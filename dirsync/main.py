@@ -1,7 +1,7 @@
 import os
 
-import printer
-import optionpicker
+import cursesswitch
+import treepicker
 import replicas_from_args
 import interactive_dir_sync
 import search_supplement_replicas
@@ -19,7 +19,7 @@ def sync(replica_a, replica_b):
     options = [A_TO_B, B_TO_A, QUIT]
 
     option = None
-    picker = optionpicker.OptionPickerByMenuTraverse(options)
+    picker = treepicker.optionpicker.OptionPickerByMenuTraverse(options)
     while option != QUIT:
         option = picker.pick_one()
         if option == A_TO_B:
@@ -37,7 +37,7 @@ def main():
 
 
 if __name__ == "__main__":
-    if os.getenv('MODE') == 'nonstatic':
+    if os.getenv('MODE') == 'static':
         main()
     else:
-        printer.wrapper(main)
+        cursesswitch.wrapper(main)

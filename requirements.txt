@@ -1,2 +1,3 @@
-treelib==1.4.0
-termcolor==1.1.0
+git+https://github.com/levioctl/treepicker.git@v1.0.0#egg=treepicker
+git+https://github.com/levioctl/fspick.git@v0.1.0#egg=fspick
+git+https://github.com/levioctl/fspick.git@v0.2.0#egg=cursesswitch

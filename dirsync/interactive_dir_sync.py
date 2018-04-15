@@ -1,9 +1,9 @@
 import os
 
-import dirtree
-import printer
 import treepicker
-import optionpicker
+import cursesswitch
+from fspick import dirtree
+from treepicker import optionpicker
 
 
 class InteractiveDirSync(object):
@@ -23,16 +23,16 @@ class InteractiveDirSync(object):
         missing = self._dst.get_unknown_entries_in_given_dirtree(self._src)
         while True:
             if not missing.does_dir_contain_any_files():
-                printer.print_string("Nothing to synchronize; Destination dir alread contains all files "
+                cursesswitch.print_string("Nothing to synchronize; Destination dir alread contains all files "
                                      "in source dir.")
                 break
             self._selected = self._chooseFiles(missing)
             if self._selected is None:
-                printer.print_string("Sync ended by user's request.")
+                cursesswitch.print_string("Sync ended by user's request.")
                 break
             if not self._selected:
                 break
-            printer.print_string("%d files were chosen to copy so far." % (len(self._selected),))
+            cursesswitch.print_string("%d files were chosen to copy so far." % (len(self._selected),))
             option = self._chooseWhatToDoWithFiles()
             if option == self._OPTION_NOTHING:
                 break
@@ -80,7 +80,7 @@ class InteractiveDirSync(object):
     def _remove(self):
         file_entries = self._selected.values()
         for index, file_entry in enumerate(file_entries):
-            printer.print_string("Removing %s (%d out of %d)" % (file_entry, index + 1, len(file_entries)))
+            cursesswitch.print_string("Removing %s (%d out of %d)" % (file_entry, index + 1, len(file_entries)))
             os.unlink(file_entry.full_filesystem_path())
 
 
