@@ -7,5 +7,9 @@ setup(
         'pbr >= 1.9',
         'setuptools >= 17.1'
     ],
-    pbr=True
+    pbr=True,
+    packages=find_packages(),
+    entry_points={
+        'console_scripts': ['dirsync=dirsync.main:main']
+    }
 )
