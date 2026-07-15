@@ -10,6 +10,6 @@ setup(
     pbr=True,
     packages=find_packages(),
     entry_points={
-        'console_scripts': ['dirsync=dirsync.main:main']
+        'console_scripts': ['dirdelta=dirdelta.main:main']
     }
 )

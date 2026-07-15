@@ -2,7 +2,7 @@ import os
 
 import treepicker
 import cursesswitch
-from fspick import dirtree
+import dirtree
 from treepicker import optionpicker
 
 
@@ -13,11 +13,13 @@ class InteractiveDirSync(object):
     _OPTION_RESELECT = "Reselect files"
 
     def __init__(self, src, dst):
-        self._src = dirtree.DirTree.factory_from_filesystem(src,
-                                                            file_extentions=dirtree.MUSIC_FILE_EXTENTIONS)
-        self._dst = dirtree.DirTree.factory_from_filesystem(dst,
-                                                            file_extentions=dirtree.MUSIC_FILE_EXTENTIONS)
+        self._src = src
+        self._dst = dst
         self._selected = dict()
+
+    def view_diff(self, src, dst):
+        missing = dst.get_unknown_entries_in_given_dirtree(src)
+        self._chooseFiles(missing)
 
     def sync(self):
         missing = self._dst.get_unknown_entries_in_given_dirtree(self._src)
@@ -51,7 +53,7 @@ class InteractiveDirSync(object):
     def _chooseFiles(self, missing):
         tree_header = ("Files in %s, which are not in %s:\n"
                        "(To select a file, press Space. When finished, press Enter.)" %
-                       (self._src, self._dst))
+                       (self._src.fullpath(), self._dst.fullpath()))
         tree_picker = treepicker.TreePicker(missing, header=tree_header)
         entries = tree_picker.pick()
         if entries is None:
@@ -59,7 +61,7 @@ class InteractiveDirSync(object):
         files = [entry for entry in entries if isinstance(entry, dirtree.FileEntry)]
         selected = dict()
         for file_entry in files:
-            selected[file_entry.fullpath()] = file_entry
+            selected[file_entry.fullpath] = file_entry
         return selected
 
     def _chooseWhatToDoWithFiles(self):
@@ -80,7 +82,8 @@ class InteractiveDirSync(object):
     def _remove(self):
         file_entries = self._selected.values()
         for index, file_entry in enumerate(file_entries):
-            cursesswitch.print_string("Removing %s (%d out of %d)" % (file_entry, index + 1, len(file_entries)))
+            cursesswitch.print_string("Removing {} ({} out of {})" % (
+                file_entry, index + 1, len(file_entries)))
             os.unlink(file_entry.full_filesystem_path())
 
 

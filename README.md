@@ -1,5 +1,11 @@
-# Dirsync
-## Usage
+# Usage
+
+##Synchronizing two directories
 ```
-dirsync directory_a_path directory_b_path
+dirdelta directory_a_path directory_b_path
+```
+
+##Exploring a directory
+```
+dirdelta directory_path
 ```

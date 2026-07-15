@@ -2,5 +2,6 @@
 AUTHORS
 ChangeLog
 build/
-dirsync.egg-info/
+dirdelta.egg-info/
+secrets/
 

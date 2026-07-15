@@ -1,3 +1,4 @@
 git+https://github.com/levioctl/treepicker.git@v1.0.1#egg=treepicker
-git+https://github.com/levioctl/fspick.git@v0.1.1#egg=fspick
-git+https://github.com/levioctl/cursesswitch.git@v0.2.0#egg=cursesswitch
+google
+google-api-python-client
+google-auth-oauthlib
