@@ -43,9 +43,20 @@ class DirEntry(object):
             parent_fullpath = parent_relpath
         self.name = name
         self.relpath = os.path.join(parent_relpath, name)
-        self.fullpath = os.path.join(parent_fullpath, name)
+        if name == os.path.sep:
+            # os.path.join(parent_fullpath, name) would normally discard
+            # parent_fullpath here, since a second argument of '/' is itself
+            # absolute - but for the tree's root entry (the only entry ever
+            # constructed with name == '/'), parent_fullpath already IS the
+            # entry's own fullpath, so it should pass through unchanged.
+            self.fullpath = parent_fullpath
+        else:
+            self.fullpath = os.path.join(parent_fullpath, name)
 
     def __repr__(self):
+        return self.fullpath
+
+    def full_filesystem_path(self):
         return self.fullpath
 
 
@@ -57,6 +68,9 @@ class FileEntry(object):
 
     def __repr__(self):
         return self.relpath
+
+    def full_filesystem_path(self):
+        return self.fullpath
 
 
 MUSIC_FILE_EXTENTIONS = ["mp3", "mp4", "wav", "ogg", "wmv", "wma"]
@@ -79,10 +93,7 @@ class DirTree(treelib.Tree):
         if len(rootpath) > 1 and rootpath.endswith('/'):
             rootpath = os.path.basename(rootpath)
         self._rootpath = rootpath
-        parent_fullpath = os.path.dirname(self._rootpath)
-        if not parent_fullpath:
-            parent_fullpath = '/'
-        root = DirEntry(name='/', parent_relpath='/', parent_fullpath=parent_fullpath)
+        root = DirEntry(name='/', parent_relpath='/', parent_fullpath=self._rootpath)
         self._create_node_orig = self.create_node
         self._root = self.create_node(identifier='/', tag=root.name, data=root)
         self.create_node = self._create_node_override_method

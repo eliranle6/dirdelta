@@ -40,6 +40,18 @@ class DirTreeTest(unittest.TestCase):
         missing = dst.get_unknown_entries_in_given_dirtree(src)
         self.assertFalse(missing.does_dir_contain_any_files())
 
+    def test_fullpath_reflects_real_filesystem_path(self):
+        tree = dirtree.DirTree('/home/user/myroot')
+        tree.add_file_by_relpath('subdir/file.txt')
+
+        root_entry = tree.get_node('/').data
+        file_entry = tree.get_node('/subdir/file.txt').data
+
+        self.assertEqual(root_entry.fullpath, '/home/user/myroot')
+        self.assertEqual(file_entry.fullpath, '/home/user/myroot/subdir/file.txt')
+        self.assertEqual(file_entry.full_filesystem_path(),
+                          '/home/user/myroot/subdir/file.txt')
+
 
 if __name__ == '__main__':
     unittest.main()

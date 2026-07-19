@@ -77,7 +77,9 @@ and the containing directory gets created, but bytes are never copied.
 Also note: it calls `self._add_file_by_path(...)`, a method that does not
 exist on `DirTree`/`LocalDiskDirTree` (nearest match is
 `add_file_by_fullpath`) — this path would raise `AttributeError` before
-reaching the copy stub.
+reaching the copy stub. (`file_entry.full_filesystem_path()` a few lines
+below is fine now — see known-issues.md #1 — but this `_add_file_by_path`
+issue still blocks the flow independently.)
 
 ### `clouddirtree.py` / `clouddirtreefactory.py`
 Cloud state is never queried live per-scan. Instead:
@@ -114,10 +116,8 @@ sit alongside it as `scandrive.py`; it's now archived at
   function in `dirtree.py`, not a classmethod — this call would raise
   `AttributeError`; see known-issues.md), then calls
   `dst.copy_inner_entries_from_dirtree(...)`.
-- `_remove()` calls `file_entry.full_filesystem_path()` and
-  `os.unlink(...)` — `FileEntry` has no `full_filesystem_path` method
-  (nearest equivalent is the `.fullpath` attribute) — another
-  likely-`AttributeError` path; see known-issues.md.
+- `_remove()` calls `file_entry.full_filesystem_path()` and `os.unlink(...)`
+  — this now resolves correctly (see known-issues.md #1).
 
 ### `dirsync_main.py` / `dirpick_main.py`
 Thin wiring: build both `DirTree`s, present a top-level menu (`View diff
