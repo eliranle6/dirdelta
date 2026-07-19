@@ -25,11 +25,22 @@ mentions below imply; that's a path nit in this doc, not a code bug).
   `localdiskdirtree.py:57-58`) now resolve correctly — but see issues 2-3
   below, which still block the Copy/Remove flows independently.
 
-2. **`LocalDiskDirTree.copy_inner_entries_from_dirtree` calls
-  `self._add_file_by_path(...)`** (`localdiskdirtree.py:46`), which is not
-  defined on `LocalDiskDirTree`, `DirTree`, or anywhere else in the repo.
-  Nearest equivalents are `add_file_by_fullpath` / `add_file_by_relpath`.
-  This would raise `AttributeError` before ever reaching the copy stub.
+2. ~~**`LocalDiskDirTree.copy_inner_entries_from_dirtree` calls
+  `self._add_file_by_path(...)`**~~ **FIXED** (2026-07-19,
+  `localdiskdirtree.py`): like issue 1, this was never lost — the
+  pre-2018 `_add_file_by_path` (a `DirTree`-level method) was reimplemented
+  under a new name, `add_file_by_relpath`, during the rewrite; this one
+  caller just never got updated to call it. Two more stale references in
+  the same method, both hidden behind this one (would have surfaced next
+  once it was fixed), were fixed alongside it: `new_file_entry.filesystem_dirpath`
+  (an attribute that doesn't exist on the current `FileEntry`/`DirEntry` —
+  replaced with `os.path.dirname(new_file_entry.full_filesystem_path())`),
+  and `self.remove_node(new_file_entry.fullpath())` (called `.fullpath` as
+  a method, and used the wrong field — node identifiers are relpaths, not
+  fullpaths — replaced with `self.remove_node(new_file_entry.relpath)`).
+  Covered by `tests/test_localdiskdirtree.py`. The actual `shutil.copy` is
+  still a stub (issue 5) — this fix makes the tree/directory bookkeeping
+  correct, not byte copying.
 
 3. **`interactive_dir_sync.py:78` calls
   `dirtree.DirTree.factory_from_list_of_file_entries(...)` as if it were a
@@ -39,17 +50,26 @@ mentions below imply; that's a path nit in this doc, not a code bug).
   `AttributeError: type object 'DirTree' has no attribute
   'factory_from_list_of_file_entries'`.
 
-  **Net effect (issues 2-3 combined):** as read, both "Copy" and "Remove" —
-  the two actions the sync flow exists to perform — still look like they'd
-  crash immediately when invoked, before doing any real work, independent of
-  issue 1's fix. Worth an end-to-end run to confirm before relying on this
-  flow, or treat it as needing repair.
+  **Net effect:** "Copy" still crashes immediately on issue 3 before doing
+  any real work. "Remove" no longer hits issues 1-2, but crashes on a
+  separate, newly-found bug instead — see issue 16.
 
 4. **`utils.py`'s `__validate_replica` calls `cursesswitch.print_string(...)`
   (`utils.py:33`) but the file never imports `cursesswitch`** (only
   imports `os`, `sys`, `clouddirtree`, `clouddirtreefactory`,
   `localdiskdirtree`). Would raise `NameError` the first time an invalid
   local replica path is given.
+
+16. **`interactive_dir_sync.py:85-86`** (found 2026-07-19 while checking
+  whether fixing issues 1-2 made "Remove" actually work) —
+  `cursesswitch.print_string("Removing {} ({} out of {})" % (file_entry,
+  index + 1, len(file_entries)))` uses `{}`-style placeholders with the
+  `%` operator, which only understands `%s`/`%d`-style ones. Confirmed by
+  direct execution (not just reading): `"a {} b" % (1,)` raises
+  `TypeError: not all arguments converted during string formatting`. This
+  fires before `os.unlink(file_entry.full_filesystem_path())` is ever
+  reached, so "Remove" still crashes today — just later, and on an
+  unrelated bug, than before issues 1-2 were fixed.
 
 ## High-confidence from reading (not grep-verified against a live run)
 

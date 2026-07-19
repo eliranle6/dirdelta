@@ -10,6 +10,9 @@ PYTHONPATH=dirdelta:tests $VENV_PY -m unittest test_dirtree -v
 echo "=== findcmdwrapper ==="
 PYTHONPATH=dirdelta:tests $VENV_PY -m unittest test_findcmdwrapper -v
 
+echo "=== localdiskdirtree ==="
+PYTHONPATH=dirdelta:tests:lib/treepicker $VENV_PY -m unittest test_localdiskdirtree -v
+
 echo "=== treepicker.pagination ==="
 PYTHONPATH=lib/treepicker:lib/treepicker/tests $VENV_PY -m unittest test_pagination -v
 

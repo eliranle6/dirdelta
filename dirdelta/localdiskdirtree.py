@@ -43,13 +43,14 @@ class LocalDiskDirTree(dirtree.DirTree):
         files = list(dirtree.iter_files())
         for index, file_entry in enumerate(files):
             cursesswitch.print_string("Copying %s (%d out of %d)" % (file_entry, index + 1, len(files)))
-            new_file_entry = self._add_file_by_path(file_entry.fullpath())
+            new_file_entry = self.add_file_by_relpath(file_entry.relpath)
             try:
-                if os.path.exists(new_file_entry.filesystem_dirpath):
-                    assert os.path.isdir(new_file_entry.filesystem_dirpath)
+                dest_dirpath = os.path.dirname(new_file_entry.full_filesystem_path())
+                if os.path.exists(dest_dirpath):
+                    assert os.path.isdir(dest_dirpath)
                 else:
                     try:
-                        os.makedirs(new_file_entry.filesystem_dirpath)
+                        os.makedirs(dest_dirpath)
                     except OSError as ex:
                         cursesswitch.print_string("Copy failed: %s" % (str(ex),), "red")
                         continue
@@ -57,7 +58,7 @@ class LocalDiskDirTree(dirtree.DirTree):
                     file_entry.full_filesystem_path(),
                     new_file_entry.full_filesystem_path())
             except:
-                self.remove_node(new_file_entry.fullpath())
+                self.remove_node(new_file_entry.relpath)
                 raise
 
     def _copy_local_file_to_tree_with_path(self, src, dst):

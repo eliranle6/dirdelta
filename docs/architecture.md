@@ -69,17 +69,17 @@ than walking Python-side. Directories are added after files, with the root
 itself excluded (`dirnames_fullpath.remove(self.fullpath())`).
 
 `copy_inner_entries_from_dirtree(dirtree)` — for each file in the given
-sub-tree, ensures the destination directory exists (`os.makedirs`, tolerant
-of already-exists), then calls `_copy_local_file_to_tree_with_path`. **That
-method's actual `shutil.copy` call is commented out** (see
-known-issues.md) — currently a no-op stub, so nodes get added to the tree
-and the containing directory gets created, but bytes are never copied.
-Also note: it calls `self._add_file_by_path(...)`, a method that does not
-exist on `DirTree`/`LocalDiskDirTree` (nearest match is
-`add_file_by_fullpath`) — this path would raise `AttributeError` before
-reaching the copy stub. (`file_entry.full_filesystem_path()` a few lines
-below is fine now — see known-issues.md #1 — but this `_add_file_by_path`
-issue still blocks the flow independently.)
+sub-tree, calls `add_file_by_relpath` to add the node to `self`'s tree, then
+ensures the destination directory exists (`os.makedirs`, tolerant of
+already-exists, path derived from `full_filesystem_path()`), then calls
+`_copy_local_file_to_tree_with_path`. **That method's actual `shutil.copy`
+call is commented out** (see known-issues.md #5) — currently a no-op stub,
+so nodes get added to the tree and the containing directory gets created,
+but bytes are never copied. (Previously called a nonexistent
+`self._add_file_by_path(...)` and referenced a `filesystem_dirpath`
+attribute that doesn't exist on the current `FileEntry`/`DirEntry` — both
+fixed, see known-issues.md #2 — and is now covered by
+`tests/test_localdiskdirtree.py`.)
 
 ### `clouddirtree.py` / `clouddirtreefactory.py`
 Cloud state is never queried live per-scan. Instead:
@@ -117,7 +117,11 @@ sit alongside it as `scandrive.py`; it's now archived at
   `AttributeError`; see known-issues.md), then calls
   `dst.copy_inner_entries_from_dirtree(...)`.
 - `_remove()` calls `file_entry.full_filesystem_path()` and `os.unlink(...)`
-  — this now resolves correctly (see known-issues.md #1).
+  — `full_filesystem_path()` itself resolves correctly now (see
+  known-issues.md #1), but the `cursesswitch.print_string(...)` call just
+  above it uses `{}`-style placeholders with the `%` operator, which raises
+  `TypeError` before `os.unlink` is ever reached (known-issues.md #16) —
+  "Remove" still doesn't work end-to-end.
 
 ### `dirsync_main.py` / `dirpick_main.py`
 Thin wiring: build both `DirTree`s, present a top-level menu (`View diff

@@ -100,7 +100,7 @@ bare-import their target module (`import dirtree`) rather than using
 unittest. **Unverified**: `bin/dirsync-fs.sh` and the other entry-point
 scripts have not been run end-to-end since the dirsync→dirdelta rewrite;
 don't assume they work. Only the unittest-covered modules (`dirtree.py`,
-`findcmdwrapper.py`, `pagination.py`) are known-good.
+`findcmdwrapper.py`, `localdiskdirtree.py`, `pagination.py`) are known-good.
 
 Run everything at once:
 
@@ -121,6 +121,11 @@ PYTHONPATH=dirdelta:tests ../dirstuff-venv/bin/python3 -m unittest test_dirtree 
 
 # findcmdwrapper.py — the `find`-shelling-out layer (uses real temp dirs, no mocking needed)
 PYTHONPATH=dirdelta:tests ../dirstuff-venv/bin/python3 -m unittest test_findcmdwrapper -v
+
+# localdiskdirtree.py — copy_inner_entries_from_dirtree's tree/directory
+# bookkeeping (uses real tempfile.mkdtemp() dirs; needs cursesswitch on the
+# path too, since the module imports it for progress printing)
+PYTHONPATH=dirdelta:tests:lib/treepicker ../dirstuff-venv/bin/python3 -m unittest test_localdiskdirtree -v
 
 # treepicker/pagination.py — pure pagination-window math
 PYTHONPATH=lib/treepicker:lib/treepicker/tests ../dirstuff-venv/bin/python3 -m unittest test_pagination -v
@@ -154,7 +159,7 @@ the `treepicker` package proper, so they're imported by their bare module
 names (`test_pagination`, `test_treeprinter`, etc.), not a dotted
 `treepicker.test_*`.)
 
-All 25 tests pass as of 2026-07-15.
+All 27 tests pass as of 2026-07-19.
 
 Notes for whoever adds the next batch:
 - Writing `test_treenavigator.py` caught a real bug in
@@ -172,12 +177,11 @@ Notes for whoever adds the next batch:
   calls with `unittest.mock` rather than hitting the real API, and
   consider fixing the `NameError`/`TypeError` bugs first so there's
   something correct to test.
-- `localdiskdirtree.py` and `interactive_dir_sync.py` are natural next
-  candidates but both currently hit the confirmed-broken
-  `full_filesystem_path()`/`_add_file_by_path` paths documented in
-  `known-issues.md` — tests there would currently just document the
-  crash, which may still be worth having as a regression trigger once
-  those are fixed.
+- `localdiskdirtree.py`'s `full_filesystem_path()`/`_add_file_by_path`
+  crashes (known-issues.md #1-#2) are now fixed and covered by
+  `test_localdiskdirtree.py`. `interactive_dir_sync.py` is still a natural
+  next candidate but hits its own separate `AttributeError` (known-issues.md
+  #3) — a test there would currently just document that crash.
 
 ## Conventions observed in the code
 
