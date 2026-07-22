@@ -82,18 +82,18 @@ mentions below imply; that's a path nit in this doc, not a code bug).
   prints "Copying ... (n out of total)" for every file before this is
   called.
 
-6. **`treepicker/treepicker.py:21`** constructs
+6. ~~**`treepicker/treepicker.py:21`** constructs
   `TreePickerModel(tree, header, max_nr_lines, min_nr_options=..., 
   max_nr_options=...)` positionally, but
   `TreePickerModel.__init__(self, tree, including_root=True, header="",
   min_nr_options=1, max_nr_options=None)` has `including_root` — not
-  `header` — as the second positional parameter. So the `header` string
-  gets bound to `including_root`, and `max_nr_lines` (an int/None) gets
-  bound to `header`. Since `including_root` is only used truthily
-  elsewhere, a non-empty header string would evaluate as truthy (no crash,
-  wrong-ish behavior); an empty header (`""`, the default in most call
-  sites) is falsy, which may coincidentally work. Worth fixing to use
-  keyword args regardless.
+  `header` — as the second positional parameter.~~ **FIXED** (2026-07-22,
+  submodule commit): switched to keyword args
+  (`including_root=including_root, header=header`), so `TreePicker`'s own
+  `including_root` parameter now actually reaches `TreeNavigator` via
+  `TreePickerModel` instead of being silently dropped. Verified by
+  constructing a `TreePicker` with `including_root=False` and checking
+  `_picker._tree_navigator._including_root` reflects it.
 
 7. **`clouddirtreefactory.py:29`** — `factory_interactive` returns
   `CloudDirTree(path_in_cloud)`, but `path_in_cloud` is never assigned
