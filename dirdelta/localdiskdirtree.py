@@ -5,6 +5,8 @@ import cursesswitch
 import dirtree
 import findcmdwrapper
 
+DRYRUN = os.environ.get("DRYRUN") != "0"
+
 
 def factory(filesystem_dirpath, max_depth=None, file_extentions=None, dirs_only=False,
             include_hidden=True, silent=False):
@@ -62,5 +64,6 @@ class LocalDiskDirTree(dirtree.DirTree):
                 raise
 
     def _copy_local_file_to_tree_with_path(self, src, dst):
-            #shutil.copy(src, dst)
-            pass
+        if DRYRUN:
+            return
+        shutil.copy(src, dst)

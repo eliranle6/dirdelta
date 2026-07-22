@@ -72,11 +72,15 @@ mentions below imply; that's a path nit in this doc, not a code bug).
 
 ## High-confidence from reading (not grep-verified against a live run)
 
-5. **`localdiskdirtree.py:63-65`** — `_copy_local_file_to_tree_with_path`'s
-  real `shutil.copy(src, dst)` is commented out and replaced with `pass`.
-  Even if the `AttributeError`s above were fixed, no bytes would be copied
-  yet — this looks like an intentional stub/WIP rather than an accidental
-  regression (there's a commented-out line right there, not a deletion).
+5. ~~**`localdiskdirtree.py:63-65`** — `_copy_local_file_to_tree_with_path`'s
+  real `shutil.copy(src, dst)` is commented out and replaced with `pass`.~~
+  **FIXED** (2026-07-22): gated behind a module-level `DRYRUN` flag
+  (`os.environ.get("DRYRUN") != "0"`, so dry-run is the default and only
+  `DRYRUN=0` in the environment enables real copying). In dry-run mode it's
+  a silent no-op — no extra print was added here since the caller
+  (`copy_inner_entries_from_dirtree`, `localdiskdirtree.py:45`) already
+  prints "Copying ... (n out of total)" for every file before this is
+  called.
 
 6. **`treepicker/treepicker.py:21`** constructs
   `TreePickerModel(tree, header, max_nr_lines, min_nr_options=..., 
