@@ -42,17 +42,18 @@ mentions below imply; that's a path nit in this doc, not a code bug).
   still a stub (issue 5) — this fix makes the tree/directory bookkeeping
   correct, not byte copying.
 
-3. **`interactive_dir_sync.py:78` calls
+3. ~~**`interactive_dir_sync.py:78` calls
   `dirtree.DirTree.factory_from_list_of_file_entries(...)` as if it were a
-  classmethod/staticmethod on `DirTree`**, but in `dirtree.py:6` it's a
-  plain module-level function (`def factory_from_list_of_file_entries(files,
-  filesystem_dirpath):`), not a method on the class. This call would raise
-  `AttributeError: type object 'DirTree' has no attribute
-  'factory_from_list_of_file_entries'`.
+  classmethod/staticmethod on `DirTree`**~~ **FIXED** (2026-07-22): the
+  call site now calls `dirtree.factory_from_list_of_file_entries(...)`
+  directly on the module, matching its actual definition (`dirtree.py:6`)
+  and the codebase's existing convention of module-level `factory*`
+  functions (`localdiskdirtree.factory`, `clouddirtreefactory.factory_interactive`)
+  rather than classmethods.
 
-  **Net effect:** "Copy" still crashes immediately on issue 3 before doing
-  any real work. "Remove" no longer hits issues 1-2, but crashes on a
-  separate, newly-found bug instead — see issue 16.
+  **Net effect:** "Copy" no longer crashes on this bug — it still hits
+  issue 5 (`shutil.copy` stubbed out) before doing real work. "Remove" no
+  longer hits issues 1-2, but crashes on a separate bug — see issue 16.
 
 4. **`utils.py`'s `__validate_replica` calls `cursesswitch.print_string(...)`
   (`utils.py:33`) but the file never imports `cursesswitch`** (only
