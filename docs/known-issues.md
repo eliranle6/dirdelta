@@ -61,16 +61,14 @@ mentions below imply; that's a path nit in this doc, not a code bug).
   `localdiskdirtree`). Would raise `NameError` the first time an invalid
   local replica path is given.
 
-16. **`interactive_dir_sync.py:85-86`** (found 2026-07-19 while checking
+16. ~~**`interactive_dir_sync.py:85-86`** (found 2026-07-19 while checking
   whether fixing issues 1-2 made "Remove" actually work) —
   `cursesswitch.print_string("Removing {} ({} out of {})" % (file_entry,
   index + 1, len(file_entries)))` uses `{}`-style placeholders with the
-  `%` operator, which only understands `%s`/`%d`-style ones. Confirmed by
-  direct execution (not just reading): `"a {} b" % (1,)` raises
-  `TypeError: not all arguments converted during string formatting`. This
-  fires before `os.unlink(file_entry.full_filesystem_path())` is ever
-  reached, so "Remove" still crashes today — just later, and on an
-  unrelated bug, than before issues 1-2 were fixed.
+  `%` operator, which only understands `%s`/`%d`-style ones.~~ **FIXED**
+  (2026-07-22): switched to `.format(...)`, matching the `{}` placeholders
+  already in the string. "Remove" now gets past this line to
+  `os.unlink(file_entry.full_filesystem_path())`.
 
 ## High-confidence from reading (not grep-verified against a live run)
 

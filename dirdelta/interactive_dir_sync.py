@@ -82,7 +82,7 @@ class InteractiveDirSync(object):
     def _remove(self):
         file_entries = self._selected.values()
         for index, file_entry in enumerate(file_entries):
-            cursesswitch.print_string("Removing {} ({} out of {})" % (
+            cursesswitch.print_string("Removing {} ({} out of {})".format(
                 file_entry, index + 1, len(file_entries)))
             os.unlink(file_entry.full_filesystem_path())
 
