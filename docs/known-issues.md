@@ -55,11 +55,11 @@ mentions below imply; that's a path nit in this doc, not a code bug).
   issue 5 (`shutil.copy` stubbed out) before doing real work. "Remove" no
   longer hits issues 1-2, but crashes on a separate bug — see issue 16.
 
-4. **`utils.py`'s `__validate_replica` calls `cursesswitch.print_string(...)`
-  (`utils.py:33`) but the file never imports `cursesswitch`** (only
-  imports `os`, `sys`, `clouddirtree`, `clouddirtreefactory`,
-  `localdiskdirtree`). Would raise `NameError` the first time an invalid
-  local replica path is given.
+4. ~~**`utils.py`'s `__validate_replica` calls `cursesswitch.print_string(...)`
+  (`utils.py:33`) but the file never imports `cursesswitch`**~~ **FIXED**
+  (2026-07-22): added `import cursesswitch`, matching how every other
+  module that calls it does so (`main.py`, `dirpick_main.py`,
+  `localdiskdirtree.py`, `interactive_dir_sync.py`).
 
 16. ~~**`interactive_dir_sync.py:85-86`** (found 2026-07-19 while checking
   whether fixing issues 1-2 made "Remove" actually work) —

@@ -3,6 +3,7 @@ import sys
 
 import clouddirtree
 import clouddirtreefactory
+import cursesswitch
 import localdiskdirtree
 
 
