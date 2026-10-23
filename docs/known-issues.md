@@ -186,10 +186,10 @@ are relative to `dirdelta/` unless noted (picker files live under
 
 ## Still open
 
-23. **Menus are shown in alphabetical order**, not the order the code lists
+23. ~~**Menus are shown in alphabetical order**, not the order the code lists
   options in, because the picker sorts every sibling group by
-  `str(node.data)`. Harmless, but e.g. the Copy/Remove menu reads "Copy,
-  Do nothing, Remove, Reselect".
+  `str(node.data)`.~~ **FIXED** (2026-10-23): menus are `dirpicker --list`
+  now, which keeps the order given.
 
 24. **Cloud scanning is untested against real Drive data.**
   `CloudDirTree._parsefile` asserts exactly one id has children but no

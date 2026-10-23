@@ -18,10 +18,22 @@ dirdelta is plain Python 3 with no build step: you can run it straight from the 
 install it (see below). From the repo root:
 
 ```bash
-git submodule update --init                 # fetches the picker library into lib/treepicker
+git submodule update --init                 # fetches lib/treepicker (for cursesswitch's printing)
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt
 ```
+
+Its pickers and menus are `dirpicker`, a C++ program from
+[cpptree](https://github.com/levioctl/cpptree) (see `docs/dirpicker-integration.md`). Build and install
+it once:
+
+```bash
+git clone https://github.com/levioctl/cpptree && cd cpptree
+make && make install PREFIX=~/.local       # needs g++ and libncurses-dev; puts it in ~/.local/bin
+```
+
+dirdelta runs `dirpicker` from your `PATH`, or `$DIRDELTA_PICKER` if that's set (e.g. to a
+`cpptree/build/dirpicker` you didn't install).
 
 Development tasks are Makefile targets (`make` lists them). They and the launcher scripts in `bin/` use
 `.venv` automatically when it exists, and otherwise whichever `python3` is on your `PATH`, so an
@@ -50,8 +62,9 @@ rm -rf /tmp/dd && cp -r tests/fixtures /tmp/dd
 .venv/bin/python3 -m dirdelta -m 1 /tmp/dd/alpha       # scan only one level deep (default 20)
 ```
 
-Move with `h`/`j`/`k`/`l`, `g`/`G` for first/last, `/` to search, `Enter` to pick the selected
-entry, `q` to quit without picking.
+Move with `h`/`j`/`k`/`l` or the arrows, `Ctrl-D`/`Ctrl-U` to page, `/` to search (`Enter` keeps
+the filter, `Esc` drops it), `Enter` to pick the selected entry, `q` to quit without picking. A local
+dir is scanned by `dirpicker` itself, so even big trees open fast.
 
 ### Sync mode (two paths)
 
@@ -61,18 +74,12 @@ DRYRUN=0 .venv/bin/python3 -m dirdelta /tmp/dd/alpha /tmp/dd/bravo    # Copy rea
 ```
 
 Choose "Remove/Copy files from ... to ..." in the menu, select files with `Space` (on a directory it
-selects everything under it), press `Enter`, then choose Copy or Remove. Menu entries are listed
-alphabetically. Copy copies the selected files from the entry's source ("from") directory into its
+selects everything under it), press `Enter`, then choose Copy or Remove. Copy copies the selected files from the entry's source ("from") directory into its
 destination ("to"); Remove deletes them from the source. Remove is not affected by `DRYRUN`.
 
 For bravo vs. alpha, `alpha` is missing `third/anotherinthird/7.mp3` and `bravo` is missing
 `first/infirst/ininfirst/huh/99.mp3`. `./bin/dirsync-fs.sh` runs this sync on a fresh temp copy of
 the fixtures.
-
-### Other modes
-
-`MODE=direct` prints to plain stdout instead of using curses (handy with a debugger), and
-`MODE=static` skips the curses setup in `main.py` entirely.
 
 ## Tests
 
@@ -104,7 +111,8 @@ Rerun `make deploy` after pulling changes, since it installs a copy rather than 
 source tree. `make undeploy` removes it.
 
 For cloud paths, the deployed copy can't find the repo's `secrets/` folder, so point
-`DIRDELTA_SECRETS_DIR` at the folder holding `credentials.json`/`token.json`.
+`DIRDELTA_SECRETS_DIR` at the folder holding `credentials.json`/`token.json`. `dirpicker` isn't
+part of the deployed copy: install it as described in Setup.
 
 ## Installing into a venv
 

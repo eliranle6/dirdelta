@@ -4,16 +4,20 @@
 
 ```
 shell script (dirsync-*.sh / dirpick-*.sh)
-  → main.py: parse_args() → cursesswitch.wrapper(main)   [curses init, unless MODE=static/direct]
-    → dirsync_main.run(args)  OR  dirpick_main.run(args)
-       → utils.create_dirtree_from_arg(path)   for each replica path
+  → main.py: parse_args() → dirsync_main.run(args)  OR  dirpick_main.run(args)
+     (no curses: each picker is a dirpicker run, which has the terminal while
+      it's open; messages in between are plain lines, via cursesswitch.print_line)
+       dirpick_main: local dir → picker.pick_under_dir(dir)   (dirpicker scans it)
+                     cloud    → utils.create_dirtree_from_arg() → picker.pick_from_tree()
+       dirsync_main: utils.create_dirtree_from_arg(path)   for each replica path
             → clouddirtreefactory.factory_interactive()   if path starts with "cloud"
             → localdiskdirtree.factory()                   otherwise
+       → menu.run_menu([...]) → picker.pick_option()       (the top-level menu)
        → interactive_dir_sync.InteractiveDirSync(src, dst)
             .sync() / .view_diff()
               → DirTree.get_unknown_entries_in_given_dirtree()   (the diff)
-              → treepicker.TreePicker(missing_tree).pick()        (curses selection UI)
-              → optionpicker.OptionPickerByMenuTraverse([...]).pick_one()  (Copy/Remove/Nothing/Reselect menu)
+              → picker.pick_from_tree(missing_tree, multi=True)  (selection UI)
+              → menu.run_menu([...])                             (Copy/Remove/Nothing/Reselect menu)
               → LocalDiskDirTree.copy_inner_entries_from_dirtree() / os.unlink()
 ```
 
@@ -23,16 +27,16 @@ shell script (dirsync-*.sh / dirpick-*.sh)
 Argparse: `dir_a_path` (required), `dir_b_path` (optional), `-x/--execute`,
 `-m/--max-depth` (default 20, passed down to `localdiskdirtree.factory` as
 `find -maxdepth`). One positional path → `dirpick_main.run`; two →
-`dirsync_main.run`. Wrapped in `cursesswitch.wrapper` unless
-`MODE=static`.
+`dirsync_main.run`. No curses setup: a `picker.PickerError` (dirpicker
+missing or failing) exits with its message.
 
 ### `utils.py`
 `create_dirtree_from_arg(rootpath)` is the single dispatch point deciding
 cloud vs local: a path is "cloud" iff its first path component
 (`CloudDirTree.path_components`) is literally the string `"cloud"`.
-`__validate_replica` checks the path is an existing directory for the local
-case, reporting failures via `cursesswitch.print_string` (the missing
-`import cursesswitch` here was fixed — known-issues.md #4).
+`validate_dir` checks the path is an existing directory for the local
+case, exiting with a message (via `cursesswitch.print_line`) otherwise.
+`is_cloud_path` is public too, for `dirpick_main`.
 
 ### `dirtree.py` — the core data structure
 `DirTree(treelib.Tree)` models a filesystem tree. Two entry types:
@@ -109,7 +113,7 @@ sit alongside it as `scandrive.py`; it's now archived at
 
 ### `interactive_dir_sync.py`
 `InteractiveDirSync(src, dst)`:
-- `sync()` loop: diff → `treepicker.TreePicker(missing).pick()` to select
+- `sync()` loop: diff → `picker.pick_from_tree(missing, multi=True)` to select
   files → `menu.run_menu` (`Do nothing` / `Reselect files` / `Copy` /
   `Remove`) → act → recompute diff → repeat until nothing is selected, the
   user picks "Do nothing", or quits either picker.
@@ -127,7 +131,7 @@ sit alongside it as `scandrive.py`; it's now archived at
 
 ### `menu.py`
 `run_menu([(label, handler), ...])` shows the labels with
-`OptionPickerByMenuTraverse`, calls the chosen label's handler (if not
+`picker.pick_option` (in the order given), calls the chosen label's handler (if not
 `None`), and returns the label, or `None` if the user quit the menu. Both
 the top-level sync menu and `InteractiveDirSync`'s Copy/Remove menu use it.
 
@@ -136,14 +140,32 @@ Thin wiring: build both `DirTree`s, present a top-level menu (`View diff
 A-not-B`, `View diff B-not-A`, `Remove/Copy A→B`, `Remove/Copy B→A`, `Quit`).
 Copy/Remove options are only offered when **both** replicas are
 `LocalDiskDirTree` — cloud replicas are diff/view-only from this menu.
-`dirpick_main.run` wraps a single-select `TreePicker` and returns the
-picked entry's path; `cursesswitch.wrapper` hands that back to `main.py`,
-which only then prints it, or `os.execvp`s the `-x` program on it. Doing
-that after curses has exited is what makes the printed path survive and
-the launched program get a normal terminal. Menus list their options
-alphabetically, since the picker sorts siblings by `str(node.data)`.
+`dirpick_main.run` returns the picked path: for a local dir it lets
+dirpicker scan the dir itself (`picker.pick_under_dir`, much faster than
+building a `DirTree`, ~3s for 119k files); for a cloud path it builds the
+`CloudDirTree` and uses `picker.pick_from_tree`. `main.py` then prints the
+path, or `os.execvp`s the `-x` program on it.
+
+### `picker.py`
+Runs `dirpicker` (from github.com/levioctl/cpptree; `$DIRDELTA_PICKER`, or
+`dirpicker` on `PATH`) as a subprocess for each pick, fzf-style: dirpicker
+draws on `/dev/tty`, reads its input on stdin and prints what was picked on
+stdout, all `\0`-separated (`-0`). Exit code 1 means the user quit (→
+`None`); others raise `PickerError`. See `docs/dirpicker-integration.md`.
+- `pick_from_tree(tree, header, multi)`: sends a `DirTree`'s node ids
+  without their leading `/` (`/sub/x` → `sub/x`), each dir before its
+  contents, siblings sorted by tag; maps the picked paths back to the nodes'
+  entries (`.` is the root).
+- `pick_under_dir(dirpath, max_depth)`: `dirpicker [--max-depth N] DIR`.
+- `pick_option(options, header)`: `dirpicker --list`, for menus.
+Names are passed as bytes with `surrogateescape`, so non-UTF-8 file names
+round-trip. Tests (`tests/test_picker.py`) run a fake dirpicker script.
 
 ## `lib/treepicker/` — curses tree-picker library (own git repo, nested as a submodule)
+
+**No longer used by dirdelta** except for `cursesswitch.print_line` (below):
+its pickers were replaced by dirpicker (`picker.py`). It's still a working
+library with its own tests.
 
 - `TreePicker` (`treepicker.py`) — the main class. State machine over modes:
   navigation / non-interactive search / interactive search / return / quit.
@@ -166,6 +188,9 @@ alphabetically, since the picker sorts siblings by `str(node.data)`.
   `OptionPickerByMenuTraverse` is its only implementation.
 
 ## `lib/treepicker/cursesswitch.py` — curses init/teardown + colored print
+
+dirdelta uses only `print_line` (its default, plain-stdout printer); the
+curses part below is no longer used by it.
 
 A flat module (no longer its own repo/package — bundled into `treepicker`
 as a single file, since it was really just one module,`printer.py`, behind

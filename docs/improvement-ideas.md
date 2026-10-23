@@ -71,6 +71,8 @@ treat as a backlog to pick from.
 
 ## Picker library (`lib/treepicker/`)
 
+No longer dirdelta's UI (see #15); these apply only if the library is kept.
+
 10. **Turn `TreePicker.pick()`'s mode if/elif chain into a dispatch
     table** (`{mode: handler}` returning the next state), so each mode's
     logic lives in its own small method instead of one long loop body
@@ -96,7 +98,16 @@ treat as a backlog to pick from.
     done 2026-10-23: it now draws at a running cursor and refreshes once
     per picker frame (see architecture.md).
 
-14. **List menu options in the order given.** `OptionPickerByMenuTraverse`
-    menus come out alphabetical because the picker sorts siblings by
-    `str(node.data)` (known-issues.md #23). A per-tree sort key, or none for
-    menus, would fix it.
+14. ~~List menu options in the order given~~ — done 2026-10-23, by moving
+    menus to `dirpicker --list` (known-issues.md #23).
+
+15. **Drop lib/treepicker.** dirdelta's pickers are dirpicker now
+    (`picker.py`); the submodule is left only for `cursesswitch.print_line`,
+    a few lines of plain/colored printing that could move into dirdelta.
+    The library's own ideas above (#10, #11) only matter if it's kept for
+    other uses.
+
+16. **Move the diff into C++.** Sync mode builds both trees in Python (~3s
+    each for 119k files) before showing anything; dirpicker builds a tree of
+    the same size in ~0.4s. Scanning both replicas and diffing them in a C++
+    helper would cut most of sync's startup time.

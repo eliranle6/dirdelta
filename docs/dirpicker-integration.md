@@ -1,4 +1,4 @@
-# Replacing the Python picker with cpptree's dirpicker
+# dirdelta's picker: cpptree's dirpicker
 
 The Python `treepicker` (lib/treepicker) is too slow for big trees: in a
 119k file tree (/usr/share) one search keystroke took over 70s, and building
@@ -6,10 +6,9 @@ dirdelta's own Python tree takes ~3s. `dirpicker`, from the C++ project at
 /home/eliran/code/cpptree (github.com/levioctl/cpptree), shows the same
 kind of tree picker: a search keystroke takes milliseconds, and it opens
 /usr/share in ~0.5s. So dirdelta runs `dirpicker` as a subprocess for every
-pick and every menu, and no longer uses curses itself.
+pick and every menu (`dirdelta/picker.py`), and no longer uses curses itself.
 
-This doc is the plan and its status, kept current so work can resume if
-interrupted.
+Done as of 2026-10-23 (see the plan below); what's left is at the end.
 
 ## How dirdelta talks to dirpicker
 
@@ -53,8 +52,7 @@ dirdelta, each a commit:
    (`menu.py`, `clouddirtreefactory.py`) and picker mode (`dirpick_main.py`)
 11. [done] Stop using curses: `main.py` no longer wraps the app in
    `cursesswitch.wrapper()`, so messages are plain prints
-12. [ ] Update README.md, CLAUDE.md and the other docs; decide what to do
-   with lib/treepicker (still used for `cursesswitch`'s plain printing)
+12. [done] Update README.md, CLAUDE.md and the other docs
 
 ## Differences from the Python picker
 
@@ -65,3 +63,17 @@ dirdelta, each a commit:
 - Search is smartcase (case-insensitive unless the keyword has uppercase)
   and matches names, like the Python picker's.
 - With -m, Enter with nothing picked does nothing, like the Python picker.
+
+## What's left
+
+- lib/treepicker: dirdelta only uses its `cursesswitch.print_line` now.
+  Moving those few lines into dirdelta would let the submodule go
+  (improvement-ideas.md #15). Not decided yet.
+- `make deploy` (pipx) installs only the Python part; dirpicker has to be
+  installed from cpptree separately (README.md, Setup).
+- The missing keys listed above, in dirpicker.
+- Sync mode's startup is now mostly building both replicas' trees in Python
+  (~3s each for 119k files); moving the scan and diff into C++ would cut it
+  (improvement-ideas.md #16).
+- The cloud flow hasn't been run end to end with dirpicker (it needs Drive
+  credentials); its pieces are covered by the unit tests.

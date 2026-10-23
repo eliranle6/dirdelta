@@ -5,10 +5,15 @@ filesystem path or a Google Drive ("cloud") tree — by **filename only** (no
 content/hash comparison). For each file present in one replica but not the
 other, the user can choose to copy it across or delete it.
 
-This is the main repo. `treepicker` (the curses tree-picker TUI library this
-app is built on, reusable on its own outside this project) is vendored inside
-it as a git submodule at `lib/treepicker` — its own history/remote, pinned to
-a specific commit here. On the original dev machine this directory sits
+This is the main repo. Its pickers and menus are `dirpicker`, a C++ program
+from cpptree (/home/eliran/code/cpptree, github.com/levioctl/cpptree), run
+as a subprocess by `dirdelta/picker.py` (see `docs/dirpicker-integration.md`);
+it must be installed separately (`make install PREFIX=~/.local` there), and
+is found as `$DIRDELTA_PICKER` or on `PATH`. `treepicker` (the Python curses
+tree-picker library the app used before, reusable on its own) is vendored
+inside it as a git submodule at `lib/treepicker` — its own history/remote,
+pinned to a specific commit here; dirdelta now only uses its
+`cursesswitch.print_line`. On the original dev machine this directory sits
 inside a local `dirstuff/` folder alongside a Python venv and an `unused/`
 scratch dir, but neither is part of this repo, and nothing in the repo may
 assume that layout (see Structure below). Dependencies go in a `.venv`
@@ -17,11 +22,11 @@ inside the repo (gitignored; see README.md), which the Makefile targets and
 
 Deep dives live in `docs/`:
 - `docs/architecture.md` — module-by-module breakdown and data flow (scan → diff → pick → copy/remove)
-- `docs/treepicker-internals.md` — the curses tree UI's rendering/pagination/search/input internals (read before touching picker UI behavior)
+- `docs/treepicker-internals.md` — the old Python picker's (lib/treepicker) rendering/pagination/search/input internals; dirdelta no longer uses it
 - `docs/known-issues.md` — real bugs and dead code found while reading the source, with file:line
 - `docs/glossary.md` — project-specific terms (replica, dirtree, cloud path convention, etc.)
 - `docs/improvement-ideas.md` — proposed refactors/simplifications, not implemented; a backlog to pick from
-- `docs/dirpicker-integration.md` — in progress: replacing the Python picker with cpptree's C++ `dirpicker` program; the plan and its status
+- `docs/dirpicker-integration.md` — how dirdelta runs cpptree's C++ `dirpicker` for its pickers and menus (it replaced the Python picker), and what's left
 
 Read the relevant doc before making changes in that area rather than
 re-deriving it from scratch.
@@ -41,13 +46,14 @@ repo's `.venv` Python (falling back to `python3`):
 - `./bin/dirpick-cloud.sh` — browse/pick a file under `cloud/mein`
 
 `main.py` picks mode by arg count: one path → picker mode (`dirpick_main.py`,
-which prints the picked path, or `execvp`s the `-x` program on it, after
-curses has exited), two paths → sync mode (`dirsync_main.py`). A "cloud" path is any path whose
+which prints the picked path, or `execvp`s the `-x` program on it), two
+paths → sync mode (`dirsync_main.py`). dirdelta doesn't use curses itself:
+each pick is a `dirpicker` run, which has the terminal while it's open, and
+messages in between are plain lines. A "cloud" path is any path whose
 first component is literally `cloud` (see `utils.py`).
 
 Env vars that change execution mode:
-- `MODE=static` — skip the `cursesswitch.wrapper()` curses init in `main.py`
-- `MODE=direct` — skip curses in `cursesswitch.py`'s `wrapper()` (falls back to plain stdout `_ConsolePrinter`)
+- `DIRDELTA_PICKER` — the dirpicker program to run (default: `dirpicker` on `PATH`)
 - `DRYRUN=0` — actually copy bytes in "Copy" (`localdiskdirtree.py`); any
   other value or unset means dry-run, where the tree/dirs are updated but
   `shutil.copy` is skipped. "Remove" is not gated by this — it always deletes.
@@ -74,15 +80,15 @@ dirstuff/                    the original dev machine's local folder, not a git 
     ├── secrets/               Google OAuth secrets — never print/edit
     ├── tests/                 unittest suite + tests/fixtures/{alpha,bravo}
     └── lib/
-        └── treepicker/        git submodule — curses tree-picker TUI library
+        └── treepicker/        git submodule — the old curses tree-picker library
             ├── cursesswitch.py  curses on/off + colored-print shim, bundled
             │                    in as a flat module (no longer its own repo)
             └── tests/           unittest suite
 ```
 
-(`cpptree`, a personal, unrelated C++/autotools learning project, used to
-live alongside this tree but has since moved to `/home/eliran/code/cpptree`
-— no longer part of it at all.)
+(`cpptree`, a C++ learning project, used to live alongside this tree and has
+since moved to `/home/eliran/code/cpptree`. It's not part of this repo, but
+its `dirpicker` program is dirdelta's picker now.)
 
 ## Secrets
 
@@ -117,13 +123,15 @@ PYTHONPATH=.:lib/treepicker:tests .venv/bin/python3 -m unittest test_interactive
 PYTHONPATH=lib/treepicker:lib/treepicker/tests .venv/bin/python3 -m unittest test_treepicker -v
 ```
 
-Every module has a test file (78 tests, all passing as of 2026-10-23)
-except the thin wiring in `main.py`/`dirsync_main.py`, covered only by
-running the app, and the tiny `keybind.py`/`getcher.py`, exercised through
-`test_treepicker`. Shared fakes:
-- `tests/helpers.py`: `scripted_option_picker` / `scripted_tree_picker`
-  patch the curses pickers to return scripted answers, plus `make_files` for
-  temp dir fixtures. App tests build their own `tempfile.mkdtemp()` trees
+Every module has a test file (53 dirdelta tests and 41 in lib/treepicker,
+all passing as of 2026-10-23) except the thin wiring in
+`main.py`/`dirsync_main.py`, covered only by running the app, and the tiny
+`keybind.py`/`getcher.py`, exercised through `test_treepicker`. Shared fakes:
+- `tests/helpers.py`: `scripted_option_picker` / `scripted_tree_picker` /
+  `scripted_dir_picker` patch `dirdelta.picker`'s functions to return
+  scripted answers, so no test runs dirpicker, plus `make_files` for
+  temp dir fixtures. `tests/test_picker.py` tests `picker.py` itself against
+  a fake dirpicker script. App tests build their own `tempfile.mkdtemp()` trees
   rather than using `tests/fixtures/`, so they never depend on (or modify)
   the repo.
 - `lib/treepicker/tests/scripted_keys.py`: `scripted_keys` feeds
@@ -135,20 +143,22 @@ running the app, and the tiny `keybind.py`/`getcher.py`, exercised through
 
 `tests/fixtures/{alpha,bravo}` are sample trees for manual runs (see
 README.md); `bin/dirsync-fs.sh` syncs a temp copy of them. As of 2026-10-23
-picker mode, `-x`, `-m`, and a sync with a real Copy (`DRYRUN=0`) have been
-run end to end in a real terminal. The cloud flow has not, since it needs
+picker mode, `-x`, and a sync with a real Copy (`DRYRUN=0`) have been run
+end to end in a real terminal with dirpicker. The cloud flow has not, since it needs
 Drive credentials.
 
 Notes for whoever changes things next:
-- The unit tests cover only small pieces of the picker. Before refactoring
+- (For lib/treepicker, if it's kept.) The unit tests cover only small pieces
+  of the picker. Before refactoring
   `treeprinter`/`treesearch`/`treepickermodel`/`treenavigator`, snapshot the
   old package and diff rendered frames (`TreePrinter._tree_lines` plus the
   selected id) over many seeded random navigate/pick/search sequences, old
   vs. new. That's how the 2026-10-23 simplifications and fixes were checked.
 - To check something in a real terminal without a person at the keyboard,
-  run `python -m dirdelta` (or an installed `dirdelta`) under `pty.fork()` (set a window size with
-  `TIOCSWINSZ`), write keys to the pty, and read what's printed after
-  curses exits.
+  run `python -m dirdelta` in a detached tmux session (`tmux new-session -d
+  -x 90 -y 20 ...`), send keys with `tmux send-keys`, and read the screen
+  with `tmux capture-pane -p`. dirpicker draws on `/dev/tty`, so the
+  terminal must be a real (pseudo-)terminal.
 - Writing `test_treenavigator.py` caught a real bug in
   `explore_deepest_child()` (it compared a variable to itself, so it always
   stopped after one level), and running the app caught most of

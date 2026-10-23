@@ -1,5 +1,9 @@
 # treepicker internals — rendering, search, pagination, input
 
+**dirdelta no longer uses this picker**: since 2026-10-23 its pickers are
+cpptree's `dirpicker` (see `dirpicker-integration.md`). This describes the
+Python library in `lib/treepicker`, which still works on its own.
+
 Deeper than `architecture.md`'s summary. Read this before changing how the
 tree is drawn, how search filtering behaves, or how scrolling/pagination
 works — the pieces are more coupled than they look from the outside.
