@@ -97,15 +97,19 @@ commit-adjacent-copy them anywhere.
 make test             # or make test ARGS=-v, or any other unittest flags via ARGS
 ```
 
-It runs `unittest discover` once per test dir, so the two dirs' helper
-modules (`helpers.py`, `scripted_keys.py`) don't collide. `tests/` runs with
-`PYTHONPATH=.:lib/treepicker` and imports its targets as
-`from dirdelta import dirtree`, and `lib/treepicker/tests/` runs with
-`PYTHONPATH=lib/treepicker` (`from treepicker import treeprinter`).
-`cursesswitch` is a flat top-level module in `lib/treepicker/`. Patch targets
-must use the same module names the code imports (`'dirdelta.localdiskdirtree.DRYRUN'`):
-a bare `import localdiskdirtree` would load a second copy of the module that
-the app never sees. To run one module:
+It runs `unittest discover` on `tests/` with `PYTHONPATH=.:lib/treepicker`
+(imports look like `from dirdelta import dirtree`), then hands off to the
+submodule's own `make -C lib/treepicker test`, which runs
+`lib/treepicker/tests/` with `PYTHONPATH=.` (`from treepicker import
+treeprinter`), passing down the same `PYTHON` and `ARGS`. `make clean` and
+`make install` delegate to the submodule the same way, so the library's
+Makefile stays usable on its own. `cursesswitch` is a flat top-level module
+in `lib/treepicker/`.
+
+Patch targets must use the same module names the code imports
+(`'dirdelta.localdiskdirtree.DRYRUN'`): a bare `import localdiskdirtree`
+would load a second copy of the module that the app never sees. To run one
+module:
 
 ```bash
 PYTHONPATH=.:lib/treepicker:tests .venv/bin/python3 -m unittest test_interactive_dir_sync -v

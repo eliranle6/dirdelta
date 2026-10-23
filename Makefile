@@ -2,6 +2,8 @@
 
 # The repo's .venv if there is one, else whichever python3 is on PATH (e.g. an active venv)
 PYTHON ?= $(if $(wildcard .venv/bin/python3),.venv/bin/python3,python3)
+# The same interpreter for the submodule's own targets, which run from inside lib/treepicker
+SUBMAKE = $(MAKE) -C lib/treepicker PYTHON=$(if $(findstring /,$(PYTHON)),$(abspath $(PYTHON)),$(PYTHON))
 
 help:
 	@echo "make test       run the unit tests (ARGS=-v for per-test output)"
@@ -10,19 +12,20 @@ help:
 	@echo "make deploy     install a dirdelta command into ~/.local/bin via pipx; rerun to update"
 	@echo "make undeploy   remove the deployed command"
 
-# The repo root makes the dirdelta package importable, lib/treepicker the picker library. Each test
-# dir is discovered separately so their helper modules don't collide.
+# The repo root makes the dirdelta package importable, lib/treepicker the picker library. The picker
+# library runs its own tests.
 test:
 	PYTHONPATH=.:lib/treepicker $(PYTHON) -m unittest discover -s tests $(ARGS)
-	PYTHONPATH=lib/treepicker $(PYTHON) -m unittest discover -s lib/treepicker/tests $(ARGS)
+	$(SUBMAKE) test ARGS="$(ARGS)"
 
 clean:
-	find . -path ./.venv -prune -o \( -name __pycache__ -o -name '*.pyc' \) -prune -exec rm -rf {} +
+	find . \( -path ./.venv -o -path ./lib/treepicker \) -prune -o \( -name __pycache__ -o -name '*.pyc' \) -prune -exec rm -rf {} +
 	rm -rf build AUTHORS ChangeLog *.egg-info
-	rm -rf lib/treepicker/build lib/treepicker/AUTHORS lib/treepicker/ChangeLog lib/treepicker/*.egg-info
+	$(SUBMAKE) clean
 
 install:
-	$(PYTHON) -m pip install -U ./lib/treepicker .
+	$(SUBMAKE) install
+	$(PYTHON) -m pip install -U .
 
 # treepicker isn't on PyPI, so it's injected into dirdelta's pipx venv from the submodule
 deploy:
