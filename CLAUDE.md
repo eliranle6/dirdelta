@@ -24,16 +24,18 @@ re-deriving it from scratch.
 
 ## Running it
 
-Entry points are shell scripts in `bin/`, each setting `PYTHONPATH` and
-invoking `dirdelta/main.py`:
+See README.md for running `dirdelta/main.py` directly. Entry points are
+shell scripts in `bin/`, each setting `PYTHONPATH` and invoking
+`dirdelta/main.py` with the venv's Python (falling back to `python3`):
 
-- `./bin/dirsync-fs.sh` — sync two local dirs (`tests/fixtures/alpha` vs `.../bravo`, sample/test dirs)
+- `./bin/dirsync-fs.sh` — sync temp copies of `tests/fixtures/alpha` and `.../bravo`
 - `./bin/dirsync-cloud.sh` — sync a local WSL path against `cloud/mein` (Drive)
 - `./bin/dirpick-localdisk.sh` — browse/pick a file under wherever it's run from
 - `./bin/dirpick-cloud.sh` — browse/pick a file under `cloud/mein`
 
-`main.py` picks mode by arg count: one path → picker mode (`dirpick_main.py`),
-two paths → sync mode (`dirsync_main.py`). A "cloud" path is any path whose
+`main.py` picks mode by arg count: one path → picker mode (`dirpick_main.py`,
+which prints the picked path, or `execvp`s the `-x` program on it, after
+curses has exited), two paths → sync mode (`dirsync_main.py`). A "cloud" path is any path whose
 first component is literally `cloud` (see `utils.py`).
 
 Env vars that change execution mode:
@@ -83,122 +85,60 @@ commit-adjacent-copy them anywhere.
 
 ## Tests
 
-Started conservatively with `unittest`, on small self-contained modules
-picked because they need no curses/network mocking (`dirtree.py`,
-`findcmdwrapper.py`), or are pure tree logic in the picker library that
-never touches curses directly: `pagination.py` (window math),
-`treeprinter.py` (`calculate_lines_to_print()` builds the line list in
-memory; only `print_tree()` writes to the screen), `treepickermodel.py`
-(pick/unpick, subtree toggle), `treesearch.py` (match propagation, the
-narrowing-reuse optimization), `treenavigator.py` (cursor movement), and
-`treeops.py` (the BFS depth-capping helper `treeprinter` relies on).
-Test files live in a `tests/` dir sibling to the package (`tests/`,
-`lib/treepicker/tests/`), separate from the production code — this is a
-change from the original bare-colocation layout; `dirdelta`'s tests still
-bare-import their target module (`import dirtree`) rather than using
-`treepicker`'s package-style imports.
-
-`tests/fixtures/{alpha,bravo}` are small sample directory trees used by
-`bin/dirsync-fs.sh` for manual/exploratory testing — not consumed by any
-unittest. **Unverified**: `bin/dirsync-fs.sh` and the other entry-point
-scripts have not been run end-to-end since the dirsync→dirdelta rewrite;
-don't assume they work. Only the unittest-covered modules (`dirtree.py`,
-`findcmdwrapper.py`, `localdiskdirtree.py`, `menu.py`, and treepicker's
-`pagination.py`, `treeprinter.py`, `treepickermodel.py`, `treesearch.py`,
-`treenavigator.py`, `treeops.py`) are known-good.
-
-Run everything at once:
-
 ```bash
-./run-tests.sh
+./run-tests.sh        # or ./run-tests.sh -v, or with any other unittest flags
 ```
 
-(Just chains the commands below with `set -e`, since the modules'
-mismatched import conventions — `dirdelta`'s bare sibling imports vs.
-`treepicker`'s package-style imports — mean plain `python -m unittest
-discover` can't satisfy both at once with one `PYTHONPATH`.)
-
-Or run one module's tests at a time with the venv's Python:
+It runs `unittest discover` twice, once per test dir, because the two
+import conventions differ: `tests/` (dirdelta) runs with
+`PYTHONPATH=dirdelta:lib/treepicker` and bare-imports its targets
+(`import dirtree`), while `lib/treepicker/tests/` runs with
+`PYTHONPATH=lib/treepicker` and uses package imports
+(`from treepicker import treeprinter`). `cursesswitch` is a flat module in
+`lib/treepicker/`, so that path covers it too. To run one module:
 
 ```bash
-# dirtree.py — core diff algorithm (DirTree, DirEntry/FileEntry)
-PYTHONPATH=dirdelta:tests ../dirstuff-venv/bin/python3 -m unittest test_dirtree -v
-
-# findcmdwrapper.py — the `find`-shelling-out layer (uses real temp dirs, no mocking needed)
-PYTHONPATH=dirdelta:tests ../dirstuff-venv/bin/python3 -m unittest test_findcmdwrapper -v
-
-# localdiskdirtree.py — copy_inner_entries_from_dirtree's tree/directory
-# bookkeeping (uses real tempfile.mkdtemp() dirs; needs cursesswitch on the
-# path too, since the module imports it for progress printing)
-PYTHONPATH=dirdelta:tests:lib/treepicker ../dirstuff-venv/bin/python3 -m unittest test_localdiskdirtree -v
-
-# menu.py — run_menu's (label, handler) dispatch, with the option picker mocked
-PYTHONPATH=dirdelta:tests:lib/treepicker ../dirstuff-venv/bin/python3 -m unittest test_menu -v
-
-# treepicker/pagination.py — pure pagination-window math
-PYTHONPATH=lib/treepicker:lib/treepicker/tests ../dirstuff-venv/bin/python3 -m unittest test_pagination -v
-
-# treepicker/treeprinter.py — rendering logic (markers, colors, pagination
-# collapse), via calculate_lines_to_print() rather than print_tree()
-PYTHONPATH=lib/treepicker:lib/treepicker/tests ../dirstuff-venv/bin/python3 -m unittest test_treeprinter -v
-
-# treepicker/treepickermodel.py — pick/unpick a node's whole subtree,
-# get_picked_nodes()'s min/max-bound gating and single-option mode
-PYTHONPATH=lib/treepicker:lib/treepicker/tests ../dirstuff-venv/bin/python3 -m unittest test_treepickermodel -v
-
-# treepicker/treesearch.py — matching propagates up to ancestors,
-# original_matching stays node-specific, narrowing reuse doesn't go stale
-PYTHONPATH=lib/treepicker:lib/treepicker/tests ../dirstuff-venv/bin/python3 -m unittest test_treesearch -v
-
-# treepicker/treenavigator.py — explore/go_up, sibling-bound clamping,
-# explore_deepest_child()
-PYTHONPATH=lib/treepicker:lib/treepicker/tests ../dirstuff-venv/bin/python3 -m unittest test_treenavigator -v
-
-# treepicker/treeops.py — BFS depth-capping used by treeprinter's
-# auto-scoping (get_max_possible_depth)
-PYTHONPATH=lib/treepicker:lib/treepicker/tests ../dirstuff-venv/bin/python3 -m unittest test_treeops -v
+PYTHONPATH=dirdelta:lib/treepicker:tests ../dirstuff-venv/bin/python3 -m unittest test_interactive_dir_sync -v
+PYTHONPATH=lib/treepicker:lib/treepicker/tests ../dirstuff-venv/bin/python3 -m unittest test_treepicker -v
 ```
 
-(`cursesswitch` is bundled inside the treepicker submodule as a flat
-`lib/treepicker/cursesswitch.py`, so `PYTHONPATH=lib/treepicker` resolves
-both `import treepicker` and `import cursesswitch` — even though none of
-the tested treepicker code paths touch curses. Test files live outside
-the `treepicker` package proper, so they're imported by their bare module
-names (`test_pagination`, `test_treeprinter`, etc.), not a dotted
-`treepicker.test_*`.)
+Every module has a test file (78 tests, all passing as of 2026-10-23)
+except the thin wiring in `main.py`/`dirsync_main.py`, covered only by
+running the app, and the tiny `keybind.py`/`getcher.py`, exercised through
+`test_treepicker`. Shared fakes:
+- `tests/helpers.py`: `scripted_option_picker` / `scripted_tree_picker`
+  patch the curses pickers to return scripted answers, plus `make_files` for
+  temp dir fixtures. App tests build their own `tempfile.mkdtemp()` trees
+  rather than using `tests/fixtures/`, so they never depend on (or modify)
+  the repo.
+- `lib/treepicker/tests/scripted_keys.py`: `scripted_keys` feeds
+  `TreePicker`/`LineScanner` a key sequence by patching
+  `getcher.GetchUnix`, and `silent_screen` swaps the `cursesswitch` printer
+  for a mock.
+- Drive is never contacted: `test_clouddirtree` writes a JSON-lines cache to
+  a temp file, and `test_clouddirtreefactory` mocks `Credentials`/`build`.
 
-All 30 tests pass as of 2026-10-23.
+`tests/fixtures/{alpha,bravo}` are sample trees for manual runs (see
+README.md); `bin/dirsync-fs.sh` syncs a temp copy of them. As of 2026-10-23
+picker mode, `-x`, `-m`, and a sync with a real Copy (`DRYRUN=0`) have been
+run end to end in a real terminal. The cloud flow has not, since it needs
+Drive credentials.
 
-Notes for whoever adds the next batch:
+Notes for whoever changes things next:
+- The unit tests cover only small pieces of the picker. Before refactoring
+  `treeprinter`/`treesearch`/`treepickermodel`/`treenavigator`, snapshot the
+  old package and diff rendered frames (`TreePrinter._tree_lines` plus the
+  selected id) over many seeded random navigate/pick/search sequences, old
+  vs. new. That's how the 2026-10-23 simplifications and fixes were checked.
+- To check something in a real terminal without a person at the keyboard,
+  run `dirdelta/main.py` under `pty.fork()` (set a window size with
+  `TIOCSWINSZ`), write keys to the pty, and read what's printed after
+  curses exits.
 - Writing `test_treenavigator.py` caught a real bug in
-  `explore_deepest_child()`: it compared a local variable to itself every
-  loop iteration (never refreshed after `self.explore()`), so the
-  "did we move?" check was always true and it stopped after one level
-  regardless of tree depth. Fixed — worth remembering as a cautionary
-  example of why these modules were worth testing in the first place.
-- New filesystem-dependent tests (`test_findcmdwrapper.py`) build their
-  own `tempfile.mkdtemp()` fixture rather than depending on
-  `tests/fixtures/` — hermetic, no dependency on repo working-tree state.
-- Nothing touching Google Drive has tests yet. `clouddirtree.py` /
-  `clouddirtreefactory.py` have known bugs (see `known-issues.md`) that
-  would surface immediately; mock the `googleapiclient`/`google.oauth2`
-  calls with `unittest.mock` rather than hitting the real API, and
-  consider fixing the `NameError`/`TypeError` bugs first so there's
-  something correct to test.
-- `localdiskdirtree.py`'s `full_filesystem_path()`/`_add_file_by_path`
-  crashes (known-issues.md #1-#2) are now fixed and covered by
-  `test_localdiskdirtree.py`. `interactive_dir_sync.py` is a natural next
-  candidate: its `AttributeError` (known-issues.md #3) and `TypeError`
-  (#16) crashes are fixed, so `_remove` should now be testable against
-  `tempfile.mkdtemp()` dirs (mind that it really unlinks). `_copy` still
-  crashes in `dirtree.factory_from_list_of_file_entries` (#17).
-- The unit tests only cover small pieces of the picker. Before refactoring
-  `treeprinter`/`treesearch`/`treepickermodel`, it's worth snapshotting the
-  old package and diffing rendered frames (`TreePrinter._tree_lines` plus
-  the selected id) over many seeded random navigate/pick/search sequences,
-  old vs. new. That's how the 2026-10-23 simplifications were checked.
-  Leave `next_leaf`/`prev_leaf` out of such sequences until known-issues.md
-  #18 is fixed, or most runs crash early.
+  `explore_deepest_child()` (it compared a variable to itself, so it always
+  stopped after one level), and running the app caught most of
+  known-issues.md #17-22. Both are good reasons to test before trusting a
+  path through the code.
 
 ## Conventions observed in the code
 

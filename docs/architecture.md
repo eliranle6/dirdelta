@@ -21,10 +21,9 @@ shell script (dirsync-*.sh / dirpick-*.sh)
 
 ### `main.py`
 Argparse: `dir_a_path` (required), `dir_b_path` (optional), `-x/--execute`,
-`-m/--max-depth` (default 20, currently unused downstream — not threaded
-into `localdiskdirtree.factory()`'s `max_depth` param anywhere in the call
-chain from `main.py`). One positional path → `dirpick_main.run`; two →
-`dirsync_main.run`. Wrapped in `cursesswitch.wrapper(main)` unless
+`-m/--max-depth` (default 20, passed down to `localdiskdirtree.factory` as
+`find -maxdepth`). One positional path → `dirpick_main.run`; two →
+`dirsync_main.run`. Wrapped in `cursesswitch.wrapper` unless
 `MODE=static`.
 
 ### `utils.py`
@@ -56,9 +55,10 @@ answers "what's in src that dst doesn't have" — pure path-string membership
 test, no content comparison at all, matching the stated scope.
 
 `factory_from_list_of_file_entries` (module-level function, despite living
-next to the class) is meant to rebuild a `DirTree` from a flat list of
-`FileEntry` objects, to build the "chosen files" sub-tree just before a
-copy. As written it crashes before doing so (known-issues.md #17).
+next to the class) builds a `DirTree` holding a flat list of `FileEntry`
+objects at their relpaths: the "chosen files" sub-tree, just before a copy.
+`add_file_by_relpath` returns the existing entry for a file already in the
+tree, which is what lets `update_from_filesystem` rescan a tree in place.
 
 ### `localdiskdirtree.py`
 `LocalDiskDirTree(DirTree)`. `factory(filesystem_dirpath, max_depth=None,
@@ -85,7 +85,8 @@ fixed, see known-issues.md #2 — and is now covered by
 
 ### `clouddirtree.py` / `clouddirtreefactory.py`
 Cloud state is never queried live per-scan. Instead:
-1. `factory_interactive(rootpath)` ensures a cache file exists at
+1. `utils.create_dirtree_from_arg` calls `factory_interactive(rootpath)`
+   for any path whose first component is `cloud`. It ensures a cache file exists at
    `CloudDirTree.FILE_LIST_CACHE` (`~/.cache/dirman/files.txt`), prompting
    the user via `OptionPickerByMenuTraverse` to refresh it if it already
    exists.
@@ -117,13 +118,12 @@ sit alongside it as `scandrive.py`; it's now archived at
   miscalled as a `DirTree` classmethod — fixed, known-issues.md #3), then
   calls `dst.copy_inner_entries_from_dirtree(...)` — which is a dry run
   unless `DRYRUN=0` (see `localdiskdirtree.py` above) — and rescans `dst`.
-  Currently crashes in `factory_from_list_of_file_entries` before any of
-  that (known-issues.md #17).
 - `_remove()` prints a progress line, then calls
   `os.unlink(file_entry.full_filesystem_path())` for each selected file.
   The `TypeError` from mixing `{}` placeholders with `%` that used to crash
   it first is fixed (known-issues.md #16). Note `_remove()` is **not**
-  gated by `DRYRUN` — it really deletes files.
+  gated by `DRYRUN` — it really deletes files. It also drops each node from
+  the in-memory `src` tree so the next diff doesn't list it again.
 
 ### `menu.py`
 `run_menu([(label, handler), ...])` shows the labels with
@@ -136,14 +136,12 @@ Thin wiring: build both `DirTree`s, present a top-level menu (`View diff
 A-not-B`, `View diff B-not-A`, `Remove/Copy A→B`, `Remove/Copy B→A`, `Quit`).
 Copy/Remove options are only offered when **both** replicas are
 `LocalDiskDirTree` — cloud replicas are diff/view-only from this menu.
-`dirpick_main.FilesystemPicker` just wraps a single-select `TreePicker`.
-
-### `config.py`
-Only constants, currently unused elsewhere in the read code path:
-`POSSIBLE_PARENT_DIRS`, `FILE_EXTENTION_FOR_REPLICA_CANDIDATE = "mp3"`,
-`MIN_NR_FILES_WITH_EXTENTION_FOR_REPLICA_CANDIDATE = 30` — looks like
-scaffolding for an unfinished "auto-detect replica candidates" feature
-(matches the `MUSIC_FILE_EXTENTIONS` list sitting unused in `dirtree.py` too).
+`dirpick_main.run` wraps a single-select `TreePicker` and returns the
+picked entry's path; `cursesswitch.wrapper` hands that back to `main.py`,
+which only then prints it, or `os.execvp`s the `-x` program on it. Doing
+that after curses has exited is what makes the printed path survive and
+the launched program get a normal terminal. Menus list their options
+alphabetically, since the picker sorts siblings by `str(node.data)`.
 
 ## `lib/treepicker/` — curses tree-picker library (own git repo, nested as a submodule)
 
@@ -176,7 +174,14 @@ a re-exporting `__init__.py`). `wrapper(main)` calls
 bound to the curses window, unless `MODE=direct`, in which case a
 `_ConsolePrinter` (plain colored stdout via `termcolor`) is used instead —
 this is what lets the same `cursesswitch.print_string` calls work whether
-or not curses is active. `_CursesWindowPrinter` buffers printed lines and
-only redraws newly-added/overflowed lines (`_draw`/`_print_missing_lines`)
-rather than a full repaint every call.
+or not curses is active. `wrapper` returns `main`'s result.
+
+`_CursesWindowPrinter` draws each string straight onto the window at a
+running row/column cursor, dropping text past the right or bottom edge.
+`clear_screen()` starts a frame: it `erase()`s (not `clear()`, which would
+force a full terminal repaint) and holds back refreshes until
+`refresh()`, which `TreePicker._print_tree` calls once the frame is drawn.
+So each keypress sends one refresh, with only the cells that changed. Output
+printed outside a frame, like Copy's progress lines, refreshes
+immediately.
 

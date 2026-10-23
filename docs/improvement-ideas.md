@@ -87,19 +87,16 @@ treat as a backlog to pick from.
 
 ## Cleanup (low-risk, high readability payoff)
 
-12. **Delete dead code** rather than refactor it. Done 2026-10-23:
-    `OptionPickerByNumbers`, `dirtree.py`'s and `treesearch.py`'s broken
-    `__main__` blocks, `MUSIC_FILE_EXTENTIONS`, and assorted unused
-    constants in `treeprinter.py`. Still left:
-    - the stray `print('\nFiltering tree\n')` in
-      `TreePickerModel.update_search_pattern()` (bypasses the curses
-      printer, so it can garble the screen while curses is active)
-    - the unused `config.py` scaffolding for the never-built "auto-detect
-      replica" feature
-    - `exampletree.py`'s Python-2-only demo tree (see `known-issues.md` #14)
+12. ~~Delete dead code~~ — done 2026-10-23: `OptionPickerByNumbers`,
+    broken `__main__` blocks, `config.py`, `MUSIC_FILE_EXTENTIONS`, unused
+    `treeprinter` constants, and the stray debug `print` in
+    `TreePickerModel.update_search_pattern()`.
 
-13. **Simplify `cursesswitch._CursesWindowPrinter`'s redraw tracking.** It
-    tracks which lines and segments are already on screen so it only draws
-    new ones, but curses' own `refresh()` already sends only changed cells.
-    Not done yet: it's an optimization too, and nothing tests it without a
-    real terminal.
+13. ~~Simplify `cursesswitch._CursesWindowPrinter`'s redraw tracking~~ —
+    done 2026-10-23: it now draws at a running cursor and refreshes once
+    per picker frame (see architecture.md).
+
+14. **List menu options in the order given.** `OptionPickerByMenuTraverse`
+    menus come out alphabetical because the picker sorts siblings by
+    `str(node.data)` (known-issues.md #23). A per-tree sort key, or none for
+    menus, would fix it.

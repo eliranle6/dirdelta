@@ -1,14 +1,11 @@
 # Known issues / dead code
 
-Found by reading (not running) the code on 2026-07-13. Grouped by how
-confident the read is; nothing here has been executed or fixed. File paths
-are relative to `dirdelta/` unless noted.
-
-Numbered 2026-07-19 for discussion purposes, re-verified against the
-current source at that time — all still present as described (the
-`treepicker` submodule's real on-disk path is `lib/treepicker/treepicker/*.py`,
-a package with `__init__.py`, not the flat `lib/treepicker/*.py` some
-mentions below imply; that's a path nit in this doc, not a code bug).
+Issues 1-15 were found by reading the code on 2026-07-13 and numbered
+2026-07-19; 16-24 were found later, mostly by running it. As of 2026-10-23
+everything except 23-24 is fixed. Fixed entries are kept, struck through,
+because their notes explain why the code looks the way it does. File paths
+are relative to `dirdelta/` unless noted (picker files live under
+`lib/treepicker/treepicker/`).
 
 ## Confirmed by grep (referenced symbol genuinely doesn't exist)
 
@@ -96,16 +93,17 @@ mentions below imply; that's a path nit in this doc, not a code bug).
   constructing a `TreePicker` with `including_root=False` and checking
   `_picker._tree_navigator._including_root` reflects it.
 
-7. **`clouddirtreefactory.py:29`** — `factory_interactive` returns
-  `CloudDirTree(path_in_cloud)`, but `path_in_cloud` is never assigned
-  anywhere in the function (only the parameter `rootpath` is). This would
-  raise `NameError` — the interactive cloud-tree factory path looks
-  unfinished/broken as written.
+7. ~~**`clouddirtreefactory.py:29`** — `factory_interactive` returns
+  `CloudDirTree(path_in_cloud)`, but `path_in_cloud` is never assigned.~~
+  **FIXED** (2026-10-23): returns `clouddirtree.CloudDirTree(rootpath)`.
 
-8. **`clouddirtree.py:120-124`** — `CloudDirTree._path_in_cloud` is declared
-  `@staticmethod` but its body references `self.path_components(path)`.
-  Calling it would raise `NameError: name 'self' is not defined`. (Note:
-  nothing currently calls `_path_in_cloud` — it may be dead.)
+8. ~~**`clouddirtree.py:120-124`** — `CloudDirTree._path_in_cloud` is a
+  `@staticmethod` whose body references `self`.~~ **FIXED** (2026-10-23).
+  It wasn't dead: `CloudDirTree.__init__` called it, as a bare
+  `_path_in_cloud(...)` (`NameError`), and also read a nonexistent
+  `self.FILE_LIST_CACHE` (the constant is module-level). All three fixed, so
+  `CloudDirTree('cloud/mein')` now builds from the cache
+  (`tests/test_clouddirtree.py`).
 
 9. ~~**`clouddirtreefactory.py:86`** — `outfile.write(item)` writes a Drive API
   result `dict` object directly to a file opened in text mode, not a
@@ -121,57 +119,80 @@ mentions below imply; that's a path nit in this doc, not a code bug).
 11. ~~**`dirtree.py:170-173`** — the `if __name__ == '__main__':` block
   references an undefined variable `t`.~~ **FIXED** (2026-10-23): removed.
 
-12. **`main.py`'s `-m/--max-depth` argument** is parsed but, in the traced
-  call chain (`main.py` → `dirsync_main.run`/`dirpick_main.run` →
-  `utils.create_dirtree_from_arg` → `localdiskdirtree.factory`), `args.max_depth`
-  is never actually passed through — `create_dirtree_from_arg` calls
-  `localdiskdirtree.factory(rootpath)` with no `max_depth` kwarg, so the
-  factory's `max_depth=None` default always applies regardless of what the
-  user passes on the CLI.
+12. ~~**`main.py`'s `-m/--max-depth` argument** is parsed but never passed
+  through to `localdiskdirtree.factory`.~~ **FIXED** (2026-10-23):
+  `create_dirtree_from_arg(rootpath, max_depth)` now receives it from both
+  modes, and it's parsed as an `int`. Note this means the default of 20 now
+  actually applies.
 
 13. ~~**`treepicker/treesearch.py:48-56`** (`__main__` block) calls
   `dirtree.DirTree.factory_from_filesystem(...)`, which does not
   exist.~~ **FIXED** (2026-10-23): removed.
 
-14. **`treepicker/exampletree.py:6`** — `for i in range(6) + range(10, 15)`
-  is Python 2 syntax (`range()` returned a list there); in Python 3
-  `range` objects don't support `+`. This demo tree is used by
-  `treepicker.py`'s `__main__` block, which therefore can't run as a
-  standalone script under Python 3. (`treeprinter.py`'s `__main__`, which
-  also used it, was removed 2026-10-23.) Doesn't affect the real app, which
-  never imports `exampletree`.
+14. ~~**`treepicker/exampletree.py:6`** — `range(6) + range(10, 15)` is
+  Python 2 only.~~ **FIXED** (2026-10-23): uses `list(range(...))`.
 
-## Confirmed by running (2026-10-23)
+15. ~~`config.py`'s constants and `dirtree.py`'s `MUSIC_FILE_EXTENTIONS` were
+  never referenced.~~ **FIXED** (2026-10-23): both deleted.
 
-17. **`dirtree.factory_from_list_of_file_entries`** (`dirtree.py:5-20`), which
-  "Copy" uses to build the tree of chosen files, cannot work as written: it
-  splits `file_entry.fullpath` assuming the root's basename is the first
-  path component (a scripted Copy on copies of the fixture dirs raised
-  `ValueError: File's first path component must match ...`), and past that
-  it calls `dirtree.get_dir_node(...)`, which doesn't exist, and
-  `dirtree.create_node(...)`, which `DirTree` overrides to always raise.
-  **Copy crashes here before any file is touched**, DRYRUN or not.
+## Confirmed by running, all FIXED 2026-10-23
 
-18. **`treenavigator.move_selection_relative_leaf`** (`Ctrl-j`/`Ctrl-k`,
-  next/prev leaf) assigns and reads `self._selected_node` (`treenavigator.py:81,87`),
-  an attribute that doesn't exist (the real one is `_selected_node_id`),
-  and the prev direction calls `explore_deepest_child(DIRECTION_PREV)`,
-  which calls a nonexistent `self.last_node()`. Both raise
-  `AttributeError` in random picker scenarios.
+17-21 have regression tests that fail on the old code.
 
-19. **Searching with no matches while `including_root=False`** raises
-  `AttributeError: 'NoneType' object has no attribute 'identifier'`: the
-  filtered tree is just the root, so
-  `TreeNavigator._calculate_initial_selected_node` finds no child to select
-  and dereferences `None`. The app's own pickers use `including_root=True`,
-  so this only affects library users.
+17. **Copy crashed before touching any file.**
+  `dirtree.factory_from_list_of_file_entries` split `file_entry.fullpath`
+  assuming the root's basename was its first component (`ValueError`), then
+  called a nonexistent `get_dir_node` and the deliberately-raising
+  `create_node`. It now just adds each entry's relpath to a fresh
+  `DirTree`. The rescan right after the copy then crashed too
+  (`DuplicatedNodeIdError`, since `update_from_filesystem` re-adds every
+  file), so `add_file_by_relpath` now returns the existing entry for a file
+  already in the tree.
 
-## Stale references (not bugs in code that runs, just dangling)
+18. **Next/prev leaf (`Ctrl-j`/`Ctrl-k`) raised `AttributeError`**:
+  `move_selection_relative_leaf` used a nonexistent `self._selected_node`
+  instead of `_selected_node_id`, and the prev direction called a
+  nonexistent `self.last_node()` (now `move_selection_absolute(index=-1)`).
 
-15. `config.py`'s constants (`POSSIBLE_PARENT_DIRS`,
-  `FILE_EXTENTION_FOR_REPLICA_CANDIDATE`,
-  `MIN_NR_FILES_WITH_EXTENTION_FOR_REPLICA_CANDIDATE`) and
-  `dirtree.py`'s `MUSIC_FILE_EXTENTIONS` are defined but never referenced
-  by any other module in `dirdelta/` — scaffolding for an
-  unfinished "auto-detect likely replica directories by music-file count"
-  feature.
+19. **Searching with no matches while `including_root=False` crashed the
+  navigator** (`_calculate_initial_selected_node` and `go_to_root` indexed
+  into an empty child list). Both now fall back to selecting the root.
+  3000 random picker sessions (navigation, leaf jumps, picks, searches) now
+  run without a single crash, and the ones that never crashed before render
+  exactly as they used to.
+
+20. **Remove left the removed files in the diff**: they were unlinked but
+  stayed in the in-memory source tree, so the next round listed them again
+  and removing them again raised `FileNotFoundError`. `_remove` now also
+  drops each node from the source tree.
+
+21. **Picker mode's result never reached the user.** The picked path was
+  printed inside curses, so it vanished when curses restored the terminal,
+  and `-x` called `.full_filesystem_path()` on the list `pick_one()`
+  returns (`AttributeError`), then `os.execve`'d with an empty environment
+  and no `PATH` lookup. `dirpick_main.run` now returns the path,
+  `cursesswitch.wrapper` passes it back, and `main.py` prints it or
+  `os.execvp`s the program once curses has exited.
+
+22. **Smaller crashes**: `DirTree('/x/y/')` set its root path to `''` (a
+  trailing slash made it take `basename`); `utils` raised `IndexError` on
+  the path `/`; `_refresh_cache` wrote text into a binary `TemporaryFile`
+  and then copied from its `.name` (an fd number) after closing it (it now
+  writes `files.txt.tmp` and renames it over the cache, so a failed scan
+  keeps the old cache); `_CursesWindowPrinter.print_line` called itself
+  forever; the `bin/` scripts ran system `python3`, which lacks `treelib`
+  (they now prefer the venv's), and `bin/dirsync-fs.sh` synced the repo's
+  own fixtures, where a Remove would delete them (it now syncs a temp copy).
+
+## Still open
+
+23. **Menus are shown in alphabetical order**, not the order the code lists
+  options in, because the picker sorts every sibling group by
+  `str(node.data)`. Harmless, but e.g. the Copy/Remove menu reads "Copy,
+  Do nothing, Remove, Reselect".
+
+24. **Cloud scanning is untested against real Drive data.**
+  `CloudDirTree._parsefile` asserts exactly one id has children but no
+  metadata (the Drive root); files whose parent folder isn't in the listing
+  (e.g. shared folders) would break that assumption. And a `___DUP__`-renamed
+  folder's children still attach to the first folder of that name.
