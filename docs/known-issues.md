@@ -51,9 +51,10 @@ mentions below imply; that's a path nit in this doc, not a code bug).
   functions (`localdiskdirtree.factory`, `clouddirtreefactory.factory_interactive`)
   rather than classmethods.
 
-  **Net effect:** "Copy" no longer crashes on this bug — it still hits
-  issue 5 (`shutil.copy` stubbed out) before doing real work. "Remove" no
-  longer hits issues 1-2, but crashes on a separate bug — see issue 16.
+  **Net effect:** "Copy" no longer crashes on this bug, but still crashes
+  inside `factory_from_list_of_file_entries` itself before copying anything
+  (issue 17). "Remove" no longer hits issues 1-2; its next bug, issue 16, is
+  fixed too.
 
 4. ~~**`utils.py`'s `__validate_replica` calls `cursesswitch.print_string(...)`
   (`utils.py:33`) but the file never imports `cursesswitch`**~~ **FIXED**
@@ -106,25 +107,19 @@ mentions below imply; that's a path nit in this doc, not a code bug).
   Calling it would raise `NameError: name 'self' is not defined`. (Note:
   nothing currently calls `_path_in_cloud` — it may be dead.)
 
-9. **`clouddirtreefactory.py:86`** — `outfile.write(item)` writes a Drive API
+9. ~~**`clouddirtreefactory.py:86`** — `outfile.write(item)` writes a Drive API
   result `dict` object directly to a file opened in text mode, not a
-  string. This would raise `TypeError: write() argument must be str, not
-  dict` — needs `json.dump`/`str(item)`/`repr(item)`. (`clouddirtree.py`'s
-  cache reader, `_parseline`, does `eval(line)` on each line, implying the
-  intended format is Python-repr text — so `outfile.write(repr(item))` or
-  similar is probably the fix, matching what the reader expects.)
+  string.~~ **FIXED** (2026-10-23): the cache is now JSON lines, written
+  with `json.dumps(item) + '\n'` and read back by `_parseline` with
+  `json.loads` instead of `eval()`.
 
-10. **`optionpicker.py:26-28`** — `OptionPickerByNumbers.__init__` calls
-  `super(OptionPicker, self).__init__(options)` (should be
-  `super(OptionPickerByNumbers, self).__init__(options)`), and the class
-  also uses Python 2's `raw_input()` (removed in Python 3). This class
-  looks unused/dead: the app only ever constructs
-  `OptionPickerByMenuTraverse` (`interactive_dir_sync.py`,
-  `dirsync_main.py`, `clouddirtreefactory.py`).
+10. ~~**`optionpicker.py:26-28`** — `OptionPickerByNumbers.__init__` calls
+  `super(OptionPicker, self).__init__(options)` and uses Python 2's
+  `raw_input()`.~~ **FIXED** (2026-10-23) by deleting the class; nothing
+  constructed it.
 
-11. **`dirtree.py:170-173`** — the `if __name__ == '__main__':` block
-  references an undefined variable `t` and calls `t.show()`. Dead/leftover
-  debug code; only matters if someone runs `python dirtree.py` directly.
+11. ~~**`dirtree.py:170-173`** — the `if __name__ == '__main__':` block
+  references an undefined variable `t`.~~ **FIXED** (2026-10-23): removed.
 
 12. **`main.py`'s `-m/--max-depth` argument** is parsed but, in the traced
   call chain (`main.py` → `dirsync_main.run`/`dirpick_main.run` →
@@ -134,18 +129,42 @@ mentions below imply; that's a path nit in this doc, not a code bug).
   factory's `max_depth=None` default always applies regardless of what the
   user passes on the CLI.
 
-13. **`treepicker/treesearch.py:48-56`** (`__main__` block) calls
-  `dirtree.DirTree.factory_from_filesystem(...)`, which does not exist
-  anywhere in the codebase. Dead/stale profiling script, not on any real
-  call path.
+13. ~~**`treepicker/treesearch.py:48-56`** (`__main__` block) calls
+  `dirtree.DirTree.factory_from_filesystem(...)`, which does not
+  exist.~~ **FIXED** (2026-10-23): removed.
 
 14. **`treepicker/exampletree.py:6`** — `for i in range(6) + range(10, 15)`
   is Python 2 syntax (`range()` returned a list there); in Python 3
-  `range` objects don't support `+`. This demo tree is used by the
-  `__main__` blocks of `treepicker.py`, `treeprinter.py`, and (indirectly)
-  `optionpicker.py` — none of them would run as standalone scripts under
-  Python 3 as a result. Doesn't affect the real app, which never imports
-  `exampletree`.
+  `range` objects don't support `+`. This demo tree is used by
+  `treepicker.py`'s `__main__` block, which therefore can't run as a
+  standalone script under Python 3. (`treeprinter.py`'s `__main__`, which
+  also used it, was removed 2026-10-23.) Doesn't affect the real app, which
+  never imports `exampletree`.
+
+## Confirmed by running (2026-10-23)
+
+17. **`dirtree.factory_from_list_of_file_entries`** (`dirtree.py:5-20`), which
+  "Copy" uses to build the tree of chosen files, cannot work as written: it
+  splits `file_entry.fullpath` assuming the root's basename is the first
+  path component (a scripted Copy on copies of the fixture dirs raised
+  `ValueError: File's first path component must match ...`), and past that
+  it calls `dirtree.get_dir_node(...)`, which doesn't exist, and
+  `dirtree.create_node(...)`, which `DirTree` overrides to always raise.
+  **Copy crashes here before any file is touched**, DRYRUN or not.
+
+18. **`treenavigator.move_selection_relative_leaf`** (`Ctrl-j`/`Ctrl-k`,
+  next/prev leaf) assigns and reads `self._selected_node` (`treenavigator.py:81,87`),
+  an attribute that doesn't exist (the real one is `_selected_node_id`),
+  and the prev direction calls `explore_deepest_child(DIRECTION_PREV)`,
+  which calls a nonexistent `self.last_node()`. Both raise
+  `AttributeError` in random picker scenarios.
+
+19. **Searching with no matches while `including_root=False`** raises
+  `AttributeError: 'NoneType' object has no attribute 'identifier'`: the
+  filtered tree is just the root, so
+  `TreeNavigator._calculate_initial_selected_node` finds no child to select
+  and dereferences `None`. The app's own pickers use `including_root=True`,
+  so this only affects library users.
 
 ## Stale references (not bugs in code that runs, just dangling)
 

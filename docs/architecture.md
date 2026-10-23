@@ -56,8 +56,9 @@ answers "what's in src that dst doesn't have" — pure path-string membership
 test, no content comparison at all, matching the stated scope.
 
 `factory_from_list_of_file_entries` (module-level function, despite living
-next to the class) rebuilds a `DirTree` from a flat list of `FileEntry`
-objects — used to build the "chosen files" sub-tree just before a copy.
+next to the class) is meant to rebuild a `DirTree` from a flat list of
+`FileEntry` objects, to build the "chosen files" sub-tree just before a
+copy. As written it crashes before doing so (known-issues.md #17).
 
 ### `localdiskdirtree.py`
 `LocalDiskDirTree(DirTree)`. `factory(filesystem_dirpath, max_depth=None,
@@ -90,11 +91,10 @@ Cloud state is never queried live per-scan. Instead:
    exists.
 2. `_refresh_cache()` → `_scan_drive_files_list()` calls the Drive v3 API
    (`files().list`, paged, `fields=... files(id,name,parents,kind,size,
-   mimeType,sha256Checksum)`) and writes one Python-dict-repr line per file
-   to the cache (note: `outfile.write(item)` writes a `dict`, not a string —
-   see known-issues.md).
+   mimeType,sha256Checksum)`) and writes one JSON line per file to the
+   cache.
 3. `CloudDirTree.__init__` reads that cache with `_parsefile`, which
-   `eval()`s each `{...}` line into a dict (id→children map + id→metadata
+   `json.loads`es each `{...}` line into a dict (id→children map + id→metadata
    map), finds the root (the one id with children but no metadata), then
    `_dirdict_to_dirtree` DFS-walks id→children building `DirTree` nodes,
    only for entries under the requested `inner_rootpath`. Handles Drive's
@@ -109,18 +109,27 @@ sit alongside it as `scandrive.py`; it's now archived at
 ### `interactive_dir_sync.py`
 `InteractiveDirSync(src, dst)`:
 - `sync()` loop: diff → `treepicker.TreePicker(missing).pick()` to select
-  files → menu (`Copy` / `Remove` / `Do nothing` / `Reselect files`) → act →
-  recompute diff → repeat until nothing selected or user quits.
+  files → `menu.run_menu` (`Do nothing` / `Reselect files` / `Copy` /
+  `Remove`) → act → recompute diff → repeat until nothing is selected, the
+  user picks "Do nothing", or quits either picker.
 - `_copy()` rebuilds a `DirTree` from just the selected `FileEntry`s via
   the module-level `dirtree.factory_from_list_of_file_entries` (previously
   miscalled as a `DirTree` classmethod — fixed, known-issues.md #3), then
   calls `dst.copy_inner_entries_from_dirtree(...)` — which is a dry run
-  unless `DRYRUN=0` (see `localdiskdirtree.py` above).
+  unless `DRYRUN=0` (see `localdiskdirtree.py` above) — and rescans `dst`.
+  Currently crashes in `factory_from_list_of_file_entries` before any of
+  that (known-issues.md #17).
 - `_remove()` prints a progress line, then calls
   `os.unlink(file_entry.full_filesystem_path())` for each selected file.
   The `TypeError` from mixing `{}` placeholders with `%` that used to crash
   it first is fixed (known-issues.md #16). Note `_remove()` is **not**
   gated by `DRYRUN` — it really deletes files.
+
+### `menu.py`
+`run_menu([(label, handler), ...])` shows the labels with
+`OptionPickerByMenuTraverse`, calls the chosen label's handler (if not
+`None`), and returns the label, or `None` if the user quit the menu. Both
+the top-level sync menu and `InteractiveDirSync`'s Copy/Remove menu use it.
 
 ### `dirsync_main.py` / `dirpick_main.py`
 Thin wiring: build both `DirTree`s, present a top-level menu (`View diff
@@ -156,9 +165,7 @@ scaffolding for an unfinished "auto-detect replica candidates" feature
   before making UI changes).
 - `optionpicker.py` — flat "pick one of N strings" menu, implemented by
   wrapping the strings as a 1-level `treelib.Tree` and reusing `TreePicker`.
-  `OptionPickerByMenuTraverse` is the one actually used by the app;
-  `OptionPickerByNumbers` is legacy/Python-2-era dead code (uses
-  `raw_input()`, has a constructor bug — see known-issues.md).
+  `OptionPickerByMenuTraverse` is its only implementation.
 
 ## `lib/treepicker/cursesswitch.py` — curses init/teardown + colored print
 

@@ -30,13 +30,18 @@ the running count would exceed `max_nr_lines`, but always allowing descent
 down to `min_depth` (the selected node's depth) regardless of count.
 
 ### Drawing (`_get_tree_lines`)
-Iterative DFS (explicit stack, not recursion) over `_children()` — which
+`_walk()` produces the `(node, depth, is_last_child)` list in print order,
+`_markers_and_color()` decides each node's marker column and color,
+`_format_node()` builds its segments, and `_get_tree_lines()` ties them
+together and applies sibling pagination.
+
+`_walk()` is an iterative DFS (explicit stack, not recursion) over `_children()` — which
 itself filters to nodes with `matching` truthy or no `matching` attribute,
 i.e. search-filtered-out nodes are simply skipped during traversal.
 Children are sorted by `str(node.data)` (`_node_key`) at each level, not by
 insertion order.
 
-Box-drawing characters (UTF-8, hardcoded as escaped byte literals):
+Box-drawing characters:
 `VERTICAL │`, `LAST_CHILD └`, `MID_CHILD ├`, `HORIZONTAL ─`. Each line's
 prefix is built as: `[selection marker][pick marker][search marker]` +
 per-depth continuation marks (`│   ` if an ancestor at that depth still has
@@ -86,25 +91,22 @@ copy-into-new-tree step using the `matching`/`original_matching` flags this
 sets). For every node (iterative DFS), sets:
 - `node.original_matching` — whether *this node's own* tag/data text
   (case-insensitive) contains the pattern
-- `node.matching` — `original_matching` OR any descendant matches (matching
-  propagates *up* to ancestors via the `path_from_root` list maintained
-  during the DFS, so a deeply matching leaf keeps its whole ancestor chain
+- `node.matching` — `original_matching` OR any descendant matches (a match
+  walks up through its parents marking them, stopping at the first one
+  already marked, so a deeply matching leaf keeps its whole ancestor chain
   visible)
+
+Everything else reads these two flags only through
+`treesearch.is_visible(node)` (`matching`, defaulting to True for nodes no
+search has touched) and `treesearch.is_self_match(node)`
+(`original_matching`, defaulting to False).
 
 Has a "performance optimization" path: if the new pattern is a superset of
 the previous pattern (`self._tree.pattern in pattern`), it only re-examines
 children of already-matching nodes — narrowing search reuses prior results
-instead of rescanning everything. This is why `treeprinter._DATA_THAT_WILL_APPEAR_FIRST`
-constants and the `~` search-match marker exist — `original_matching`
-(this node itself matched) is what's rendered with `~`, distinct from
+instead of rescanning everything. `original_matching` (this node itself
+matched) is what's rendered with the `~` search-match marker, distinct from
 `matching` (this node or a descendant matched, used for traversal/visibility).
-
-Its `__main__` block (`treesearch.py:48-56`) calls
-`dirtree.DirTree.factory_from_filesystem(...)`, which does not exist
-anywhere in the codebase (nearest equivalents:
-`localdiskdirtree.factory()`, or the module-level
-`dirtree.factory_from_list_of_file_entries`). Dead/stale profiling script,
-not part of any real call path.
 
 ## Raw input — `getcher.GetchUnix`
 
@@ -137,8 +139,7 @@ keystroke.
 
 ## `exampletree.py`
 
-Demo tree used by `treepicker.py`'s, `treeprinter.py`'s, and (indirectly)
-`optionpicker.py`'s `__main__` blocks. **Broken under Python 3**: line 6
+Demo tree used by `treepicker.py`'s `__main__` block. **Broken under Python 3**: line 6
 does `for i in range(6) + range(10, 15)`, and `range` objects don't support
 `+` in Python 3 (only in Python 2, where `range()` returned a list). Would
 raise `TypeError: unsupported operand type(s) for +: 'range' and 'range'`

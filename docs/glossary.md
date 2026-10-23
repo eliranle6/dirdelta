@@ -29,9 +29,9 @@ mtime, or a hash — the diff is filename/path-string equality only, by
 design.
 
 **Cloud files list cache** — `~/.cache/dirman/files.txt`
-(`CloudDirTree.FILE_LIST_CACHE`). One Python-dict-repr line per Drive API
+(`CloudDirTree.FILE_LIST_CACHE`). One JSON line per Drive API
 file object (`id`, `name`, `parents`, `mimeType`, etc.), refreshed on
-demand rather than queried live per scan. `CloudDirTree` `eval()`s this
+demand rather than queried live per scan. `CloudDirTree` parses this
 file line-by-line to rebuild id→children / id→metadata maps before walking
 them into a `DirTree`.
 

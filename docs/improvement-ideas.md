@@ -56,12 +56,9 @@ treat as a backlog to pick from.
    `unused/scandrive.py` (and `src/drivesync/` deleted) rather than kept
    alongside the real package.
 
-8. **Extract a small "labeled-action menu" helper.** Both
-   `dirsync_main._sync` and
-   `InteractiveDirSync._chooseWhatToDoWithFiles`/`sync` hand-roll "build
-   option strings → pick one → if/elif string-compare to dispatch"
-   independently. A tiny `run_menu([(label, handler), ...])` helper would
-   remove both duplicated dispatch chains.
+8. ~~Extract a small "labeled-action menu" helper~~ — done (2026-10-23):
+   `dirdelta/menu.py`'s `run_menu([(label, handler), ...])` now drives both
+   `dirsync_main._sync` and `InteractiveDirSync.sync`.
 
 9. **Break up `InteractiveDirSync.sync()`.** It mixes diff recomputation,
    UI invocation, menu dispatch, and control flow in one loop, with
@@ -80,22 +77,29 @@ treat as a backlog to pick from.
     juggling `print_tree_once`/state-hash diffing inline.
 
 11. **Give the `matching`/`original_matching` node attributes an explicit
-    home.** They're bolted onto plain `treelib.Node` objects ad hoc in
-    `treesearch.py` and read via defensive `hasattr()` checks scattered
-    across `treeprinter.py`, `treenavigator.py`, and `treepickermodel.py`.
-    Setting a default at node-creation time (or a tiny wrapper) would
-    remove the repeated `hasattr` guards.
+    home.** Partly done (2026-10-23): every reader now goes through
+    `treesearch.is_visible(node)` / `treesearch.is_self_match(node)` instead
+    of its own `hasattr()` check. The attributes are still set ad hoc on
+    plain `treelib.Node` objects, though; a cleaner next step would be for
+    `TreeSearch` to return sets of visible/self-matching ids (keeping the
+    narrowing optimization by remembering the previous set), which would
+    also let `TreePickerModel` stop copying the tree for the navigator.
 
 ## Cleanup (low-risk, high readability payoff)
 
-12. **Delete dead code** rather than refactor it:
-    - `OptionPickerByNumbers` (Python 2 syntax, broken `super()` call,
-      unused — `OptionPickerByMenuTraverse` is what's actually used)
-    - the stray `print('toggling')`/`print('end toggle')` debug lines in
-      `treepickermodel.toggle()` (these bypass the curses printer and
-      would garble the screen if ever hit while curses is active)
-    - `dirtree.py`'s broken `__main__` block (references undefined `t`)
-    - the unused `config.py` / `MUSIC_FILE_EXTENTIONS` scaffolding for the
-      never-built "auto-detect replica" feature
-    - `treesearch.py`'s and `exampletree.py`'s broken `__main__`/demo code
-      (see `known-issues.md`)
+12. **Delete dead code** rather than refactor it. Done 2026-10-23:
+    `OptionPickerByNumbers`, `dirtree.py`'s and `treesearch.py`'s broken
+    `__main__` blocks, `MUSIC_FILE_EXTENTIONS`, and assorted unused
+    constants in `treeprinter.py`. Still left:
+    - the stray `print('\nFiltering tree\n')` in
+      `TreePickerModel.update_search_pattern()` (bypasses the curses
+      printer, so it can garble the screen while curses is active)
+    - the unused `config.py` scaffolding for the never-built "auto-detect
+      replica" feature
+    - `exampletree.py`'s Python-2-only demo tree (see `known-issues.md` #14)
+
+13. **Simplify `cursesswitch._CursesWindowPrinter`'s redraw tracking.** It
+    tracks which lines and segments are already on screen so it only draws
+    new ones, but curses' own `refresh()` already sends only changed cells.
+    Not done yet: it's an optimization too, and nothing tests it without a
+    real terminal.

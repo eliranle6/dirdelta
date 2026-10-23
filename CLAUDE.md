@@ -103,7 +103,7 @@ bare-import their target module (`import dirtree`) rather than using
 unittest. **Unverified**: `bin/dirsync-fs.sh` and the other entry-point
 scripts have not been run end-to-end since the dirsync→dirdelta rewrite;
 don't assume they work. Only the unittest-covered modules (`dirtree.py`,
-`findcmdwrapper.py`, `localdiskdirtree.py`, and treepicker's
+`findcmdwrapper.py`, `localdiskdirtree.py`, `menu.py`, and treepicker's
 `pagination.py`, `treeprinter.py`, `treepickermodel.py`, `treesearch.py`,
 `treenavigator.py`, `treeops.py`) are known-good.
 
@@ -131,6 +131,9 @@ PYTHONPATH=dirdelta:tests ../dirstuff-venv/bin/python3 -m unittest test_findcmdw
 # bookkeeping (uses real tempfile.mkdtemp() dirs; needs cursesswitch on the
 # path too, since the module imports it for progress printing)
 PYTHONPATH=dirdelta:tests:lib/treepicker ../dirstuff-venv/bin/python3 -m unittest test_localdiskdirtree -v
+
+# menu.py — run_menu's (label, handler) dispatch, with the option picker mocked
+PYTHONPATH=dirdelta:tests:lib/treepicker ../dirstuff-venv/bin/python3 -m unittest test_menu -v
 
 # treepicker/pagination.py — pure pagination-window math
 PYTHONPATH=lib/treepicker:lib/treepicker/tests ../dirstuff-venv/bin/python3 -m unittest test_pagination -v
@@ -164,7 +167,7 @@ the `treepicker` package proper, so they're imported by their bare module
 names (`test_pagination`, `test_treeprinter`, etc.), not a dotted
 `treepicker.test_*`.)
 
-All 27 tests pass as of 2026-10-23.
+All 30 tests pass as of 2026-10-23.
 
 Notes for whoever adds the next batch:
 - Writing `test_treenavigator.py` caught a real bug in
@@ -186,8 +189,16 @@ Notes for whoever adds the next batch:
   crashes (known-issues.md #1-#2) are now fixed and covered by
   `test_localdiskdirtree.py`. `interactive_dir_sync.py` is a natural next
   candidate: its `AttributeError` (known-issues.md #3) and `TypeError`
-  (#16) crashes are fixed, so `_copy`/`_remove` should now be testable
-  against `tempfile.mkdtemp()` dirs (mind that `_remove` really unlinks).
+  (#16) crashes are fixed, so `_remove` should now be testable against
+  `tempfile.mkdtemp()` dirs (mind that it really unlinks). `_copy` still
+  crashes in `dirtree.factory_from_list_of_file_entries` (#17).
+- The unit tests only cover small pieces of the picker. Before refactoring
+  `treeprinter`/`treesearch`/`treepickermodel`, it's worth snapshotting the
+  old package and diffing rendered frames (`TreePrinter._tree_lines` plus
+  the selected id) over many seeded random navigate/pick/search sequences,
+  old vs. new. That's how the 2026-10-23 simplifications were checked.
+  Leave `next_leaf`/`prev_leaf` out of such sequences until known-issues.md
+  #18 is fixed, or most runs crash early.
 
 ## Conventions observed in the code
 
