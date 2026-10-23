@@ -3,7 +3,7 @@ import os
 import treepicker
 import cursesswitch
 import dirtree
-from treepicker import optionpicker
+import menu
 
 
 class InteractiveDirSync(object):
@@ -22,8 +22,8 @@ class InteractiveDirSync(object):
         self._chooseFiles(missing)
 
     def sync(self):
-        missing = self._dst.get_unknown_entries_in_given_dirtree(self._src)
         while True:
+            missing = self._dst.get_unknown_entries_in_given_dirtree(self._src)
             if not missing.does_dir_contain_any_files():
                 cursesswitch.print_string("Nothing to synchronize; Destination dir alread contains all files "
                                      "in source dir.")
@@ -35,20 +35,14 @@ class InteractiveDirSync(object):
             if not self._selected:
                 break
             cursesswitch.print_string("%d files were chosen to copy so far." % (len(self._selected),))
-            option = self._chooseWhatToDoWithFiles()
-            if option == self._OPTION_NOTHING:
+            option = menu.run_menu([
+                (self._OPTION_NOTHING, None),
+                (self._OPTION_RESELECT, None),
+                (self._OPTION_COPY, self._copy),
+                (self._OPTION_REMOVE, self._remove),
+            ])
+            if option in (None, self._OPTION_NOTHING):
                 break
-            elif option == self._OPTION_COPY:
-                self._copy()
-                self._update_from_filesystem()
-                missing = self._dst.get_unknown_entries_in_given_dirtree(self._src)
-                self._selected = dict()
-            elif option == self._OPTION_REMOVE:
-                self._remove()
-            elif option == self._OPTION_RESELECT:
-                pass
-            else:
-                assert False, option
 
     def _chooseFiles(self, missing):
         tree_header = ("Files in %s, which are not in %s:\n"
@@ -64,20 +58,11 @@ class InteractiveDirSync(object):
             selected[file_entry.fullpath] = file_entry
         return selected
 
-    def _chooseWhatToDoWithFiles(self):
-        options = [self._OPTION_NOTHING, self._OPTION_RESELECT]
-        if self._selected:
-            options.extend([self._OPTION_COPY, self._OPTION_REMOVE])
-        picker = optionpicker.OptionPickerByMenuTraverse(options)
-        return picker.pick_one()
-
-    def _update_from_filesystem(self):
-        self._dst.update_from_filesystem()
-
     def _copy(self):
         _dirtree = dirtree.factory_from_list_of_file_entries(self._selected.values(),
                                                               self._src.fullpath())
         self._dst.copy_inner_entries_from_dirtree(_dirtree)
+        self._dst.update_from_filesystem()
 
     def _remove(self):
         file_entries = self._selected.values()
