@@ -25,7 +25,7 @@ class LocalDiskDirTree(dirtree.DirTree):
     def update_from_filesystem(self, max_depth=None, file_extentions=None, dirs_only=False,
                                include_hidden=True):
         if not self._silent:
-            cursesswitch.print_string("Scanning directory %s..." % (self._rootpath,))
+            cursesswitch.print_line("Scanning directory %s..." % (self._rootpath,))
         if not dirs_only:
             # Read disk for files
             full_paths = findcmdwrapper.find_files(
@@ -44,7 +44,7 @@ class LocalDiskDirTree(dirtree.DirTree):
     def copy_inner_entries_from_dirtree(self, dirtree):
         files = list(dirtree.iter_files())
         for index, file_entry in enumerate(files):
-            cursesswitch.print_string("Copying %s (%d out of %d)" % (file_entry, index + 1, len(files)))
+            cursesswitch.print_line("Copying %s (%d out of %d)" % (file_entry, index + 1, len(files)))
             new_file_entry = self.add_file_by_relpath(file_entry.relpath)
             try:
                 dest_dirpath = os.path.dirname(new_file_entry.full_filesystem_path())
@@ -54,7 +54,7 @@ class LocalDiskDirTree(dirtree.DirTree):
                     try:
                         os.makedirs(dest_dirpath)
                     except OSError as ex:
-                        cursesswitch.print_string("Copy failed: %s" % (str(ex),), "red")
+                        cursesswitch.print_line("Copy failed: %s" % (str(ex),), "red")
                         continue
                 self._copy_local_file_to_tree_with_path(
                     file_entry.full_filesystem_path(),

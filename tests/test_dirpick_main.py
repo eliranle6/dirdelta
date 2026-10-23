@@ -15,7 +15,7 @@ class DirpickMainTest(unittest.TestCase):
         self.root = tempfile.mkdtemp(prefix='dirstuff-dirpick-')
         helpers.make_files(self.root, ['song.mp3'])
         self.args = argparse.Namespace(dir_a_path=self.root, max_depth=None, execute=None)
-        patcher = mock.patch('cursesswitch.print_string')
+        patcher = mock.patch('cursesswitch.print_line')
         patcher.start()
         self.addCleanup(patcher.stop)
 

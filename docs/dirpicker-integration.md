@@ -51,7 +51,7 @@ dirdelta, each a commit:
    entries), with tests using a fake dirpicker script
 10. [done] Use it for the sync picker (`interactive_dir_sync.py`), menus
    (`menu.py`, `clouddirtreefactory.py`) and picker mode (`dirpick_main.py`)
-11. [ ] Stop using curses: `main.py` no longer wraps the app in
+11. [done] Stop using curses: `main.py` no longer wraps the app in
    `cursesswitch.wrapper()`, so messages are plain prints
 12. [ ] Update README.md, CLAUDE.md and the other docs; decide what to do
    with lib/treepicker (still used for `cursesswitch`'s plain printing)

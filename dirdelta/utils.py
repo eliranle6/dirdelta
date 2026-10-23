@@ -26,5 +26,5 @@ def is_cloud_path(path):
 def validate_dir(replica_path):
     """Exit with a message unless replica_path is a dir (or None)."""
     if replica_path is not None and not os.path.isdir(replica_path):
-        cursesswitch.print_string("{} is not a directory".format(replica_path))
+        cursesswitch.print_line("{} is not a directory".format(replica_path))
         sys.exit(1)

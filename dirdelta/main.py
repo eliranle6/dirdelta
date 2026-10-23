@@ -1,9 +1,10 @@
 import argparse
 import os
+import sys
 
-import cursesswitch
 from dirdelta import dirsync_main
 from dirdelta import dirpick_main
+from dirdelta import picker
 
 
 def parse_args():
@@ -17,12 +18,13 @@ def parse_args():
 
 def main():
     args = parse_args()
-    if os.getenv('MODE') == 'static':
+    # No curses here: the pickers (dirpicker) take over the terminal while they run, and messages
+    # are plain prints in between
+    try:
         picked_path = _run(args)
-    else:
-        picked_path = cursesswitch.wrapper(_run, args)
+    except picker.PickerError as error:
+        sys.exit('dirdelta: %s' % (error,))
 
-    # Done only now that curses has restored the terminal
     if picked_path is not None:
         dirpick_main.use_picked_path(picked_path, args.execute)
 
