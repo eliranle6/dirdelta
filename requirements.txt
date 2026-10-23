@@ -1,4 +1,5 @@
-git+https://github.com/levioctl/treepicker.git@v1.0.1#egg=treepicker
-google
+# The picker library (treepicker, cursesswitch) comes from the lib/treepicker submodule, not from here
 google-api-python-client
 google-auth-oauthlib
+termcolor
+treelib

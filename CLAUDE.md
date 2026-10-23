@@ -8,9 +8,12 @@ other, the user can choose to copy it across or delete it.
 This is the main repo. `treepicker` (the curses tree-picker TUI library this
 app is built on, reusable on its own outside this project) is vendored inside
 it as a git submodule at `lib/treepicker` — its own history/remote, pinned to
-a specific commit here. This directory happens to sit inside a local
-`dirstuff/` folder alongside a Python venv and an `unused/` scratch dir, but
-neither of those is part of this repo (see Structure below).
+a specific commit here. On the original dev machine this directory sits
+inside a local `dirstuff/` folder alongside a Python venv and an `unused/`
+scratch dir, but neither is part of this repo, and nothing in the repo may
+assume that layout (see Structure below). Dependencies go in a `.venv`
+inside the repo (gitignored; see README.md), which `bin/` and
+`run-tests.sh` pick up automatically, falling back to `python3` on `PATH`.
 
 Deep dives live in `docs/`:
 - `docs/architecture.md` — module-by-module breakdown and data flow (scan → diff → pick → copy/remove)
@@ -53,8 +56,8 @@ gitignored files.
 ## Structure
 
 ```
-dirstuff/                    a local folder, not itself a git repo
-├── dirstuff-venv/            Python venv, not part of this repo
+dirstuff/                    the original dev machine's local folder, not a git repo
+├── dirstuff-venv/            that machine's older venv (activate it, or make .venv)
 ├── unused/                   dead/unimported scripts kept for reference only
 │   ├── scandrive.py           (near-dup of clouddirtreefactory.py's scan logic)
 │   └── parse-drive-files.py
@@ -98,8 +101,8 @@ import conventions differ: `tests/` (dirdelta) runs with
 `lib/treepicker/`, so that path covers it too. To run one module:
 
 ```bash
-PYTHONPATH=dirdelta:lib/treepicker:tests ../dirstuff-venv/bin/python3 -m unittest test_interactive_dir_sync -v
-PYTHONPATH=lib/treepicker:lib/treepicker/tests ../dirstuff-venv/bin/python3 -m unittest test_treepicker -v
+PYTHONPATH=dirdelta:lib/treepicker:tests .venv/bin/python3 -m unittest test_interactive_dir_sync -v
+PYTHONPATH=lib/treepicker:lib/treepicker/tests .venv/bin/python3 -m unittest test_treepicker -v
 ```
 
 Every module has a test file (78 tests, all passing as of 2026-10-23)
@@ -142,10 +145,12 @@ Notes for whoever changes things next:
 
 ## Conventions observed in the code
 
-- Pure Python, no build step, no `requirements.txt` lockfile management beyond
-  the plain `requirements.txt` files per package (google API libs mainly).
-  There's a `dirstuff-venv/` one level up from the repo root — activate that
-  rather than assuming system Python has the deps.
+- Pure Python, no build step; it runs from source. The root
+  `requirements.txt` lists every third-party dependency (the picker library
+  itself comes from the submodule, not pip). Installing it as a package
+  (`setup.py`/`make install`) doesn't work yet: the app's bare imports only
+  resolve when run from source, and pbr also rejects `setup.cfg`'s version
+  1.3.0 since the git tags already reach v1.3.2.
 - Diffing is filename/path-only (see `DirTree.get_unknown_entries_in_given_dirtree`
   in `dirdelta/dirtree.py`) — no hashing, no size/mtime comparison.
 - The local-disk scanner shells out to the real `find` binary
