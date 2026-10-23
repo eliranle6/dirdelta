@@ -1,3 +1,4 @@
+import json
 import os.path
 import shutil
 import tempfile
@@ -88,7 +89,7 @@ def _scan_drive_files_list(outfile):
         page_items = results.get('files', [])
         print(f'#items in page: {len(page_items)}')
         for item in page_items:
-            outfile.write(item)
+            outfile.write(json.dumps(item) + '\n')
 
         page_token = results.get('nextPageToken', None)
         if page_token is None:

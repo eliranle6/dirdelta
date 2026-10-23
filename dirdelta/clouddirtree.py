@@ -1,3 +1,4 @@
+import json
 import os
 import sys
 import time
@@ -26,7 +27,7 @@ class CloudDirTree(dirtree.DirTree):
             return
 
         # Parse dict
-        md = eval(line)
+        md = json.loads(line)
 
         # Determine root
         if 'parents' not in md:
