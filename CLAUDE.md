@@ -12,8 +12,8 @@ a specific commit here. On the original dev machine this directory sits
 inside a local `dirstuff/` folder alongside a Python venv and an `unused/`
 scratch dir, but neither is part of this repo, and nothing in the repo may
 assume that layout (see Structure below). Dependencies go in a `.venv`
-inside the repo (gitignored; see README.md), which `bin/` and
-`run-tests.sh` pick up automatically, falling back to `python3` on `PATH`.
+inside the repo (gitignored; see README.md), which the Makefile targets and
+`bin/` scripts pick up automatically, falling back to `python3` on `PATH`.
 
 Deep dives live in `docs/`:
 - `docs/architecture.md` — module-by-module breakdown and data flow (scan → diff → pick → copy/remove)
@@ -51,10 +51,12 @@ Env vars that change execution mode:
   other value or unset means dry-run, where the tree/dirs are updated but
   `shutil.copy` is skipped. "Remove" is not gated by this — it always deletes.
 
-`./clean.sh` removes `__pycache__`/`*.pyc`/`*.egg-info`/`build/` cruft from
-this repo and the `lib/treepicker` submodule. It does not touch
-`~/.cache/dirman/files.txt` (the real Drive-scan cache) or `secrets/`/any
-gitignored files.
+Developer tasks all live in the Makefile (`make` lists them): `test`,
+`clean`, `install`, `deploy`, `undeploy`. Keep new ones there too rather
+than adding shell scripts; `bin/` is only for app launchers. `make clean`
+removes `__pycache__`/`*.pyc`/`*.egg-info`/`build/`/pbr's `AUTHORS` and
+`ChangeLog` in this repo and the submodule, skipping `.venv`. It does not
+touch `~/.cache/dirman/files.txt` (the real Drive-scan cache) or `secrets/`.
 
 ## Structure
 
@@ -66,7 +68,7 @@ dirstuff/                    the original dev machine's local folder, not a git 
 │   └── parse-drive-files.py
 └── dirdelta/                 THIS repo
     ├── bin/                   entry-point scripts
-    ├── clean.sh, run-tests.sh dev-tooling scripts
+    ├── Makefile               dev tasks: test, clean, install, deploy, undeploy
     ├── dirdelta/              the application (see docs/architecture.md)
     ├── secrets/               Google OAuth secrets — never print/edit
     ├── tests/                 unittest suite + tests/fixtures/{alpha,bravo}
@@ -92,7 +94,7 @@ commit-adjacent-copy them anywhere.
 ## Tests
 
 ```bash
-./run-tests.sh        # or ./run-tests.sh -v, or with any other unittest flags
+make test             # or make test ARGS=-v, or any other unittest flags via ARGS
 ```
 
 It runs `unittest discover` once per test dir, so the two dirs' helper

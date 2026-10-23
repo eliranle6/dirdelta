@@ -23,8 +23,9 @@ python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt
 ```
 
-The scripts in `bin/` and `run-tests.sh` use `.venv` automatically when it exists, and otherwise
-whichever `python3` is on your `PATH`, so an already activated venv works too.
+Development tasks are Makefile targets (`make` lists them). They and the launcher scripts in `bin/` use
+`.venv` automatically when it exists, and otherwise whichever `python3` is on your `PATH`, so an
+already activated venv works too. `make PYTHON=/path/to/python3 ...` overrides that.
 
 ## Running from source
 
@@ -76,13 +77,13 @@ the fixtures.
 ## Tests
 
 ```bash
-./run-tests.sh        # or ./run-tests.sh -v
+make test             # or make test ARGS=-v
 ```
 
 ## Cleaning
 
 ```bash
-./clean.sh
+make clean
 ```
 
 Removes `__pycache__`, `*.pyc`, `build/`, `*.egg-info` and pbr's generated `AUTHORS`/`ChangeLog`, both
@@ -111,5 +112,5 @@ For cloud paths, the deployed copy can't find the repo's `secrets/` folder, so p
 make install          # pip install ./lib/treepicker .
 ```
 
-Installs both packages into whichever environment's `pip` comes first on your `PATH`, so activate a
-venv first. Useful for trying the packaged `dirdelta` command without deploying it.
+Installs both packages into the same environment the other targets use (`.venv` if it exists, else
+the `python3` on your `PATH`). Useful for trying the packaged `dirdelta` command without deploying it.
