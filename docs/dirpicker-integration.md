@@ -47,7 +47,7 @@ cpptree (dirpicker), each a commit:
 8. [done] `--max-depth N` for scanning a dir
 
 dirdelta, each a commit:
-9. [ ] `dirdelta/picker.py`: runs dirpicker (tree → stdin, stdout → picked
+9. [done] `dirdelta/picker.py`: runs dirpicker (tree → stdin, stdout → picked
    entries), with tests using a fake dirpicker script
 10. [ ] Use it for the sync picker (`interactive_dir_sync.py`), menus
    (`menu.py`, `clouddirtreefactory.py`) and picker mode (`dirpick_main.py`)
