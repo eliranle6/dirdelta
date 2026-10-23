@@ -1,24 +1,23 @@
-"""Fakes shared by the dirdelta tests, for code that would otherwise block on a curses picker."""
+"""Fakes shared by the dirdelta tests, for code that would otherwise run dirpicker (dirdelta.picker)."""
 import os
 from unittest import mock
 
 
 def scripted_option_picker(answers):
-    """Patch OptionPickerByMenuTraverse so each pick_one() returns the next of the given labels."""
+    """Patch picker.pick_option so each call returns the next of the given labels."""
     answers = list(answers)
-    picker_class = mock.Mock()
-    picker_class.return_value.pick_one.side_effect = lambda: answers.pop(0)
-    return mock.patch('treepicker.optionpicker.OptionPickerByMenuTraverse', picker_class)
+    return mock.patch('dirdelta.picker.pick_option', side_effect=lambda *_, **__: answers.pop(0))
 
 
 def scripted_tree_picker(choose):
-    """Patch TreePicker so pick() returns choose(tree), called with the tree the picker was given."""
-    def make_picker(tree, *args, **kwargs):
-        picker = mock.Mock()
-        picker.pick.side_effect = lambda: choose(tree)
-        picker.pick_one.side_effect = lambda: choose(tree)
-        return picker
-    return mock.patch('treepicker.TreePicker', side_effect=make_picker)
+    """Patch picker.pick_from_tree so it returns choose(tree), called with the tree it was given."""
+    return mock.patch('dirdelta.picker.pick_from_tree',
+                      side_effect=lambda tree, *_, **__: choose(tree))
+
+
+def scripted_dir_picker(picked_path):
+    """Patch picker.pick_under_dir so it returns picked_path."""
+    return mock.patch('dirdelta.picker.pick_under_dir', return_value=picked_path)
 
 
 def all_files(tree):

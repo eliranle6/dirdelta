@@ -1,9 +1,9 @@
 import os
 
-import treepicker
 import cursesswitch
 from dirdelta import dirtree
 from dirdelta import menu
+from dirdelta import picker
 
 
 class InteractiveDirSync(object):
@@ -48,8 +48,7 @@ class InteractiveDirSync(object):
         tree_header = ("Files in %s, which are not in %s:\n"
                        "(To select a file, press Space. When finished, press Enter.)" %
                        (self._src.fullpath(), self._dst.fullpath()))
-        tree_picker = treepicker.TreePicker(missing, header=tree_header)
-        entries = tree_picker.pick()
+        entries = picker.pick_from_tree(missing, header=tree_header, multi=True)
         if entries is None:
             return None
         files = [entry for entry in entries if isinstance(entry, dirtree.FileEntry)]

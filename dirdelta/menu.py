@@ -1,4 +1,4 @@
-from treepicker import optionpicker
+from dirdelta import picker
 
 
 def run_menu(actions):
@@ -6,7 +6,7 @@ def run_menu(actions):
 
     Returns the chosen label, or None if the user quit the menu.
     """
-    label = optionpicker.OptionPickerByMenuTraverse([label for label, _ in actions]).pick_one()
+    label = picker.pick_option([label for label, _ in actions])
     handler = next((handler for _label, handler in actions if _label == label), None)
     if handler is not None:
         handler()

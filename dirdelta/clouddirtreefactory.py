@@ -8,7 +8,7 @@ from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
 from dirdelta import clouddirtree
-import treepicker
+from dirdelta import picker
 
 
 # secrets/ at the repo root when running from source; an installed copy needs DIRDELTA_SECRETS_DIR
@@ -39,9 +39,7 @@ def _does_user_want_to_refresh_cache(rootpath):
     OPTION_REFRESH = 'Refresh cloud files list cache'
     OPTION_NO_REFRESH = 'Continue with old cloud files list cache'
     options = [OPTION_REFRESH, OPTION_NO_REFRESH]
-    picker = treepicker.optionpicker.OptionPickerByMenuTraverse(options)
-    option = picker.pick_one()
-    return option == OPTION_REFRESH
+    return picker.pick_option(options) == OPTION_REFRESH
 
 
 def _refresh_cache():

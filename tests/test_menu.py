@@ -5,18 +5,16 @@ from dirdelta import menu
 
 
 def _picker_choosing(label):
-    picker_class = mock.Mock()
-    picker_class.return_value.pick_one.return_value = label
-    return mock.patch('treepicker.optionpicker.OptionPickerByMenuTraverse', picker_class)
+    return mock.patch('dirdelta.picker.pick_option', return_value=label)
 
 
 class RunMenuTest(unittest.TestCase):
     def test_calls_only_the_chosen_handler_and_returns_its_label(self):
         first, second = mock.Mock(), mock.Mock()
-        with _picker_choosing('second') as picker_class:
+        with _picker_choosing('second') as pick_option:
             label = menu.run_menu([('first', first), ('second', second)])
 
-        picker_class.assert_called_once_with(['first', 'second'])
+        pick_option.assert_called_once_with(['first', 'second'])
         self.assertEqual(label, 'second')
         second.assert_called_once_with()
         first.assert_not_called()
