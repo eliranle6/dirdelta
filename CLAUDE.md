@@ -28,7 +28,8 @@ re-deriving it from scratch.
 ## Running it
 
 See README.md for running from source (`python -m dirdelta`, from the
-repo root with `PYTHONPATH=lib/treepicker`) and for `make install`. Entry
+repo root with `PYTHONPATH=lib/treepicker`), `make install` (into a venv) and
+`make deploy` (a pipx-managed `dirdelta` in `~/.local/bin`). Entry
 points are shell scripts in `bin/`, each putting the repo root and
 `lib/treepicker` on `PYTHONPATH` and running `python -m dirdelta` with the
 repo's `.venv` Python (falling back to `python3`):

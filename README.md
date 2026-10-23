@@ -89,13 +89,27 @@ Removes `__pycache__`, `*.pyc`, `build/`, `*.egg-info` and pbr's generated `AUTH
 here and in `lib/treepicker`. It leaves `.venv`, `secrets/` and the Drive cache
 (`~/.cache/dirman/files.txt`) alone; delete `.venv` yourself to start over.
 
-## Installing
+## Deploying to your system
+
+To get a `dirdelta` command for everyday use, without activating any venv:
+
+```bash
+make deploy           # needs pipx (on Debian/Ubuntu: sudo apt install pipx)
+```
+
+This uses [pipx](https://pipx.pypa.io/) to install dirdelta and the picker library into a private venv
+and link the command into `~/.local/bin`, which must be on your `PATH` (`pipx ensurepath` adds it).
+Rerun `make deploy` after pulling changes, since it installs a copy rather than linking to the
+source tree. `make undeploy` removes it.
+
+For cloud paths, the deployed copy can't find the repo's `secrets/` folder, so point
+`DIRDELTA_SECRETS_DIR` at the folder holding `credentials.json`/`token.json`.
+
+## Installing into a venv
 
 ```bash
 make install          # pip install ./lib/treepicker .
 ```
 
-This installs the picker library and dirdelta, with their dependencies, into whichever environment's
-`pip` comes first on your `PATH`, so activate a venv first. That gives you the `dirdelta` command used
-under Usage above. An installed copy can't find the repo's `secrets/` folder, so for cloud paths point
-`DIRDELTA_SECRETS_DIR` at the folder holding `credentials.json`/`token.json`.
+Installs both packages into whichever environment's `pip` comes first on your `PATH`, so activate a
+venv first. Useful for trying the packaged `dirdelta` command without deploying it.
