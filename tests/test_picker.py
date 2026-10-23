@@ -93,12 +93,46 @@ class PickerTest(unittest.TestCase):
         with self.assertRaises(picker.PickerError):
             picker.pick_option(['x'])
 
-    def test_missing_program_raises(self):
+    def lookup_without(self, next_to_python=None, source_tree=None, on_path=None):
+        """Patch where dirpicker is looked for, other than $DIRDELTA_PICKER (which is unset)"""
         os.environ[picker.PROGRAM_ENV_VAR] = ''
-        with mock.patch('shutil.which', return_value=None):
-            with self.assertRaises(picker.PickerError) as context:
-                picker.pick_option(['x'])
-        self.assertIn('cpptree', str(context.exception))
+        python_dir = os.path.join(self.tmpdir, 'python-bin')
+        os.makedirs(python_dir, exist_ok=True)
+        if next_to_python:
+            shutil.copy(self.program, os.path.join(python_dir, 'dirpicker'))
+        return [mock.patch('sys.executable', os.path.join(python_dir, 'python3')),
+                mock.patch('dirdelta.picker.SOURCE_TREE_PROGRAM',
+                           source_tree or os.path.join(self.tmpdir, 'no-such-build')),
+                mock.patch('shutil.which', return_value=on_path)]
+
+    def find_program(self, **kwargs):
+        patchers = self.lookup_without(**kwargs)
+        for patcher in patchers:
+            patcher.start()
+        try:
+            return picker._find_program()
+        finally:
+            for patcher in patchers:
+                patcher.stop()
+
+    def test_missing_program_raises(self):
+        with self.assertRaises(picker.PickerError) as context:
+            self.find_program()
+        self.assertIn('make build', str(context.exception))
+
+    def test_program_next_to_python_comes_first(self):
+        # Where make install and make deploy put it
+        found = self.find_program(next_to_python=True, source_tree=self.program, on_path='/bin/x')
+        self.assertEqual(found, os.path.join(self.tmpdir, 'python-bin', 'dirpicker'))
+
+    def test_source_tree_build_comes_before_path(self):
+        self.assertEqual(self.find_program(source_tree=self.program, on_path='/bin/x'), self.program)
+
+    def test_program_on_path(self):
+        self.assertEqual(self.find_program(on_path='/bin/x'), '/bin/x')
+
+    def test_env_var_comes_first(self):
+        self.assertEqual(picker._find_program(), self.program)
 
     def test_unrunnable_program_raises(self):
         os.environ[picker.PROGRAM_ENV_VAR] = os.path.join(self.tmpdir, 'no-such-program')

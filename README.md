@@ -14,30 +14,24 @@ dirdelta directory_path
 
 ## Setup
 
-dirdelta is plain Python 3 with no build step: you can run it straight from the source tree, or
-install it (see below). From the repo root:
+dirdelta is Python 3, plus its picker, which is C++ and built with `make`: you can run it straight
+from the source tree, or install it (see below). From the repo root:
 
 ```bash
-git submodule update --init                 # fetches lib/treepicker (for cursesswitch's printing)
+git submodule update --init       # fetches lib/cpptree (dirpicker) and lib/treepicker
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt
+make                              # builds dirpicker: needs g++ and libncurses-dev
 ```
 
-Its pickers and menus are `dirpicker`, a C++ program from
-[cpptree](https://github.com/levioctl/cpptree) (see `docs/dirpicker-integration.md`). Build and install
-it once:
+dirdelta's pickers and menus are `dirpicker`, a C++ program from
+[cpptree](https://github.com/levioctl/cpptree) (see `docs/dirpicker-integration.md`), a submodule at
+`lib/cpptree`; `make` builds it into `lib/cpptree/build/dirpicker`, where dirdelta finds it when run
+from the source tree. `$DIRDELTA_PICKER` overrides which program it runs.
 
-```bash
-git clone https://github.com/levioctl/cpptree && cd cpptree
-make && make install PREFIX=~/.local       # needs g++ and libncurses-dev; puts it in ~/.local/bin
-```
-
-dirdelta runs `dirpicker` from your `PATH`, or `$DIRDELTA_PICKER` if that's set (e.g. to a
-`cpptree/build/dirpicker` you didn't install).
-
-Development tasks are Makefile targets (`make` lists them). They and the launcher scripts in `bin/` use
-`.venv` automatically when it exists, and otherwise whichever `python3` is on your `PATH`, so an
-already activated venv works too. `make PYTHON=/path/to/python3 ...` overrides that.
+Development tasks are Makefile targets (`make help` lists them). They and the launcher scripts in
+`bin/` use `.venv` automatically when it exists, and otherwise whichever `python3` is on your `PATH`,
+so an already activated venv works too. `make PYTHON=/path/to/python3 ...` overrides that.
 
 ## Running from source
 
@@ -86,6 +80,8 @@ the fixtures.
 ```bash
 make test             # or make test ARGS=-v
 ```
+
+It also runs dirpicker's own tests (in `lib/cpptree`), which need Google Test (`libgtest-dev`).
 
 ## Cleaning
 
