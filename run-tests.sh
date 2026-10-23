@@ -4,32 +4,11 @@ cd "$(dirname "$0")"
 
 VENV_PY=../dirstuff-venv/bin/python3
 
-echo "=== dirtree ==="
-PYTHONPATH=dirdelta:tests $VENV_PY -m unittest test_dirtree -v
+# dirdelta's modules import each other by bare module name, while the picker library uses
+# package-style imports, so each test dir gets its own PYTHONPATH. Pass -v for per-test output.
 
-echo "=== findcmdwrapper ==="
-PYTHONPATH=dirdelta:tests $VENV_PY -m unittest test_findcmdwrapper -v
+echo "=== dirdelta (tests/) ==="
+PYTHONPATH=dirdelta:lib/treepicker $VENV_PY -m unittest discover -s tests "$@"
 
-echo "=== localdiskdirtree ==="
-PYTHONPATH=dirdelta:tests:lib/treepicker $VENV_PY -m unittest test_localdiskdirtree -v
-
-echo "=== menu ==="
-PYTHONPATH=dirdelta:tests:lib/treepicker $VENV_PY -m unittest test_menu -v
-
-echo "=== treepicker.pagination ==="
-PYTHONPATH=lib/treepicker:lib/treepicker/tests $VENV_PY -m unittest test_pagination -v
-
-echo "=== treepicker.treeprinter ==="
-PYTHONPATH=lib/treepicker:lib/treepicker/tests $VENV_PY -m unittest test_treeprinter -v
-
-echo "=== treepicker.treepickermodel ==="
-PYTHONPATH=lib/treepicker:lib/treepicker/tests $VENV_PY -m unittest test_treepickermodel -v
-
-echo "=== treepicker.treesearch ==="
-PYTHONPATH=lib/treepicker:lib/treepicker/tests $VENV_PY -m unittest test_treesearch -v
-
-echo "=== treepicker.treenavigator ==="
-PYTHONPATH=lib/treepicker:lib/treepicker/tests $VENV_PY -m unittest test_treenavigator -v
-
-echo "=== treepicker.treeops ==="
-PYTHONPATH=lib/treepicker:lib/treepicker/tests $VENV_PY -m unittest test_treeops -v
+echo "=== treepicker (lib/treepicker/tests/) ==="
+PYTHONPATH=lib/treepicker $VENV_PY -m unittest discover -s lib/treepicker/tests "$@"
