@@ -1,10 +1,10 @@
 import os
 import sys
 
-import clouddirtree
-import clouddirtreefactory
+from dirdelta import clouddirtree
+from dirdelta import clouddirtreefactory
 import cursesswitch
-import localdiskdirtree
+from dirdelta import localdiskdirtree
 
 
 def create_dirtree_from_arg(rootpath, max_depth=None):

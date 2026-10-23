@@ -7,7 +7,7 @@ echo "Syncing copies of the fixtures in $WORKDIR"
 PY="$ROOT/.venv/bin/python3"
 [ -x "$PY" ] || PY=python3
 
-PYTHONPATH="$ROOT/lib/treepicker" \
-           "$PY" "$ROOT/dirdelta/main.py" \
+PYTHONPATH="$ROOT:$ROOT/lib/treepicker" \
+           "$PY" -m dirdelta \
            "$WORKDIR/alpha/" \
            "$WORKDIR/bravo/"

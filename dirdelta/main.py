@@ -2,8 +2,8 @@ import argparse
 import os
 
 import cursesswitch
-import dirsync_main
-import dirpick_main
+from dirdelta import dirsync_main
+from dirdelta import dirpick_main
 
 
 def parse_args():

@@ -3,7 +3,7 @@ import shutil
 import tempfile
 import unittest
 
-import findcmdwrapper
+from dirdelta import findcmdwrapper
 
 
 class FindCmdWrapperTest(unittest.TestCase):

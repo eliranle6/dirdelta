@@ -2,8 +2,8 @@ import os
 import shutil
 
 import cursesswitch
-import dirtree
-import findcmdwrapper
+from dirdelta import dirtree
+from dirdelta import findcmdwrapper
 
 DRYRUN = os.environ.get("DRYRUN") != "0"
 

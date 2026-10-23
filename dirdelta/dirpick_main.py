@@ -1,7 +1,7 @@
 import os
 
 import treepicker
-import utils
+from dirdelta import utils
 
 
 def run(args):

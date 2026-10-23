@@ -3,7 +3,7 @@ import shutil
 import tempfile
 import unittest
 
-import localdiskdirtree
+from dirdelta import localdiskdirtree
 
 
 class LocalDiskDirTreeTest(unittest.TestCase):

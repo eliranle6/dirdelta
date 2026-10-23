@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from unittest import mock
 
-import clouddirtree
+from dirdelta import clouddirtree
 
 FOLDER = 'application/vnd.google-apps.folder'
 
@@ -38,7 +38,7 @@ class CloudDirTreeTest(unittest.TestCase):
         with os.fdopen(fd, 'w') as f:
             for item in ITEMS:
                 f.write(json.dumps(item) + '\n')
-        patcher = mock.patch('clouddirtree.FILE_LIST_CACHE', self.cache)
+        patcher = mock.patch('dirdelta.clouddirtree.FILE_LIST_CACHE', self.cache)
         patcher.start()
         self.addCleanup(patcher.stop)
         self.addCleanup(os.remove, self.cache)

@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from unittest import mock
 
-import dirpick_main
+from dirdelta import dirpick_main
 import helpers
 
 

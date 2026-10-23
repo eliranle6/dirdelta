@@ -2,8 +2,8 @@ import os
 
 import treepicker
 import cursesswitch
-import dirtree
-import menu
+from dirdelta import dirtree
+from dirdelta import menu
 
 
 class InteractiveDirSync(object):

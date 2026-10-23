@@ -1,7 +1,7 @@
 import json
 import os
 
-import dirtree
+from dirdelta import dirtree
 
 
 FILE_LIST_CACHE = os.path.expanduser('~/.cache/dirman/files.txt')

@@ -6,11 +6,11 @@ cd "$(dirname "$0")"
 PY=.venv/bin/python3
 [ -x "$PY" ] || PY=python3
 
-# dirdelta's modules import each other by bare module name, while the picker library uses
-# package-style imports, so each test dir gets its own PYTHONPATH. Pass -v for per-test output.
+# The repo root makes the dirdelta package importable, lib/treepicker the picker library. Each test
+# dir is discovered separately so their helper modules don't collide. Pass -v for per-test output.
 
 echo "=== dirdelta (tests/) ==="
-PYTHONPATH=dirdelta:lib/treepicker $PY -m unittest discover -s tests "$@"
+PYTHONPATH=.:lib/treepicker $PY -m unittest discover -s tests "$@"
 
 echo "=== treepicker (lib/treepicker/tests/) ==="
 PYTHONPATH=lib/treepicker $PY -m unittest discover -s lib/treepicker/tests "$@"

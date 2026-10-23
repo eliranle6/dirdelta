@@ -5,8 +5,8 @@ import unittest
 from unittest import mock
 
 import helpers
-import interactive_dir_sync
-import localdiskdirtree
+from dirdelta import interactive_dir_sync
+from dirdelta import localdiskdirtree
 
 COPY = interactive_dir_sync.InteractiveDirSync._OPTION_COPY
 REMOVE = interactive_dir_sync.InteractiveDirSync._OPTION_REMOVE
@@ -38,7 +38,7 @@ class InteractiveDirSyncTest(unittest.TestCase):
         return src, dst
 
     def test_copy_copies_missing_file_and_then_reports_nothing_left(self):
-        with mock.patch('localdiskdirtree.DRYRUN', False):
+        with mock.patch('dirdelta.localdiskdirtree.DRYRUN', False):
             self._sync([COPY])
 
         with open(os.path.join(self.dst_root, 'sub/b.txt')) as f:
@@ -46,7 +46,7 @@ class InteractiveDirSyncTest(unittest.TestCase):
         self.assertIn('Nothing to synchronize', self.messages[-1])
 
     def test_dry_run_copy_leaves_disk_untouched(self):
-        with mock.patch('localdiskdirtree.DRYRUN', True):
+        with mock.patch('dirdelta.localdiskdirtree.DRYRUN', True):
             self._sync([COPY])
 
         self.assertFalse(os.path.exists(os.path.join(self.dst_root, 'sub/b.txt')))

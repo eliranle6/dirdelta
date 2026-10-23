@@ -1,7 +1,7 @@
 import unittest
 from unittest import mock
 
-import menu
+from dirdelta import menu
 
 
 def _picker_choosing(label):

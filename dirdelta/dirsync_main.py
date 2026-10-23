@@ -1,7 +1,7 @@
-import localdiskdirtree
-import interactive_dir_sync
-import menu
-import utils
+from dirdelta import localdiskdirtree
+from dirdelta import interactive_dir_sync
+from dirdelta import menu
+from dirdelta import utils
 
 
 def run(args):

@@ -4,8 +4,8 @@ import unittest
 from unittest import mock
 
 import helpers
-import localdiskdirtree
-import utils
+from dirdelta import localdiskdirtree
+from dirdelta import utils
 
 
 class CreateDirtreeFromArgTest(unittest.TestCase):
@@ -29,13 +29,13 @@ class CreateDirtreeFromArgTest(unittest.TestCase):
         self.assertEqual([e.relpath for e in tree.iter_files()], ['/top.txt'])
 
     def test_cloud_path_goes_to_the_cloud_factory(self):
-        with mock.patch('clouddirtreefactory.factory_interactive') as factory:
+        with mock.patch('dirdelta.clouddirtreefactory.factory_interactive') as factory:
             tree = utils.create_dirtree_from_arg('cloud/mein')
         factory.assert_called_once_with('cloud/mein')
         self.assertIs(tree, factory.return_value)
 
     def test_path_merely_containing_cloud_is_local(self):
-        with mock.patch('clouddirtreefactory.factory_interactive') as factory, \
+        with mock.patch('dirdelta.clouddirtreefactory.factory_interactive') as factory, \
              self.assertRaises(SystemExit):
             utils.create_dirtree_from_arg('not-cloud/cloud')
         factory.assert_not_called()
