@@ -107,8 +107,11 @@ Rerun `make deploy` after pulling changes, since it installs a copy rather than 
 source tree. `make undeploy` removes it.
 
 For cloud paths, the deployed copy can't find the repo's `secrets/` folder, so point
-`DIRDELTA_SECRETS_DIR` at the folder holding `credentials.json`/`token.json`. `dirpicker` isn't
-part of the deployed copy: install it as described in Setup.
+`DIRDELTA_SECRETS_DIR` at the folder holding `credentials.json`/`token.json`.
+
+`make deploy` builds dirpicker too, and puts it in dirdelta's pipx venv (next to its python, where
+dirdelta looks first), so it needs g++ and libncurses-dev, and `make undeploy` removes it with the
+venv.
 
 ## Installing into a venv
 
@@ -117,4 +120,4 @@ make install          # pip install ./lib/treepicker .
 ```
 
 Installs both packages into the same environment the other targets use (`.venv` if it exists, else
-the `python3` on your `PATH`). Useful for trying the packaged `dirdelta` command without deploying it.
+the `python3` on your `PATH`), and dirpicker next to that environment's python. Useful for trying the packaged `dirdelta` command without deploying it.

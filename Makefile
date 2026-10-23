@@ -15,7 +15,7 @@ help:
 	@echo "make build      build dirpicker (lib/cpptree/build/dirpicker), the picker dirdelta runs"
 	@echo "make test       run the unit tests (ARGS=-v for per-test output)"
 	@echo "make clean      remove caches and build output (keeps .venv, secrets/)"
-	@echo "make install    pip install the picker library and dirdelta into \$$PYTHON's environment"
+	@echo "make install    pip install dirdelta (and dirpicker) into \$$PYTHON's environment"
 	@echo "make deploy     install a dirdelta command into ~/.local/bin via pipx; rerun to update"
 	@echo "make undeploy   remove the deployed command"
 
@@ -32,14 +32,18 @@ clean:
 	$(SUBMAKE) clean
 	$(MAKE) -C lib/cpptree clean
 
-install:
+# dirpicker goes next to the environment's python (where its scripts go), which is where picker.py
+# looks for it first
+install: build
 	$(SUBMAKE) install
 	$(PYTHON) -m pip install -U .
+	install -m 755 $(DIRPICKER) "$$($(PYTHON) -c 'import sysconfig; print(sysconfig.get_path("scripts"))')"
 
 # treepicker isn't on PyPI, so it's injected into dirdelta's pipx venv from the submodule
-deploy:
+deploy: build
 	pipx install --force .
 	pipx inject --force dirdelta ./lib/treepicker
+	install -m 755 $(DIRPICKER) "$$(pipx environment --value PIPX_LOCAL_VENVS)/dirdelta/bin"
 
 undeploy:
 	pipx uninstall dirdelta
