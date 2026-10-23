@@ -41,10 +41,10 @@ cpptree (dirpicker), each a commit:
 2. [done] Pick with Enter, print the result, exit codes
 3. [done] Multi-select (`-m`)
 4. [done] Esc / Ctrl-[ clears the search filter, also after Enter kept it
-5. [ ] `--header TEXT`: lines shown above the tree
-6. [ ] `--root NAME`: the root's name (stdin trees' root is otherwise ".")
-7. [ ] `--list`: stdin lines are a flat list of options, the first one selected
-8. [ ] `--max-depth N` for scanning a dir
+5. [done] `--header TEXT`: lines shown above the tree
+6. [done] `--root NAME`: the root's name (stdin trees' root is otherwise ".")
+7. [done] `--list`: stdin lines are a flat list of options, the first one selected
+8. [done] `--max-depth N` for scanning a dir
 
 dirdelta, each a commit:
 9. [ ] `dirdelta/picker.py`: runs dirpicker (tree → stdin, stdout → picked
