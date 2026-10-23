@@ -1,28 +1,27 @@
-import argparse
 import os
 
-import clouddirtree
-import cursesswitch
-import localdiskdirtree
 import treepicker
 import utils
 
 
 def run(args):
-    picker = FilesystemPicker(args.dir_a_path)
-    picked_file = picker.pick_one()
-    if picked_file is not None:
-        if args.execute is not None:
-            command = [os.path.basename(args.execute), picked_file.full_filesystem_path()]
-            os.execve(args.execute, command, {})
-        elif picked_file:
-            picked_file = picked_file[0]
-            cursesswitch.print_line(picked_file.full_filesystem_path())
+    """Let the user pick a file or dir under args.dir_a_path. Returns its path, or None if they quit."""
+    picker = FilesystemPicker(args.dir_a_path, args.max_depth)
+    picked = picker.pick_one()
+    return picked[0].full_filesystem_path() if picked else None
+
+
+def use_picked_path(path, execute=None):
+    """Print the picked path, or replace this process with `execute path` if a program was given."""
+    if execute is None:
+        print(path)
+    else:
+        os.execvp(execute, [execute, path])
 
 
 class FilesystemPicker(object):
-    def __init__(self, rootpath):
-        dirtree = utils.create_dirtree_from_arg(rootpath)
+    def __init__(self, rootpath, max_depth=None):
+        dirtree = utils.create_dirtree_from_arg(rootpath, max_depth)
         self._tree_picker = treepicker.TreePicker(dirtree, min_nr_options=1, max_nr_options=1)
 
     def pick_one(self):

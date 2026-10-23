@@ -3,20 +3,10 @@ import treelib
 
 
 def factory_from_list_of_file_entries(files, filesystem_dirpath):
-    filesystem_dirpath = os.path.realpath(filesystem_dirpath)
-    filesystem_basename = os.path.basename(filesystem_dirpath)
-    dirtree = DirTree(filesystem_dirpath)
+    """A DirTree rooted at filesystem_dirpath holding the given files, at the same relative paths."""
+    dirtree = DirTree(os.path.realpath(filesystem_dirpath))
     for file_entry in files:
-        file_first_component, inner_path = file_entry.fullpath.split(os.path.sep, 2)[1:]
-        if file_first_component != filesystem_basename:
-            raise ValueError("File's first path component must match that of filesystem path",
-                                file_entry, filesystem_dirpath, file_first_component, filesystem_basename)
-        inner_dirpath = os.path.dirname(inner_path)
-        parent_dir_node = dirtree.get_dir_node(inner_dirpath)
-        dirtree.create_node(identifier=file_entry.fullpath,
-                                tag=file_entry.name,
-                                data=file_entry,
-                                parent=parent_dir_node.identifier)
+        dirtree.add_file_by_relpath(file_entry.relpath)
     return dirtree
 
 
@@ -65,8 +55,7 @@ class DirTree(treelib.Tree):
         super().__init__(*args, **kwargs)
         self._silent = silent
 
-        if len(rootpath) > 1 and rootpath.endswith('/'):
-            rootpath = os.path.basename(rootpath)
+        rootpath = rootpath.rstrip('/') or '/'
         self._rootpath = rootpath
         root = DirEntry(name='/', relpath='/', fullpath=self._rootpath)
         self._create_node_orig = self.create_node
@@ -97,6 +86,10 @@ class DirTree(treelib.Tree):
         parent_dir_node = self.create_dir_node_from_relpath_if_not_exists(dirpath)
         filename = os.path.basename(relpath)
         _file = FileEntry(filename, *parent_dir_node.data._child_paths(filename))
+        # Rescanning a tree re-adds files it already has
+        existing_node = self.get_node(_file.relpath)
+        if existing_node is not None:
+            return existing_node.data
         file_entry = self._create_node_orig(
             identifier=_file.relpath,
             tag=_file.name,

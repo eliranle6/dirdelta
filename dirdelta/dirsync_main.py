@@ -5,8 +5,8 @@ import utils
 
 
 def run(args):
-    dirtree_a = utils.create_dirtree_from_arg(args.dir_a_path)
-    dirtree_b = utils.create_dirtree_from_arg(args.dir_b_path)
+    dirtree_a = utils.create_dirtree_from_arg(args.dir_a_path, args.max_depth)
+    dirtree_b = utils.create_dirtree_from_arg(args.dir_b_path, args.max_depth)
     _sync(dirtree_a, dirtree_b, args.dir_a_path, args.dir_b_path)
 
 

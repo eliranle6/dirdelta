@@ -70,8 +70,6 @@ class InteractiveDirSync(object):
             cursesswitch.print_string("Removing {} ({} out of {})".format(
                 file_entry, index + 1, len(file_entries)))
             os.unlink(file_entry.full_filesystem_path())
+            # Keep the in-memory source tree in sync so the next diff doesn't list the file again
+            self._src.remove_node(file_entry.relpath)
 
-
-if __name__ == "__main__":
-    sync = InteractiveDirSync('alpha', 'bravo')
-    sync.sync()

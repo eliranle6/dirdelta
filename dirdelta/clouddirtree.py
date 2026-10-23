@@ -1,7 +1,5 @@
 import json
 import os
-import sys
-import time
 
 import dirtree
 
@@ -16,8 +14,8 @@ class CloudDirTree(dirtree.DirTree):
     in the cloud exists and is updated.
     """
     def __init__(self, rootpath):
-        rootpath = _path_in_cloud(rootpath)
-        id_child_map, id_md_map, root_id = self._parsefile(self.FILE_LIST_CACHE)
+        rootpath = self._path_in_cloud(rootpath)
+        id_child_map, id_md_map, root_id = self._parsefile(FILE_LIST_CACHE)
         super(CloudDirTree, self).__init__(rootpath=rootpath)
         self._dirdict_to_dirtree(id_child_map, id_md_map, root_id, rootpath)
 
@@ -121,7 +119,7 @@ class CloudDirTree(dirtree.DirTree):
     @staticmethod
     def _path_in_cloud(path):
         # Assume first component is 'cloud'
-        components = self.path_components(path)
+        components = CloudDirTree.path_components(path)
         return '/' + '/'.join(components[1:])
 
     @staticmethod

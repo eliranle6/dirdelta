@@ -1,7 +1,5 @@
 import json
 import os.path
-import shutil
-import tempfile
 
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
@@ -31,8 +29,7 @@ def factory_interactive(rootpath):
         os.makedirs(os.path.dirname(clouddirtree.FILE_LIST_CACHE), exist_ok=True)
         _refresh_cache()
 
-
-    return CloudDirTree(path_in_cloud)
+    return clouddirtree.CloudDirTree(rootpath)
 
 
 def _does_user_want_to_refresh_cache(rootpath):
@@ -45,10 +42,11 @@ def _does_user_want_to_refresh_cache(rootpath):
 
 
 def _refresh_cache():
-    with tempfile.TemporaryFile() as fp:
+    # Scan into a temporary file first, so a failed scan doesn't leave a truncated cache behind
+    tmp_path = clouddirtree.FILE_LIST_CACHE + '.tmp'
+    with open(tmp_path, 'w') as fp:
         _scan_drive_files_list(outfile=fp)
-
-    shutil.copy(fp.name, clouddirtree.FILE_LIST_CACHE)
+    os.replace(tmp_path, clouddirtree.FILE_LIST_CACHE)
 
 
 def _scan_drive_files_list(outfile):
