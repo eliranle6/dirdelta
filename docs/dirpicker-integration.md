@@ -62,7 +62,8 @@ dirdelta, each a commit:
   it), Space picks (with -m), Enter picks/finishes, q or Ctrl-C quits.
   g/G go to the first/last sibling, Ctrl-/ searches only when Enter is
   pressed, and f switches between the matches-only tree and the whole tree
-  with matches highlighted. Missing: the leaf jumps (Ctrl-J/K), Ctrl-H,
+  with matches highlighted. ? shows the keys (the stats line says so).
+  Missing: the leaf jumps (Ctrl-J/K), Ctrl-H,
   Ctrl-L, u/d (use Ctrl-U/Ctrl-D or PageUp/PageDown).
 - Search is smartcase (case-insensitive unless the keyword has uppercase)
   and matches names, like the Python picker's.
