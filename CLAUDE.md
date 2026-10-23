@@ -21,6 +21,7 @@ Deep dives live in `docs/`:
 - `docs/known-issues.md` — real bugs and dead code found while reading the source, with file:line
 - `docs/glossary.md` — project-specific terms (replica, dirtree, cloud path convention, etc.)
 - `docs/improvement-ideas.md` — proposed refactors/simplifications, not implemented; a backlog to pick from
+- `docs/dirpicker-integration.md` — in progress: replacing the Python picker with cpptree's C++ `dirpicker` program; the plan and its status
 
 Read the relevant doc before making changes in that area rather than
 re-deriving it from scratch.
