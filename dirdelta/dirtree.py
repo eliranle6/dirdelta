@@ -1,5 +1,4 @@
 import os
-import sys
 import treelib
 
 
@@ -21,59 +20,35 @@ def factory_from_list_of_file_entries(files, filesystem_dirpath):
     return dirtree
 
 
-class DirEntry(object):
-    """
-    A DirTree node that Represents a filesystem directory.
+class _Entry(object):
+    """A DirTree node's data.
 
-    name: The dir's basename
-    path: The dir's parent's relative path from the tree's root dir
-    filesystem_dirpath: The tree's root absolute parent path
-
-    Example:
-    The dirtree's root is in /home/users/blah
-    An entry is located in /home/users/blah/subdir1/subdir2
-    Hence,
-    name: subdir2
-    relpath: /blah/subdir2
-    fullpath: /home/users/blah/subdir2
+    Example: the dirtree's root is /home/users/blah and an entry is /home/users/blah/subdir1/subdir2.
+    Then name is subdir2, relpath is /subdir1/subdir2 and fullpath is /home/users/blah/subdir1/subdir2.
     """
 
-    def __init__(self, name, parent_relpath, parent_fullpath=None):
-        if parent_fullpath is None:
-            parent_fullpath = parent_relpath
+    def __init__(self, name, relpath, fullpath):
         self.name = name
-        self.relpath = os.path.join(parent_relpath, name)
-        if name == os.path.sep:
-            # os.path.join(parent_fullpath, name) would normally discard
-            # parent_fullpath here, since a second argument of '/' is itself
-            # absolute - but for the tree's root entry (the only entry ever
-            # constructed with name == '/'), parent_fullpath already IS the
-            # entry's own fullpath, so it should pass through unchanged.
-            self.fullpath = parent_fullpath
-        else:
-            self.fullpath = os.path.join(parent_fullpath, name)
-
-    def __repr__(self):
-        return self.fullpath
+        self.relpath = relpath
+        self.fullpath = fullpath
 
     def full_filesystem_path(self):
         return self.fullpath
 
+    def _child_paths(self, name):
+        return os.path.join(self.relpath, name), os.path.join(self.fullpath, name)
 
-class FileEntry(object):
-    def __init__(self, name, parent_dir_entry):
-        self.name = name
-        self.relpath = os.path.join(parent_dir_entry.relpath, self.name)
-        self.fullpath = os.path.join(parent_dir_entry.fullpath, self.name)
 
+class DirEntry(_Entry):
+    """A DirTree node that represents a filesystem directory."""
+
+    def __repr__(self):
+        return self.fullpath
+
+
+class FileEntry(_Entry):
     def __repr__(self):
         return self.relpath
-
-    def full_filesystem_path(self):
-        return self.fullpath
-
-
-MUSIC_FILE_EXTENTIONS = ["mp3", "mp4", "wav", "ogg", "wmv", "wma"]
 
 
 class DirTree(treelib.Tree):
@@ -93,7 +68,7 @@ class DirTree(treelib.Tree):
         if len(rootpath) > 1 and rootpath.endswith('/'):
             rootpath = os.path.basename(rootpath)
         self._rootpath = rootpath
-        root = DirEntry(name='/', parent_relpath='/', parent_fullpath=self._rootpath)
+        root = DirEntry(name='/', relpath='/', fullpath=self._rootpath)
         self._create_node_orig = self.create_node
         self._root = self.create_node(identifier='/', tag=root.name, data=root)
         self.create_node = self._create_node_override_method
@@ -121,7 +96,7 @@ class DirTree(treelib.Tree):
         dirpath = os.path.dirname(relpath)
         parent_dir_node = self.create_dir_node_from_relpath_if_not_exists(dirpath)
         filename = os.path.basename(relpath)
-        _file = FileEntry(filename, parent_dir_entry=parent_dir_node.data)
+        _file = FileEntry(filename, *parent_dir_node.data._child_paths(filename))
         file_entry = self._create_node_orig(
             identifier=_file.relpath,
             tag=_file.name,
@@ -135,41 +110,26 @@ class DirTree(treelib.Tree):
                 yield node.data
 
     def does_dir_contain_any_files(self):
-        return any(isinstance(entry, FileEntry) for entry in self.iter_files())
+        return next(self.iter_files(), None) is not None
 
     def get_unknown_entries_in_given_dirtree(self, other):
         unknown_files_dirtree = DirTree(other._rootpath)
-
-        unknown_files = []
         for file_entry in other.iter_files():
             if file_entry.relpath not in self.nodes:
-                unknown_files.append(file_entry)
-
-        for _file in unknown_files:
-            unknown_files_dirtree.add_file_by_relpath(_file.relpath)
+                unknown_files_dirtree.add_file_by_relpath(file_entry.relpath)
         return unknown_files_dirtree
 
     def fullpath(self):
         return self._rootpath
 
-    @staticmethod
-    def _remove_prefix_from_path(name, _path):
-        prefix = os.path.sep + name + os.path.sep
-        assert _path.startswith(prefix)
-        relative_path = _path[len(prefix):]
-        return relative_path
-
     def _set_default_subdir(self, parent, name):
-        relpath = os.path.join(parent.data.relpath, name)
-        fullpath = os.path.join(parent.data.fullpath, name)
+        relpath, fullpath = parent.data._child_paths(name)
         node = self.get_node(relpath)
         if node is None:
-            subdir_entry = DirEntry(name, parent_relpath=parent.data.relpath,
-                                    parent_fullpath=parent.data.fullpath)
             node = self._create_node_orig(
                 identifier=relpath,
                 tag=name,
-                data=subdir_entry,
+                data=DirEntry(name, relpath, fullpath),
                 parent=parent.identifier)
         return node
 
@@ -177,8 +137,3 @@ class DirTree(treelib.Tree):
         raise NotImplementedError('Please use create_dir_node_from_fullpath_if_not_exists, '
             'add_file_by_relpath, or add_file_by_fullpath')
 
-
-if __name__ == '__main__':
-#    #import sys
-#    t = LocalDiskFSTree.factory(sys.argv[1], silent=True)
-     t.show()
