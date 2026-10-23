@@ -12,7 +12,7 @@ class CreateDirtreeFromArgTest(unittest.TestCase):
     def setUp(self):
         self.root = tempfile.mkdtemp(prefix='dirstuff-utils-')
         helpers.make_files(self.root, ['top.txt', 'a/b/deep.txt'])
-        patcher = mock.patch('cursesswitch.print_line')
+        patcher = mock.patch('dirdelta.messages.print_line')
         patcher.start()
         self.addCleanup(patcher.stop)
 

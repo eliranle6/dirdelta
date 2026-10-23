@@ -6,14 +6,12 @@ content/hash comparison). For each file present in one replica but not the
 other, the user can choose to copy it across or delete it.
 
 This is the main repo. Its pickers and menus are `dirpicker`, a C++ program
-from cpptree (/home/eliran/code/cpptree, github.com/levioctl/cpptree), run
-as a subprocess by `dirdelta/picker.py` (see `docs/dirpicker-integration.md`);
-it must be installed separately (`make install PREFIX=~/.local` there), and
-is found as `$DIRDELTA_PICKER` or on `PATH`. `treepicker` (the Python curses
-tree-picker library the app used before, reusable on its own) is vendored
-inside it as a git submodule at `lib/treepicker` — its own history/remote,
-pinned to a specific commit here; dirdelta now only uses its
-`cursesswitch.print_line`. On the original dev machine this directory sits
+from cpptree (github.com/levioctl/cpptree), vendored as a git submodule at
+`lib/cpptree` (its own history/remote, pinned to a specific commit here) and
+built with `make`; `dirdelta/picker.py` runs it as a subprocess (see
+`docs/dirpicker-integration.md`). The Python `treepicker` library that was
+the UI before is gone (removed 2026-10-24; it was the `lib/treepicker`
+submodule, github.com/levioctl/treepicker). On the original dev machine this directory sits
 inside a local `dirstuff/` folder alongside a Python venv and an `unused/`
 scratch dir, but neither is part of this repo, and nothing in the repo may
 assume that layout (see Structure below). Dependencies go in a `.venv`
@@ -22,7 +20,6 @@ inside the repo (gitignored; see README.md), which the Makefile targets and
 
 Deep dives live in `docs/`:
 - `docs/architecture.md` — module-by-module breakdown and data flow (scan → diff → pick → copy/remove)
-- `docs/treepicker-internals.md` — the old Python picker's (lib/treepicker) rendering/pagination/search/input internals; dirdelta no longer uses it
 - `docs/known-issues.md` — real bugs and dead code found while reading the source, with file:line
 - `docs/glossary.md` — project-specific terms (replica, dirtree, cloud path convention, etc.)
 - `docs/improvement-ideas.md` — proposed refactors/simplifications, not implemented; a backlog to pick from
@@ -33,12 +30,13 @@ re-deriving it from scratch.
 
 ## Running it
 
-See README.md for running from source (`python -m dirdelta`, from the
-repo root with `PYTHONPATH=lib/treepicker`), `make install` (into a venv) and
-`make deploy` (a pipx-managed `dirdelta` in `~/.local/bin`). Entry
-points are shell scripts in `bin/`, each putting the repo root and
-`lib/treepicker` on `PYTHONPATH` and running `python -m dirdelta` with the
-repo's `.venv` Python (falling back to `python3`):
+See README.md for running from source (`make` to build dirpicker, then
+`python -m dirdelta` from the repo root), `make install` (into a venv) and
+`make deploy` (a pipx-managed `dirdelta` in `~/.local/bin`); both also
+install dirpicker next to the environment's python. Entry points are shell
+scripts in `bin/`, each putting the repo root on `PYTHONPATH` and running
+`python -m dirdelta` with the repo's `.venv` Python (falling back to
+`python3`):
 
 - `./bin/dirsync-fs.sh` — sync temp copies of `tests/fixtures/alpha` and `.../bravo`
 - `./bin/dirsync-cloud.sh` — sync a local WSL path against `cloud/mein` (Drive)
@@ -53,7 +51,9 @@ messages in between are plain lines. A "cloud" path is any path whose
 first component is literally `cloud` (see `utils.py`).
 
 Env vars that change execution mode:
-- `DIRDELTA_PICKER` — the dirpicker program to run (default: `dirpicker` on `PATH`)
+- `DIRDELTA_PICKER` — the dirpicker program to run (default: the first of
+  `dirpicker` next to the running python, `lib/cpptree/build/dirpicker`,
+  `dirpicker` on `PATH`)
 - `DRYRUN=0` — actually copy bytes in "Copy" (`localdiskdirtree.py`); any
   other value or unset means dry-run, where the tree/dirs are updated but
   `shutil.copy` is skipped. "Remove" is not gated by this — it always deletes.
@@ -75,20 +75,19 @@ dirstuff/                    the original dev machine's local folder, not a git 
 │   └── parse-drive-files.py
 └── dirdelta/                 THIS repo
     ├── bin/                   entry-point scripts
-    ├── Makefile               dev tasks: test, clean, install, deploy, undeploy
+    ├── Makefile               dev tasks: build, test, clean, install, deploy, undeploy
     ├── dirdelta/              the application (see docs/architecture.md)
     ├── secrets/               Google OAuth secrets — never print/edit
     ├── tests/                 unittest suite + tests/fixtures/{alpha,bravo}
     └── lib/
-        └── treepicker/        git submodule — the old curses tree-picker library
-            ├── cursesswitch.py  curses on/off + colored-print shim, bundled
-            │                    in as a flat module (no longer its own repo)
-            └── tests/           unittest suite
+        └── cpptree/           git submodule — the C++ tree library and dirpicker
+                               (make build → lib/cpptree/build/dirpicker)
 ```
 
-(`cpptree`, a C++ learning project, used to live alongside this tree and has
-since moved to `/home/eliran/code/cpptree`. It's not part of this repo, but
-its `dirpicker` program is dirdelta's picker now.)
+(`cpptree` is a C++ learning project of the same author. Its own working copy
+is at `/home/eliran/code/cpptree`; `lib/cpptree` is a separate clone of it,
+so changes made there need committing in `lib/cpptree` (and pushing) before
+the submodule pin here is updated.)
 
 ## Secrets
 
@@ -104,14 +103,10 @@ commit-adjacent-copy them anywhere.
 make test             # or make test ARGS=-v, or any other unittest flags via ARGS
 ```
 
-It runs `unittest discover` on `tests/` with `PYTHONPATH=.:lib/treepicker`
-(imports look like `from dirdelta import dirtree`), then hands off to the
-submodule's own `make -C lib/treepicker test`, which runs
-`lib/treepicker/tests/` with `PYTHONPATH=.` (`from treepicker import
-treeprinter`), passing down the same `PYTHON` and `ARGS`. `make clean` and
-`make install` delegate to the submodule the same way, so the library's
-Makefile stays usable on its own. `cursesswitch` is a flat top-level module
-in `lib/treepicker/`.
+It runs `unittest discover` on `tests/` with `PYTHONPATH=.` (imports look
+like `from dirdelta import dirtree`), then dirpicker's own C++ tests with
+`make -C lib/cpptree test` (which needs Google Test, `libgtest-dev`).
+`make clean` cleans the submodule too.
 
 Patch targets must use the same module names the code imports
 (`'dirdelta.localdiskdirtree.DRYRUN'`): a bare `import localdiskdirtree`
@@ -119,14 +114,12 @@ would load a second copy of the module that the app never sees. To run one
 module:
 
 ```bash
-PYTHONPATH=.:lib/treepicker:tests .venv/bin/python3 -m unittest test_interactive_dir_sync -v
-PYTHONPATH=lib/treepicker:lib/treepicker/tests .venv/bin/python3 -m unittest test_treepicker -v
+PYTHONPATH=.:tests .venv/bin/python3 -m unittest test_interactive_dir_sync -v
 ```
 
-Every module has a test file (53 dirdelta tests and 41 in lib/treepicker,
-all passing as of 2026-10-23) except the thin wiring in
-`main.py`/`dirsync_main.py`, covered only by running the app, and the tiny
-`keybind.py`/`getcher.py`, exercised through `test_treepicker`. Shared fakes:
+Every module has a test file (60 tests, all passing as of 2026-10-24) except
+the thin wiring in `main.py`/`dirsync_main.py`, covered only by running the
+app. Shared fakes:
 - `tests/helpers.py`: `scripted_option_picker` / `scripted_tree_picker` /
   `scripted_dir_picker` patch `dirdelta.picker`'s functions to return
   scripted answers, so no test runs dirpicker, plus `make_files` for
@@ -134,10 +127,6 @@ all passing as of 2026-10-23) except the thin wiring in
   a fake dirpicker script. App tests build their own `tempfile.mkdtemp()` trees
   rather than using `tests/fixtures/`, so they never depend on (or modify)
   the repo.
-- `lib/treepicker/tests/scripted_keys.py`: `scripted_keys` feeds
-  `TreePicker`/`LineScanner` a key sequence by patching
-  `getcher.GetchUnix`, and `silent_screen` swaps the `cursesswitch` printer
-  for a mock.
 - Drive is never contacted: `test_clouddirtree` writes a JSON-lines cache to
   a temp file, and `test_clouddirtreefactory` mocks `Credentials`/`build`.
 
@@ -148,34 +137,25 @@ end to end in a real terminal with dirpicker. The cloud flow has not, since it n
 Drive credentials.
 
 Notes for whoever changes things next:
-- (For lib/treepicker, if it's kept.) The unit tests cover only small pieces
-  of the picker. Before refactoring
-  `treeprinter`/`treesearch`/`treepickermodel`/`treenavigator`, snapshot the
-  old package and diff rendered frames (`TreePrinter._tree_lines` plus the
-  selected id) over many seeded random navigate/pick/search sequences, old
-  vs. new. That's how the 2026-10-23 simplifications and fixes were checked.
 - To check something in a real terminal without a person at the keyboard,
   run `python -m dirdelta` in a detached tmux session (`tmux new-session -d
   -x 90 -y 20 ...`), send keys with `tmux send-keys`, and read the screen
   with `tmux capture-pane -p`. dirpicker draws on `/dev/tty`, so the
   terminal must be a real (pseudo-)terminal.
-- Writing `test_treenavigator.py` caught a real bug in
-  `explore_deepest_child()` (it compared a variable to itself, so it always
-  stopped after one level), and running the app caught most of
-  known-issues.md #17-22. Both are good reasons to test before trusting a
-  path through the code.
+- Running the app caught most of known-issues.md #17-22, and dirpicker's
+  randomized tests caught several of its bugs: good reasons to test before
+  trusting a path through the code.
 
 ## Conventions observed in the code
 
-- Pure Python, no build step. Modules inside `dirdelta/` import each other
+- Python, plus dirpicker (C++, built by `make`). Modules inside `dirdelta/` import each other
   as `from dirdelta import x` (never bare `import x`, which only worked in
   Python 2 or when `dirdelta/` itself happened to be on `sys.path`), so the
   same code runs from source via `python -m dirdelta` and installed via
-  `make install` (`pip install ./lib/treepicker .`, pbr-based `setup.py`s).
+  `make install` (`pip install .`, a pbr-based `setup.py`).
   pbr derives versions from git tags, so `setup.cfg`'s `version` must stay
-  ahead of the latest tag (dirdelta 1.4.0 vs. v1.3.2, treepicker 1.1.0 vs.
-  v1.0.1). The root `requirements.txt` lists the third-party dependencies;
-  the picker library comes from the submodule, not PyPI.
+  ahead of the latest tag (dirdelta 1.4.0 vs. v1.3.2). The root
+  `requirements.txt` lists the third-party dependencies.
 - Diffing is filename/path-only (see `DirTree.get_unknown_entries_in_given_dirtree`
   in `dirdelta/dirtree.py`) — no hashing, no size/mtime comparison.
 - The local-disk scanner shells out to the real `find` binary

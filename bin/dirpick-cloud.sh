@@ -3,5 +3,5 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 PY="$ROOT/.venv/bin/python3"
 [ -x "$PY" ] || PY=python3
 
-PYTHONPATH="$ROOT:$ROOT/lib/treepicker" \
+PYTHONPATH="$ROOT" \
            "$PY" -m dirdelta cloud/mein

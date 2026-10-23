@@ -1,6 +1,3 @@
-[submodule "lib/treepicker"]
-	path = lib/treepicker
-	url = https://github.com/levioctl/treepicker
 [submodule "lib/cpptree"]
 	path = lib/cpptree
 	url = https://github.com/levioctl/cpptree

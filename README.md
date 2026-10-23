@@ -18,7 +18,7 @@ dirdelta is Python 3, plus its picker, which is C++ and built with `make`: you c
 from the source tree, or install it (see below). From the repo root:
 
 ```bash
-git submodule update --init       # fetches lib/cpptree (dirpicker) and lib/treepicker
+git submodule update --init       # fetches lib/cpptree (dirpicker)
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt
 make                              # builds dirpicker: needs g++ and libncurses-dev
@@ -35,10 +35,9 @@ so an already activated venv works too. `make PYTHON=/path/to/python3 ...` overr
 
 ## Running from source
 
-Run the `dirdelta` package as a module from the repo root, with the picker library on `PYTHONPATH`:
+Run the `dirdelta` package as a module from the repo root (after `make`, which builds dirpicker):
 
 ```bash
-export PYTHONPATH=lib/treepicker
 .venv/bin/python3 -m dirdelta --help
 ```
 
@@ -89,8 +88,8 @@ It also runs dirpicker's own tests (in `lib/cpptree`), which need Google Test (`
 make clean
 ```
 
-Removes `__pycache__`, `*.pyc`, `build/`, `*.egg-info` and pbr's generated `AUTHORS`/`ChangeLog`, both
-here and in `lib/treepicker`. It leaves `.venv`, `secrets/` and the Drive cache
+Removes `__pycache__`, `*.pyc`, `build/`, `*.egg-info`, `.eggs` and pbr's generated
+`AUTHORS`/`ChangeLog`, and dirpicker's build (`lib/cpptree/build`). It leaves `.venv`, `secrets/` and the Drive cache
 (`~/.cache/dirman/files.txt`) alone; delete `.venv` yourself to start over.
 
 ## Deploying to your system
@@ -116,8 +115,8 @@ venv.
 ## Installing into a venv
 
 ```bash
-make install          # pip install ./lib/treepicker .
+make install          # pip install . (and dirpicker next to that python)
 ```
 
-Installs both packages into the same environment the other targets use (`.venv` if it exists, else
-the `python3` on your `PATH`), and dirpicker next to that environment's python. Useful for trying the packaged `dirdelta` command without deploying it.
+Installs dirdelta into the same environment the other targets use (`.venv` if it exists, else the
+`python3` on your `PATH`), and dirpicker next to that environment's python. Useful for trying the packaged `dirdelta` command without deploying it.

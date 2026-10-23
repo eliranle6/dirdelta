@@ -6,3 +6,4 @@ dirdelta.egg-info/
 secrets/
 
 .venv/
+.eggs/

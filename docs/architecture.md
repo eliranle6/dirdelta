@@ -6,7 +6,7 @@
 shell script (dirsync-*.sh / dirpick-*.sh)
   → main.py: parse_args() → dirsync_main.run(args)  OR  dirpick_main.run(args)
      (no curses: each picker is a dirpicker run, which has the terminal while
-      it's open; messages in between are plain lines, via cursesswitch.print_line)
+      it's open; messages in between are plain lines, via messages.print_line)
        dirpick_main: local dir → picker.pick_under_dir(dir)   (dirpicker scans it)
                      cloud    → utils.create_dirtree_from_arg() → picker.pick_from_tree()
        dirsync_main: utils.create_dirtree_from_arg(path)   for each replica path
@@ -35,7 +35,7 @@ missing or failing) exits with its message.
 cloud vs local: a path is "cloud" iff its first path component
 (`CloudDirTree.path_components`) is literally the string `"cloud"`.
 `validate_dir` checks the path is an existing directory for the local
-case, exiting with a message (via `cursesswitch.print_line`) otherwise.
+case, exiting with a message (via `messages.print_line`) otherwise.
 `is_cloud_path` is public too, for `dirpick_main`.
 
 ### `dirtree.py` — the core data structure
@@ -146,6 +146,12 @@ building a `DirTree`, ~3s for 119k files); for a cloud path it builds the
 `CloudDirTree` and uses `picker.pick_from_tree`. `main.py` then prints the
 path, or `os.execvp`s the `-x` program on it.
 
+### `messages.py`
+`print_line(line, color=None)`: prints dirdelta's messages (scanning,
+copying, removing...) as plain lines, optionally colored with `termcolor`,
+encoding with `surrogateescape` so file names that aren't UTF-8 print as
+they are.
+
 ### `picker.py`
 Runs `dirpicker` (from github.com/levioctl/cpptree; `$DIRDELTA_PICKER`, or
 `dirpicker` on `PATH`) as a subprocess for each pick, fzf-style: dirpicker
@@ -161,52 +167,11 @@ stdout, all `\0`-separated (`-0`). Exit code 1 means the user quit (→
 Names are passed as bytes with `surrogateescape`, so non-UTF-8 file names
 round-trip. Tests (`tests/test_picker.py`) run a fake dirpicker script.
 
-## `lib/treepicker/` — curses tree-picker library (own git repo, nested as a submodule)
+## `lib/cpptree/` — dirpicker (git submodule)
 
-**No longer used by dirdelta** except for `cursesswitch.print_line` (below):
-its pickers were replaced by dirpicker (`picker.py`). It's still a working
-library with its own tests.
-
-- `TreePicker` (`treepicker.py`) — the main class. State machine over modes:
-  navigation / non-interactive search / interactive search / return / quit.
-  Keybindings registered via `keybind.KeyBind` (vim-ish: `hjkl` navigate,
-  `space` toggle, `/` interactive search, `Ctrl-/` non-interactive search,
-  `g`/`G` first/last, `Ctrl-d`/`Ctrl-u` or `d`/`u` page down/up, `Enter`
-  return selection, `q`/`Ctrl-c` quit).
-- `treepickermodel.TreePickerModel` — selection/pick-set state, search
-  filtering (rebuilds a filtered `treelib.Tree` copy tagging nodes with
-  `.matching`), delegates cursor movement to `treenavigator.TreeNavigator`.
-- `treenavigator.TreeNavigator` — cursor movement over siblings/children
-  with a sorted-children cache (sort key = `str(node.data)`); leaf-to-leaf
-  jumps via `move_selection_relative_leaf`.
-- `treeprinter.py` / `linescanner.py` / `pagination.py` / `treesearch.py` /
-  `getcher.py` — rendering, raw single-char input reading (Unix `getch`),
-  pagination, and substring search respectively (not fully read; skim these
-  before making UI changes).
-- `optionpicker.py` — flat "pick one of N strings" menu, implemented by
-  wrapping the strings as a 1-level `treelib.Tree` and reusing `TreePicker`.
-  `OptionPickerByMenuTraverse` is its only implementation.
-
-## `lib/treepicker/cursesswitch.py` — curses init/teardown + colored print
-
-dirdelta uses only `print_line` (its default, plain-stdout printer); the
-curses part below is no longer used by it.
-
-A flat module (no longer its own repo/package — bundled into `treepicker`
-as a single file, since it was really just one module,`printer.py`, behind
-a re-exporting `__init__.py`). `wrapper(main)` calls
-`curses.wrapper(...)` and installs a module-global `_CursesWindowPrinter`
-bound to the curses window, unless `MODE=direct`, in which case a
-`_ConsolePrinter` (plain colored stdout via `termcolor`) is used instead —
-this is what lets the same `cursesswitch.print_string` calls work whether
-or not curses is active. `wrapper` returns `main`'s result.
-
-`_CursesWindowPrinter` draws each string straight onto the window at a
-running row/column cursor, dropping text past the right or bottom edge.
-`clear_screen()` starts a frame: it `erase()`s (not `clear()`, which would
-force a full terminal repaint) and holds back refreshes until
-`refresh()`, which `TreePicker._print_tree` calls once the frame is drawn.
-So each keypress sends one refresh, with only the cells that changed. Output
-printed outside a frame, like Copy's progress lines, refreshes
-immediately.
-
+The C++ tree picker dirdelta runs (github.com/levioctl/cpptree; its README and
+`dirpicker --help` describe it). `make build` builds
+`lib/cpptree/build/dirpicker`; `make install`/`make deploy` copy it next to
+the environment's python, where `picker.py` looks first. The Python picker
+library that was the UI before (`lib/treepicker`, with `cursesswitch`) was
+removed on 2026-10-24.

@@ -1,8 +1,8 @@
 import os
 
-import cursesswitch
 from dirdelta import dirtree
 from dirdelta import menu
+from dirdelta import messages
 from dirdelta import picker
 
 
@@ -25,16 +25,16 @@ class InteractiveDirSync(object):
         while True:
             missing = self._dst.get_unknown_entries_in_given_dirtree(self._src)
             if not missing.does_dir_contain_any_files():
-                cursesswitch.print_line("Nothing to synchronize; Destination dir alread contains all files "
+                messages.print_line("Nothing to synchronize; Destination dir alread contains all files "
                                      "in source dir.")
                 break
             self._selected = self._chooseFiles(missing)
             if self._selected is None:
-                cursesswitch.print_line("Sync ended by user's request.")
+                messages.print_line("Sync ended by user's request.")
                 break
             if not self._selected:
                 break
-            cursesswitch.print_line("%d files were chosen to copy so far." % (len(self._selected),))
+            messages.print_line("%d files were chosen to copy so far." % (len(self._selected),))
             option = menu.run_menu([
                 (self._OPTION_NOTHING, None),
                 (self._OPTION_RESELECT, None),
@@ -66,7 +66,7 @@ class InteractiveDirSync(object):
     def _remove(self):
         file_entries = self._selected.values()
         for index, file_entry in enumerate(file_entries):
-            cursesswitch.print_line("Removing {} ({} out of {})".format(
+            messages.print_line("Removing {} ({} out of {})".format(
                 file_entry, index + 1, len(file_entries)))
             os.unlink(file_entry.full_filesystem_path())
             # Keep the in-memory source tree in sync so the next diff doesn't list the file again

@@ -5,7 +5,8 @@ Issues 1-15 were found by reading the code on 2026-07-13 and numbered
 everything except 23-24 is fixed. Fixed entries are kept, struck through,
 because their notes explain why the code looks the way it does. File paths
 are relative to `dirdelta/` unless noted (picker files live under
-`lib/treepicker/treepicker/`).
+`lib/treepicker/treepicker/`; that library was removed on 2026-10-24, so its
+entries here are history).
 
 ## Confirmed by grep (referenced symbol genuinely doesn't exist)
 

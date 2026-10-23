@@ -41,17 +41,6 @@ for the `-x/--execute` launch-with-a-program flow); two paths → "sync"
 (`dirsync_main.py`, the diff/copy/remove flow this whole project exists
 for).
 
-**`cursesswitch`** — a tiny module (`lib/treepicker/cursesswitch.py`,
-bundled into the `treepicker` submodule, not its own repo). dirdelta uses only
-its `print_line`, which prints a (optionally colored) line to stdout; its
-curses mode (`wrapper()`) is no longer used.
-
-**`dirpicker`** — the C++ tree picker program (from cpptree,
-github.com/levioctl/cpptree) that dirdelta runs for every pick and menu, via
-`dirdelta/picker.py`. See `docs/dirpicker-integration.md`.
-
-**`treepicker`** — a tiny Python library (own git repo, nested as a submodule
-at `lib/treepicker/`) implementing a curses tree-navigation-and-multi-select
-widget (`TreePicker`) plus a flat single-select menu (`OptionPickerByMenuTraverse`).
-It used to be dirdelta's UI; dirpicker replaced it, since it was too slow for
-big trees.
+**`treepicker`** — the Python curses tree-picker library (github.com/levioctl/treepicker)
+that was dirdelta's UI, as the `lib/treepicker` submodule (with `cursesswitch`, its
+curses/plain printing shim), until dirpicker replaced it; removed 2026-10-24.

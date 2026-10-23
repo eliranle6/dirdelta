@@ -1,6 +1,6 @@
 # dirdelta's picker: cpptree's dirpicker
 
-The Python `treepicker` (lib/treepicker) is too slow for big trees: in a
+The Python `treepicker` (the lib/treepicker submodule, removed since) was too slow for big trees: in a
 119k file tree (/usr/share) one search keystroke took over 70s, and building
 dirdelta's own Python tree takes ~3s. `dirpicker`, from the C++ project at
 /home/eliran/code/cpptree (github.com/levioctl/cpptree), shows the same
@@ -29,9 +29,11 @@ Like fzf: dirdelta starts `dirpicker`, which draws on the terminal itself
   `.`. Exit code 0: something was picked; 1: the user quit; anything else:
   an error (its message is on stderr).
 
-dirdelta finds the program as `$DIRDELTA_PICKER` if set, or else
-`dirpicker` on `PATH` (`make install PREFIX=~/.local` in cpptree puts it in
-~/.local/bin).
+dirpicker is the `lib/cpptree` submodule, built by `make` (make build) into
+`lib/cpptree/build/dirpicker`; `make install` and `make deploy` put a copy
+next to the environment's python. dirdelta runs `$DIRDELTA_PICKER` if set,
+else the first of: dirpicker next to the running python, that build,
+dirpicker on `PATH`.
 
 ## Plan and status
 
@@ -58,20 +60,18 @@ dirdelta, each a commit:
 
 - Keys: h/j/k/l or arrows, / to search (Enter keeps the filter, Esc drops
   it), Space picks (with -m), Enter picks/finishes, q or Ctrl-C quits.
-  Missing so far: g/G, the leaf jumps (Ctrl-J/K), Ctrl-H, Ctrl-L, u/d (use
-  Ctrl-U/Ctrl-D or PageUp/PageDown), non-interactive search (Ctrl-/).
+  g/G go to the first/last sibling, Ctrl-/ searches only when Enter is
+  pressed, and f switches between the matches-only tree and the whole tree
+  with matches highlighted. Missing: the leaf jumps (Ctrl-J/K), Ctrl-H,
+  Ctrl-L, u/d (use Ctrl-U/Ctrl-D or PageUp/PageDown).
 - Search is smartcase (case-insensitive unless the keyword has uppercase)
   and matches names, like the Python picker's.
 - With -m, Enter with nothing picked does nothing, like the Python picker.
 
 ## What's left
 
-- lib/treepicker: dirdelta only uses its `cursesswitch.print_line` now.
-  Moving those few lines into dirdelta would let the submodule go
-  (improvement-ideas.md #15). Not decided yet.
-- `make deploy` (pipx) installs only the Python part; dirpicker has to be
-  installed from cpptree separately (README.md, Setup).
-- The missing keys listed above, in dirpicker.
+- The leaf jumps (Ctrl-J/K), Ctrl-H and Ctrl-L, which the Python picker had
+  (not needed, so far).
 - Sync mode's startup is now mostly building both replicas' trees in Python
   (~3s each for 119k files); moving the scan and diff into C++ would cut it
   (improvement-ideas.md #16).

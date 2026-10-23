@@ -2,8 +2,6 @@
 
 # The repo's .venv if there is one, else whichever python3 is on PATH (e.g. an active venv)
 PYTHON ?= $(if $(wildcard .venv/bin/python3),.venv/bin/python3,python3)
-# The same interpreter for the submodule's own targets, which run from inside lib/treepicker
-SUBMAKE = $(MAKE) -C lib/treepicker PYTHON=$(if $(findstring /,$(PYTHON)),$(abspath $(PYTHON)),$(PYTHON))
 
 # dirpicker, the C++ picker dirdelta runs, built in its submodule
 DIRPICKER = lib/cpptree/build/dirpicker
@@ -19,30 +17,24 @@ help:
 	@echo "make deploy     install a dirdelta command into ~/.local/bin via pipx; rerun to update"
 	@echo "make undeploy   remove the deployed command"
 
-# The repo root makes the dirdelta package importable, lib/treepicker the picker library. The picker
-# library runs its own tests.
+# The repo root makes the dirdelta package importable. dirpicker runs its own tests.
 test:
-	PYTHONPATH=.:lib/treepicker $(PYTHON) -m unittest discover -s tests $(ARGS)
-	$(SUBMAKE) test ARGS="$(ARGS)"
+	PYTHONPATH=. $(PYTHON) -m unittest discover -s tests $(ARGS)
 	$(MAKE) -C lib/cpptree test
 
 clean:
-	find . \( -path ./.venv -o -path ./lib/treepicker \) -prune -o \( -name __pycache__ -o -name '*.pyc' \) -prune -exec rm -rf {} +
-	rm -rf build AUTHORS ChangeLog *.egg-info
-	$(SUBMAKE) clean
+	find . \( -path ./.venv -o -path ./lib \) -prune -o \( -name __pycache__ -o -name '*.pyc' \) -prune -exec rm -rf {} +
+	rm -rf build AUTHORS ChangeLog *.egg-info .eggs
 	$(MAKE) -C lib/cpptree clean
 
 # dirpicker goes next to the environment's python (where its scripts go), which is where picker.py
 # looks for it first
 install: build
-	$(SUBMAKE) install
 	$(PYTHON) -m pip install -U .
 	install -m 755 $(DIRPICKER) "$$($(PYTHON) -c 'import sysconfig; print(sysconfig.get_path("scripts"))')"
 
-# treepicker isn't on PyPI, so it's injected into dirdelta's pipx venv from the submodule
 deploy: build
 	pipx install --force .
-	pipx inject --force dirdelta ./lib/treepicker
 	install -m 755 $(DIRPICKER) "$$(pipx environment --value PIPX_LOCAL_VENVS)/dirdelta/bin"
 
 undeploy:

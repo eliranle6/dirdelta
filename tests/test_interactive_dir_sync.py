@@ -22,7 +22,7 @@ class InteractiveDirSyncTest(unittest.TestCase):
         helpers.make_files(self.src_root, ['a.txt', 'sub/b.txt'])
         helpers.make_files(self.dst_root, ['a.txt'])
         self.messages = []
-        patcher = mock.patch('cursesswitch.print_line', side_effect=lambda s, *a: self.messages.append(s))
+        patcher = mock.patch('dirdelta.messages.print_line', side_effect=lambda s, *a: self.messages.append(s))
         patcher.start()
         self.addCleanup(patcher.stop)
 
