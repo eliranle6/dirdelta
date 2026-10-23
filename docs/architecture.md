@@ -32,8 +32,8 @@ chain from `main.py`). One positional path → `dirpick_main.run`; two →
 cloud vs local: a path is "cloud" iff its first path component
 (`CloudDirTree.path_components`) is literally the string `"cloud"`.
 `__validate_replica` checks the path is an existing directory for the local
-case (note: calls `cursesswitch.print_string` without importing
-`cursesswitch` in this file — see known-issues.md).
+case, reporting failures via `cursesswitch.print_string` (the missing
+`import cursesswitch` here was fixed — known-issues.md #4).
 
 ### `dirtree.py` — the core data structure
 `DirTree(treelib.Tree)` models a filesystem tree. Two entry types:
@@ -72,10 +72,11 @@ itself excluded (`dirnames_fullpath.remove(self.fullpath())`).
 sub-tree, calls `add_file_by_relpath` to add the node to `self`'s tree, then
 ensures the destination directory exists (`os.makedirs`, tolerant of
 already-exists, path derived from `full_filesystem_path()`), then calls
-`_copy_local_file_to_tree_with_path`. **That method's actual `shutil.copy`
-call is commented out** (see known-issues.md #5) — currently a no-op stub,
-so nodes get added to the tree and the containing directory gets created,
-but bytes are never copied. (Previously called a nonexistent
+`_copy_local_file_to_tree_with_path`. **That method's `shutil.copy` is gated
+behind the module-level `DRYRUN` flag** (known-issues.md #5): dry-run is
+the default, so nodes get added to the tree and the containing directory
+gets created, but bytes are only copied when `DRYRUN=0` is set in the
+environment. (Previously called a nonexistent
 `self._add_file_by_path(...)` and referenced a `filesystem_dirpath`
 attribute that doesn't exist on the current `FileEntry`/`DirEntry` — both
 fixed, see known-issues.md #2 — and is now covered by
@@ -111,17 +112,15 @@ sit alongside it as `scandrive.py`; it's now archived at
   files → menu (`Copy` / `Remove` / `Do nothing` / `Reselect files`) → act →
   recompute diff → repeat until nothing selected or user quits.
 - `_copy()` rebuilds a `DirTree` from just the selected `FileEntry`s via
-  `dirtree.DirTree.factory_from_list_of_file_entries` (note:
-  `DirTree.factory_from_list_of_file_entries` is actually a *module-level*
-  function in `dirtree.py`, not a classmethod — this call would raise
-  `AttributeError`; see known-issues.md), then calls
-  `dst.copy_inner_entries_from_dirtree(...)`.
-- `_remove()` calls `file_entry.full_filesystem_path()` and `os.unlink(...)`
-  — `full_filesystem_path()` itself resolves correctly now (see
-  known-issues.md #1), but the `cursesswitch.print_string(...)` call just
-  above it uses `{}`-style placeholders with the `%` operator, which raises
-  `TypeError` before `os.unlink` is ever reached (known-issues.md #16) —
-  "Remove" still doesn't work end-to-end.
+  the module-level `dirtree.factory_from_list_of_file_entries` (previously
+  miscalled as a `DirTree` classmethod — fixed, known-issues.md #3), then
+  calls `dst.copy_inner_entries_from_dirtree(...)` — which is a dry run
+  unless `DRYRUN=0` (see `localdiskdirtree.py` above).
+- `_remove()` prints a progress line, then calls
+  `os.unlink(file_entry.full_filesystem_path())` for each selected file.
+  The `TypeError` from mixing `{}` placeholders with `%` that used to crash
+  it first is fixed (known-issues.md #16). Note `_remove()` is **not**
+  gated by `DRYRUN` — it really deletes files.
 
 ### `dirsync_main.py` / `dirpick_main.py`
 Thin wiring: build both `DirTree`s, present a top-level menu (`View diff

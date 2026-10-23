@@ -39,6 +39,9 @@ first component is literally `cloud` (see `utils.py`).
 Env vars that change execution mode:
 - `MODE=static` — skip the `cursesswitch.wrapper()` curses init in `main.py`
 - `MODE=direct` — skip curses in `cursesswitch.py`'s `wrapper()` (falls back to plain stdout `_ConsolePrinter`)
+- `DRYRUN=0` — actually copy bytes in "Copy" (`localdiskdirtree.py`); any
+  other value or unset means dry-run, where the tree/dirs are updated but
+  `shutil.copy` is skipped. "Remove" is not gated by this — it always deletes.
 
 `./clean.sh` removes `__pycache__`/`*.pyc`/`*.egg-info`/`build/` cruft from
 this repo and the `lib/treepicker` submodule. It does not touch
@@ -100,7 +103,9 @@ bare-import their target module (`import dirtree`) rather than using
 unittest. **Unverified**: `bin/dirsync-fs.sh` and the other entry-point
 scripts have not been run end-to-end since the dirsync→dirdelta rewrite;
 don't assume they work. Only the unittest-covered modules (`dirtree.py`,
-`findcmdwrapper.py`, `localdiskdirtree.py`, `pagination.py`) are known-good.
+`findcmdwrapper.py`, `localdiskdirtree.py`, and treepicker's
+`pagination.py`, `treeprinter.py`, `treepickermodel.py`, `treesearch.py`,
+`treenavigator.py`, `treeops.py`) are known-good.
 
 Run everything at once:
 
@@ -159,7 +164,7 @@ the `treepicker` package proper, so they're imported by their bare module
 names (`test_pagination`, `test_treeprinter`, etc.), not a dotted
 `treepicker.test_*`.)
 
-All 27 tests pass as of 2026-07-19.
+All 27 tests pass as of 2026-10-23.
 
 Notes for whoever adds the next batch:
 - Writing `test_treenavigator.py` caught a real bug in
@@ -179,9 +184,10 @@ Notes for whoever adds the next batch:
   something correct to test.
 - `localdiskdirtree.py`'s `full_filesystem_path()`/`_add_file_by_path`
   crashes (known-issues.md #1-#2) are now fixed and covered by
-  `test_localdiskdirtree.py`. `interactive_dir_sync.py` is still a natural
-  next candidate but hits its own separate `AttributeError` (known-issues.md
-  #3) — a test there would currently just document that crash.
+  `test_localdiskdirtree.py`. `interactive_dir_sync.py` is a natural next
+  candidate: its `AttributeError` (known-issues.md #3) and `TypeError`
+  (#16) crashes are fixed, so `_copy`/`_remove` should now be testable
+  against `tempfile.mkdtemp()` dirs (mind that `_remove` really unlinks).
 
 ## Conventions observed in the code
 
