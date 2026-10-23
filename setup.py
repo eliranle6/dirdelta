@@ -1,6 +1,5 @@
 #!/usr/bin/python
-from distutils.core import setup
-from setuptools import find_packages
+from setuptools import setup
 
 setup(
     setup_requires=[
@@ -8,7 +7,7 @@ setup(
         'setuptools >= 17.1'
     ],
     pbr=True,
-    packages=find_packages(),
+    packages=['dirdelta'],
     entry_points={
         'console_scripts': ['dirdelta=dirdelta.main:main']
     }

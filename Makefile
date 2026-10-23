@@ -1,6 +1,6 @@
+# Installs into whichever environment's pip is first on PATH (activate a venv first)
 install:
-	sudo pip install -U -r requirements.txt
-	sudo pip install . -U
+	pip install -U ./lib/treepicker .
 
 check_convention:
 	pep8 dirdelta

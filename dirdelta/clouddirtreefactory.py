@@ -11,7 +11,10 @@ from dirdelta import clouddirtree
 import treepicker
 
 
-SECRETS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'secrets')
+# secrets/ at the repo root when running from source; an installed copy needs DIRDELTA_SECRETS_DIR
+SECRETS_DIR = os.environ.get(
+    'DIRDELTA_SECRETS_DIR',
+    os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'secrets'))
 TOKEN_PATH = os.path.join(SECRETS_DIR, 'token.json')
 CREDENTIALS_PATH = os.path.join(SECRETS_DIR, 'credentials.json')
 

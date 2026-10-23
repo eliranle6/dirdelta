@@ -27,9 +27,11 @@ re-deriving it from scratch.
 
 ## Running it
 
-See README.md for running `dirdelta/main.py` directly. Entry points are
-shell scripts in `bin/`, each setting `PYTHONPATH` and invoking
-`dirdelta/main.py` with the venv's Python (falling back to `python3`):
+See README.md for running from source (`python -m dirdelta`, from the
+repo root with `PYTHONPATH=lib/treepicker`) and for `make install`. Entry
+points are shell scripts in `bin/`, each putting the repo root and
+`lib/treepicker` on `PYTHONPATH` and running `python -m dirdelta` with the
+repo's `.venv` Python (falling back to `python3`):
 
 - `./bin/dirsync-fs.sh` — sync temp copies of `tests/fixtures/alpha` and `.../bravo`
 - `./bin/dirsync-cloud.sh` — sync a local WSL path against `cloud/mein` (Drive)
@@ -92,16 +94,18 @@ commit-adjacent-copy them anywhere.
 ./run-tests.sh        # or ./run-tests.sh -v, or with any other unittest flags
 ```
 
-It runs `unittest discover` twice, once per test dir, because the two
-import conventions differ: `tests/` (dirdelta) runs with
-`PYTHONPATH=dirdelta:lib/treepicker` and bare-imports its targets
-(`import dirtree`), while `lib/treepicker/tests/` runs with
-`PYTHONPATH=lib/treepicker` and uses package imports
-(`from treepicker import treeprinter`). `cursesswitch` is a flat module in
-`lib/treepicker/`, so that path covers it too. To run one module:
+It runs `unittest discover` once per test dir, so the two dirs' helper
+modules (`helpers.py`, `scripted_keys.py`) don't collide. `tests/` runs with
+`PYTHONPATH=.:lib/treepicker` and imports its targets as
+`from dirdelta import dirtree`, and `lib/treepicker/tests/` runs with
+`PYTHONPATH=lib/treepicker` (`from treepicker import treeprinter`).
+`cursesswitch` is a flat top-level module in `lib/treepicker/`. Patch targets
+must use the same module names the code imports (`'dirdelta.localdiskdirtree.DRYRUN'`):
+a bare `import localdiskdirtree` would load a second copy of the module that
+the app never sees. To run one module:
 
 ```bash
-PYTHONPATH=dirdelta:lib/treepicker:tests .venv/bin/python3 -m unittest test_interactive_dir_sync -v
+PYTHONPATH=.:lib/treepicker:tests .venv/bin/python3 -m unittest test_interactive_dir_sync -v
 PYTHONPATH=lib/treepicker:lib/treepicker/tests .venv/bin/python3 -m unittest test_treepicker -v
 ```
 
@@ -134,7 +138,7 @@ Notes for whoever changes things next:
   selected id) over many seeded random navigate/pick/search sequences, old
   vs. new. That's how the 2026-10-23 simplifications and fixes were checked.
 - To check something in a real terminal without a person at the keyboard,
-  run `dirdelta/main.py` under `pty.fork()` (set a window size with
+  run `python -m dirdelta` (or an installed `dirdelta`) under `pty.fork()` (set a window size with
   `TIOCSWINSZ`), write keys to the pty, and read what's printed after
   curses exits.
 - Writing `test_treenavigator.py` caught a real bug in
@@ -145,12 +149,15 @@ Notes for whoever changes things next:
 
 ## Conventions observed in the code
 
-- Pure Python, no build step; it runs from source. The root
-  `requirements.txt` lists every third-party dependency (the picker library
-  itself comes from the submodule, not pip). Installing it as a package
-  (`setup.py`/`make install`) doesn't work yet: the app's bare imports only
-  resolve when run from source, and pbr also rejects `setup.cfg`'s version
-  1.3.0 since the git tags already reach v1.3.2.
+- Pure Python, no build step. Modules inside `dirdelta/` import each other
+  as `from dirdelta import x` (never bare `import x`, which only worked in
+  Python 2 or when `dirdelta/` itself happened to be on `sys.path`), so the
+  same code runs from source via `python -m dirdelta` and installed via
+  `make install` (`pip install ./lib/treepicker .`, pbr-based `setup.py`s).
+  pbr derives versions from git tags, so `setup.cfg`'s `version` must stay
+  ahead of the latest tag (dirdelta 1.4.0 vs. v1.3.2, treepicker 1.1.0 vs.
+  v1.0.1). The root `requirements.txt` lists the third-party dependencies;
+  the picker library comes from the submodule, not PyPI.
 - Diffing is filename/path-only (see `DirTree.get_unknown_entries_in_given_dirtree`
   in `dirdelta/dirtree.py`) — no hashing, no size/mtime comparison.
 - The local-disk scanner shells out to the real `find` binary
