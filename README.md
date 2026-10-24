@@ -80,10 +80,12 @@ runs: they change nothing on disk (not even the dirs copied files would go into)
 would have done. Every screen says which it is, at the start of its bottom line (the progress
 screen: its top line): "DRY RUN" in green, or "LIVE" in red.
 
-The fixtures are a small music library. Both have 44 files in common; only `alpha` has 42 (e.g.
+The fixtures are a small music library. Both have 106 files in common; only `alpha` has 364 (e.g.
 `podcasts/`, `music/Nina Simone/` and `first/infirst/ininfirst/huh/99.mp3`), and only `bravo` has 31
 (e.g. `audiobooks/Dune/`, `music/The Beatles/` and `third/anotherinthird/7.mp3`), so copying or
-removing them fills the progress screen. `./bin/example-sync-local.sh` runs this sync on a fresh temp
+removing them fills the progress screen. Some dirs are taller than a screen, to show the picker's
+pagination (`... (N more)` lines): `alpha/music/` has 36 artists, `alpha/podcasts/` 150 episodes, and
+`alpha/music/Bach/The Well-Tempered Clavier/` 48 tracks. `./bin/example-sync-local.sh` runs this sync on a fresh temp
 copy of the fixtures, so `DRYRUN=0 ./bin/example-sync-local.sh` is safe too.
 
 ## Tests
