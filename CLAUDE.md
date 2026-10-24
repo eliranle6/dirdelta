@@ -22,7 +22,8 @@ Deep dives live in `docs/`:
 - `docs/architecture.md` — module-by-module breakdown and data flow (scan → diff → pick → copy/remove)
 - `docs/known-issues.md` — real bugs and dead code found while reading the source, with file:line
 - `docs/glossary.md` — project-specific terms (replica, dirtree, cloud path convention, etc.)
-- `docs/improvement-ideas.md` — proposed refactors/simplifications, not implemented; a backlog to pick from
+- `docs/improvement-ideas.md` — proposed refactors/simplifications, not implemented; a backlog to pick from (#17-25: the 2026-10-24 review's concept, UI and code simplifications)
+- `lib/cpptree/CLAUDE.md` and `lib/cpptree/docs/improvement-ideas.md` — dirpicker's own (read before changing picker behavior; picker changes are made in cpptree, not here)
 - `docs/dirpicker-integration.md` — how dirdelta runs cpptree's C++ `dirpicker` for its pickers and menus (it replaced the Python picker), and what's left
 
 Read the relevant doc before making changes in that area rather than
@@ -48,7 +49,10 @@ to `python3`); "local" in their names is the local disk, as opposed to
 which prints the picked path, or `execvp`s the `-x` program on it), two
 paths → sync mode (`dirsync_main.py`). dirdelta doesn't use curses itself:
 each pick is a `dirpicker` run, which has the terminal while it's open, and
-messages in between are plain lines. A "cloud" path is any path whose
+messages in between are plain lines (`messages.py`), also shown at the top
+of the next picker, since its screen covers them. Copy and Remove run on a
+full-screen progress screen (`messages.progress_screen()`), stoppable with
+Ctrl-C, and ask for confirmation first. A "cloud" path is any path whose
 first component is literally `cloud` (see `utils.py`).
 
 Env vars that change execution mode:
@@ -87,9 +91,9 @@ dirstuff/                    the original dev machine's local folder, not a git 
 ```
 
 (`cpptree` is a C++ learning project of the same author. Its own working copy
-is at `/home/eliran/code/cpptree`; `lib/cpptree` is a separate clone of it,
-so changes made there need committing in `lib/cpptree` (and pushing) before
-the submodule pin here is updated.)
+is at `/home/eliran/code/cpptree`, where changes are committed; `lib/cpptree`
+is a separate clone of it, updated by fetching from that copy and
+fast-forwarding, then committing the new pin here. Don't push either repo.)
 
 ## Secrets
 
@@ -119,7 +123,7 @@ module:
 PYTHONPATH=.:tests .venv/bin/python3 -m unittest test_interactive_dir_sync -v
 ```
 
-Every module has a test file (60 tests, all passing as of 2026-10-24) except
+Every module has a test file (91 tests, all passing as of 2026-10-24) except
 the thin wiring in `main.py`/`dirsync_main.py`, covered only by running the
 app. Shared fakes:
 - `tests/helpers.py`: `scripted_option_picker` / `scripted_tree_picker` /

@@ -68,6 +68,8 @@ treat as a backlog to pick from.
    `_copy(selected)`/`_remove(selected)` instead of through
    `self._selected`, would make the data flow traceable without jumping
    between methods.
+   (Since 2026-10-24 there's no action menu in the loop anymore, but
+   `self._selected` is still the hand-off.)
 
 ## Picker library (`lib/treepicker/`)
 
@@ -108,3 +110,64 @@ The library was removed on 2026-10-24 (#15); kept for the record.
     each for 119k files) before showing anything; dirpicker builds a tree of
     the same size in ~0.4s. Scanning both replicas and diffing them in a C++
     helper would cut most of sync's startup time.
+
+## Simplifications found in the 2026-10-24 review
+
+Concepts and UI first, then code. cpptree's own (dirpicker's) are in
+`lib/cpptree/docs/improvement-ideas.md`.
+
+17. **A dry run shouldn't pretend in the trees.** Copy's and Remove's dry
+    runs update the in-memory trees as if they had acted, so right after a
+    dry run sync says "Nothing to synchronize" although nothing changed on
+    disk. If a dry run left the trees alone, it would offer the same files
+    again (the honest result), and the "as if" code paths in
+    `localdiskdirtree.py` (adding nodes in a dry copy, dropping them in a dry
+    remove, then rescanning) would go.
+
+18. **One `find` per scan.** `LocalDiskDirTree.update_from_filesystem()`
+    runs find twice, once for files and once for dirs
+    (`findcmdwrapper.find_files`/`find_dirs`), which doubles the scan time
+    and makes both report the same unreadable paths (hence the de-duplicating
+    of `scan_errors`). One `find ROOT -printf '%y %p\0'`, as dirpicker
+    does, gives both, `\0`-separated so odd file names are safe too.
+
+19. **Drop the unused scan options.** `localdiskdirtree.factory()` and
+    `findcmdwrapper` take `file_extentions`, `dirs_only` and
+    `include_hidden`, but the only caller (`utils.create_dirtree_from_arg`)
+    passes just `max_depth`. Without them `findcmdwrapper` is a few lines,
+    small enough to fold into `localdiskdirtree.py`.
+
+20. **Remove the "View files in A, not B" menu items?** Since the menu has
+    "Copy files from A to B" and "Remove files from A", whose pickers show
+    exactly that diff (and can be left with `q` without doing anything),
+    the two View items repeat them. Dropping them makes the main menu 5
+    items: the 4 actions and Quit. (Kept for now: View can't change
+    anything, which may be worth something on its own.)
+
+21. **One way to show messages.** Messages reach the user two ways: in the
+    next picker's header (`messages.take_recent()`), and on the progress
+    screen. If scanning (and the find warnings) also ran on the progress
+    screen, the header mechanism, with its line cap and "(N earlier lines)",
+    could go. The cost: an extra Enter after scanning.
+
+22. **Back to the main menu after an action?** After a copy or remove, the
+    files left are offered again (`sync()` loops). Going back to the main
+    menu instead would make the loop a single pass (pick, confirm, act), at
+    the cost of re-choosing the action to continue.
+
+23. **Thin wrappers.** `dirsync_main._view_diff()` and
+    `_sync_from_src_to_dst()` only construct an `InteractiveDirSync` and call
+    one method; `InteractiveDirSync.view_diff(src, dst)` takes src and dst
+    although the object holds them. And `menu.run_menu()` has one caller.
+
+24. **DirTree ids without the leading `/`.** DirTree's ids are `/sub/x`
+    (the root's is `/`), dirpicker's are `sub/x` (the root's is `.`), so
+    `picker.py` converts both ways (`_id_to_path`, `_path_to_id`). With
+    relative ids the conversion would go, but every `relpath` user would
+    change, so it's only worth it alongside other DirTree work (#1, #16).
+
+25. **Count files, not nodes, in the picker's status line.** "picked: 7" for
+    5 tracks counts the album and the artist dirs too, while the
+    confirmation says "Copy 5 files". dirpicker would need to know which
+    nodes are files (e.g. `d `/`f ` prefixes on stdin, like find's `%y`).
+
