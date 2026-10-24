@@ -181,7 +181,8 @@ Concepts and UI first, then code. cpptree's own (dirpicker's) are in
     relative ids the conversion would go, but every `relpath` user would
     change, so it's only worth it alongside other DirTree work (#1, #16).
 
-25. **Count files, not nodes, in the picker's status line.** "picked: 7" for
+25. ~~Count files, not nodes, in the picker's status line~~ — done 2026-10-24: picker.py sends
+    typed paths (dirpicker's `--typed`), so it says "picked: 5 files". Was: **Count files, not nodes, in the picker's status line.** "picked: 7" for
     5 tracks counts the album and the artist dirs too, while the
     confirmation says "Copy 5 files". dirpicker would need to know which
     nodes are files (e.g. `d `/`f ` prefixes on stdin, like find's `%y`).

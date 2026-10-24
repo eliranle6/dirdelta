@@ -77,8 +77,9 @@ class PickerTest(unittest.TestCase):
         self.answer('a/1.txt')
         picker.pick_from_tree(self.make_tree())
         args, paths = self.call()
-        self.assertEqual(paths, ['a', 'a/1.txt', 'b', 'b/2.txt', 'b/sub', 'b/sub/3.txt', 'c.txt'])
-        self.assertEqual(args, ['-0', '--root', '/some/root', '-'])
+        # Each after its type, so empty dirs show as dirs and picked files are counted
+        self.assertEqual(paths, ['d a', 'f a/1.txt', 'd b', 'f b/2.txt', 'd b/sub', 'f b/sub/3.txt', 'f c.txt'])
+        self.assertEqual(args, ['-0', '--typed', '--root', '/some/root', '-'])
 
     def test_pick_from_tree_returns_the_entries(self):
         self.answer('a/1.txt')
@@ -96,7 +97,7 @@ class PickerTest(unittest.TestCase):
         picked = picker.pick_from_tree(self.make_tree(), header='Pick\nfiles', multi=True)
         self.assertEqual([entry.relpath for entry in picked], ['/b', '/b/2.txt', '/b/sub', '/b/sub/3.txt'])
         args, _ = self.call()
-        self.assertEqual(args, ['-0', '--root', '/some/root', '-m', '--header', 'Pick\nfiles', '-'])
+        self.assertEqual(args, ['-0', '--typed', '--root', '/some/root', '-m', '--header', 'Pick\nfiles', '-'])
 
     def test_picked_entries_start_picked(self):
         tree = self.make_tree()

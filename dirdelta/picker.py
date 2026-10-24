@@ -11,6 +11,7 @@ import subprocess
 import sys
 import tempfile
 
+from dirdelta import dirtree
 from dirdelta import dryrun
 
 PROGRAM_ENV_VAR = 'DIRDELTA_PICKER'
@@ -35,7 +36,7 @@ def pick_from_tree(tree, header='', multi=False, picked=None):
     (entries, e.g. what an earlier call returned) start picked.
     """
     paths = list(_tree_paths(tree))
-    args = ['--root', tree.fullpath()] + (['-m'] if multi else []) + _header_args(header)
+    args = ['--typed', '--root', tree.fullpath()] + (['-m'] if multi else []) + _header_args(header)
     with tempfile.NamedTemporaryFile('wb', prefix='dirdelta-picked-') as picked_file:
         if picked:
             picked_file.write(_null_terminated(_id_to_path(entry.relpath) or '.' for entry in picked))
@@ -65,11 +66,13 @@ def pick_option(options, header=''):
 
 def _tree_paths(tree):
     """The tree's nodes' paths for dirpicker (relative, '/'-separated), each dir before what's in
-    it, siblings sorted by name. The root isn't one: it's dirpicker's root."""
+    it, siblings sorted by name, each after its type for --typed ('f ' a file, 'd ' a dir). The root
+    isn't one: it's dirpicker's root."""
     stack = list(reversed(_sorted_children(tree, tree.root)))
     while stack:
         node = stack.pop()
-        yield _id_to_path(node.identifier)
+        kind = 'f' if isinstance(node.data, dirtree.FileEntry) else 'd'
+        yield '%s %s' % (kind, _id_to_path(node.identifier))
         stack.extend(reversed(_sorted_children(tree, node.identifier)))
 
 

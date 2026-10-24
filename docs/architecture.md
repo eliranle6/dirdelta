@@ -177,8 +177,9 @@ draws on `/dev/tty`, reads its input on stdin and prints what was picked on
 stdout, all `\0`-separated (`-0`). Exit code 1 means the user quit (→
 `None`); others raise `PickerError`. See `docs/dirpicker-integration.md`.
 - `pick_from_tree(tree, header, multi)`: sends a `DirTree`'s node ids
-  without their leading `/` (`/sub/x` → `sub/x`), each dir before its
-  contents, siblings sorted by tag; maps the picked paths back to the nodes'
+  without their leading `/` (`/sub/x` → `sub/x`), each after its type
+  (`--typed`: `f sub/x`, `d sub`, so the picker counts files), each dir
+  before its contents, siblings sorted by tag; maps the picked paths back to the nodes'
   entries (`.` is the root).
 - `pick_under_dir(dirpath, max_depth)`: `dirpicker [--max-depth N] DIR`.
 - `pick_option(options, header)`: `dirpicker --list`, for menus.
