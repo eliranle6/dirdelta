@@ -18,7 +18,6 @@ class InteractiveDirSync(object):
     def __init__(self, src, dst):
         self._src = src
         self._dst = dst
-        self._selected = dict()
 
     def view_diff(self, src, dst):
         missing = dst.get_unknown_entries_in_given_dirtree(src)
@@ -27,39 +26,37 @@ class InteractiveDirSync(object):
 
     def sync(self, action):
         """Let the user pick files of src that aren't in dst, then copy them to dst (action COPY) or
-        remove them from src (REMOVE), once the user confirms; repeat with what's left, until the user
-        quits. If the user doesn't confirm, they pick again, starting from what they picked."""
+        remove them from src (REMOVE), once the user confirms. If the user doesn't confirm, they pick
+        again, starting from what they picked."""
+        missing = self._dst.get_unknown_entries_in_given_dirtree(self._src)
+        if not missing.does_dir_contain_any_files():
+            messages.print_line("Nothing to synchronize; Destination dir alread contains all files "
+                                 "in source dir.")
+            return
         picked = None
         while True:
-            missing = self._dst.get_unknown_entries_in_given_dirtree(self._src)
-            if not missing.does_dir_contain_any_files():
-                messages.print_line("Nothing to synchronize; Destination dir alread contains all files "
-                                     "in source dir.")
-                break
             entries = self._chooseFiles(missing, action, picked)
             if entries is None:
-                messages.print_line("Sync ended by user's request.")
+                return
+            files = self._files(entries)
+            if not files:
+                return
+            if self._confirm(action, files):
                 break
-            self._selected = self._files(entries)
-            if not self._selected:
-                break
-            if not self._confirm(action):
-                picked = entries
-                continue
-            picked = None
-            nr_files = len(self._selected)
+            picked = entries
+
+        if action == self.COPY:
+            title = "Copying %d files from %s to %s" % (len(files), self._src.fullpath(),
+                                                       self._dst.fullpath())
+        else:
+            title = "Removing %d files from %s" % (len(files), self._src.fullpath())
+        if dryrun.DRYRUN:
+            title += " (a dry run)"
+        with messages.progress_screen(title, dryrun.label()):
             if action == self.COPY:
-                title = "Copying %d files from %s to %s" % (nr_files, self._src.fullpath(),
-                                                           self._dst.fullpath())
+                self._copy(files)
             else:
-                title = "Removing %d files from %s" % (nr_files, self._src.fullpath())
-            if dryrun.DRYRUN:
-                title += " (a dry run)"
-            with messages.progress_screen(title, dryrun.label()):
-                if action == self.COPY:
-                    self._copy()
-                else:
-                    self._remove()
+                self._remove(files)
 
     def _chooseFiles(self, missing, action, picked=None):
         purpose = ("copy to %s" % (self._dst.fullpath(),) if action == self.COPY else
@@ -71,12 +68,11 @@ class InteractiveDirSync(object):
 
     @staticmethod
     def _files(entries):
-        """The picked entries' files (by full path): picking a dir also picks it, but only its files
-        are copied or removed"""
-        return {entry.fullpath: entry for entry in entries if isinstance(entry, dirtree.FileEntry)}
+        """The picked entries' files: picking a dir also picks it, but only its files are copied or
+        removed"""
+        return [entry for entry in entries if isinstance(entry, dirtree.FileEntry)]
 
-    def _confirm(self, action):
-        files = list(self._selected.values())
+    def _confirm(self, action, files):
         if action == self.COPY:
             question = "Copy %d files from %s to %s?" % (len(files), self._src.fullpath(),
                                                          self._dst.fullpath())
@@ -90,12 +86,11 @@ class InteractiveDirSync(object):
         answer = picker.pick_option([self.CONFIRM_NO, self.CONFIRM_YES], header='\n'.join(lines))
         return answer == self.CONFIRM_YES
 
-    def _copy(self):
-        _dirtree = dirtree.factory_from_list_of_file_entries(self._selected.values(),
-                                                              self._src.fullpath())
+    def _copy(self, files):
+        _dirtree = dirtree.factory_from_list_of_file_entries(files, self._src.fullpath())
         self._dst.copy_inner_entries_from_dirtree(_dirtree)
         # Quietly: the copy's report ends with whether it's complete
         self._dst.update_from_filesystem(silent=True)
 
-    def _remove(self):
-        self._src.remove_files(list(self._selected.values()))
+    def _remove(self, files):
+        self._src.remove_files(files)

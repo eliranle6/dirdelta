@@ -43,13 +43,14 @@ class InteractiveDirSyncTest(unittest.TestCase):
             interactive_dir_sync.InteractiveDirSync(src, dst).sync(action)
         return src, dst
 
-    def test_copy_copies_missing_file_and_then_reports_nothing_left(self):
+    def test_copy_copies_missing_file(self):
         with mock.patch('dirdelta.dryrun.DRYRUN', False):
-            self._sync(COPY)
+            src, dst = self._sync(COPY)
 
         with open(os.path.join(self.dst_root, 'sub/b.txt')) as f:
             self.assertEqual(f.read(), 'sub/b.txt')
-        self.assertIn('Nothing to synchronize', self.messages[-1])
+        # So the next diff doesn't list it
+        self.assertIsNotNone(dst.get_node('/sub/b.txt'))
 
     def test_dry_run_copy_leaves_disk_untouched(self):
         with mock.patch('dirdelta.dryrun.DRYRUN', True):
@@ -101,7 +102,6 @@ class InteractiveDirSyncTest(unittest.TestCase):
         self.assertIsNone(src.get_node('/sub/b.txt'))
         self.assertIn('Removing /sub/b.txt (1 out of 1)', self.messages)
         self.assertIn('Remove complete: removed 1 of 1 files from %s' % (os.path.realpath(self.src_root),), self.messages)
-        self.assertIn('Nothing to synchronize', self.messages[-1])
 
     def test_dry_run_remove_leaves_disk_untouched(self):
         with mock.patch('dirdelta.dryrun.DRYRUN', True):
@@ -163,24 +163,28 @@ class InteractiveDirSyncTest(unittest.TestCase):
         self._sync(COPY, choose=lambda tree: None)
 
         self.assertFalse(os.path.exists(os.path.join(self.dst_root, 'sub/b.txt')))
-        self.assertIn("Sync ended by user's request.", self.messages)
 
-    def test_after_acting_the_rest_is_offered_again(self):
+    def test_after_acting_sync_ends(self):
+        # Back to the main menu, rather than offering the files left again
         helpers.make_files(self.src_root, ['sub/c.txt'])
         offered = []
 
         def choose(tree):
             files = helpers.all_files(tree)
             offered.append([entry.relpath for entry in files])
-            # The first file only the first time, then quit
-            return files[:1] if len(offered) == 1 else None
+            return files[:1]
 
         with mock.patch('dirdelta.dryrun.DRYRUN', False):
             self._sync(COPY, choose)
 
-        self.assertEqual(offered, [['/sub/b.txt', '/sub/c.txt'], ['/sub/c.txt']])
+        self.assertEqual(offered, [['/sub/b.txt', '/sub/c.txt']])
         self.assertTrue(os.path.exists(os.path.join(self.dst_root, 'sub/b.txt')))
         self.assertFalse(os.path.exists(os.path.join(self.dst_root, 'sub/c.txt')))
+
+    def test_nothing_missing_says_so_without_a_picker(self):
+        helpers.make_files(self.dst_root, ['sub/b.txt'])
+        self._sync(COPY, choose=lambda tree: self.fail('no picker expected'))
+        self.assertIn('Nothing to synchronize', self.messages[-1])
 
     def test_picking_only_dirs_ends_sync(self):
         # Enter with nothing picked doesn't return; picking only dirs picks no files

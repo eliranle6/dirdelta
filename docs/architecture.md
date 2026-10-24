@@ -116,13 +116,13 @@ sit alongside it as `scandrive.py`; it's now archived at
 
 ### `interactive_dir_sync.py`
 `InteractiveDirSync(src, dst)`:
-- `sync(action)` loop, for `COPY` (src's missing files into dst) or
+- `sync(action)`, one pass, for `COPY` (src's missing files into dst) or
   `REMOVE` (them from src): diff → `picker.pick_from_tree(missing,
   multi=True)` to select files → confirm (`picker.pick_option(['No',
   'Yes'])`, No first so it's selected; No, or quitting it, picks again,
-  starting from the same picks via `pick_from_tree(picked=...)`) → act →
-  recompute diff → repeat until nothing is missing, or the user quits the
-  picker.
+  starting from the same picks via `pick_from_tree(picked=...)`) → act (on
+  the progress screen) → back to the main menu. The picked files are
+  passed to `_copy(files)`/`_remove(files)`.
 - `_copy()` rebuilds a `DirTree` from just the selected `FileEntry`s via
   the module-level `dirtree.factory_from_list_of_file_entries` (previously
   miscalled as a `DirTree` classmethod — fixed, known-issues.md #3), then

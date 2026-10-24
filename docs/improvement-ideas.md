@@ -66,7 +66,8 @@ removed Python picker.)
    `dirdelta/menu.py`'s `run_menu([(label, handler), ...])` now drives both
    `dirsync_main._sync` and `InteractiveDirSync.sync`.
 
-9. **Break up `InteractiveDirSync.sync()`.** It mixes diff recomputation,
+9. ~~Break up `InteractiveDirSync.sync()`~~ — done 2026-10-24, with #22: it's one pass now, and
+   the picked files are passed to `_copy(files)`/`_remove(files)`. Was: **Break up `InteractiveDirSync.sync()`.** It mixes diff recomputation,
    UI invocation, menu dispatch, and control flow in one loop, with
    `self._selected` as implicit shared mutable state read by
    `_copy`/`_remove` several calls later. Extracting a `_pick_round()`
@@ -156,7 +157,7 @@ Concepts and UI first, then code. cpptree's own (dirpicker's) are in
     screen, the header mechanism, with its line cap and "(N earlier lines)",
     could go. The cost: an extra Enter after scanning.
 
-22. **Back to the main menu after an action?** After a copy or remove, the
+22. ~~Back to the main menu after an action?~~ — done 2026-10-24. Was: **Back to the main menu after an action?** After a copy or remove, the
     files left are offered again (`sync()` loops). Going back to the main
     menu instead would make the loop a single pass (pick, confirm, act), at
     the cost of re-choosing the action to continue.
