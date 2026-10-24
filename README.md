@@ -73,7 +73,7 @@ the dirs files would go into) and says what it would have copied; Remove is not 
 `DRYRUN`.
 
 For bravo vs. alpha, `alpha` is missing `third/anotherinthird/7.mp3` and `bravo` is missing
-`first/infirst/ininfirst/huh/99.mp3`. `./bin/dirsync-fs.sh` runs this sync on a fresh temp copy of
+`first/infirst/ininfirst/huh/99.mp3`. `./bin/example-sync-local.sh` runs this sync on a fresh temp copy of
 the fixtures.
 
 ## Tests

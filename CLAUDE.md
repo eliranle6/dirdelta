@@ -33,15 +33,16 @@ re-deriving it from scratch.
 See README.md for running from source (`make` to build dirpicker, then
 `python -m dirdelta` from the repo root), `make install` (into a venv) and
 `make deploy` (a pipx-managed `dirdelta` in `~/.local/bin`); both also
-install dirpicker next to the environment's python. Entry points are shell
-scripts in `bin/`, each putting the repo root on `PYTHONPATH` and running
-`python -m dirdelta` with the repo's `.venv` Python (falling back to
-`python3`):
+install dirpicker next to the environment's python. `bin/` has example
+launchers (`example-*.sh`), each putting the repo root on `PYTHONPATH` and
+running `python -m dirdelta` with the repo's `.venv` Python (falling back
+to `python3`); "local" in their names is the local disk, as opposed to
+"cloud" (Drive):
 
-- `./bin/dirsync-fs.sh` — sync temp copies of `tests/fixtures/alpha` and `.../bravo`
-- `./bin/dirsync-cloud.sh` — sync a local WSL path against `cloud/mein` (Drive)
-- `./bin/dirpick-localdisk.sh` — browse/pick a file under wherever it's run from
-- `./bin/dirpick-cloud.sh` — browse/pick a file under `cloud/mein`
+- `./bin/example-sync-local.sh` — sync temp copies of `tests/fixtures/alpha` and `.../bravo`
+- `./bin/example-sync-cloud.sh` — sync a local WSL path against `cloud/mein` (Drive)
+- `./bin/example-pick-local.sh` — browse/pick a file under wherever it's run from
+- `./bin/example-pick-cloud.sh` — browse/pick a file under `cloud/mein`
 
 `main.py` picks mode by arg count: one path → picker mode (`dirpick_main.py`,
 which prints the picked path, or `execvp`s the `-x` program on it), two
@@ -60,7 +61,7 @@ Env vars that change execution mode:
 
 Developer tasks all live in the Makefile (`make` lists them): `test`,
 `clean`, `install`, `deploy`, `undeploy`. Keep new ones there too rather
-than adding shell scripts; `bin/` is only for app launchers. `make clean`
+than adding shell scripts; `bin/` is only for example app launchers. `make clean`
 removes `__pycache__`/`*.pyc`/`*.egg-info`/`build/`/pbr's `AUTHORS` and
 `ChangeLog` in this repo and the submodule, skipping `.venv`. It does not
 touch `~/.cache/dirman/files.txt` (the real Drive-scan cache) or `secrets/`.
@@ -131,7 +132,7 @@ app. Shared fakes:
   a temp file, and `test_clouddirtreefactory` mocks `Credentials`/`build`.
 
 `tests/fixtures/{alpha,bravo}` are sample trees for manual runs (see
-README.md); `bin/dirsync-fs.sh` syncs a temp copy of them. As of 2026-10-23
+README.md); `bin/example-sync-local.sh` syncs a temp copy of them. As of 2026-10-23
 picker mode, `-x`, and a sync with a real Copy (`DRYRUN=0`) have been run
 end to end in a real terminal with dirpicker. The cloud flow has not, since it needs
 Drive credentials.
