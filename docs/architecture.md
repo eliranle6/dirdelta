@@ -117,8 +117,19 @@ OAuth token handling (`token.json`/`credentials.json`,
 sit alongside it as `scandrive.py`; it's now archived at
 `unused/scandrive.py` (outside any package), not part of the app.
 
+### `dirdiff.py`, `programs.py`
+`dirdiff.files_not_in(src_dir, dst_dir, max_depth)` runs `dirdiff -0 SRC DST`,
+returning src's files (relative paths) that dst lacks, and find's errors.
+It scans both dirs in C++ (~1s for two 119k-file dirs, where building their
+Python trees took ~6s). `programs.find(name, env_var)` finds dirpicker and
+dirdiff: `$env_var`, next to the running python, `lib/cpptree/build/`, `PATH`.
+
 ### `interactive_dir_sync.py`
-`InteractiveDirSync(src, dst)`:
+`InteractiveDirSync(src, dst)`. Its diff (`_missing()`): for two local dirs,
+`dirdiff`, run anew for each action (so the dirs' own trees are never
+scanned: `dirsync_main` makes them empty, and there's no stale scan), with a
+warning screen if find couldn't read everything; with a cloud replica, the
+trees' `get_unknown_entries_in_given_dirtree()`.
 - `sync(action)`, one pass, for `COPY` (src's missing files into dst) or
   `REMOVE` (them from src): diff → `picker.pick_from_tree(missing,
   multi=True)` to select files → confirm (`picker.pick_option(['No',
@@ -138,7 +149,9 @@ sit alongside it as `scandrive.py`; it's now archived at
   to crash it is fixed, known-issues.md #16.)
 
 ### `dirsync_main.py` / `dirpick_main.py`
-Thin wiring: build both `DirTree`s, warn (`scan_errors_warning`, shown with
+Thin wiring: for two local dirs, make their `LocalDiskDirTree`s without
+scanning them (each action diffs them with dirdiff, see below); else build
+both `DirTree`s, warn (`scan_errors_warning`, shown with
 `messages.show()`) about each local one whose scan couldn't read everything,
 since its diff may then be wrong,
 present a top-level menu (`_sync`: a loop of `picker.pick_option()` over
@@ -190,11 +203,11 @@ stdout, all `\0`-separated (`-0`). Exit code 1 means the user quit (→
 Names are passed as bytes with `surrogateescape`, so non-UTF-8 file names
 round-trip. Tests (`tests/test_picker.py`) run a fake dirpicker script.
 
-## `lib/cpptree/` — dirpicker (git submodule)
+## `lib/cpptree/` — dirpicker and dirdiff (git submodule)
 
-The C++ tree picker dirdelta runs (github.com/levioctl/cpptree; its README and
-`dirpicker --help` describe it). `make build` builds
-`lib/cpptree/build/dirpicker`; `make install`/`make deploy` copy it next to
-the environment's python, where `picker.py` looks first. The Python picker
+The C++ tree picker dirdelta runs, and `dirdiff` (github.com/levioctl/cpptree;
+its README and `--help` describe them). `make build` builds them in
+`lib/cpptree/build/`; `make install`/`make deploy` copy them next to the
+environment's python, where `programs.find()` looks first. The Python picker
 library that was the UI before (`lib/treepicker`, with `cursesswitch`) was
 removed on 2026-10-24.

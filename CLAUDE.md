@@ -57,9 +57,9 @@ and ask for confirmation first. A "cloud" path is any path whose
 first component is literally `cloud` (see `paths.py`).
 
 Env vars that change execution mode:
-- `DIRDELTA_PICKER` — the dirpicker program to run (default: the first of
-  `dirpicker` next to the running python, `lib/cpptree/build/dirpicker`,
-  `dirpicker` on `PATH`)
+- `DIRDELTA_PICKER`, `DIRDELTA_DIRDIFF` — the dirpicker and dirdiff programs
+  to run (default, `programs.find()`: the first of the program next to the
+  running python, in `lib/cpptree/build/`, on `PATH`)
 - `DRYRUN=0` — actually change files: Copy and Remove (`dryrun.py`, used by
   `localdiskdirtree.py`). Every screen shows the mode: "DRY RUN" in green, or
   "LIVE" in red.
@@ -89,8 +89,8 @@ dirstuff/                    the original dev machine's local folder, not a git 
     ├── secrets/               Google OAuth secrets — never print/edit
     ├── tests/                 unittest suite + tests/fixtures/{alpha,bravo}
     └── lib/
-        └── cpptree/           git submodule — the C++ tree library and dirpicker
-                               (make build → lib/cpptree/build/dirpicker)
+        └── cpptree/           git submodule — the C++ tree library, dirpicker and
+                               dirdiff (make build → lib/cpptree/build/)
 ```
 
 (`cpptree` is a C++ learning project of the same author. Its own working copy

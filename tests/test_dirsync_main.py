@@ -28,7 +28,7 @@ class ScanErrorsWarningTest(unittest.TestCase):
 
     def test_only_the_first_errors_are_listed(self):
         lines = self.warning(["find: '/some/dir/%d': Permission denied" % (i,) for i in range(5)])
-        self.assertEqual(len(lines), 1 + dirsync_main.MAX_SCAN_ERRORS_SHOWN + 1)
+        self.assertEqual(len(lines), 1 + localdiskdirtree.MAX_SCAN_ERRORS_SHOWN + 1)
         self.assertIn('(5 errors)', lines[0])
         self.assertEqual(lines[-1], '  (and 2 more)')
 

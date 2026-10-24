@@ -1,6 +1,8 @@
+from dirdelta import dirdiff
 from dirdelta import dirtree
 from dirdelta import entries
 from dirdelta import dryrun
+from dirdelta import localdiskdirtree
 from dirdelta import messages
 from dirdelta import picker
 
@@ -30,7 +32,7 @@ class InteractiveDirSync(object):
         """Let the user pick files of src that aren't in dst, then copy them to dst (action COPY) or
         remove them from src (REMOVE), once the user confirms. If the user doesn't confirm, they pick
         again, starting from what they picked."""
-        missing = self._dst.get_unknown_entries_in_given_dirtree(self._src)
+        missing = self._missing()
         if not missing.does_dir_contain_any_files():
             messages.show("Nothing to %s" % (action,),
                           ["%s has all of %s's files." % (self._dst.fullpath(), self._src.fullpath())],
@@ -60,6 +62,24 @@ class InteractiveDirSync(object):
                 self._copy(files)
             else:
                 self._remove(files)
+
+    def _missing(self):
+        """src's files that dst lacks, as a tree of src. Two local dirs are diffed with dirdiff, which
+        scans them anew (so dirdelta needn't keep their trees, and its diff isn't from a stale
+        scan), warning if find couldn't read everything; other trees are diffed as they are."""
+        if not (isinstance(self._src, localdiskdirtree.LocalDiskDirTree) and
+                isinstance(self._dst, localdiskdirtree.LocalDiskDirTree)):
+            return self._dst.get_unknown_entries_in_given_dirtree(self._src)
+        relpaths, errors = dirdiff.files_not_in(self._src.fullpath(), self._dst.fullpath(),
+                                                self._src.max_depth)
+        warning = localdiskdirtree.scan_warning(
+            "%s or %s" % (self._src.fullpath(), self._dst.fullpath()), errors)
+        if warning:
+            messages.show("Warning: find couldn't read everything", warning, dryrun.label(), 'red')
+        missing = dirtree.DirTree(self._src.fullpath())
+        for relpath in relpaths:
+            missing.add_file_by_relpath(relpath)
+        return missing
 
     def _chooseFiles(self, missing, action, picked=None):
         purpose = ("copy to %s" % (self._dst.fullpath(),) if action == self.COPY else

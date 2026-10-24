@@ -2,35 +2,31 @@ from dirdelta import dryrun
 from dirdelta import interactive_dir_sync
 from dirdelta import localdiskdirtree
 from dirdelta import messages
+from dirdelta import paths
 from dirdelta import picker
 from dirdelta import utils
 
 
-# How many of find's error messages a warning lists
-MAX_SCAN_ERRORS_SHOWN = 3
-
-
 def run(args):
-    dirtree_a = utils.create_dirtree_from_arg(args.dir_a_path, args.max_depth)
-    dirtree_b = utils.create_dirtree_from_arg(args.dir_b_path, args.max_depth)
-    warnings = scan_errors_warning(dirtree_a) + scan_errors_warning(dirtree_b)
-    if warnings:
-        messages.show("Warning: find couldn't read everything", warnings, dryrun.label(), 'red')
+    if not paths.is_cloud_path(args.dir_a_path) and not paths.is_cloud_path(args.dir_b_path):
+        # Two local dirs: each action diffs them with dirdiff, which scans them anew, so there's
+        # nothing to scan here
+        for path in (args.dir_a_path, args.dir_b_path):
+            utils.validate_dir(path)
+        dirtree_a = localdiskdirtree.LocalDiskDirTree(args.dir_a_path, True, args.max_depth)
+        dirtree_b = localdiskdirtree.LocalDiskDirTree(args.dir_b_path, True, args.max_depth)
+    else:
+        dirtree_a = utils.create_dirtree_from_arg(args.dir_a_path, args.max_depth)
+        dirtree_b = utils.create_dirtree_from_arg(args.dir_b_path, args.max_depth)
+        warnings = scan_errors_warning(dirtree_a) + scan_errors_warning(dirtree_b)
+        if warnings:
+            messages.show("Warning: find couldn't read everything", warnings, dryrun.label(), 'red')
     _sync(dirtree_a, dirtree_b, args.dir_a_path, args.dir_b_path)
 
 
 def scan_errors_warning(tree):
-    """A warning's lines if scanning the (local) tree couldn't read everything, since then the diff
-    may list files as missing that are there, or miss some; else none."""
-    errors = getattr(tree, 'scan_errors', [])
-    if not errors:
-        return []
-    lines = ["find couldn't read everything in %s (%d errors), so the diff may be wrong:" %
-             (tree.fullpath(), len(errors))]
-    lines += ["  " + error for error in errors[:MAX_SCAN_ERRORS_SHOWN]]
-    if len(errors) > MAX_SCAN_ERRORS_SHOWN:
-        lines.append("  (and %d more)" % (len(errors) - MAX_SCAN_ERRORS_SHOWN,))
-    return lines
+    """A warning's lines if scanning the (local) tree couldn't read everything; else none."""
+    return localdiskdirtree.scan_warning(tree.fullpath(), getattr(tree, 'scan_errors', []))
 
 
 def _sync(replica_a, replica_b, replica_a_path, replica_b_path):

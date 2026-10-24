@@ -24,10 +24,11 @@ python3 -m venv .venv
 make                              # builds dirpicker: needs g++ and libncurses-dev
 ```
 
-dirdelta's pickers and menus are `dirpicker`, a C++ program from
-[cpptree](https://github.com/levioctl/cpptree) (see `docs/dirpicker-integration.md`), a submodule at
-`lib/cpptree`; `make` builds it into `lib/cpptree/build/dirpicker`, where dirdelta finds it when run
-from the source tree. `$DIRDELTA_PICKER` overrides which program it runs.
+dirdelta's pickers and menus are `dirpicker`, and it diffs two local dirs with `dirdiff`: C++
+programs from [cpptree](https://github.com/levioctl/cpptree) (see `docs/dirpicker-integration.md`), a
+submodule at `lib/cpptree`. `make` builds them into `lib/cpptree/build/`, where dirdelta finds them
+when run from the source tree. `$DIRDELTA_PICKER` and `$DIRDELTA_DIRDIFF` override which programs it
+runs.
 
 Development tasks are Makefile targets (`make help` lists them). They and the launcher scripts in
 `bin/` use `.venv` automatically when it exists, and otherwise whichever `python3` is on your `PATH`,

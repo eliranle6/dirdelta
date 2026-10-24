@@ -7,28 +7,49 @@ from dirdelta import dryrun
 from dirdelta import messages
 
 
+# How many of find's error messages a scan warning lists
+MAX_SCAN_ERRORS_SHOWN = 3
+
+
 def factory(filesystem_dirpath, max_depth=None, silent=False):
-    dirtree = LocalDiskDirTree(filesystem_dirpath, silent)
-    dirtree.update_from_filesystem(max_depth)
+    dirtree = LocalDiskDirTree(filesystem_dirpath, silent, max_depth)
+    dirtree.update_from_filesystem()
     return dirtree
 
 
+def scan_warning(where, errors):
+    """A warning's lines if scanning where (a dir, or a description of dirs) couldn't read everything,
+    given find's error messages, since then a diff may list files as missing that are there, or
+    miss some; no lines if there are no errors."""
+    if not errors:
+        return []
+    lines = ["find couldn't read everything in %s (%d errors), so the diff may be wrong:" %
+             (where, len(errors))]
+    lines += ["  " + error for error in errors[:MAX_SCAN_ERRORS_SHOWN]]
+    if len(errors) > MAX_SCAN_ERRORS_SHOWN:
+        lines.append("  (and %d more)" % (len(errors) - MAX_SCAN_ERRORS_SHOWN,))
+    return lines
+
+
 class LocalDiskDirTree(dirtree.DirTree):
-    def __init__(self, filesystem_dirpath, silent):
+    def __init__(self, filesystem_dirpath, silent, max_depth=None):
+        """A tree of the dir, which is empty until update_from_filesystem(), which scans down to
+        max_depth levels below it."""
         filesystem_dirpath = os.path.realpath(filesystem_dirpath)
         super(LocalDiskDirTree, self).__init__(rootpath=filesystem_dirpath, silent=silent)
+        self.max_depth = max_depth
         # find's messages about what it couldn't read in the last scan, so the tree may lack
         self.scan_errors = []
 
-    def update_from_filesystem(self, max_depth=None):
+    def update_from_filesystem(self):
         """Add the dirs and files on disk (hidden ones too), down to max_depth levels below the root."""
         if not self._silent:
             messages.print_line("Scanning directory %s..." % (self._rootpath,))
         # One find for both files and dirs, each entry its type letter and path, ending with '\0'
         # (paths may hold newlines). Other types (e.g. symlinks) are skipped.
         command = ["find", self._rootpath, "-mindepth", "1"]
-        if max_depth is not None:
-            command += ["-maxdepth", str(max_depth)]
+        if self.max_depth is not None:
+            command += ["-maxdepth", str(self.max_depth)]
         command += ["-printf", "%y %p\\0"]
         result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         self.scan_errors = result.stderr.decode('utf-8', 'surrogateescape').splitlines()
@@ -101,7 +122,9 @@ class LocalDiskDirTree(dirtree.DirTree):
                 messages.print_line("%s %s (%d out of %d)" % (verb, file_entry, index + 1, len(file_entries)))
                 if not dryrun.DRYRUN:
                     os.unlink(file_entry.full_filesystem_path())
-                    self.remove_node(file_entry.relpath)
+                    # The tree may not have it, if it wasn't scanned (see dirdiff.py)
+                    if file_entry.relpath in self:
+                        self.remove_node(file_entry.relpath)
                 nr_removed += 1
         except KeyboardInterrupt:
             messages.note_stopped()

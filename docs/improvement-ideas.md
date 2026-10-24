@@ -5,11 +5,8 @@ the source (see `architecture.md`,
 `known-issues.md`). Ordered roughly by impact. None of these are required;
 treat as a backlog to pick from.
 
-**In progress (2026-10-24): doing all of the open ideas below**, one commit
-each, in this order: a dry-run label on every screen (a new request, not an
-idea here); #17; #18, #19 and #6; #20; #22 with #9; #23; #21; #25; #24, #1-#5;
-#16. Each is marked done here when committed. (#10 and #11 were about the
-removed Python picker.)
+**Done (2026-10-24): all of the ideas below that were open then** (#10 and #11
+were about the removed Python picker). Open since: #26.
 
 ## Application layer (`dirdelta/`)
 
@@ -117,7 +114,9 @@ The library was removed on 2026-10-24 (#15); kept for the record.
 15. ~~Drop lib/treepicker~~ — done 2026-10-24: its last use,
     `cursesswitch.print_line`, is `dirdelta/messages.py` now.
 
-16. **Move the diff into C++.** Sync mode builds both trees in Python (~3s
+16. ~~Move the diff into C++~~ — done 2026-10-24, for two local dirs: cpptree's `dirdiff`
+    (`dirdiff.py`). Sync's main menu now shows in ~0.3s for two 119k-file dirs, where it took
+    ~6s; each action rescans with dirdiff (~1s). Was: **Move the diff into C++.** Sync mode builds both trees in Python (~3s
     each for 119k files) before showing anything; dirpicker builds a tree of
     the same size in ~0.4s. Scanning both replicas and diffing them in a C++
     helper would cut most of sync's startup time.
@@ -188,4 +187,9 @@ Concepts and UI first, then code. cpptree's own (dirpicker's) are in
     5 tracks counts the album and the artist dirs too, while the
     confirmation says "Copy 5 files". dirpicker would need to know which
     nodes are files (e.g. `d `/`f ` prefixes on stdin, like find's `%y`).
+
+26. **Don't build a Python tree of the missing files.** With dirdiff, the time left before a
+    file picker shows is mostly building a DirTree of the missing files in Python (1.8s for a
+    110k-file diff) and listing it back out for dirpicker (0.4s). dirdiff's output could go to
+    dirpicker as it is (typed), with entries made only for the picked files.
 
