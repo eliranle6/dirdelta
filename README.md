@@ -76,9 +76,11 @@ on. Then the files that are left are offered again, until you quit the picker (`
 runs: they change nothing on disk (not even the dirs copied files would go into), and say what they
 would have done.
 
-For bravo vs. alpha, `alpha` is missing `third/anotherinthird/7.mp3` and `bravo` is missing
-`first/infirst/ininfirst/huh/99.mp3`. `./bin/example-sync-local.sh` runs this sync on a fresh temp copy of
-the fixtures.
+The fixtures are a small music library. Both have 44 files in common; only `alpha` has 42 (e.g.
+`podcasts/`, `music/Nina Simone/` and `first/infirst/ininfirst/huh/99.mp3`), and only `bravo` has 31
+(e.g. `audiobooks/Dune/`, `music/The Beatles/` and `third/anotherinthird/7.mp3`), so copying or
+removing them fills the progress screen. `./bin/example-sync-local.sh` runs this sync on a fresh temp
+copy of the fixtures, so `DRYRUN=0 ./bin/example-sync-local.sh` is safe too.
 
 ## Tests
 
