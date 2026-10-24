@@ -95,7 +95,7 @@ class CloudDirTree(dirtree.DirTree):
                     # Generate relative path (the node's id)
                     node_rel_path = os.path.relpath(node_path, inner_rootpath)
                     # Change node ID if it already exists (two files with the same path is possible in cloud)
-                    if node_rel_path in self.nodes:
+                    if node_rel_path in self:
                         node_rel_path += f'___DUP__{node_cloud_id}'
 
                     is_dir = md['mimeType'] == 'application/vnd.google-apps.folder'

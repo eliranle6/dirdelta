@@ -10,7 +10,7 @@ literally `"cloud"` (e.g. `cloud/mein`). Detected in `utils.py`'s
 after the leading `cloud/` segment is the path *inside* the Drive tree, not
 a real filesystem path.
 
-**DirTree** — the shared in-memory representation (`dirtree.py`, built on
+**DirTree** — the shared in-memory representation (`dirtree.py`, holding a
 `treelib.Tree`) of a scanned replica: one node per file or directory,
 node identifier = relpath from the tree's root (`sub/x`; the root's is `''`). `LocalDiskDirTree` and
 `CloudDirTree` both subclass it and differ only in how they populate

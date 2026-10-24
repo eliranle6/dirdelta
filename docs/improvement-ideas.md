@@ -20,7 +20,8 @@ removed Python picker.)
    `interactive_dir_sync.py`'s existing call to it as a classmethod would
    even be correct; see `known-issues.md`).
 
-2. **Replace the `create_node`-override trick** in `DirTree.__init__`
+2. ~~Replace the `create_node`-override trick~~ — done 2026-10-24: DirTree holds a treelib.Tree.
+   Was: **Replace the `create_node`-override trick** in `DirTree.__init__`
    (stash the real bound method, then monkey-patch `self.create_node` to
    always raise) with plain composition — hold a `treelib.Tree` as an
    attribute instead of subclassing it. Right now "you can't call

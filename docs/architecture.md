@@ -38,15 +38,15 @@ case, exiting with a message (via `messages.print_line`) otherwise.
 `is_cloud_path` is public too, for `dirpick_main`.
 
 ### `entries.py`, `dirtree.py` — the core data structure
-`DirTree(treelib.Tree)` models a filesystem tree. Its nodes' data are entries
+`DirTree` models a filesystem tree, holding a `treelib.Tree` (it offers
+`get_node`, `children`, `root`, `remove_node`, `all_nodes`, `in` and
+`len()` of it). Its nodes' data are entries
 (`entries.py`), each with `name`, `relpath` and `fullpath`:
 - `DirEntry` — directory node
 - `FileEntry` — file node, no size/hash/mtime stored
 
-Construction is deliberately locked down: `DirTree.__init__` overrides
-`self.create_node` after root creation to always raise
-`NotImplementedError`, forcing all callers through
-`add_file_by_relpath` / `add_file_by_fullpath` /
+Since it doesn't subclass treelib, it has no `create_node`: all callers go
+through `add_file_by_relpath` / `add_file_by_fullpath` /
 `create_dir_node_from_relpath_if_not_exists` so relpath/fullpath bookkeeping
 stays consistent. Node `identifier` in `treelib` is the file's `relpath`,
 relative (`sub/x`; the root's is `''`), like dirpicker's paths.

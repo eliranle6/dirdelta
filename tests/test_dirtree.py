@@ -53,5 +53,15 @@ class DirTreeTest(unittest.TestCase):
                           '/home/user/myroot/subdir/file.txt')
 
 
+    def test_nodes_are_only_added_through_its_own_methods(self):
+        # It holds a treelib.Tree rather than being one, so there's no create_node() to bypass them
+        tree = dirtree.DirTree('/some/root')
+        self.assertFalse(hasattr(tree, 'create_node'))
+        tree.add_file_by_relpath('a/b.txt')
+        self.assertIn('a/b.txt', tree)
+        self.assertEqual(len(tree), 3)
+        self.assertEqual([node.identifier for node in tree.children('a')], ['a/b.txt'])
+
+
 if __name__ == '__main__':
     unittest.main()
