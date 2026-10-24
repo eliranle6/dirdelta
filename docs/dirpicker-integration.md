@@ -22,7 +22,10 @@ Like fzf: dirdelta starts `dirpicker`, which draws on the terminal itself
   show. `-m` picks several (Space picks a node and everything under it,
   Enter finishes).
 - Picking under a local dir (picker mode): `dirpicker -0 --max-depth N DIR`.
-  dirpicker scans it with `find` itself, so dirdelta builds no Python tree.
+  dirpicker scans it with `find` itself, so dirdelta builds no Python tree;
+  if find couldn't read everything, dirpicker warns in its header.
+- Showing a picker again with the user's picks: `--picked FILE`, FILE
+  holding the paths dirpicker printed.
 - Menus: `dirpicker -0 --list [--header TEXT] -`, with the labels on stdin
   (`--list` keeps them flat, since labels contain '/').
 - Output: the picked paths (or labels), each ending with `\0`, the root as
