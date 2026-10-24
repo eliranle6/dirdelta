@@ -49,10 +49,11 @@ to `python3`); "local" in their names is the local disk, as opposed to
 which prints the picked path, or `execvp`s the `-x` program on it), two
 paths → sync mode (`dirsync_main.py`). dirdelta doesn't use curses itself:
 each pick is a `dirpicker` run, which has the terminal while it's open, and
-messages in between are plain lines (`messages.py`), also shown at the top
-of the next picker, since its screen covers them. Copy and Remove run on a
-full-screen progress screen (`messages.progress_screen()`), stoppable with
-Ctrl-C, and ask for confirmation first. A "cloud" path is any path whose
+what's to be read in between (warnings, "Nothing to copy", an action's
+report) is on a full screen that waits for Enter (`messages.show()`,
+`messages.progress_screen()`); plain progress lines ("Scanning...") just
+print. Copy and Remove run on the progress screen, stoppable with Ctrl-C,
+and ask for confirmation first. A "cloud" path is any path whose
 first component is literally `cloud` (see `utils.py`).
 
 Env vars that change execution mode:

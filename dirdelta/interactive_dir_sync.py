@@ -31,8 +31,9 @@ class InteractiveDirSync(object):
         again, starting from what they picked."""
         missing = self._dst.get_unknown_entries_in_given_dirtree(self._src)
         if not missing.does_dir_contain_any_files():
-            messages.print_line("Nothing to synchronize; Destination dir alread contains all files "
-                                 "in source dir.")
+            messages.show("Nothing to %s" % (action,),
+                          ["%s has all of %s's files." % (self._dst.fullpath(), self._src.fullpath())],
+                          dryrun.label())
             return
         picked = None
         while True:

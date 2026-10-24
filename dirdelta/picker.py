@@ -12,7 +12,6 @@ import sys
 import tempfile
 
 from dirdelta import dryrun
-from dirdelta import messages
 
 PROGRAM_ENV_VAR = 'DIRDELTA_PICKER'
 PROGRAM_NAME = 'dirpicker'
@@ -89,12 +88,7 @@ def _path_to_id(path):
 
 
 def _header_args(header):
-    """dirpicker's arguments for showing header, after the messages printed since the last picker
-    (which the picker's screen would hide)."""
-    lines = messages.take_recent()
-    if header:
-        lines += ([''] if lines else []) + [header]
-    return ['--header', '\n'.join(lines)] if lines else []
+    return ['--header', header] if header else []
 
 
 def _run(args, input_items):

@@ -190,8 +190,12 @@ class InteractiveDirSyncTest(unittest.TestCase):
 
     def test_nothing_missing_says_so_without_a_picker(self):
         helpers.make_files(self.dst_root, ['sub/b.txt'])
-        self._sync(COPY, choose=lambda tree: self.fail('no picker expected'))
-        self.assertIn('Nothing to synchronize', self.messages[-1])
+        with mock.patch('dirdelta.messages.show') as show:
+            self._sync(COPY, choose=lambda tree: self.fail('no picker expected'))
+        title, lines, _ = show.call_args.args
+        self.assertEqual(title, 'Nothing to copy')
+        self.assertEqual(lines, ["%s has all of %s's files." % (os.path.realpath(self.dst_root),
+                                                              os.path.realpath(self.src_root))])
 
     def test_picking_only_dirs_ends_sync(self):
         # Enter with nothing picked doesn't return; picking only dirs picks no files

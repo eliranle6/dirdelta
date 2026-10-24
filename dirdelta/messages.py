@@ -1,8 +1,6 @@
-"""dirdelta's messages, printed as plain lines between pickers (each picker has the terminal while
-it's open).
-
-A picker covers what was printed before it, so the lines printed since the last picker are also
-kept, for the next picker to show (see take_recent()).
+"""dirdelta's messages: plain lines, printed between pickers (each picker has the terminal while it's
+open), and screens, which show lines until Enter is pressed: progress_screen() for an action's
+progress, show() for messages to read before the next picker covers them.
 """
 import contextlib
 import shutil
@@ -10,39 +8,17 @@ import sys
 
 import termcolor
 
-# How many of the lines printed since the last picker are kept for the next one
-MAX_RECENT_LINES = 12
-
-_recent_lines = []
-_nr_recent_lines_dropped = 0
 # Whether the action on the progress screen was stopped (Ctrl-C)
 _is_stopped = False
 
 
 def print_line(line, color=None):
     """Print line (in color, a termcolor name like 'red', if given)."""
-    global _nr_recent_lines_dropped
-    _recent_lines.append(line)
-    if len(_recent_lines) > MAX_RECENT_LINES:
-        del _recent_lines[0]
-        _nr_recent_lines_dropped += 1
     if color is not None:
         line = termcolor.colored(line, color)
     # surrogateescape: lines may hold file names that aren't valid UTF-8
     sys.stdout.buffer.write((line + '\n').encode('utf-8', 'surrogateescape'))
     sys.stdout.flush()
-
-
-def take_recent():
-    """The lines printed since the last call (the last MAX_RECENT_LINES of them, after a line saying
-    how many earlier ones there were, if any), and forget them."""
-    global _nr_recent_lines_dropped
-    lines = list(_recent_lines)
-    if _nr_recent_lines_dropped:
-        lines.insert(0, '(%d earlier lines)' % (_nr_recent_lines_dropped,))
-    del _recent_lines[:]
-    _nr_recent_lines_dropped = 0
-    return lines
 
 
 def note_stopped():
@@ -53,19 +29,26 @@ def note_stopped():
     print_line("Stopped (Ctrl-C)", "red")
 
 
+def show(title, lines, label=None, color=None):
+    """Show lines (in color, if given) on a screen under title, until Enter is pressed"""
+    with progress_screen(title, label, is_stoppable=False):
+        for line in lines:
+            print_line(line, color)
+
+
 # A label's look on a terminal, by its color name: bold, black or white on the color
 _LABEL_STYLES = {'green': '\033[1;30;42m', 'red': '\033[1;37;41m'}
 
 
 @contextlib.contextmanager
-def progress_screen(title, label=None):
+def progress_screen(title, label=None, is_stoppable=True):
     """Show what's printed inside (an action's progress) on the whole screen, under title, which
     stays on the top line while the lines scroll under it. When the action ends, wait for Enter, so
     its report can be read before the next picker covers it.
 
     Ctrl-C inside stops the action (which may catch it itself, to say how far it got). label, a
-    (text, color) pair (e.g. dryrun.label()), starts the top line. Without a terminal, the title and
-    the lines are just printed.
+    (text, color) pair (e.g. dryrun.label()), starts the top line. Without is_stoppable, the top line
+    doesn't offer Ctrl-C (for messages). Without a terminal, the title and the lines are just printed.
     """
     global _is_stopped
     _is_stopped = False
@@ -80,17 +63,17 @@ def progress_screen(title, label=None):
 
     height = shutil.get_terminal_size().lines
     # Clear the screen, title on the top line, and the lines scrolling in the rest (a scroll region)
-    _write("\033[2J\033[H" + _top_line("Ctrl-C to stop: " + title, label) +
+    _write("\033[2J\033[H" + _top_line(("Ctrl-C to stop: " if is_stoppable else "") + title, label) +
            "\033[2;%dr\033[2;1H" % (height,))
     try:
         yield
     except KeyboardInterrupt:
         note_stopped()
     finally:
-        done = "Stopped" if _is_stopped else "Done"
+        done = ("Stopped. " if _is_stopped else "Done. ") if is_stoppable else ""
         # Save the cursor, rewrite the top line, and restore it. What to do first, in case the line
         # is cut.
-        _write("\0337\033[1;1H" + _top_line("%s. Press Enter to continue: %s" % (done, title), label) +
+        _write("\0337\033[1;1H" + _top_line("%sPress Enter to continue: %s" % (done, title), label) +
                "\0338")
         try:
             input()
@@ -98,8 +81,6 @@ def progress_screen(title, label=None):
             pass
         # Back to scrolling the whole screen
         _write("\033[r")
-        # The report was read here, so the next picker needn't show it again
-        take_recent()
 
 
 def _top_line(text, label=None):

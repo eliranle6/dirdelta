@@ -134,9 +134,9 @@ sit alongside it as `scandrive.py`; it's now archived at
   to crash it is fixed, known-issues.md #16.)
 
 ### `dirsync_main.py` / `dirpick_main.py`
-Thin wiring: build both `DirTree`s, warn (`warn_about_scan_errors`) about
-each local one whose scan couldn't read everything, since its diff may then
-be wrong (the warning is in the main menu's header, like other messages),
+Thin wiring: build both `DirTree`s, warn (`scan_errors_warning`, shown with
+`messages.show()`) about each local one whose scan couldn't read everything,
+since its diff may then be wrong,
 present a top-level menu (`_sync`: a loop of `picker.pick_option()` over
 (label, action) pairs, each action an `InteractiveDirSync(src, dst)`'s
 `sync(COPY or REMOVE)` or `view_diff()`, until Quit): `Copy A→B`, `Copy B→A`, `Remove from A` (A's
@@ -154,15 +154,13 @@ path, or `os.execvp`s the `-x` program on it.
 `print_line(line, color=None)`: prints dirdelta's messages (scanning,
 copying, removing...) as plain lines, optionally colored with `termcolor`,
 encoding with `surrogateescape` so file names that aren't UTF-8 print as
-they are. The lines printed since the last picker are kept too (the last 8),
-and `picker.py` shows them at the top of the next picker's header
-(`take_recent()`), since the picker's screen would hide them: e.g. a copy's
-progress and summary appear above the menu that follows it.
-`progress_screen(title)` (a context manager) runs an action on the whole
+they are. A picker covers what was printed before it, so what's to be read
+goes on a screen that waits for Enter: `show(title, lines)` for messages
+(the scan warnings, "Nothing to copy"), and `progress_screen(title)` for
+actions. `progress_screen(title)` (a context manager) runs an action on the whole
 screen, on a terminal: it clears it, keeps the title on the top line with
 a scroll region (`ESC[2;Hr`) for the lines under it, catches Ctrl-C, and
-at the end says Done/Stopped and waits for Enter (and then the lines
-aren't shown again by the next picker). Actions that catch Ctrl-C to say
+at the end says Done/Stopped and waits for Enter. Actions that catch Ctrl-C to say
 how far they got (copying, removing) call `note_stopped()`. Without a
 terminal it only prints.
 

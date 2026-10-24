@@ -156,7 +156,9 @@ Concepts and UI first, then code. cpptree's own (dirpicker's) are in
     items: the 4 actions and Quit. (Kept for now: View can't change
     anything, which may be worth something on its own.)
 
-21. **One way to show messages.** Messages reach the user two ways: in the
+21. ~~One way to show messages~~ — done 2026-10-24: what's to be read is on a screen
+    (`messages.show()` or the progress screen); the warning screen comes only when there are
+    warnings, so a normal start needs no extra Enter. Was: **One way to show messages.** Messages reach the user two ways: in the
     next picker's header (`messages.take_recent()`), and on the progress
     screen. If scanning (and the find warnings) also ran on the progress
     screen, the header mechanism, with its line cap and "(N earlier lines)",

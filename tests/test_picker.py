@@ -8,7 +8,6 @@ import unittest
 from unittest import mock
 
 from dirdelta import dirtree
-from dirdelta import messages
 from dirdelta import picker
 
 # Stands in for dirpicker: records its arguments and stdin into $FAKE_PICKER_LOG, then prints
@@ -37,7 +36,6 @@ class PickerTest(unittest.TestCase):
         self.env = mock.patch.dict(os.environ, {picker.PROGRAM_ENV_VAR: self.program,
                                                 'FAKE_PICKER_LOG': self.log})
         self.env.start()
-        messages.take_recent()
 
     def tearDown(self):
         self.env.stop()
@@ -197,28 +195,6 @@ class PickerTest(unittest.TestCase):
         args, items = self.call()
         self.assertEqual(args, ['-0', '--max-depth', '3', '/some/dir'])
         self.assertEqual(items, [])
-
-    def test_messages_printed_since_the_last_picker_are_in_the_header(self):
-        # The picker's screen would hide them
-        with mock.patch('sys.stdout'):
-            messages.print_line('Copied 1 files to /b')
-        self.answer('Quit')
-        picker.pick_option(['Quit'], header='What now?')
-        args, _ = self.call()
-        self.assertEqual(args[args.index('--header') + 1], 'Copied 1 files to /b\n\nWhat now?')
-
-        # Only once
-        picker.pick_option(['Quit'], header='What now?')
-        args, _ = self.call()
-        self.assertEqual(args[args.index('--header') + 1], 'What now?')
-
-    def test_messages_without_a_header(self):
-        with mock.patch('sys.stdout'):
-            messages.print_line('Scanning directory /a...')
-        self.answer('.')
-        picker.pick_under_dir('/a')
-        args, _ = self.call()
-        self.assertEqual(args, ['-0', '--header', 'Scanning directory /a...', '/a'])
 
     def test_pick_under_dir_root(self):
         self.answer('.')

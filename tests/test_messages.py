@@ -7,9 +7,6 @@ from dirdelta import messages
 
 
 class PrintLineTest(unittest.TestCase):
-    def setUp(self):
-        messages.take_recent()
-
     def print_line(self, *args, **kwargs):
         stdout = mock.Mock()
         stdout.buffer = io.BytesIO()
@@ -29,27 +26,8 @@ class PrintLineTest(unittest.TestCase):
         self.assertEqual(self.print_line('Removing ' + name), b'Removing caf\xe9.txt\n')
 
 
-    def test_recent_lines_are_kept_until_taken(self):
-        self.print_line('one')
-        self.print_line('two', 'red')
-        self.assertEqual(messages.take_recent(), ['one', 'two'])
-        self.assertEqual(messages.take_recent(), [])
-
-    def test_only_the_last_recent_lines_are_kept(self):
-        for i in range(messages.MAX_RECENT_LINES + 3):
-            self.print_line('line %d' % (i,))
-        recent = messages.take_recent()
-        self.assertEqual(recent[0], '(3 earlier lines)')
-        self.assertEqual(recent[1:], ['line %d' % (i,) for i in range(3, messages.MAX_RECENT_LINES + 3)])
-        self.assertEqual(messages.take_recent(), [])
-
-
-
 class ProgressScreenTest(unittest.TestCase):
-    def setUp(self):
-        messages.take_recent()
-
-    def run_screen(self, is_terminal, body, label=None):
+    def run_screen(self, is_terminal, body, label=None, screen=None):
         stdout = mock.Mock()
         stdout.buffer = io.BytesIO()
         stdout.isatty.return_value = is_terminal
@@ -60,8 +38,11 @@ class ProgressScreenTest(unittest.TestCase):
                 mock.patch('builtins.input') as input_mock, \
                 mock.patch('shutil.get_terminal_size', return_value=os.terminal_size((80, 10))):
             stdin.isatty.return_value = is_terminal
-            with messages.progress_screen('Copying 2 files', label):
-                body()
+            if screen is None:
+                with messages.progress_screen('Copying 2 files', label):
+                    body()
+            else:
+                screen()
         return ''.join(written), stdout.buffer.getvalue(), input_mock
 
     def test_without_a_terminal_the_lines_are_just_printed(self):
@@ -80,8 +61,6 @@ class ProgressScreenTest(unittest.TestCase):
         self.assertTrue(escapes.endswith('\033[r'))
         self.assertEqual(lines, b'one\n')
         input_mock.assert_called_once_with()
-        # It was read on the screen, so the next picker doesn't show it again
-        self.assertEqual(messages.take_recent(), [])
 
     def test_label_starts_the_top_line(self):
         escapes, _, _ = self.run_screen(True, lambda: None, label=('DRY RUN', 'green'))
@@ -114,6 +93,17 @@ class ProgressScreenTest(unittest.TestCase):
         self.run_screen(True, messages.note_stopped)
         escapes, _, _ = self.run_screen(True, lambda: None)
         self.assertIn('Done. Press Enter to continue', escapes)
+
+    def test_show(self):
+        escapes, lines, input_mock = self.run_screen(
+            True, None, screen=lambda: messages.show('Nothing to copy', ['/b has all of /a'],
+                                                    ('DRY RUN', 'green')))
+        self.assertEqual(lines, b'/b has all of /a\n')
+        # Not an action: no Ctrl-C
+        self.assertNotIn('Ctrl-C', escapes)
+        self.assertIn('\033[7mNothing to copy', escapes)
+        self.assertIn('\033[7mPress Enter to continue: Nothing to copy', escapes)
+        input_mock.assert_called_once_with()
 
 
 if __name__ == '__main__':
