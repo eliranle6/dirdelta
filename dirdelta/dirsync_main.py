@@ -43,20 +43,14 @@ def _view_diff(src, dst):
 
 def _sync(replica_a, replica_b, replica_a_path, replica_b_path):
     QUIT = "Quit"
-    actions = [
-        ("View files in %s, not %s" % (replica_a_path, replica_b_path),
-         lambda: _view_diff(src=replica_a, dst=replica_b)),
-        ("View files in %s, not %s" % (replica_b_path, replica_a_path),
-         lambda: _view_diff(src=replica_b, dst=replica_a)),
-    ]
-
-    # Allow sync (copy/remove) only if both dirs are in local disk. Each acts on the files in one
-    # dir that aren't in the other.
+    # Copying and removing only between dirs on the local disk. Each acts on the files in one dir
+    # that aren't in the other, and its picker shows them, so viewing them is offered only where
+    # it's all there is (a cloud replica).
     if (isinstance(replica_a, localdiskdirtree.LocalDiskDirTree)
         and isinstance(replica_b, localdiskdirtree.LocalDiskDirTree)):
         copy = interactive_dir_sync.InteractiveDirSync.COPY
         remove = interactive_dir_sync.InteractiveDirSync.REMOVE
-        actions.extend([
+        actions = [
             ("Copy files from %s to %s (the ones it lacks)" % (replica_a_path, replica_b_path),
              lambda: _sync_from_src_to_dst(src=replica_a, dst=replica_b, action=copy)),
             ("Copy files from %s to %s (the ones it lacks)" % (replica_b_path, replica_a_path),
@@ -65,7 +59,14 @@ def _sync(replica_a, replica_b, replica_a_path, replica_b_path):
              lambda: _sync_from_src_to_dst(src=replica_a, dst=replica_b, action=remove)),
             ("Remove files from %s (the ones %s lacks)" % (replica_b_path, replica_a_path),
              lambda: _sync_from_src_to_dst(src=replica_b, dst=replica_a, action=remove)),
-        ])
+        ]
+    else:
+        actions = [
+            ("View files in %s, not %s" % (replica_a_path, replica_b_path),
+             lambda: _view_diff(src=replica_a, dst=replica_b)),
+            ("View files in %s, not %s" % (replica_b_path, replica_a_path),
+             lambda: _view_diff(src=replica_b, dst=replica_a)),
+        ]
     actions.append((QUIT, None))
 
     # Present sync options until user quits

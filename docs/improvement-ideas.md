@@ -147,7 +147,8 @@ Concepts and UI first, then code. cpptree's own (dirpicker's) are in
     passes just `max_depth`. Without them `findcmdwrapper` is a few lines,
     small enough to fold into `localdiskdirtree.py`.
 
-20. **Remove the "View files in A, not B" menu items?** Since the menu has
+20. ~~Remove the "View files in A, not B" menu items~~ — done 2026-10-24, for local dirs: with a
+    cloud replica they stay, since there's no Copy or Remove then. Was: **Remove the "View files in A, not B" menu items?** Since the menu has
     "Copy files from A to B" and "Remove files from A", whose pickers show
     exactly that diff (and can be left with `q` without doing anything),
     the two View items repeat them. Dropping them makes the main menu 5

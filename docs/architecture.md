@@ -143,11 +143,11 @@ the top-level sync menu and `InteractiveDirSync`'s Copy/Remove menu use it.
 Thin wiring: build both `DirTree`s, warn (`warn_about_scan_errors`) about
 each local one whose scan couldn't read everything, since its diff may then
 be wrong (the warning is in the main menu's header, like other messages),
-present a top-level menu (`View diff
-A-not-B`, `View diff B-not-A`, `Copy A→B`, `Copy B→A`, `Remove from A`
-(A's files that B lacks), `Remove from B`, `Quit`).
-Copy/Remove options are only offered when **both** replicas are
-`LocalDiskDirTree` — cloud replicas are diff/view-only from this menu.
+present a top-level menu: `Copy A→B`, `Copy B→A`, `Remove from A` (A's
+files that B lacks), `Remove from B`, `Quit` when **both** replicas are
+`LocalDiskDirTree`s; else (a cloud replica) only `View diff A-not-B`,
+`View diff B-not-A`, `Quit`, since cloud replicas are view-only (and the
+local menu's pickers already show those diffs).
 `dirpick_main.run` returns the picked path: for a local dir it lets
 dirpicker scan the dir itself (`picker.pick_under_dir`, much faster than
 building a `DirTree`, ~3s for 119k files); for a cloud path it builds the

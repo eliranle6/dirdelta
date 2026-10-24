@@ -3,6 +3,7 @@ from unittest import mock
 
 from dirdelta import dirsync_main
 from dirdelta import dirtree
+from dirdelta import localdiskdirtree
 
 
 class WarnAboutScanErrorsTest(unittest.TestCase):
@@ -39,3 +40,31 @@ class WarnAboutScanErrorsTest(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class MainMenuTest(unittest.TestCase):
+    def options(self, replica_a, replica_b):
+        with mock.patch('dirdelta.picker.pick_option', return_value='Quit') as pick_option:
+            dirsync_main._sync(replica_a, replica_b, '/a', '/b')
+        options, = pick_option.call_args.args
+        return options
+
+    def test_local_dirs_get_copy_and_remove_each_way(self):
+        a = localdiskdirtree.LocalDiskDirTree('/a', silent=True)
+        b = localdiskdirtree.LocalDiskDirTree('/b', silent=True)
+        self.assertEqual(self.options(a, b), [
+            'Copy files from /a to /b (the ones it lacks)',
+            'Copy files from /b to /a (the ones it lacks)',
+            'Remove files from /a (the ones /b lacks)',
+            'Remove files from /b (the ones /a lacks)',
+            'Quit',
+        ])
+
+    def test_a_cloud_replica_gets_viewing_only(self):
+        a = localdiskdirtree.LocalDiskDirTree('/a', silent=True)
+        b = dirtree.DirTree('cloud/b')
+        self.assertEqual(self.options(a, b), [
+            'View files in /a, not /b',
+            'View files in /b, not /a',
+            'Quit',
+        ])
