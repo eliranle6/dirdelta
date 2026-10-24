@@ -68,7 +68,9 @@ DRYRUN=0 .venv/bin/python3 -m dirdelta /tmp/dd/alpha /tmp/dd/bravo    # Copy rea
 
 Choose "Remove/Copy files from ... to ..." in the menu, select files with `Space` (on a directory it
 selects everything under it), press `Enter`, then choose Copy or Remove. Copy copies the selected files from the entry's source ("from") directory into its
-destination ("to"); Remove deletes them from the source. Remove is not affected by `DRYRUN`.
+destination ("to"); Remove deletes them from the source. Copy's dry run writes nothing (not even
+the dirs files would go into) and says what it would have copied; Remove is not affected by
+`DRYRUN`.
 
 For bravo vs. alpha, `alpha` is missing `third/anotherinthird/7.mp3` and `bravo` is missing
 `first/infirst/ininfirst/huh/99.mp3`. `./bin/dirsync-fs.sh` runs this sync on a fresh temp copy of

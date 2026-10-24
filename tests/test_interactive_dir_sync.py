@@ -50,6 +50,23 @@ class InteractiveDirSyncTest(unittest.TestCase):
             self._sync([COPY])
 
         self.assertFalse(os.path.exists(os.path.join(self.dst_root, 'sub/b.txt')))
+        # Not even the dir it would have gone into
+        self.assertFalse(os.path.exists(os.path.join(self.dst_root, 'sub')))
+
+    def test_dry_run_copy_says_so(self):
+        with mock.patch('dirdelta.localdiskdirtree.DRYRUN', True):
+            self._sync([COPY])
+
+        self.assertIn('Dry run, not copying /sub/b.txt (1 out of 1)', self.messages)
+        self.assertTrue(any(message.startswith('Dry run: nothing was copied to')
+                            for message in self.messages))
+
+    def test_copy_reports_what_it_copied(self):
+        with mock.patch('dirdelta.localdiskdirtree.DRYRUN', False):
+            self._sync([COPY])
+
+        self.assertIn('Copying /sub/b.txt (1 out of 1)', self.messages)
+        self.assertIn('Copied 1 files to %s' % (os.path.realpath(self.dst_root),), self.messages)
 
     def test_remove_deletes_file_from_src_and_from_the_diff(self):
         src, dst = self._sync([REMOVE])

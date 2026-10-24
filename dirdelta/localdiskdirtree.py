@@ -43,14 +43,16 @@ class LocalDiskDirTree(dirtree.DirTree):
 
     def copy_inner_entries_from_dirtree(self, dirtree):
         files = list(dirtree.iter_files())
+        # In a dry run nothing is written (dirs included), but the tree is updated as if it was
+        verb = "Dry run, not copying" if DRYRUN else "Copying"
         for index, file_entry in enumerate(files):
-            messages.print_line("Copying %s (%d out of %d)" % (file_entry, index + 1, len(files)))
+            messages.print_line("%s %s (%d out of %d)" % (verb, file_entry, index + 1, len(files)))
             new_file_entry = self.add_file_by_relpath(file_entry.relpath)
             try:
                 dest_dirpath = os.path.dirname(new_file_entry.full_filesystem_path())
                 if os.path.exists(dest_dirpath):
                     assert os.path.isdir(dest_dirpath)
-                else:
+                elif not DRYRUN:
                     try:
                         os.makedirs(dest_dirpath)
                     except OSError as ex:
@@ -62,6 +64,10 @@ class LocalDiskDirTree(dirtree.DirTree):
             except:
                 self.remove_node(new_file_entry.relpath)
                 raise
+        if DRYRUN:
+            messages.print_line("Dry run: nothing was copied to %s (DRYRUN=0 copies)" % (self._rootpath,))
+        else:
+            messages.print_line("Copied %d files to %s" % (len(files), self._rootpath))
 
     def _copy_local_file_to_tree_with_path(self, src, dst):
         if DRYRUN:
