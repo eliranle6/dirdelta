@@ -14,7 +14,8 @@ class _Entry(object):
     """A DirTree node's data.
 
     Example: the dirtree's root is /home/users/blah and an entry is /home/users/blah/subdir1/subdir2.
-    Then name is subdir2, relpath is /subdir1/subdir2 and fullpath is /home/users/blah/subdir1/subdir2.
+    Then name is subdir2, relpath is subdir1/subdir2 and fullpath is /home/users/blah/subdir1/subdir2.
+    The root's relpath is ''. relpath is also the entry's node's id in the tree.
     """
 
     def __init__(self, name, relpath, fullpath):
@@ -42,14 +43,8 @@ class FileEntry(_Entry):
 
 
 class DirTree(treelib.Tree):
-    """
-    The tree will be created as follows:
-        Root node:
-            id='/'
-            tag=root path (for instance /home/blah/myfiles/)
-            data=Root node entry
-
-    The full filesystem path can be obtained from the data (node.data.full_filesystem_path())
+    """A tree of a dir's files and dirs: each node's data is its entry (DirEntry or FileEntry), and
+    its id is the entry's relpath (the root's is '').
     """
     def __init__(self, rootpath, silent=False, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -57,9 +52,9 @@ class DirTree(treelib.Tree):
 
         rootpath = rootpath.rstrip('/') or '/'
         self._rootpath = rootpath
-        root = DirEntry(name='/', relpath='/', fullpath=self._rootpath)
+        root = DirEntry(name='/', relpath='', fullpath=self._rootpath)
         self._create_node_orig = self.create_node
-        self._root = self.create_node(identifier='/', tag=root.name, data=root)
+        self._root = self.create_node(identifier='', tag=root.name, data=root)
         self.create_node = self._create_node_override_method
 
     def create_dir_node_from_fullpath_if_not_exists(self, fullpath):
@@ -69,7 +64,9 @@ class DirTree(treelib.Tree):
         return self.create_dir_node_from_relpath_if_not_exists(relpath)
 
     def create_dir_node_from_relpath_if_not_exists(self, relpath):
-        # Make sure all subdires have nodes
+        # Make sure all subdires have nodes ('' and '.' are the root itself)
+        if relpath in ('', '.'):
+            return self._root
         parts = relpath.split(os.path.sep)
         cur_subdir = self._root
         for subdir_name in parts:

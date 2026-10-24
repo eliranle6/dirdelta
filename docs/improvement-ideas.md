@@ -175,7 +175,7 @@ Concepts and UI first, then code. cpptree's own (dirpicker's) are in
     one method; `InteractiveDirSync.view_diff(src, dst)` takes src and dst
     although the object holds them. And `menu.run_menu()` has one caller.
 
-24. **DirTree ids without the leading `/`.** DirTree's ids are `/sub/x`
+24. ~~DirTree ids without the leading `/`~~ — done 2026-10-24. Was: **DirTree ids without the leading `/`.** DirTree's ids are `/sub/x`
     (the root's is `/`), dirpicker's are `sub/x` (the root's is `.`), so
     `picker.py` converts both ways (`_id_to_path`, `_path_to_id`). With
     relative ids the conversion would go, but every `relpath` user would

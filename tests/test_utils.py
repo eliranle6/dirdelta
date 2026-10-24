@@ -22,11 +22,11 @@ class CreateDirtreeFromArgTest(unittest.TestCase):
     def test_local_path_builds_local_disk_tree(self):
         tree = utils.create_dirtree_from_arg(self.root)
         self.assertIsInstance(tree, localdiskdirtree.LocalDiskDirTree)
-        self.assertEqual(sorted(e.relpath for e in tree.iter_files()), ['/a/b/deep.txt', '/top.txt'])
+        self.assertEqual(sorted(e.relpath for e in tree.iter_files()), ['a/b/deep.txt', 'top.txt'])
 
     def test_max_depth_limits_the_scan(self):
         tree = utils.create_dirtree_from_arg(self.root, max_depth=1)
-        self.assertEqual([e.relpath for e in tree.iter_files()], ['/top.txt'])
+        self.assertEqual([e.relpath for e in tree.iter_files()], ['top.txt'])
 
     def test_cloud_path_goes_to_the_cloud_factory(self):
         with mock.patch('dirdelta.clouddirtreefactory.factory_interactive') as factory:

@@ -50,7 +50,7 @@ class InteractiveDirSyncTest(unittest.TestCase):
         with open(os.path.join(self.dst_root, 'sub/b.txt')) as f:
             self.assertEqual(f.read(), 'sub/b.txt')
         # So the next diff doesn't list it
-        self.assertIsNotNone(dst.get_node('/sub/b.txt'))
+        self.assertIsNotNone(dst.get_node('sub/b.txt'))
 
     def test_dry_run_copy_leaves_disk_untouched(self):
         with mock.patch('dirdelta.dryrun.DRYRUN', True):
@@ -64,14 +64,14 @@ class InteractiveDirSyncTest(unittest.TestCase):
         with mock.patch('dirdelta.dryrun.DRYRUN', True):
             src, dst = self._sync(COPY)
 
-        self.assertIsNone(dst.get_node('/sub/b.txt'))
-        self.assertIsNone(dst.get_node('/sub'))
+        self.assertIsNone(dst.get_node('sub/b.txt'))
+        self.assertIsNone(dst.get_node('sub'))
 
     def test_dry_run_copy_says_so(self):
         with mock.patch('dirdelta.dryrun.DRYRUN', True):
             self._sync(COPY)
 
-        self.assertIn('Dry run, not copying /sub/b.txt (1 out of 1)', self.messages)
+        self.assertIn('Dry run, not copying sub/b.txt (1 out of 1)', self.messages)
         self.assertTrue(any(message.startswith('Dry run complete: nothing was copied to')
                             for message in self.messages))
 
@@ -79,7 +79,7 @@ class InteractiveDirSyncTest(unittest.TestCase):
         with mock.patch('dirdelta.dryrun.DRYRUN', False):
             self._sync(COPY)
 
-        self.assertIn('Copying /sub/b.txt (1 out of 1)', self.messages)
+        self.assertIn('Copying sub/b.txt (1 out of 1)', self.messages)
         self.assertIn('Copy complete: copied 1 of 1 files to %s' % (os.path.realpath(self.dst_root),), self.messages)
 
     def test_copy_report_ends_saying_its_complete(self):
@@ -106,8 +106,8 @@ class InteractiveDirSyncTest(unittest.TestCase):
             src, dst = self._sync(REMOVE)
 
         self.assertFalse(os.path.exists(os.path.join(self.src_root, 'sub/b.txt')))
-        self.assertIsNone(src.get_node('/sub/b.txt'))
-        self.assertIn('Removing /sub/b.txt (1 out of 1)', self.messages)
+        self.assertIsNone(src.get_node('sub/b.txt'))
+        self.assertIn('Removing sub/b.txt (1 out of 1)', self.messages)
         self.assertIn('Remove complete: removed 1 of 1 files from %s' % (os.path.realpath(self.src_root),), self.messages)
 
     def test_dry_run_remove_leaves_disk_untouched(self):
@@ -116,8 +116,8 @@ class InteractiveDirSyncTest(unittest.TestCase):
 
         self.assertTrue(os.path.exists(os.path.join(self.src_root, 'sub/b.txt')))
         # Nor the tree: the next diff still lists it
-        self.assertIsNotNone(src.get_node('/sub/b.txt'))
-        self.assertIn('Dry run, not removing /sub/b.txt (1 out of 1)', self.messages)
+        self.assertIsNotNone(src.get_node('sub/b.txt'))
+        self.assertIn('Dry run, not removing sub/b.txt (1 out of 1)', self.messages)
         self.assertTrue(any(message.startswith('Dry run complete: nothing was removed from')
                             for message in self.messages))
 
@@ -130,7 +130,7 @@ class InteractiveDirSyncTest(unittest.TestCase):
         header = self.pick_option.call_args.kwargs['header'].splitlines()
         self.assertEqual(header[0], 'Copy 1 files from %s to %s?' % (os.path.realpath(self.src_root),
                                                                      os.path.realpath(self.dst_root)))
-        self.assertEqual(header[1], '  /sub/b.txt')
+        self.assertEqual(header[1], '  sub/b.txt')
         self.assertIn('dry run', header[-1])
 
     def test_no_picks_again_from_the_same_picks_and_changes_nothing(self):
@@ -149,7 +149,7 @@ class InteractiveDirSyncTest(unittest.TestCase):
             interactive_dir_sync.InteractiveDirSync(src, dst).sync(REMOVE)
 
         self.assertIsNone(picked_args[0])
-        self.assertEqual([entry.relpath for entry in picked_args[1]], ['/sub/b.txt'])
+        self.assertEqual([entry.relpath for entry in picked_args[1]], ['sub/b.txt'])
         self.assertTrue(os.path.exists(os.path.join(self.src_root, 'sub/b.txt')))
 
     def test_quitting_the_confirmation_is_no(self):
@@ -184,7 +184,7 @@ class InteractiveDirSyncTest(unittest.TestCase):
         with mock.patch('dirdelta.dryrun.DRYRUN', False):
             self._sync(COPY, choose)
 
-        self.assertEqual(offered, [['/sub/b.txt', '/sub/c.txt']])
+        self.assertEqual(offered, [['sub/b.txt', 'sub/c.txt']])
         self.assertTrue(os.path.exists(os.path.join(self.dst_root, 'sub/b.txt')))
         self.assertFalse(os.path.exists(os.path.join(self.dst_root, 'sub/c.txt')))
 

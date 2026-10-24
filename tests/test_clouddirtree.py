@@ -48,24 +48,24 @@ class CloudDirTreeTest(unittest.TestCase):
 
     def test_builds_files_under_the_requested_folder_only(self):
         tree = clouddirtree.CloudDirTree('cloud/mein')
-        self.assertIn('/song.mp3', self._relpaths(tree))
-        self.assertIn('/album/track.mp3', self._relpaths(tree))
-        self.assertNotIn('/elsewhere.mp3', self._relpaths(tree))
+        self.assertIn('song.mp3', self._relpaths(tree))
+        self.assertIn('album/track.mp3', self._relpaths(tree))
+        self.assertNotIn('elsewhere.mp3', self._relpaths(tree))
 
     def test_folders_become_dirs_and_files_become_files(self):
         tree = clouddirtree.CloudDirTree('cloud/mein')
-        self.assertIsNotNone(tree.get_node('/album'))
-        self.assertNotIn('/album', self._relpaths(tree))
+        self.assertIsNotNone(tree.get_node('album'))
+        self.assertNotIn('album', self._relpaths(tree))
 
     def test_same_named_files_both_kept_with_dup_suffix(self):
         tree = clouddirtree.CloudDirTree('cloud/mein')
-        dups = [path for path in self._relpaths(tree) if path.startswith('/dup.mp3')]
+        dups = [path for path in self._relpaths(tree) if path.startswith('dup.mp3')]
         self.assertEqual(len(dups), 2)
-        self.assertIn('/dup.mp3', dups)
+        self.assertIn('dup.mp3', dups)
 
     def test_fullpath_is_the_path_inside_the_drive(self):
         tree = clouddirtree.CloudDirTree('cloud/mein')
-        self.assertEqual(tree.get_node('/album/track.mp3').data.fullpath, '/mein/album/track.mp3')
+        self.assertEqual(tree.get_node('album/track.mp3').data.fullpath, '/mein/album/track.mp3')
 
     def test_path_components_ignores_empty_parts(self):
         self.assertEqual(clouddirtree.CloudDirTree.path_components('/cloud//mein/'), ['cloud', 'mein'])

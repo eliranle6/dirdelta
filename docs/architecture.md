@@ -47,8 +47,8 @@ Construction is deliberately locked down: `DirTree.__init__` overrides
 `NotImplementedError`, forcing all callers through
 `add_file_by_relpath` / `add_file_by_fullpath` /
 `create_dir_node_from_relpath_if_not_exists` so relpath/fullpath bookkeeping
-stays consistent. Node `identifier` in `treelib` is the file's `relpath`
-(root's is `'/'`).
+stays consistent. Node `identifier` in `treelib` is the file's `relpath`,
+relative (`sub/x`; the root's is `''`), like dirpicker's paths.
 
 **The diff algorithm** — `get_unknown_entries_in_given_dirtree(self, other)`:
 for every file in `other`, if its `relpath` is not a node id in `self`,
@@ -177,7 +177,7 @@ draws on `/dev/tty`, reads its input on stdin and prints what was picked on
 stdout, all `\0`-separated (`-0`). Exit code 1 means the user quit (→
 `None`); others raise `PickerError`. See `docs/dirpicker-integration.md`.
 - `pick_from_tree(tree, header, multi)`: sends a `DirTree`'s node ids
-  without their leading `/` (`/sub/x` → `sub/x`), each after its type
+  (relative paths, like dirpicker's; the root, `''`, is dirpicker's `.`), each after its type
   (`--typed`: `f sub/x`, `d sub`, so the picker counts files), each dir
   before its contents, siblings sorted by tag; maps the picked paths back to the nodes'
   entries (`.` is the root).

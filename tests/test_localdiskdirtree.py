@@ -36,7 +36,7 @@ class LocalDiskDirTreeTest(unittest.TestCase):
         files = list(dst.iter_files())
         self.assertEqual(len(files), 1)
         new_file_entry = files[0]
-        self.assertEqual(new_file_entry.relpath, '/subdir/file.txt')
+        self.assertEqual(new_file_entry.relpath, 'subdir/file.txt')
         self.assertEqual(new_file_entry.fullpath,
                           os.path.join(self.dst_root, 'subdir/file.txt'))
 
@@ -95,7 +95,7 @@ class LocalDiskDirTreeTest(unittest.TestCase):
             dst.copy_inner_entries_from_dirtree(src)
 
         self.assertEqual(sorted(os.listdir(self.dst_root)), ['1.txt'])
-        self.assertIsNone(dst.get_node('/2.txt'))
+        self.assertIsNone(dst.get_node('2.txt'))
         self.assertIn('Stopped (Ctrl-C)', printed)
         self.assertEqual(printed[-1], 'Copy stopped: copied 1 of 3 files to %s' % (os.path.realpath(self.dst_root),))
 
@@ -139,7 +139,7 @@ class LocalDiskDirTreeTest(unittest.TestCase):
             tree.remove_files(entries)
 
         self.assertEqual(sorted(os.listdir(self.src_root)), ['2.txt'])
-        self.assertIsNotNone(tree.get_node('/2.txt'))
+        self.assertIsNotNone(tree.get_node('2.txt'))
         self.assertEqual(printed[-1], 'Remove stopped: removed 1 of 2 files from %s' % (os.path.realpath(self.src_root),))
 
 
@@ -153,33 +153,33 @@ class LocalDiskDirTreeTest(unittest.TestCase):
     def test_scan_has_files_and_dirs_hidden_ones_too(self):
         tree = self._scan(['visible.txt', 'sub/nested.txt', '.hidden/inner.txt', '.hidden_at_root.txt'])
         self.assertEqual(sorted(entry.relpath for entry in tree.iter_files()),
-                         ['/.hidden/inner.txt', '/.hidden_at_root.txt', '/sub/nested.txt', '/visible.txt'])
-        self.assertIsInstance(tree.get_node('/sub').data, dirtree.DirEntry)
-        self.assertIsInstance(tree.get_node('/.hidden').data, dirtree.DirEntry)
+                         ['.hidden/inner.txt', '.hidden_at_root.txt', 'sub/nested.txt', 'visible.txt'])
+        self.assertIsInstance(tree.get_node('sub').data, dirtree.DirEntry)
+        self.assertIsInstance(tree.get_node('.hidden').data, dirtree.DirEntry)
 
     def test_scan_keeps_empty_dirs(self):
         os.makedirs(os.path.join(self.src_root, 'empty'))
         tree = self._scan([])
-        self.assertIsInstance(tree.get_node('/empty').data, dirtree.DirEntry)
+        self.assertIsInstance(tree.get_node('empty').data, dirtree.DirEntry)
 
     def test_scan_max_depth(self):
         tree = self._scan(['top.txt', 'a/b/deep.txt'], max_depth=2)
-        self.assertIsNotNone(tree.get_node('/a/b'))
-        self.assertIsNone(tree.get_node('/a/b/deep.txt'))
-        self.assertIsNotNone(tree.get_node('/top.txt'))
+        self.assertIsNotNone(tree.get_node('a/b'))
+        self.assertIsNone(tree.get_node('a/b/deep.txt'))
+        self.assertIsNotNone(tree.get_node('top.txt'))
 
     def test_scan_skips_symlinks(self):
         tree_root = self.src_root
         open(os.path.join(tree_root, 'real.txt'), 'w').close()
         os.symlink(os.path.join(tree_root, 'real.txt'), os.path.join(tree_root, 'link.txt'))
         tree = self._scan([])
-        self.assertIsNotNone(tree.get_node('/real.txt'))
-        self.assertIsNone(tree.get_node('/link.txt'))
+        self.assertIsNotNone(tree.get_node('real.txt'))
+        self.assertIsNone(tree.get_node('link.txt'))
 
     def test_scan_names_that_arent_utf8(self):
         name = os.fsdecode(b'caf\xe9.txt')
         tree = self._scan([name])
-        self.assertIsNotNone(tree.get_node('/' + name))
+        self.assertIsNotNone(tree.get_node(name))
 
 
 if __name__ == '__main__':

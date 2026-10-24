@@ -17,8 +17,8 @@ Like fzf: dirdelta starts `dirpicker`, which draws on the terminal itself
 
 - Picking from a tree dirdelta already has (sync mode's diff tree, a cloud
   tree): `dirpicker -0 [-m] [--header TEXT] [--root NAME] -`, with the tree's
-  paths on stdin, each ending with `\0`, relative to the root (`sub/x`, not
-  dirdelta's `/sub/x` ids). Each folder before what's in it, in the order to
+  paths on stdin, each ending with `\0`, relative to the root (`sub/x`, the
+  same as dirdelta's ids). Each folder before what's in it, in the order to
   show. `-m` picks several (Space picks a node and everything under it,
   Enter finishes).
 - Picking under a local dir (picker mode): `dirpicker -0 --max-depth N DIR`.

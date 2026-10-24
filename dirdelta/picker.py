@@ -39,13 +39,14 @@ def pick_from_tree(tree, header='', multi=False, picked=None):
     args = ['--typed', '--root', tree.fullpath()] + (['-m'] if multi else []) + _header_args(header)
     with tempfile.NamedTemporaryFile('wb', prefix='dirdelta-picked-') as picked_file:
         if picked:
-            picked_file.write(_null_terminated(_id_to_path(entry.relpath) or '.' for entry in picked))
+            picked_file.write(_null_terminated(entry.relpath or '.' for entry in picked))
             picked_file.flush()
             args += ['--picked', picked_file.name]
         picked_paths = _run(args + ['-'], paths)
     if picked_paths is None:
         return None
-    return [tree.get_node(_path_to_id(path)).data for path in picked_paths]
+    # The root is printed as '.'; its id is ''
+    return [tree.get_node('' if path == '.' else path).data for path in picked_paths]
 
 
 def pick_under_dir(dirpath, max_depth=None):
@@ -72,22 +73,12 @@ def _tree_paths(tree):
     while stack:
         node = stack.pop()
         kind = 'f' if isinstance(node.data, dirtree.FileEntry) else 'd'
-        yield '%s %s' % (kind, _id_to_path(node.identifier))
+        yield '%s %s' % (kind, node.identifier)
         stack.extend(reversed(_sorted_children(tree, node.identifier)))
 
 
 def _sorted_children(tree, identifier):
     return sorted(tree.children(identifier), key=lambda node: node.tag)
-
-
-# DirTree ids are paths from the root, starting with '/' (the root's is '/'), while dirpicker's are
-# relative (the root's printed as '.')
-def _id_to_path(identifier):
-    return identifier.lstrip('/')
-
-
-def _path_to_id(path):
-    return '/' if path == '.' else '/' + path
 
 
 def _header_args(header):

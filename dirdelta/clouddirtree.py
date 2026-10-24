@@ -92,19 +92,11 @@ class CloudDirTree(dirtree.DirTree):
                 # Create node, only if under the requested inner root
                 under_inner_root = (parent_path + '/').startswith(inner_rootpath.rstrip('/') + '/')
                 if under_inner_root:
-                    # Generate relative path
-                    node_rel_path = '/' + os.path.relpath(node_path, inner_rootpath)
+                    # Generate relative path (the node's id)
+                    node_rel_path = os.path.relpath(node_path, inner_rootpath)
                     # Change node ID if it already exists (two files with the same path is possible in cloud)
                     if node_rel_path in self.nodes:
                         node_rel_path += f'___DUP__{node_cloud_id}'
-
-                    # Generate parent relative path
-                    if parent_path == inner_rootpath:
-                        parent_rel_path = '/'
-                    else:
-                        parent_rel_path = os.path.relpath(parent_path, inner_rootpath)
-
-                    node_rel_path = node_rel_path.lstrip('/')
 
                     is_dir = md['mimeType'] == 'application/vnd.google-apps.folder'
                     if is_dir:

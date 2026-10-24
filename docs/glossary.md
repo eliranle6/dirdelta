@@ -12,7 +12,7 @@ a real filesystem path.
 
 **DirTree** — the shared in-memory representation (`dirtree.py`, built on
 `treelib.Tree`) of a scanned replica: one node per file or directory,
-node identifier = relpath from the tree's root. `LocalDiskDirTree` and
+node identifier = relpath from the tree's root (`sub/x`; the root's is `''`). `LocalDiskDirTree` and
 `CloudDirTree` both subclass it and differ only in how they populate
 themselves (real `find` scan vs. cached Drive metadata).
 

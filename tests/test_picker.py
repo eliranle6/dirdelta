@@ -84,18 +84,18 @@ class PickerTest(unittest.TestCase):
     def test_pick_from_tree_returns_the_entries(self):
         self.answer('a/1.txt')
         picked = picker.pick_from_tree(self.make_tree())
-        self.assertEqual([entry.relpath for entry in picked], ['/a/1.txt'])
+        self.assertEqual([entry.relpath for entry in picked], ['a/1.txt'])
         self.assertIsInstance(picked[0], dirtree.FileEntry)
 
     def test_pick_the_root(self):
         tree = self.make_tree()
         self.answer('.')
-        self.assertEqual(picker.pick_from_tree(tree), [tree.get_node('/').data])
+        self.assertEqual(picker.pick_from_tree(tree), [tree.get_node('').data])
 
     def test_pick_several(self):
         self.answer('b|b/2.txt|b/sub|b/sub/3.txt')
         picked = picker.pick_from_tree(self.make_tree(), header='Pick\nfiles', multi=True)
-        self.assertEqual([entry.relpath for entry in picked], ['/b', '/b/2.txt', '/b/sub', '/b/sub/3.txt'])
+        self.assertEqual([entry.relpath for entry in picked], ['b', 'b/2.txt', 'b/sub', 'b/sub/3.txt'])
         args, _ = self.call()
         self.assertEqual(args, ['-0', '--typed', '--root', '/some/root', '-m', '--header', 'Pick\nfiles', '-'])
 
@@ -111,8 +111,8 @@ class PickerTest(unittest.TestCase):
         real_run = picker.subprocess.run
         with mock.patch('dirdelta.picker.subprocess.run', side_effect=run):
             picker.pick_from_tree(tree, multi=True,
-                                  picked=[tree.get_node('/b').data, tree.get_node('/b/2.txt').data,
-                                          tree.get_node('/').data])
+                                  picked=[tree.get_node('b').data, tree.get_node('b/2.txt').data,
+                                          tree.get_node('').data])
 
         self.assertEqual(self.picked_file_contents, b'b\0b/2.txt\0.\0')
         args, _ = self.call()

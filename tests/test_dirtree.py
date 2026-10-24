@@ -9,8 +9,8 @@ class DirTreeTest(unittest.TestCase):
         tree.add_file_by_relpath('games/mario.rom')
 
         files = [f.relpath for f in tree.iter_files()]
-        self.assertEqual(files, ['/games/mario.rom'])
-        self.assertIsNotNone(tree.get_node('/games'))
+        self.assertEqual(files, ['games/mario.rom'])
+        self.assertIsNotNone(tree.get_node('games'))
 
     def test_iter_files_excludes_directories(self):
         tree = dirtree.DirTree('/roms')
@@ -29,7 +29,7 @@ class DirTreeTest(unittest.TestCase):
 
         missing = dst.get_unknown_entries_in_given_dirtree(src)
         missing_paths = [f.relpath for f in missing.iter_files()]
-        self.assertEqual(missing_paths, ['/a.txt'])
+        self.assertEqual(missing_paths, ['a.txt'])
 
     def test_diff_is_empty_when_nothing_missing(self):
         src = dirtree.DirTree('/src')
@@ -44,8 +44,8 @@ class DirTreeTest(unittest.TestCase):
         tree = dirtree.DirTree('/home/user/myroot')
         tree.add_file_by_relpath('subdir/file.txt')
 
-        root_entry = tree.get_node('/').data
-        file_entry = tree.get_node('/subdir/file.txt').data
+        root_entry = tree.get_node('').data
+        file_entry = tree.get_node('subdir/file.txt').data
 
         self.assertEqual(root_entry.fullpath, '/home/user/myroot')
         self.assertEqual(file_entry.fullpath, '/home/user/myroot/subdir/file.txt')
