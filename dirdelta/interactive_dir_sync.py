@@ -47,10 +47,19 @@ class InteractiveDirSync(object):
                 picked = entries
                 continue
             picked = None
+            nr_files = len(self._selected)
             if action == self.COPY:
-                self._copy()
+                title = "Copying %d files from %s to %s" % (nr_files, self._src.fullpath(),
+                                                           self._dst.fullpath())
             else:
-                self._remove()
+                title = "Removing %d files from %s" % (nr_files, self._src.fullpath())
+            if localdiskdirtree.DRYRUN:
+                title += " (a dry run)"
+            with messages.progress_screen(title):
+                if action == self.COPY:
+                    self._copy()
+                else:
+                    self._remove()
 
     def _chooseFiles(self, missing, action, picked=None):
         purpose = ("copy to %s" % (self._dst.fullpath(),) if action == self.COPY else

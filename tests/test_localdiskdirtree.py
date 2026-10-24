@@ -67,5 +67,77 @@ class LocalDiskDirTreeTest(unittest.TestCase):
         self.assertEqual(localdiskdirtree.factory(self.src_root, silent=True).scan_errors, [])
 
 
+    def test_ctrl_c_stops_copying_and_drops_the_partial_file(self):
+        src = localdiskdirtree.LocalDiskDirTree(self.src_root, silent=True)
+        for name in ['1.txt', '2.txt', '3.txt']:
+            with open(os.path.join(self.src_root, name), 'w') as f:
+                f.write(name)
+            src.add_file_by_relpath(name)
+        dst = localdiskdirtree.LocalDiskDirTree(self.dst_root, silent=True)
+
+        real_copy = localdiskdirtree.shutil.copy
+
+        def copy(source, dest):
+            if source.endswith('2.txt'):
+                with open(dest, 'w') as f:
+                    f.write('part')
+                raise KeyboardInterrupt()
+            real_copy(source, dest)
+
+        printed = []
+        with mock.patch('dirdelta.localdiskdirtree.DRYRUN', False), \
+                mock.patch('dirdelta.localdiskdirtree.shutil.copy', side_effect=copy), \
+                mock.patch('dirdelta.messages.print_line', side_effect=lambda line, *_: printed.append(line)):
+            dst.copy_inner_entries_from_dirtree(src)
+
+        self.assertEqual(sorted(os.listdir(self.dst_root)), ['1.txt'])
+        self.assertIsNone(dst.get_node('/2.txt'))
+        self.assertIn('Stopped (Ctrl-C)', printed)
+        self.assertEqual(printed[-1], 'Copied 1 of 3 files to %s' % (os.path.realpath(self.dst_root),))
+
+    def test_ctrl_c_while_copying_keeps_a_file_that_was_there(self):
+        # A file the tree didn't know of (e.g. find couldn't read it) isn't deleted
+        os.makedirs(os.path.join(self.src_root, 'd'))
+        with open(os.path.join(self.src_root, 'd', 'x.txt'), 'w') as f:
+            f.write('new')
+        src = localdiskdirtree.LocalDiskDirTree(self.src_root, silent=True)
+        src.add_file_by_relpath('d/x.txt')
+        os.makedirs(os.path.join(self.dst_root, 'd'))
+        with open(os.path.join(self.dst_root, 'd', 'x.txt'), 'w') as f:
+            f.write('old')
+        dst = localdiskdirtree.LocalDiskDirTree(self.dst_root, silent=True)
+
+        with mock.patch('dirdelta.localdiskdirtree.DRYRUN', False), \
+                mock.patch('dirdelta.localdiskdirtree.shutil.copy', side_effect=KeyboardInterrupt()), \
+                mock.patch('dirdelta.messages.print_line'):
+            dst.copy_inner_entries_from_dirtree(src)
+
+        with open(os.path.join(self.dst_root, 'd', 'x.txt')) as f:
+            self.assertEqual(f.read(), 'old')
+
+    def test_ctrl_c_stops_removing(self):
+        tree = localdiskdirtree.LocalDiskDirTree(self.src_root, silent=True)
+        entries = []
+        for name in ['1.txt', '2.txt']:
+            open(os.path.join(self.src_root, name), 'w').close()
+            entries.append(tree.add_file_by_relpath(name))
+        real_unlink = os.unlink
+
+        def unlink(path):
+            if path.endswith('2.txt'):
+                raise KeyboardInterrupt()
+            real_unlink(path)
+
+        printed = []
+        with mock.patch('dirdelta.localdiskdirtree.DRYRUN', False), \
+                mock.patch('dirdelta.localdiskdirtree.os.unlink', side_effect=unlink), \
+                mock.patch('dirdelta.messages.print_line', side_effect=lambda line, *_: printed.append(line)):
+            tree.remove_files(entries)
+
+        self.assertEqual(sorted(os.listdir(self.src_root)), ['2.txt'])
+        self.assertIsNotNone(tree.get_node('/2.txt'))
+        self.assertEqual(printed[-1], 'Removed 1 of 2 files from %s' % (os.path.realpath(self.src_root),))
+
+
 if __name__ == '__main__':
     unittest.main()

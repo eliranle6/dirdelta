@@ -4,6 +4,8 @@ it's open).
 A picker covers what was printed before it, so the lines printed since the last picker are also
 kept, for the next picker to show (see take_recent()).
 """
+import contextlib
+import shutil
 import sys
 
 import termcolor
@@ -13,6 +15,8 @@ MAX_RECENT_LINES = 12
 
 _recent_lines = []
 _nr_recent_lines_dropped = 0
+# Whether the action on the progress screen was stopped (Ctrl-C)
+_is_stopped = False
 
 
 def print_line(line, color=None):
@@ -39,3 +43,65 @@ def take_recent():
     del _recent_lines[:]
     _nr_recent_lines_dropped = 0
     return lines
+
+
+def note_stopped():
+    """Say that an action was stopped with Ctrl-C (also on the progress screen's top line), e.g. by an
+    action that catches it to say how far it got."""
+    global _is_stopped
+    _is_stopped = True
+    print_line("Stopped (Ctrl-C)", "red")
+
+
+@contextlib.contextmanager
+def progress_screen(title):
+    """Show what's printed inside (an action's progress) on the whole screen, under title, which
+    stays on the top line while the lines scroll under it. When the action ends, wait for Enter, so
+    its report can be read before the next picker covers it.
+
+    Ctrl-C inside stops the action (which may catch it itself, to say how far it got). Without a
+    terminal, the title and the lines are just printed.
+    """
+    global _is_stopped
+    _is_stopped = False
+    is_terminal = sys.stdout.isatty() and sys.stdin.isatty()
+    if not is_terminal:
+        print_line(title)
+        try:
+            yield
+        except KeyboardInterrupt:
+            note_stopped()
+        return
+
+    height = shutil.get_terminal_size().lines
+    # Clear the screen, title on the top line, and the lines scrolling in the rest (a scroll region)
+    _write("\033[2J\033[H" + _top_line("Ctrl-C to stop: " + title) + "\033[2;%dr\033[2;1H" % (height,))
+    try:
+        yield
+    except KeyboardInterrupt:
+        note_stopped()
+    finally:
+        done = "Stopped" if _is_stopped else "Done"
+        # Save the cursor, rewrite the top line, and restore it. What to do first, in case the line
+        # is cut.
+        _write("\0337\033[1;1H" + _top_line("%s. Press Enter to continue: %s" % (done, title)) + "\0338")
+        try:
+            input()
+        except (EOFError, KeyboardInterrupt):
+            pass
+        # Back to scrolling the whole screen
+        _write("\033[r")
+        # The report was read here, so the next picker needn't show it again
+        take_recent()
+
+
+def _top_line(text):
+    """text on the current line, in reverse video, over the whole width"""
+    width = shutil.get_terminal_size().columns
+    return "\033[7m" + text[:width].ljust(width) + "\033[0m\033[K"
+
+
+def _write(text):
+    sys.stdout.write(text)
+    sys.stdout.flush()
+

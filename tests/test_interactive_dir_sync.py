@@ -71,7 +71,7 @@ class InteractiveDirSyncTest(unittest.TestCase):
             self._sync(COPY)
 
         self.assertIn('Copying /sub/b.txt (1 out of 1)', self.messages)
-        self.assertIn('Copied 1 files to %s' % (os.path.realpath(self.dst_root),), self.messages)
+        self.assertIn('Copied 1 of 1 files to %s' % (os.path.realpath(self.dst_root),), self.messages)
 
     def test_remove_deletes_file_from_src_and_from_the_diff(self):
         with mock.patch('dirdelta.localdiskdirtree.DRYRUN', False):
@@ -80,7 +80,7 @@ class InteractiveDirSyncTest(unittest.TestCase):
         self.assertFalse(os.path.exists(os.path.join(self.src_root, 'sub/b.txt')))
         self.assertIsNone(src.get_node('/sub/b.txt'))
         self.assertIn('Removing /sub/b.txt (1 out of 1)', self.messages)
-        self.assertIn('Removed 1 files from %s' % (os.path.realpath(self.src_root),), self.messages)
+        self.assertIn('Removed 1 of 1 files from %s' % (os.path.realpath(self.src_root),), self.messages)
         self.assertIn('Nothing to synchronize', self.messages[-1])
 
     def test_dry_run_remove_leaves_disk_untouched(self):

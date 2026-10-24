@@ -163,6 +163,13 @@ they are. The lines printed since the last picker are kept too (the last 8),
 and `picker.py` shows them at the top of the next picker's header
 (`take_recent()`), since the picker's screen would hide them: e.g. a copy's
 progress and summary appear above the menu that follows it.
+`progress_screen(title)` (a context manager) runs an action on the whole
+screen, on a terminal: it clears it, keeps the title on the top line with
+a scroll region (`ESC[2;Hr`) for the lines under it, catches Ctrl-C, and
+at the end says Done/Stopped and waits for Enter (and then the lines
+aren't shown again by the next picker). Actions that catch Ctrl-C to say
+how far they got (copying, removing) call `note_stopped()`. Without a
+terminal it only prints.
 
 ### `picker.py`
 Runs `dirpicker` (from github.com/levioctl/cpptree; `$DIRDELTA_PICKER`, or
