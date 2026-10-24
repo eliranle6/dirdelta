@@ -46,7 +46,8 @@ removed Python picker.)
    tree class. Give it its own home (e.g. `paths.py`) so `utils.py` doesn't
    need to import the cloud module just to route between cloud/local.
 
-6. **Collapse `findcmdwrapper.find_files`/`find_dirs`.** They're ~90%
+6. ~~Collapse `findcmdwrapper.find_files`/`find_dirs`~~ — done 2026-10-24 with #18 and #19:
+   findcmdwrapper is gone. Was: **Collapse `findcmdwrapper.find_files`/`find_dirs`.** They're ~90%
    identical (base command, `-maxdepth`, hidden-file exclusion), differing
    only in `-type f` vs `-type d` and the regex clause. One parameterized
    `_find(rootpath, type_flag, ...)` removes the duplication. (Also
@@ -132,14 +133,15 @@ Concepts and UI first, then code. cpptree's own (dirpicker's) are in
     `localdiskdirtree.py` (adding nodes in a dry copy, dropping them in a dry
     remove, then rescanning) would go.
 
-18. **One `find` per scan.** `LocalDiskDirTree.update_from_filesystem()`
+18. ~~One `find` per scan~~ — done 2026-10-24. It saved less than expected (2.9s → 2.8s for
+    /usr/share): building the Python tree is most of the time, which #16 addresses. Was: **One `find` per scan.** `LocalDiskDirTree.update_from_filesystem()`
     runs find twice, once for files and once for dirs
     (`findcmdwrapper.find_files`/`find_dirs`), which doubles the scan time
     and makes both report the same unreadable paths (hence the de-duplicating
     of `scan_errors`). One `find ROOT -printf '%y %p\0'`, as dirpicker
     does, gives both, `\0`-separated so odd file names are safe too.
 
-19. **Drop the unused scan options.** `localdiskdirtree.factory()` and
+19. ~~Drop the unused scan options~~ — done 2026-10-24. Was: **Drop the unused scan options.** `localdiskdirtree.factory()` and
     `findcmdwrapper` take `file_extentions`, `dirs_only` and
     `include_hidden`, but the only caller (`utils.create_dirtree_from_arg`)
     passes just `max_depth`. Without them `findcmdwrapper` is a few lines,

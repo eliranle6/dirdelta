@@ -166,7 +166,7 @@ Notes for whoever changes things next:
   `requirements.txt` lists the third-party dependencies.
 - Diffing is filename/path-only (see `DirTree.get_unknown_entries_in_given_dirtree`
   in `dirdelta/dirtree.py`) — no hashing, no size/mtime comparison.
-- The local-disk scanner shells out to the real `find` binary
-  (`dirdelta/findcmdwrapper.py`) rather than using `os.walk`.
+- The local-disk scanner shells out to the real `find` binary (one run per
+  scan, in `localdiskdirtree.py`) rather than using `os.walk`.
 - Cloud state is cached to disk (`~/.cache/dirman/files.txt`) rather than
   queried live on every scan; refreshing it re-hits the Drive API.

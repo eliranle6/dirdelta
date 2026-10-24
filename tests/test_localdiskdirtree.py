@@ -4,6 +4,7 @@ import tempfile
 import unittest
 from unittest import mock
 
+from dirdelta import dirtree
 from dirdelta import localdiskdirtree
 
 
@@ -140,6 +141,45 @@ class LocalDiskDirTreeTest(unittest.TestCase):
         self.assertEqual(sorted(os.listdir(self.src_root)), ['2.txt'])
         self.assertIsNotNone(tree.get_node('/2.txt'))
         self.assertEqual(printed[-1], 'Remove stopped: removed 1 of 2 files from %s' % (os.path.realpath(self.src_root),))
+
+
+    def _scan(self, relpaths, **kwargs):
+        for relpath in relpaths:
+            path = os.path.join(self.src_root, relpath)
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            open(path, 'w').close()
+        return localdiskdirtree.factory(self.src_root, silent=True, **kwargs)
+
+    def test_scan_has_files_and_dirs_hidden_ones_too(self):
+        tree = self._scan(['visible.txt', 'sub/nested.txt', '.hidden/inner.txt', '.hidden_at_root.txt'])
+        self.assertEqual(sorted(entry.relpath for entry in tree.iter_files()),
+                         ['/.hidden/inner.txt', '/.hidden_at_root.txt', '/sub/nested.txt', '/visible.txt'])
+        self.assertIsInstance(tree.get_node('/sub').data, dirtree.DirEntry)
+        self.assertIsInstance(tree.get_node('/.hidden').data, dirtree.DirEntry)
+
+    def test_scan_keeps_empty_dirs(self):
+        os.makedirs(os.path.join(self.src_root, 'empty'))
+        tree = self._scan([])
+        self.assertIsInstance(tree.get_node('/empty').data, dirtree.DirEntry)
+
+    def test_scan_max_depth(self):
+        tree = self._scan(['top.txt', 'a/b/deep.txt'], max_depth=2)
+        self.assertIsNotNone(tree.get_node('/a/b'))
+        self.assertIsNone(tree.get_node('/a/b/deep.txt'))
+        self.assertIsNotNone(tree.get_node('/top.txt'))
+
+    def test_scan_skips_symlinks(self):
+        tree_root = self.src_root
+        open(os.path.join(tree_root, 'real.txt'), 'w').close()
+        os.symlink(os.path.join(tree_root, 'real.txt'), os.path.join(tree_root, 'link.txt'))
+        tree = self._scan([])
+        self.assertIsNotNone(tree.get_node('/real.txt'))
+        self.assertIsNone(tree.get_node('/link.txt'))
+
+    def test_scan_names_that_arent_utf8(self):
+        name = os.fsdecode(b'caf\xe9.txt')
+        tree = self._scan([name])
+        self.assertIsNotNone(tree.get_node('/' + name))
 
 
 if __name__ == '__main__':

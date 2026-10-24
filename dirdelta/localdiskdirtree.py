@@ -1,19 +1,15 @@
 import os
 import shutil
+import subprocess
 
 from dirdelta import dirtree
 from dirdelta import dryrun
-from dirdelta import findcmdwrapper
 from dirdelta import messages
 
 
-
-def factory(filesystem_dirpath, max_depth=None, file_extentions=None, dirs_only=False,
-            include_hidden=True, silent=False):
-    filesystem_dirpath = os.path.realpath(filesystem_dirpath)
+def factory(filesystem_dirpath, max_depth=None, silent=False):
     dirtree = LocalDiskDirTree(filesystem_dirpath, silent)
-    dirtree.update_from_filesystem(max_depth, file_extentions, dirs_only, include_hidden)
-    dirtree.children(dirtree._root.identifier)
+    dirtree.update_from_filesystem(max_depth)
     return dirtree
 
 
@@ -24,27 +20,25 @@ class LocalDiskDirTree(dirtree.DirTree):
         # find's messages about what it couldn't read in the last scan, so the tree may lack
         self.scan_errors = []
 
-    def update_from_filesystem(self, max_depth=None, file_extentions=None, dirs_only=False,
-                               include_hidden=True):
+    def update_from_filesystem(self, max_depth=None):
+        """Add the dirs and files on disk (hidden ones too), down to max_depth levels below the root."""
         if not self._silent:
             messages.print_line("Scanning directory %s..." % (self._rootpath,))
-        errors = []
-        if not dirs_only:
-            # Read disk for files
-            full_paths = findcmdwrapper.find_files(
-                self._rootpath, max_depth, file_extentions, include_hidden, errors)
-
-            # Create nodes
-            for filepath in full_paths:
-                self.add_file_by_fullpath(filepath)
-
-        # Add directories
-        dirnames_fullpath = findcmdwrapper.find_dirs(self._rootpath, max_depth, include_hidden, errors)
-        # Both finds hit the same unreadable paths
-        self.scan_errors = list(dict.fromkeys(errors))
-        dirnames_fullpath.remove(self.fullpath())
-        for dirpath in dirnames_fullpath:
-            self.create_dir_node_from_fullpath_if_not_exists(dirpath)
+        # One find for both files and dirs, each entry its type letter and path, ending with '\0'
+        # (paths may hold newlines). Other types (e.g. symlinks) are skipped.
+        command = ["find", self._rootpath, "-mindepth", "1"]
+        if max_depth is not None:
+            command += ["-maxdepth", str(max_depth)]
+        command += ["-printf", "%y %p\\0"]
+        result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        self.scan_errors = result.stderr.decode('utf-8', 'surrogateescape').splitlines()
+        for entry in result.stdout.split(b'\0'):
+            # Names needn't be valid UTF-8: decoded like Python decodes paths
+            kind, path = entry[:1], os.fsdecode(entry[2:])
+            if kind == b'f':
+                self.add_file_by_fullpath(path)
+            elif kind == b'd':
+                self.create_dir_node_from_fullpath_if_not_exists(path)
 
     def copy_inner_entries_from_dirtree(self, dirtree):
         files = list(dirtree.iter_files())

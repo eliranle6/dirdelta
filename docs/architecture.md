@@ -65,14 +65,13 @@ tree, which is what lets `update_from_filesystem` rescan a tree in place.
 
 ### `localdiskdirtree.py`
 `LocalDiskDirTree(DirTree)`. `factory(filesystem_dirpath, max_depth=None,
-file_extentions=None, dirs_only=False, include_hidden=True, silent=False)`
-builds the tree then calls `update_from_filesystem`, which shells out via
-`findcmdwrapper.find_files` / `find_dirs` (literally invokes the `find`
-binary with `-maxdepth`/`-regex`/`-type`/hidden-file exclusion flags) rather
-than walking Python-side. Directories are added after files, with the root
-itself excluded (`dirnames_fullpath.remove(self.fullpath())`). find's error
-messages (paths it couldn't read, e.g. `Permission denied`) are kept in
-`scan_errors`, once each, since both finds hit the same paths.
+silent=False)` builds the tree then calls `update_from_filesystem`, which
+runs one `find ROOT -mindepth 1 [-maxdepth N] -printf '%y %p\0'` (rather
+than walking Python-side) and adds its files and dirs (other types, like
+symlinks, are skipped; names are decoded with `os.fsdecode`, so names that
+aren't UTF-8 work). find's error messages (paths it couldn't read, e.g.
+`Permission denied`) are kept in `scan_errors`. Building the tree, not
+find, is most of the time (~2.8s for /usr/share's 119k entries).
 
 `copy_inner_entries_from_dirtree(dirtree)` — for each file in the given
 sub-tree, calls `add_file_by_relpath` to add the node to `self`'s tree, then
