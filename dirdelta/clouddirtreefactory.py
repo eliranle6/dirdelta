@@ -33,7 +33,7 @@ def factory_interactive(rootpath):
         os.makedirs(os.path.dirname(drivecache.FILE_LIST_CACHE), exist_ok=True)
         _refresh_cache()
 
-    return clouddirtree.CloudDirTree(rootpath)
+    return clouddirtree.factory(rootpath)
 
 
 def _does_user_want_to_refresh_cache(rootpath):

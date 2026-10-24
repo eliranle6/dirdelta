@@ -29,7 +29,8 @@ removed Python picker.)
    `NotImplementedError`; composition makes it structurally impossible
    instead of an emergent surprise.
 
-3. **Make `CloudDirTree` and `LocalDiskDirTree` symmetric.** Local has a
+3. ~~Make `CloudDirTree` and `LocalDiskDirTree` symmetric~~ — done 2026-10-24: `clouddirtree.factory()`,
+   `CloudDirTree.update_from_cache()`. Was: **Make `CloudDirTree` and `LocalDiskDirTree` symmetric.** Local has a
    clean `factory()` doing the work outside `__init__`; Cloud does
    cache-parsing and a full tree-walk *inside* `__init__`. Give
    `CloudDirTree` the same `factory()` shape so both replica types are

@@ -3,16 +3,22 @@ from dirdelta import drivecache
 from dirdelta import paths
 
 
-class CloudDirTree(dirtree.DirTree):
-    """A dir tree representing a directory on the cloud.
+def factory(rootpath):
+    """The tree of the cloud path rootpath (e.g. cloud/mein), from the Drive file list cache, which
+    must exist (clouddirtreefactory makes sure it does)."""
+    tree = CloudDirTree(rootpath)
+    tree.update_from_cache()
+    return tree
 
-    Note that this class requires a factory to make sure that the cache file containing the list of files
-    in the cloud exists and is updated.
-    """
+
+class CloudDirTree(dirtree.DirTree):
+    """A dir tree representing a directory on the cloud (Google Drive)."""
     def __init__(self, rootpath):
-        rootpath = paths.path_in_cloud(rootpath)
-        super(CloudDirTree, self).__init__(rootpath=rootpath)
-        for relpath, cloud_id, is_dir in drivecache.entries(rootpath):
+        super(CloudDirTree, self).__init__(rootpath=paths.path_in_cloud(rootpath))
+
+    def update_from_cache(self):
+        """Add the files and folders in the Drive file list cache (drivecache) under the tree's root"""
+        for relpath, cloud_id, is_dir in drivecache.entries(self.fullpath()):
             # Change node ID if it already exists (two files with the same path is possible in cloud)
             if relpath in self:
                 relpath += f'___DUP__{cloud_id}'

@@ -105,9 +105,11 @@ Cloud state is never queried live per-scan. Instead:
    id→metadata map), finds the root (the one id with children but no
    metadata), then DFS-walks id→children, yielding `(relpath, cloud_id,
    is_dir)` for what's under the requested `inner_rootpath`, each folder
-   before its contents. `CloudDirTree` adds them as `DirTree` nodes, and
-   handles Drive's "two files, same path" case by suffixing `___DUP__<id>`
-   on collision.
+   before its contents. `clouddirtree.factory(rootpath)` builds the tree like
+   `localdiskdirtree.factory()` does: a `CloudDirTree(rootpath)`, then its
+   `update_from_cache()`, which adds them as `DirTree` nodes, and handles
+   Drive's "two files, same path" case by suffixing `___DUP__<id>` on
+   collision.
 
 OAuth token handling (`token.json`/`credentials.json`,
 `SCOPES=[drive.metadata.readonly]`) lives in `clouddirtreefactory.py`'s
