@@ -4,7 +4,7 @@ import sys
 
 from dirdelta import dirsync_main
 from dirdelta import dirpick_main
-from dirdelta import picker
+from dirdelta import programs
 
 
 def parse_args():
@@ -22,7 +22,7 @@ def main():
     # are plain prints in between
     try:
         picked_path = _run(args)
-    except picker.PickerError as error:
+    except programs.ProgramError as error:
         sys.exit('dirdelta: %s' % (error,))
 
     if picked_path is not None:

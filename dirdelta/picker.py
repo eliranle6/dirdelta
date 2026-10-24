@@ -1,30 +1,25 @@
 """dirdelta's pickers: they run the dirpicker program, from github.com/levioctl/cpptree.
 
 Like fzf, dirpicker draws on the terminal itself and prints what was picked, so each pick runs it as
-a subprocess (see docs/dirpicker-integration.md). It's found as $DIRDELTA_PICKER; else next to the
-Python running dirdelta, where make install and make deploy put it; else as the repo's own build
-(lib/cpptree/build/dirpicker, from make build), for running from source; else on PATH.
+a subprocess (see docs/dirpicker-integration.md), found by programs.find() ($DIRDELTA_PICKER, or
+else where make install, make deploy or make build put it, or else on PATH).
 """
 import os
-import shutil
 import subprocess
-import sys
 import tempfile
 
 from dirdelta import entries
 from dirdelta import dryrun
+from dirdelta import programs
 
 PROGRAM_ENV_VAR = 'DIRDELTA_PICKER'
 PROGRAM_NAME = 'dirpicker'
-# Where make build puts it, when running from the source tree
-SOURCE_TREE_PROGRAM = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-                                   'lib', 'cpptree', 'build', PROGRAM_NAME)
 
 # dirpicker's exit code when the user quit without picking
 _EXIT_CODE_QUIT = 1
 
 
-class PickerError(Exception):
+class PickerError(programs.ProgramError):
     pass
 
 
@@ -110,16 +105,4 @@ def _null_terminated(items):
 
 
 def _find_program():
-    program = os.environ.get(PROGRAM_ENV_VAR)
-    if program:
-        return program
-    # Not resolving sys.executable's links: a venv's python links to the system's
-    for candidate in (os.path.join(os.path.dirname(sys.executable), PROGRAM_NAME), SOURCE_TREE_PROGRAM):
-        if os.access(candidate, os.X_OK):
-            return candidate
-    program = shutil.which(PROGRAM_NAME)
-    if not program:
-        raise PickerError(
-            '%s was not found. Build it with make build (or install it with make install or make '
-            'deploy), or point $%s at it.' % (PROGRAM_NAME, PROGRAM_ENV_VAR))
-    return program
+    return programs.find(PROGRAM_NAME, PROGRAM_ENV_VAR)
