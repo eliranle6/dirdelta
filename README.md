@@ -68,7 +68,9 @@ DRYRUN=0 .venv/bin/python3 -m dirdelta /tmp/dd/alpha /tmp/dd/bravo    # Copy and
 
 The menu offers, for each direction, "Copy files from A to B" (the files in A that aren't in B, copied
 into B) and "Remove files from A" (the files in A that aren't in B, deleted from A). Choose one, pick
-files with `Space` (on a directory it picks everything under it), and press `Enter`. A confirmation
+files with `Space` (on a directory it picks everything under it), and press `Enter`. A directory
+is marked picked (`X`, red) when everything under it is, and partly picked (`-`, magenta) when only
+some of it is. A confirmation
 follows, with No selected: No takes you back to the picker, with the same files picked; Yes goes
 ahead. Its progress fills the screen under a top line saying what's being done; `Ctrl-C` stops it
 (a file cut off in the middle of its copy is deleted), and when it's done or stopped, `Enter` goes
