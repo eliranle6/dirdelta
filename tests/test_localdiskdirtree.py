@@ -50,5 +50,22 @@ class LocalDiskDirTreeTest(unittest.TestCase):
         self.assertFalse(os.path.exists(os.path.join(self.dst_root, 'subdir')))
 
 
+    @unittest.skipIf(os.geteuid() == 0, 'root can read anything')
+    def test_scan_errors_are_kept_once(self):
+        # find_files and find_dirs both hit the locked dir
+        locked = os.path.join(self.src_root, 'locked')
+        os.makedirs(locked)
+        os.chmod(locked, 0)
+        self.addCleanup(os.chmod, locked, 0o755)
+
+        tree = localdiskdirtree.factory(self.src_root, silent=True)
+
+        self.assertEqual(len(tree.scan_errors), 1)
+        self.assertIn('Permission denied', tree.scan_errors[0])
+
+    def test_no_scan_errors(self):
+        self.assertEqual(localdiskdirtree.factory(self.src_root, silent=True).scan_errors, [])
+
+
 if __name__ == '__main__':
     unittest.main()

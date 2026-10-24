@@ -23,22 +23,27 @@ class LocalDiskDirTree(dirtree.DirTree):
     def __init__(self, filesystem_dirpath, silent):
         filesystem_dirpath = os.path.realpath(filesystem_dirpath)
         super(LocalDiskDirTree, self).__init__(rootpath=filesystem_dirpath, silent=silent)
+        # find's messages about what it couldn't read in the last scan, so the tree may lack
+        self.scan_errors = []
 
     def update_from_filesystem(self, max_depth=None, file_extentions=None, dirs_only=False,
                                include_hidden=True):
         if not self._silent:
             messages.print_line("Scanning directory %s..." % (self._rootpath,))
+        errors = []
         if not dirs_only:
             # Read disk for files
             full_paths = findcmdwrapper.find_files(
-                self._rootpath, max_depth, file_extentions, include_hidden)
+                self._rootpath, max_depth, file_extentions, include_hidden, errors)
 
             # Create nodes
             for filepath in full_paths:
                 self.add_file_by_fullpath(filepath)
 
         # Add directories
-        dirnames_fullpath = findcmdwrapper.find_dirs(self._rootpath, max_depth, include_hidden)
+        dirnames_fullpath = findcmdwrapper.find_dirs(self._rootpath, max_depth, include_hidden, errors)
+        # Both finds hit the same unreadable paths
+        self.scan_errors = list(dict.fromkeys(errors))
         dirnames_fullpath.remove(self.fullpath())
         for dirpath in dirnames_fullpath:
             self.create_dir_node_from_fullpath_if_not_exists(dirpath)

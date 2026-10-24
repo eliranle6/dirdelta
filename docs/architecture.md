@@ -71,7 +71,9 @@ builds the tree then calls `update_from_filesystem`, which shells out via
 `findcmdwrapper.find_files` / `find_dirs` (literally invokes the `find`
 binary with `-maxdepth`/`-regex`/`-type`/hidden-file exclusion flags) rather
 than walking Python-side. Directories are added after files, with the root
-itself excluded (`dirnames_fullpath.remove(self.fullpath())`).
+itself excluded (`dirnames_fullpath.remove(self.fullpath())`). find's error
+messages (paths it couldn't read, e.g. `Permission denied`) are kept in
+`scan_errors`, once each, since both finds hit the same paths.
 
 `copy_inner_entries_from_dirtree(dirtree)` — for each file in the given
 sub-tree, calls `add_file_by_relpath` to add the node to `self`'s tree, then
@@ -137,7 +139,10 @@ sit alongside it as `scandrive.py`; it's now archived at
 the top-level sync menu and `InteractiveDirSync`'s Copy/Remove menu use it.
 
 ### `dirsync_main.py` / `dirpick_main.py`
-Thin wiring: build both `DirTree`s, present a top-level menu (`View diff
+Thin wiring: build both `DirTree`s, warn (`warn_about_scan_errors`) about
+each local one whose scan couldn't read everything, since its diff may then
+be wrong (the warning is in the main menu's header, like other messages),
+present a top-level menu (`View diff
 A-not-B`, `View diff B-not-A`, `Remove/Copy A→B`, `Remove/Copy B→A`, `Quit`).
 Copy/Remove options are only offered when **both** replicas are
 `LocalDiskDirTree` — cloud replicas are diff/view-only from this menu.

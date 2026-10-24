@@ -46,5 +46,26 @@ class FindCmdWrapperTest(unittest.TestCase):
         self.assertEqual(found, expected)
 
 
+    @unittest.skipIf(os.geteuid() == 0, 'root can read anything')
+    def test_errors_list_what_find_could_not_read(self):
+        locked = os.path.join(self.root, 'locked')
+        self._make_file('locked/secret.txt')
+        os.chmod(locked, 0)
+        self.addCleanup(os.chmod, locked, 0o755)
+
+        errors = []
+        found = findcmdwrapper.find_files(self.root, errors=errors)
+
+        self.assertNotIn(os.path.join(locked, 'secret.txt'), found)
+        self.assertEqual(len(errors), 1)
+        self.assertIn(locked, errors[0])
+        self.assertIn('Permission denied', errors[0])
+
+    def test_no_errors(self):
+        errors = []
+        findcmdwrapper.find_dirs(self.root, max_depth=None, errors=errors)
+        self.assertEqual(errors, [])
+
+
 if __name__ == '__main__':
     unittest.main()

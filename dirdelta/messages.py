@@ -9,7 +9,7 @@ import sys
 import termcolor
 
 # How many of the lines printed since the last picker are kept for the next one
-MAX_RECENT_LINES = 8
+MAX_RECENT_LINES = 12
 
 _recent_lines = []
 _nr_recent_lines_dropped = 0

@@ -1,7 +1,11 @@
 import subprocess
 
 
-def find_files(rootpath, max_depth=None, file_extentions=None, include_hidden=True):
+# Each function takes an errors list, to which it adds find's error messages (e.g. "find:
+# '/a/b': Permission denied"), each for a path whose contents it couldn't read
+
+
+def find_files(rootpath, max_depth=None, file_extentions=None, include_hidden=True, errors=None):
     command = _get_base_command(rootpath)
     if max_depth is not None:
         command.extend(["-maxdepth", str(max_depth)])
@@ -12,25 +16,27 @@ def find_files(rootpath, max_depth=None, file_extentions=None, include_hidden=Tr
     command += ["-type", "f"]
     if not include_hidden:
         command += ['-not', '-path', '*/\\.*']
-    return _get_command_output(command)
+    return _get_command_output(command, errors)
 
 
-def find_dirs(rootpath, max_depth, include_hidden=True):
+def find_dirs(rootpath, max_depth, include_hidden=True, errors=None):
     command = _get_base_command(rootpath)
     if max_depth is not None:
         command.extend(["-maxdepth", str(max_depth)])
     command += ["-type", "d"]
     if not include_hidden:
         command += ['-not', '-path', '*/\\.*']
-    return _get_command_output(command)
+    return _get_command_output(command, errors)
 
 
 def _get_base_command(rootpath):
     return ["find", rootpath]
 
 
-def _get_command_output(command):
+def _get_command_output(command, errors=None):
     proc = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    output, _ = proc.communicate()
+    output, error_output = proc.communicate()
+    if errors is not None:
+        errors.extend(error_output.decode('utf-8', 'surrogateescape').splitlines())
     output = output.decode('utf-8')
     return output.splitlines()

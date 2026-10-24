@@ -1,13 +1,34 @@
 from dirdelta import localdiskdirtree
 from dirdelta import interactive_dir_sync
 from dirdelta import menu
+from dirdelta import messages
 from dirdelta import utils
+
+
+# How many of find's error messages a warning lists
+MAX_SCAN_ERRORS_SHOWN = 3
 
 
 def run(args):
     dirtree_a = utils.create_dirtree_from_arg(args.dir_a_path, args.max_depth)
     dirtree_b = utils.create_dirtree_from_arg(args.dir_b_path, args.max_depth)
+    for tree in (dirtree_a, dirtree_b):
+        warn_about_scan_errors(tree)
     _sync(dirtree_a, dirtree_b, args.dir_a_path, args.dir_b_path)
+
+
+def warn_about_scan_errors(tree):
+    """Warn if scanning the (local) tree couldn't read everything, since then the diff may list
+    files as missing that are there, or miss some."""
+    errors = getattr(tree, 'scan_errors', [])
+    if not errors:
+        return
+    messages.print_line("Warning: find couldn't read everything in %s (%d errors), so the diff may "
+                        "be wrong:" % (tree.fullpath(), len(errors)), 'red')
+    for error in errors[:MAX_SCAN_ERRORS_SHOWN]:
+        messages.print_line("  " + error, 'red')
+    if len(errors) > MAX_SCAN_ERRORS_SHOWN:
+        messages.print_line("  (and %d more)" % (len(errors) - MAX_SCAN_ERRORS_SHOWN,), 'red')
 
 
 def _sync_from_src_to_dst(src, dst):
