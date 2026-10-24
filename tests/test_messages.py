@@ -7,6 +7,9 @@ from dirdelta import messages
 
 
 class PrintLineTest(unittest.TestCase):
+    def setUp(self):
+        messages.take_recent()
+
     def print_line(self, *args, **kwargs):
         stdout = mock.Mock()
         stdout.buffer = io.BytesIO()
@@ -24,6 +27,21 @@ class PrintLineTest(unittest.TestCase):
     def test_names_that_arent_utf8(self):
         name = os.fsdecode(b'caf\xe9.txt')
         self.assertEqual(self.print_line('Removing ' + name), b'Removing caf\xe9.txt\n')
+
+
+    def test_recent_lines_are_kept_until_taken(self):
+        self.print_line('one')
+        self.print_line('two', 'red')
+        self.assertEqual(messages.take_recent(), ['one', 'two'])
+        self.assertEqual(messages.take_recent(), [])
+
+    def test_only_the_last_recent_lines_are_kept(self):
+        for i in range(messages.MAX_RECENT_LINES + 3):
+            self.print_line('line %d' % (i,))
+        recent = messages.take_recent()
+        self.assertEqual(recent[0], '(3 earlier lines)')
+        self.assertEqual(recent[1:], ['line %d' % (i,) for i in range(3, messages.MAX_RECENT_LINES + 3)])
+        self.assertEqual(messages.take_recent(), [])
 
 
 if __name__ == '__main__':

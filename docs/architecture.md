@@ -150,7 +150,10 @@ path, or `os.execvp`s the `-x` program on it.
 `print_line(line, color=None)`: prints dirdelta's messages (scanning,
 copying, removing...) as plain lines, optionally colored with `termcolor`,
 encoding with `surrogateescape` so file names that aren't UTF-8 print as
-they are.
+they are. The lines printed since the last picker are kept too (the last 8),
+and `picker.py` shows them at the top of the next picker's header
+(`take_recent()`), since the picker's screen would hide them: e.g. a copy's
+progress and summary appear above the menu that follows it.
 
 ### `picker.py`
 Runs `dirpicker` (from github.com/levioctl/cpptree; `$DIRDELTA_PICKER`, or

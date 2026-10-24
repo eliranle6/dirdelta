@@ -10,6 +10,8 @@ import shutil
 import subprocess
 import sys
 
+from dirdelta import messages
+
 PROGRAM_ENV_VAR = 'DIRDELTA_PICKER'
 PROGRAM_NAME = 'dirpicker'
 # Where make build puts it, when running from the source tree
@@ -42,7 +44,7 @@ def pick_under_dir(dirpath, max_depth=None):
     """Let the user pick a file or dir under the local dir dirpath, scanned by dirpicker itself.
     Returns the picked one's full path, or None if the user quit."""
     args = [] if max_depth is None else ['--max-depth', str(max_depth)]
-    picked = _run(args + [dirpath], None)
+    picked = _run(args + _header_args('') + [dirpath], None)
     if picked is None:
         return None
     return dirpath if picked[0] == '.' else os.path.join(dirpath, picked[0])
@@ -79,7 +81,12 @@ def _path_to_id(path):
 
 
 def _header_args(header):
-    return ['--header', header] if header else []
+    """dirpicker's arguments for showing header, after the messages printed since the last picker
+    (which the picker's screen would hide)."""
+    lines = messages.take_recent()
+    if header:
+        lines += ([''] if lines else []) + [header]
+    return ['--header', '\n'.join(lines)] if lines else []
 
 
 def _run(args, input_items):
