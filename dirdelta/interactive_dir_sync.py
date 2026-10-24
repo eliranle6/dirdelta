@@ -1,5 +1,5 @@
 from dirdelta import dirtree
-from dirdelta import localdiskdirtree
+from dirdelta import dryrun
 from dirdelta import messages
 from dirdelta import picker
 
@@ -53,9 +53,9 @@ class InteractiveDirSync(object):
                                                            self._dst.fullpath())
             else:
                 title = "Removing %d files from %s" % (nr_files, self._src.fullpath())
-            if localdiskdirtree.DRYRUN:
+            if dryrun.DRYRUN:
                 title += " (a dry run)"
-            with messages.progress_screen(title):
+            with messages.progress_screen(title, dryrun.label()):
                 if action == self.COPY:
                     self._copy()
                 else:
@@ -85,7 +85,7 @@ class InteractiveDirSync(object):
         lines = [question] + ["  %s" % (entry,) for entry in files[:self.MAX_FILES_LISTED]]
         if len(files) > self.MAX_FILES_LISTED:
             lines.append("  (and %d more)" % (len(files) - self.MAX_FILES_LISTED,))
-        if localdiskdirtree.DRYRUN:
+        if dryrun.DRYRUN:
             lines.append("(A dry run: nothing on disk will change. DRYRUN=0 changes files.)")
         answer = picker.pick_option([self.CONFIRM_NO, self.CONFIRM_YES], header='\n'.join(lines))
         return answer == self.CONFIRM_YES

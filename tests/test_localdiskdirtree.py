@@ -39,13 +39,13 @@ class LocalDiskDirTreeTest(unittest.TestCase):
                           os.path.join(self.dst_root, 'subdir/file.txt'))
 
     def test_copy_creates_missing_dirs(self):
-        with mock.patch('dirdelta.localdiskdirtree.DRYRUN', False):
+        with mock.patch('dirdelta.dryrun.DRYRUN', False):
             self._copy_subdir_file()
         with open(os.path.join(self.dst_root, 'subdir', 'file.txt')) as f:
             self.assertEqual(f.read(), 'content')
 
     def test_dry_run_copy_creates_no_dirs(self):
-        with mock.patch('dirdelta.localdiskdirtree.DRYRUN', True):
+        with mock.patch('dirdelta.dryrun.DRYRUN', True):
             self._copy_subdir_file()
         self.assertFalse(os.path.exists(os.path.join(self.dst_root, 'subdir')))
 
@@ -85,7 +85,7 @@ class LocalDiskDirTreeTest(unittest.TestCase):
             real_copy(source, dest)
 
         printed = []
-        with mock.patch('dirdelta.localdiskdirtree.DRYRUN', False), \
+        with mock.patch('dirdelta.dryrun.DRYRUN', False), \
                 mock.patch('dirdelta.localdiskdirtree.shutil.copy', side_effect=copy), \
                 mock.patch('dirdelta.messages.print_line', side_effect=lambda line, *_: printed.append(line)):
             dst.copy_inner_entries_from_dirtree(src)
@@ -107,7 +107,7 @@ class LocalDiskDirTreeTest(unittest.TestCase):
             f.write('old')
         dst = localdiskdirtree.LocalDiskDirTree(self.dst_root, silent=True)
 
-        with mock.patch('dirdelta.localdiskdirtree.DRYRUN', False), \
+        with mock.patch('dirdelta.dryrun.DRYRUN', False), \
                 mock.patch('dirdelta.localdiskdirtree.shutil.copy', side_effect=KeyboardInterrupt()), \
                 mock.patch('dirdelta.messages.print_line'):
             dst.copy_inner_entries_from_dirtree(src)
@@ -129,7 +129,7 @@ class LocalDiskDirTreeTest(unittest.TestCase):
             real_unlink(path)
 
         printed = []
-        with mock.patch('dirdelta.localdiskdirtree.DRYRUN', False), \
+        with mock.patch('dirdelta.dryrun.DRYRUN', False), \
                 mock.patch('dirdelta.localdiskdirtree.os.unlink', side_effect=unlink), \
                 mock.patch('dirdelta.messages.print_line', side_effect=lambda line, *_: printed.append(line)):
             tree.remove_files(entries)

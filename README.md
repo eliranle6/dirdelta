@@ -76,7 +76,8 @@ ahead. Its progress fills the screen under a top line saying what's being done; 
 (a file cut off in the middle of its copy is deleted), and when it's done or stopped, `Enter` goes
 on. Then the files that are left are offered again, until you quit the picker (`q`). Unless `DRYRUN=0` is set, both are dry
 runs: they change nothing on disk (not even the dirs copied files would go into), and say what they
-would have done.
+would have done. Every screen says which it is, at the start of its bottom line (the progress
+screen: its top line): "DRY RUN" in green, or "LIVE" in red.
 
 The fixtures are a small music library. Both have 44 files in common; only `alpha` has 42 (e.g.
 `podcasts/`, `music/Nina Simone/` and `first/infirst/ininfirst/huh/99.mp3`), and only `bravo` has 31

@@ -2,12 +2,10 @@ import os
 import shutil
 
 from dirdelta import dirtree
+from dirdelta import dryrun
 from dirdelta import findcmdwrapper
 from dirdelta import messages
 
-# Unless DRYRUN=0, actions that change files (copying, removing) only say what they would do. The
-# tree is updated as if they did it, though.
-DRYRUN = os.environ.get("DRYRUN") != "0"
 
 
 def factory(filesystem_dirpath, max_depth=None, file_extentions=None, dirs_only=False,
@@ -52,7 +50,7 @@ class LocalDiskDirTree(dirtree.DirTree):
     def copy_inner_entries_from_dirtree(self, dirtree):
         files = list(dirtree.iter_files())
         # In a dry run nothing is written (dirs included), but the tree is updated as if it was
-        verb = "Dry run, not copying" if DRYRUN else "Copying"
+        verb = "Dry run, not copying" if dryrun.DRYRUN else "Copying"
         nr_copied = 0
         is_stopped = False
         try:
@@ -64,7 +62,7 @@ class LocalDiskDirTree(dirtree.DirTree):
             messages.note_stopped()
             is_stopped = True
         ended = "stopped" if is_stopped else "complete"
-        if DRYRUN:
+        if dryrun.DRYRUN:
             messages.print_line("Dry run %s: nothing was copied to %s (DRYRUN=0 copies)" % (ended, self._rootpath))
         else:
             messages.print_line("Copy %s: copied %d of %d files to %s" % (ended, nr_copied, len(files),
@@ -80,7 +78,7 @@ class LocalDiskDirTree(dirtree.DirTree):
             dest_dirpath = os.path.dirname(dest_path)
             if os.path.exists(dest_dirpath):
                 assert os.path.isdir(dest_dirpath)
-            elif not DRYRUN:
+            elif not dryrun.DRYRUN:
                 try:
                     os.makedirs(dest_dirpath)
                 except OSError as ex:
@@ -93,19 +91,19 @@ class LocalDiskDirTree(dirtree.DirTree):
             self.remove_node(new_file_entry.relpath)
             # A copy cut off in the middle (e.g. Ctrl-C) leaves part of the file: drop it, unless
             # it's a file that was there before
-            if not DRYRUN and not did_dest_exist and os.path.exists(dest_path):
+            if not dryrun.DRYRUN and not did_dest_exist and os.path.exists(dest_path):
                 os.unlink(dest_path)
             raise
 
     def remove_files(self, file_entries):
         """Delete the files, and drop them from the tree (so the next diff doesn't list them)."""
-        verb = "Dry run, not removing" if DRYRUN else "Removing"
+        verb = "Dry run, not removing" if dryrun.DRYRUN else "Removing"
         nr_removed = 0
         is_stopped = False
         try:
             for index, file_entry in enumerate(file_entries):
                 messages.print_line("%s %s (%d out of %d)" % (verb, file_entry, index + 1, len(file_entries)))
-                if not DRYRUN:
+                if not dryrun.DRYRUN:
                     os.unlink(file_entry.full_filesystem_path())
                 self.remove_node(file_entry.relpath)
                 nr_removed += 1
@@ -113,7 +111,7 @@ class LocalDiskDirTree(dirtree.DirTree):
             messages.note_stopped()
             is_stopped = True
         ended = "stopped" if is_stopped else "complete"
-        if DRYRUN:
+        if dryrun.DRYRUN:
             messages.print_line("Dry run %s: nothing was removed from %s (DRYRUN=0 removes)" % (ended,
                                                                                           self._rootpath))
         else:
@@ -121,6 +119,6 @@ class LocalDiskDirTree(dirtree.DirTree):
                                                                              len(file_entries), self._rootpath))
 
     def _copy_local_file_to_tree_with_path(self, src, dst):
-        if DRYRUN:
+        if dryrun.DRYRUN:
             return
         shutil.copy(src, dst)

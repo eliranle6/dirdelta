@@ -49,7 +49,7 @@ class ProgressScreenTest(unittest.TestCase):
     def setUp(self):
         messages.take_recent()
 
-    def run_screen(self, is_terminal, body):
+    def run_screen(self, is_terminal, body, label=None):
         stdout = mock.Mock()
         stdout.buffer = io.BytesIO()
         stdout.isatty.return_value = is_terminal
@@ -60,7 +60,7 @@ class ProgressScreenTest(unittest.TestCase):
                 mock.patch('builtins.input') as input_mock, \
                 mock.patch('shutil.get_terminal_size', return_value=os.terminal_size((80, 10))):
             stdin.isatty.return_value = is_terminal
-            with messages.progress_screen('Copying 2 files'):
+            with messages.progress_screen('Copying 2 files', label):
                 body()
         return ''.join(written), stdout.buffer.getvalue(), input_mock
 
@@ -82,6 +82,15 @@ class ProgressScreenTest(unittest.TestCase):
         input_mock.assert_called_once_with()
         # It was read on the screen, so the next picker doesn't show it again
         self.assertEqual(messages.take_recent(), [])
+
+    def test_label_starts_the_top_line(self):
+        escapes, _, _ = self.run_screen(True, lambda: None, label=('DRY RUN', 'green'))
+        self.assertIn('\033[2J\033[H\033[1;30;42m DRY RUN \033[0m \033[7mCtrl-C to stop', escapes)
+        self.assertIn('\033[1;30;42m DRY RUN \033[0m \033[7mDone.', escapes)
+
+    def test_label_without_a_terminal(self):
+        _, lines, _ = self.run_screen(False, lambda: None, label=('LIVE', 'red'))
+        self.assertEqual(lines, b'LIVE: Copying 2 files\n')
 
     def test_ctrl_c_stops_the_action(self):
         def body():

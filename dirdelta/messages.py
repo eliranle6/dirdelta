@@ -53,20 +53,25 @@ def note_stopped():
     print_line("Stopped (Ctrl-C)", "red")
 
 
+# A label's look on a terminal, by its color name: bold, black or white on the color
+_LABEL_STYLES = {'green': '\033[1;30;42m', 'red': '\033[1;37;41m'}
+
+
 @contextlib.contextmanager
-def progress_screen(title):
+def progress_screen(title, label=None):
     """Show what's printed inside (an action's progress) on the whole screen, under title, which
     stays on the top line while the lines scroll under it. When the action ends, wait for Enter, so
     its report can be read before the next picker covers it.
 
-    Ctrl-C inside stops the action (which may catch it itself, to say how far it got). Without a
-    terminal, the title and the lines are just printed.
+    Ctrl-C inside stops the action (which may catch it itself, to say how far it got). label, a
+    (text, color) pair (e.g. dryrun.label()), starts the top line. Without a terminal, the title and
+    the lines are just printed.
     """
     global _is_stopped
     _is_stopped = False
     is_terminal = sys.stdout.isatty() and sys.stdin.isatty()
     if not is_terminal:
-        print_line(title)
+        print_line(title if label is None else "%s: %s" % (label[0], title))
         try:
             yield
         except KeyboardInterrupt:
@@ -75,7 +80,8 @@ def progress_screen(title):
 
     height = shutil.get_terminal_size().lines
     # Clear the screen, title on the top line, and the lines scrolling in the rest (a scroll region)
-    _write("\033[2J\033[H" + _top_line("Ctrl-C to stop: " + title) + "\033[2;%dr\033[2;1H" % (height,))
+    _write("\033[2J\033[H" + _top_line("Ctrl-C to stop: " + title, label) +
+           "\033[2;%dr\033[2;1H" % (height,))
     try:
         yield
     except KeyboardInterrupt:
@@ -84,7 +90,8 @@ def progress_screen(title):
         done = "Stopped" if _is_stopped else "Done"
         # Save the cursor, rewrite the top line, and restore it. What to do first, in case the line
         # is cut.
-        _write("\0337\033[1;1H" + _top_line("%s. Press Enter to continue: %s" % (done, title)) + "\0338")
+        _write("\0337\033[1;1H" + _top_line("%s. Press Enter to continue: %s" % (done, title), label) +
+               "\0338")
         try:
             input()
         except (EOFError, KeyboardInterrupt):
@@ -95,10 +102,16 @@ def progress_screen(title):
         take_recent()
 
 
-def _top_line(text):
-    """text on the current line, in reverse video, over the whole width"""
+def _top_line(text, label=None):
+    """text on the current line, in reverse video, over the whole width, after label (text, color)
+    in its color"""
     width = shutil.get_terminal_size().columns
-    return "\033[7m" + text[:width].ljust(width) + "\033[0m\033[K"
+    line = ""
+    if label is not None:
+        label_text = " %s " % (label[0],)
+        line = _LABEL_STYLES.get(label[1], "\033[1m") + label_text + "\033[0m "
+        width -= len(label_text) + 1
+    return line + "\033[7m" + text[:max(0, width)].ljust(max(0, width)) + "\033[0m\033[K"
 
 
 def _write(text):

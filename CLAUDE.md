@@ -59,7 +59,9 @@ Env vars that change execution mode:
 - `DIRDELTA_PICKER` — the dirpicker program to run (default: the first of
   `dirpicker` next to the running python, `lib/cpptree/build/dirpicker`,
   `dirpicker` on `PATH`)
-- `DRYRUN=0` — actually change files: Copy and Remove (`localdiskdirtree.py`).
+- `DRYRUN=0` — actually change files: Copy and Remove (`dryrun.py`, used by
+  `localdiskdirtree.py`). Every screen shows the mode: "DRY RUN" in green, or
+  "LIVE" in red.
   Any other value, or unset, means a dry run: nothing on disk changes (no
   copies, no new dirs, no deletes), the progress lines say so, and only the
   in-memory trees are updated as if it was done.
@@ -115,8 +117,8 @@ like `from dirdelta import dirtree`), then dirpicker's own C++ tests with
 `make clean` cleans the submodule too.
 
 Patch targets must use the same module names the code imports
-(`'dirdelta.localdiskdirtree.DRYRUN'`): a bare `import localdiskdirtree`
-would load a second copy of the module that the app never sees. To run one
+(`'dirdelta.dryrun.DRYRUN'`): a bare `import dryrun` would load a second
+copy of the module that the app never sees. To run one
 module:
 
 ```bash

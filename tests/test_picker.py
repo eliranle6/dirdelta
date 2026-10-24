@@ -47,11 +47,27 @@ class PickerTest(unittest.TestCase):
         os.environ['FAKE_PICKER_OUTPUT'] = output
         os.environ['FAKE_PICKER_EXIT_CODE'] = str(exit_code)
 
-    def call(self):
-        """The arguments and the stdin items the fake dirpicker got"""
+    def call(self, with_label=False):
+        """The arguments and the stdin items the fake dirpicker got (the arguments without the
+        dry run label every call has, unless with_label)"""
         with open(self.log) as f:
             log = json.load(f)
-        return log['args'], [item for item in log['stdin'].split('\0') if item]
+        args = log['args']
+        if not with_label:
+            index = args.index('--label')
+            args = args[:index] + args[index + 4:]
+        return args, [item for item in log['stdin'].split('\0') if item]
+
+    def test_every_picker_shows_whether_its_a_dry_run(self):
+        self.answer('x')
+        with mock.patch('dirdelta.dryrun.DRYRUN', True):
+            picker.pick_option(['x'])
+        args, _ = self.call(with_label=True)
+        self.assertEqual(args[1:5], ['--label', 'DRY RUN', '--label-color', 'green'])
+        with mock.patch('dirdelta.dryrun.DRYRUN', False):
+            picker.pick_under_dir('/some/dir')
+        args, _ = self.call(with_label=True)
+        self.assertEqual(args[1:5], ['--label', 'LIVE', '--label-color', 'red'])
 
     def make_tree(self):
         tree = dirtree.DirTree('/some/root')

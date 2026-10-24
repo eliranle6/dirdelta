@@ -78,8 +78,8 @@ messages (paths it couldn't read, e.g. `Permission denied`) are kept in
 sub-tree, calls `add_file_by_relpath` to add the node to `self`'s tree, then
 ensures the destination directory exists (`os.makedirs`, tolerant of
 already-exists, path derived from `full_filesystem_path()`), then calls
-`_copy_local_file_to_tree_with_path`. **Writing is gated behind the
-module-level `DRYRUN` flag** (known-issues.md #5): dry-run is the default,
+`_copy_local_file_to_tree_with_path`. **Writing is gated behind
+`dryrun.DRYRUN`** (`dryrun.py`; known-issues.md #5): dry-run is the default,
 so nodes get added to the tree, but no directory is created and no bytes
 are copied unless `DRYRUN=0` is set in the environment. `remove_files()`
 is gated the same way: it deletes only with `DRYRUN=0`, and drops the
@@ -170,6 +170,12 @@ at the end says Done/Stopped and waits for Enter (and then the lines
 aren't shown again by the next picker). Actions that catch Ctrl-C to say
 how far they got (copying, removing) call `note_stopped()`. Without a
 terminal it only prints.
+
+### `dryrun.py`
+`DRYRUN` (true unless `DRYRUN=0` is set), read at each use, and `label()`:
+("DRY RUN", "green") or ("LIVE", "red"), which `picker.py` passes to every
+dirpicker run (`--label`, `--label-color`: at the start of its bottom line)
+and `interactive_dir_sync.py` to the progress screen (its top line).
 
 ### `picker.py`
 Runs `dirpicker` (from github.com/levioctl/cpptree; `$DIRDELTA_PICKER`, or

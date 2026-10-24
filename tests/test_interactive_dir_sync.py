@@ -44,7 +44,7 @@ class InteractiveDirSyncTest(unittest.TestCase):
         return src, dst
 
     def test_copy_copies_missing_file_and_then_reports_nothing_left(self):
-        with mock.patch('dirdelta.localdiskdirtree.DRYRUN', False):
+        with mock.patch('dirdelta.dryrun.DRYRUN', False):
             self._sync(COPY)
 
         with open(os.path.join(self.dst_root, 'sub/b.txt')) as f:
@@ -52,7 +52,7 @@ class InteractiveDirSyncTest(unittest.TestCase):
         self.assertIn('Nothing to synchronize', self.messages[-1])
 
     def test_dry_run_copy_leaves_disk_untouched(self):
-        with mock.patch('dirdelta.localdiskdirtree.DRYRUN', True):
+        with mock.patch('dirdelta.dryrun.DRYRUN', True):
             self._sync(COPY)
 
         self.assertFalse(os.path.exists(os.path.join(self.dst_root, 'sub/b.txt')))
@@ -60,7 +60,7 @@ class InteractiveDirSyncTest(unittest.TestCase):
         self.assertFalse(os.path.exists(os.path.join(self.dst_root, 'sub')))
 
     def test_dry_run_copy_says_so(self):
-        with mock.patch('dirdelta.localdiskdirtree.DRYRUN', True):
+        with mock.patch('dirdelta.dryrun.DRYRUN', True):
             self._sync(COPY)
 
         self.assertIn('Dry run, not copying /sub/b.txt (1 out of 1)', self.messages)
@@ -68,7 +68,7 @@ class InteractiveDirSyncTest(unittest.TestCase):
                             for message in self.messages))
 
     def test_copy_reports_what_it_copied(self):
-        with mock.patch('dirdelta.localdiskdirtree.DRYRUN', False):
+        with mock.patch('dirdelta.dryrun.DRYRUN', False):
             self._sync(COPY)
 
         self.assertIn('Copying /sub/b.txt (1 out of 1)', self.messages)
@@ -81,7 +81,7 @@ class InteractiveDirSyncTest(unittest.TestCase):
         last_lines = []
 
         @contextlib.contextmanager
-        def progress_screen(title):
+        def progress_screen(title, label=None):
             yield
             last_lines.append(self.messages[-1])
 
@@ -94,7 +94,7 @@ class InteractiveDirSyncTest(unittest.TestCase):
         self.assertTrue(last_lines[0].startswith('Dry run complete: nothing was copied to'), last_lines)
 
     def test_remove_deletes_file_from_src_and_from_the_diff(self):
-        with mock.patch('dirdelta.localdiskdirtree.DRYRUN', False):
+        with mock.patch('dirdelta.dryrun.DRYRUN', False):
             src, dst = self._sync(REMOVE)
 
         self.assertFalse(os.path.exists(os.path.join(self.src_root, 'sub/b.txt')))
@@ -104,7 +104,7 @@ class InteractiveDirSyncTest(unittest.TestCase):
         self.assertIn('Nothing to synchronize', self.messages[-1])
 
     def test_dry_run_remove_leaves_disk_untouched(self):
-        with mock.patch('dirdelta.localdiskdirtree.DRYRUN', True):
+        with mock.patch('dirdelta.dryrun.DRYRUN', True):
             src, dst = self._sync(REMOVE)
 
         self.assertTrue(os.path.exists(os.path.join(self.src_root, 'sub/b.txt')))
@@ -115,7 +115,7 @@ class InteractiveDirSyncTest(unittest.TestCase):
                             for message in self.messages))
 
     def test_confirmation_starts_with_no_and_says_what_it_will_do(self):
-        with mock.patch('dirdelta.localdiskdirtree.DRYRUN', True):
+        with mock.patch('dirdelta.dryrun.DRYRUN', True):
             self._sync(COPY)
 
         options, = self.pick_option.call_args.args
@@ -138,7 +138,7 @@ class InteractiveDirSyncTest(unittest.TestCase):
         dst = localdiskdirtree.factory(self.dst_root, silent=True)
         with mock.patch('dirdelta.picker.pick_from_tree', side_effect=pick_from_tree), \
                 helpers.scripted_option_picker([NO]), \
-                mock.patch('dirdelta.localdiskdirtree.DRYRUN', False):
+                mock.patch('dirdelta.dryrun.DRYRUN', False):
             interactive_dir_sync.InteractiveDirSync(src, dst).sync(REMOVE)
 
         self.assertIsNone(picked_args[0])
@@ -153,7 +153,7 @@ class InteractiveDirSyncTest(unittest.TestCase):
             nr_picks.append(1)
             return helpers.all_files(tree) if len(nr_picks) == 1 else None
 
-        with mock.patch('dirdelta.localdiskdirtree.DRYRUN', False):
+        with mock.patch('dirdelta.dryrun.DRYRUN', False):
             self._sync(REMOVE, choose, confirmations=[None])
 
         self.assertEqual(len(nr_picks), 2)
@@ -175,7 +175,7 @@ class InteractiveDirSyncTest(unittest.TestCase):
             # The first file only the first time, then quit
             return files[:1] if len(offered) == 1 else None
 
-        with mock.patch('dirdelta.localdiskdirtree.DRYRUN', False):
+        with mock.patch('dirdelta.dryrun.DRYRUN', False):
             self._sync(COPY, choose)
 
         self.assertEqual(offered, [['/sub/b.txt', '/sub/c.txt'], ['/sub/c.txt']])

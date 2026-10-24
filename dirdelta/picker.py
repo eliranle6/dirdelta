@@ -11,6 +11,7 @@ import subprocess
 import sys
 import tempfile
 
+from dirdelta import dryrun
 from dirdelta import messages
 
 PROGRAM_ENV_VAR = 'DIRDELTA_PICKER'
@@ -98,8 +99,9 @@ def _header_args(header):
 
 def _run(args, input_items):
     """Run dirpicker with args and the items (or None) on its stdin. Returns what was picked, or
-    None if the user quit."""
-    command = [_find_program(), '-0'] + args
+    None if the user quit. Every picker shows whether it's a dry run."""
+    label, label_color = dryrun.label()
+    command = [_find_program(), '-0', '--label', label, '--label-color', label_color] + args
     input_bytes = None if input_items is None else _null_terminated(input_items)
     try:
         result = subprocess.run(command, input=input_bytes, stdout=subprocess.PIPE,
