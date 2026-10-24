@@ -9,6 +9,7 @@ import os
 import shutil
 import subprocess
 import sys
+import tempfile
 
 from dirdelta import messages
 
@@ -26,18 +27,24 @@ class PickerError(Exception):
     pass
 
 
-def pick_from_tree(tree, header='', multi=False):
+def pick_from_tree(tree, header='', multi=False, picked=None):
     """Let the user pick from a DirTree. Returns the picked nodes' data (entries), in the tree's
     order, or None if the user quit.
 
-    With multi, they pick several: picking a dir picks everything under it, dirs included.
+    With multi, they pick several: picking a dir picks everything under it, dirs included. picked
+    (entries, e.g. what an earlier call returned) start picked.
     """
     paths = list(_tree_paths(tree))
-    args = ['--root', tree.fullpath()] + (['-m'] if multi else []) + _header_args(header) + ['-']
-    picked = _run(args, paths)
-    if picked is None:
+    args = ['--root', tree.fullpath()] + (['-m'] if multi else []) + _header_args(header)
+    with tempfile.NamedTemporaryFile('wb', prefix='dirdelta-picked-') as picked_file:
+        if picked:
+            picked_file.write(_null_terminated(_id_to_path(entry.relpath) or '.' for entry in picked))
+            picked_file.flush()
+            args += ['--picked', picked_file.name]
+        picked_paths = _run(args + ['-'], paths)
+    if picked_paths is None:
         return None
-    return [tree.get_node(_path_to_id(path)).data for path in picked]
+    return [tree.get_node(_path_to_id(path)).data for path in picked_paths]
 
 
 def pick_under_dir(dirpath, max_depth=None):
@@ -93,9 +100,7 @@ def _run(args, input_items):
     """Run dirpicker with args and the items (or None) on its stdin. Returns what was picked, or
     None if the user quit."""
     command = [_find_program(), '-0'] + args
-    # surrogateescape: file names needn't be valid UTF-8, and come back as they went
-    input_bytes = None if input_items is None else b''.join(
-        item.encode('utf-8', 'surrogateescape') + b'\0' for item in input_items)
+    input_bytes = None if input_items is None else _null_terminated(input_items)
     try:
         result = subprocess.run(command, input=input_bytes, stdout=subprocess.PIPE,
                                 stdin=None if input_bytes is not None else subprocess.DEVNULL)
@@ -107,6 +112,11 @@ def _run(args, input_items):
         raise PickerError('%s failed (exit code %d)' % (command[0], result.returncode))
     output = result.stdout.decode('utf-8', 'surrogateescape')
     return [item for item in output.split('\0') if item]
+
+
+def _null_terminated(items):
+    # surrogateescape: file names needn't be valid UTF-8, and come back as they went
+    return b''.join(item.encode('utf-8', 'surrogateescape') + b'\0' for item in items)
 
 
 def _find_program():

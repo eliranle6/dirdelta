@@ -68,8 +68,9 @@ DRYRUN=0 .venv/bin/python3 -m dirdelta /tmp/dd/alpha /tmp/dd/bravo    # Copy and
 
 The menu offers, for each direction, "Copy files from A to B" (the files in A that aren't in B, copied
 into B) and "Remove files from A" (the files in A that aren't in B, deleted from A). Choose one, pick
-files with `Space` (on a directory it picks everything under it), and press `Enter`. Then the files
-that are left are offered again, until you quit the picker (`q`). Unless `DRYRUN=0` is set, both are dry
+files with `Space` (on a directory it picks everything under it), and press `Enter`. A confirmation
+follows, with No selected: No takes you back to the picker, with the same files picked; Yes goes
+ahead. Then the files that are left are offered again, until you quit the picker (`q`). Unless `DRYRUN=0` is set, both are dry
 runs: they change nothing on disk (not even the dirs copied files would go into), and say what they
 would have done.
 

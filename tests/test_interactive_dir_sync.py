@@ -11,6 +11,8 @@ from dirdelta import localdiskdirtree
 
 COPY = interactive_dir_sync.InteractiveDirSync.COPY
 REMOVE = interactive_dir_sync.InteractiveDirSync.REMOVE
+YES = interactive_dir_sync.InteractiveDirSync.CONFIRM_YES
+NO = interactive_dir_sync.InteractiveDirSync.CONFIRM_NO
 
 
 class InteractiveDirSyncTest(unittest.TestCase):
@@ -30,10 +32,13 @@ class InteractiveDirSyncTest(unittest.TestCase):
         shutil.rmtree(self.src_root, ignore_errors=True)
         shutil.rmtree(self.dst_root, ignore_errors=True)
 
-    def _sync(self, action, choose=helpers.all_files):
+    def _sync(self, action, choose=helpers.all_files, confirmations=None):
+        """Sync, answering each confirmation with the next of confirmations (by default, Yes to all)"""
         src = localdiskdirtree.factory(self.src_root, silent=True)
         dst = localdiskdirtree.factory(self.dst_root, silent=True)
-        with helpers.scripted_tree_picker(choose):
+        answers = (helpers.scripted_option_picker(confirmations) if confirmations is not None else
+                   mock.patch('dirdelta.picker.pick_option', return_value=YES))
+        with helpers.scripted_tree_picker(choose), answers as self.pick_option:
             interactive_dir_sync.InteractiveDirSync(src, dst).sync(action)
         return src, dst
 
@@ -88,6 +93,51 @@ class InteractiveDirSyncTest(unittest.TestCase):
         self.assertIn('Dry run, not removing /sub/b.txt (1 out of 1)', self.messages)
         self.assertTrue(any(message.startswith('Dry run: nothing was removed from')
                             for message in self.messages))
+
+    def test_confirmation_starts_with_no_and_says_what_it_will_do(self):
+        with mock.patch('dirdelta.localdiskdirtree.DRYRUN', True):
+            self._sync(COPY)
+
+        options, = self.pick_option.call_args.args
+        self.assertEqual(options[0], NO)
+        header = self.pick_option.call_args.kwargs['header'].splitlines()
+        self.assertEqual(header[0], 'Copy 1 files from %s to %s?' % (os.path.realpath(self.src_root),
+                                                                     os.path.realpath(self.dst_root)))
+        self.assertEqual(header[1], '  /sub/b.txt')
+        self.assertIn('dry run', header[-1])
+
+    def test_no_picks_again_from_the_same_picks_and_changes_nothing(self):
+        picked_args = []
+
+        def pick_from_tree(tree, picked=None, **_):
+            picked_args.append(picked)
+            # The files, then quit
+            return helpers.all_files(tree) if len(picked_args) == 1 else None
+
+        src = localdiskdirtree.factory(self.src_root, silent=True)
+        dst = localdiskdirtree.factory(self.dst_root, silent=True)
+        with mock.patch('dirdelta.picker.pick_from_tree', side_effect=pick_from_tree), \
+                helpers.scripted_option_picker([NO]), \
+                mock.patch('dirdelta.localdiskdirtree.DRYRUN', False):
+            interactive_dir_sync.InteractiveDirSync(src, dst).sync(REMOVE)
+
+        self.assertIsNone(picked_args[0])
+        self.assertEqual([entry.relpath for entry in picked_args[1]], ['/sub/b.txt'])
+        self.assertTrue(os.path.exists(os.path.join(self.src_root, 'sub/b.txt')))
+
+    def test_quitting_the_confirmation_is_no(self):
+        nr_picks = []
+
+        def choose(tree):
+            # The files, then quit
+            nr_picks.append(1)
+            return helpers.all_files(tree) if len(nr_picks) == 1 else None
+
+        with mock.patch('dirdelta.localdiskdirtree.DRYRUN', False):
+            self._sync(REMOVE, choose, confirmations=[None])
+
+        self.assertEqual(len(nr_picks), 2)
+        self.assertTrue(os.path.exists(os.path.join(self.src_root, 'sub/b.txt')))
 
     def test_quitting_the_file_picker_ends_sync(self):
         self._sync(COPY, choose=lambda tree: None)

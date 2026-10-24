@@ -84,6 +84,31 @@ class PickerTest(unittest.TestCase):
         args, _ = self.call()
         self.assertEqual(args, ['-0', '--root', '/some/root', '-m', '--header', 'Pick\nfiles', '-'])
 
+    def test_picked_entries_start_picked(self):
+        tree = self.make_tree()
+        self.answer('b/2.txt')
+
+        # The fake records the --picked file's contents, which is gone once the picker returns
+        def run(command, **kwargs):
+            with open(command[command.index('--picked') + 1], 'rb') as f:
+                self.picked_file_contents = f.read()
+            return real_run(command, **kwargs)
+        real_run = picker.subprocess.run
+        with mock.patch('dirdelta.picker.subprocess.run', side_effect=run):
+            picker.pick_from_tree(tree, multi=True,
+                                  picked=[tree.get_node('/b').data, tree.get_node('/b/2.txt').data,
+                                          tree.get_node('/').data])
+
+        self.assertEqual(self.picked_file_contents, b'b\0b/2.txt\0.\0')
+        args, _ = self.call()
+        self.assertIn('--picked', args)
+
+    def test_nothing_picked_passes_no_picked_file(self):
+        self.answer('a/1.txt')
+        picker.pick_from_tree(self.make_tree(), multi=True, picked=[])
+        args, _ = self.call()
+        self.assertNotIn('--picked', args)
+
     def test_quitting_returns_none(self):
         self.answer(exit_code=1)
         self.assertIsNone(picker.pick_from_tree(self.make_tree()))
