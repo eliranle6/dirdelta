@@ -77,11 +77,13 @@ itself excluded (`dirnames_fullpath.remove(self.fullpath())`).
 sub-tree, calls `add_file_by_relpath` to add the node to `self`'s tree, then
 ensures the destination directory exists (`os.makedirs`, tolerant of
 already-exists, path derived from `full_filesystem_path()`), then calls
-`_copy_local_file_to_tree_with_path`. **That method's `shutil.copy` is gated
-behind the module-level `DRYRUN` flag** (known-issues.md #5): dry-run is
-the default, so nodes get added to the tree and the containing directory
-gets created, but bytes are only copied when `DRYRUN=0` is set in the
-environment. (Previously called a nonexistent
+`_copy_local_file_to_tree_with_path`. **Writing is gated behind the
+module-level `DRYRUN` flag** (known-issues.md #5): dry-run is the default,
+so nodes get added to the tree, but no directory is created and no bytes
+are copied unless `DRYRUN=0` is set in the environment. `remove_files()`
+is gated the same way: it deletes only with `DRYRUN=0`, and drops the
+nodes from the tree either way. Both print a progress line per file, and a
+summary. (Previously called a nonexistent
 `self._add_file_by_path(...)` and referenced a `filesystem_dirpath`
 attribute that doesn't exist on the current `FileEntry`/`DirEntry` — both
 fixed, see known-issues.md #2 — and is now covered by
@@ -122,12 +124,11 @@ sit alongside it as `scandrive.py`; it's now archived at
   miscalled as a `DirTree` classmethod — fixed, known-issues.md #3), then
   calls `dst.copy_inner_entries_from_dirtree(...)` — which is a dry run
   unless `DRYRUN=0` (see `localdiskdirtree.py` above) — and rescans `dst`.
-- `_remove()` prints a progress line, then calls
-  `os.unlink(file_entry.full_filesystem_path())` for each selected file.
-  The `TypeError` from mixing `{}` placeholders with `%` that used to crash
-  it first is fixed (known-issues.md #16). Note `_remove()` is **not**
-  gated by `DRYRUN` — it really deletes files. It also drops each node from
-  the in-memory `src` tree so the next diff doesn't list it again.
+- `_remove()` calls `src.remove_files(...)` (see `localdiskdirtree.py`
+  above), which deletes the selected files unless it's a dry run, and drops
+  them from the in-memory `src` tree so the next diff doesn't list them
+  again. (The `TypeError` from mixing `{}` placeholders with `%` that used
+  to crash it is fixed, known-issues.md #16.)
 
 ### `menu.py`
 `run_menu([(label, handler), ...])` shows the labels with

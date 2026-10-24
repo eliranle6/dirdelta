@@ -1,5 +1,3 @@
-import os
-
 from dirdelta import dirtree
 from dirdelta import menu
 from dirdelta import messages
@@ -64,11 +62,5 @@ class InteractiveDirSync(object):
         self._dst.update_from_filesystem()
 
     def _remove(self):
-        file_entries = self._selected.values()
-        for index, file_entry in enumerate(file_entries):
-            messages.print_line("Removing {} ({} out of {})".format(
-                file_entry, index + 1, len(file_entries)))
-            os.unlink(file_entry.full_filesystem_path())
-            # Keep the in-memory source tree in sync so the next diff doesn't list the file again
-            self._src.remove_node(file_entry.relpath)
+        self._src.remove_files(list(self._selected.values()))
 

@@ -62,15 +62,15 @@ dir is scanned by `dirpicker` itself, so even big trees open fast.
 ### Sync mode (two paths)
 
 ```bash
-.venv/bin/python3 -m dirdelta /tmp/dd/alpha /tmp/dd/bravo             # Copy is a dry run
-DRYRUN=0 .venv/bin/python3 -m dirdelta /tmp/dd/alpha /tmp/dd/bravo    # Copy really copies
+.venv/bin/python3 -m dirdelta /tmp/dd/alpha /tmp/dd/bravo             # a dry run: changes nothing
+DRYRUN=0 .venv/bin/python3 -m dirdelta /tmp/dd/alpha /tmp/dd/bravo    # Copy and Remove really do
 ```
 
 Choose "Remove/Copy files from ... to ..." in the menu, select files with `Space` (on a directory it
 selects everything under it), press `Enter`, then choose Copy or Remove. Copy copies the selected files from the entry's source ("from") directory into its
-destination ("to"); Remove deletes them from the source. Copy's dry run writes nothing (not even
-the dirs files would go into) and says what it would have copied; Remove is not affected by
-`DRYRUN`.
+destination ("to"); Remove deletes them from the source. Unless `DRYRUN=0` is set, both are dry
+runs: they change nothing on disk (not even the dirs copied files would go into), and say what they
+would have done.
 
 For bravo vs. alpha, `alpha` is missing `third/anotherinthird/7.mp3` and `bravo` is missing
 `first/infirst/ininfirst/huh/99.mp3`. `./bin/example-sync-local.sh` runs this sync on a fresh temp copy of

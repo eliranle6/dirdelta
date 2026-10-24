@@ -5,6 +5,8 @@ from dirdelta import dirtree
 from dirdelta import findcmdwrapper
 from dirdelta import messages
 
+# Unless DRYRUN=0, actions that change files (copying, removing) only say what they would do. The
+# tree is updated as if they did it, though.
 DRYRUN = os.environ.get("DRYRUN") != "0"
 
 
@@ -68,6 +70,19 @@ class LocalDiskDirTree(dirtree.DirTree):
             messages.print_line("Dry run: nothing was copied to %s (DRYRUN=0 copies)" % (self._rootpath,))
         else:
             messages.print_line("Copied %d files to %s" % (len(files), self._rootpath))
+
+    def remove_files(self, file_entries):
+        """Delete the files, and drop them from the tree (so the next diff doesn't list them)."""
+        verb = "Dry run, not removing" if DRYRUN else "Removing"
+        for index, file_entry in enumerate(file_entries):
+            messages.print_line("%s %s (%d out of %d)" % (verb, file_entry, index + 1, len(file_entries)))
+            if not DRYRUN:
+                os.unlink(file_entry.full_filesystem_path())
+            self.remove_node(file_entry.relpath)
+        if DRYRUN:
+            messages.print_line("Dry run: nothing was removed from %s (DRYRUN=0 removes)" % (self._rootpath,))
+        else:
+            messages.print_line("Removed %d files from %s" % (len(file_entries), self._rootpath))
 
     def _copy_local_file_to_tree_with_path(self, src, dst):
         if DRYRUN:

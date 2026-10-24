@@ -55,9 +55,10 @@ Env vars that change execution mode:
 - `DIRDELTA_PICKER` — the dirpicker program to run (default: the first of
   `dirpicker` next to the running python, `lib/cpptree/build/dirpicker`,
   `dirpicker` on `PATH`)
-- `DRYRUN=0` — actually copy bytes in "Copy" (`localdiskdirtree.py`); any
-  other value or unset means dry-run, where the tree/dirs are updated but
-  `shutil.copy` is skipped. "Remove" is not gated by this — it always deletes.
+- `DRYRUN=0` — actually change files: Copy and Remove (`localdiskdirtree.py`).
+  Any other value, or unset, means a dry run: nothing on disk changes (no
+  copies, no new dirs, no deletes), the progress lines say so, and only the
+  in-memory trees are updated as if it was done.
 
 Developer tasks all live in the Makefile (`make` lists them): `test`,
 `clean`, `install`, `deploy`, `undeploy`. Keep new ones there too rather
