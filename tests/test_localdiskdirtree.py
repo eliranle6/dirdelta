@@ -93,7 +93,7 @@ class LocalDiskDirTreeTest(unittest.TestCase):
         self.assertEqual(sorted(os.listdir(self.dst_root)), ['1.txt'])
         self.assertIsNone(dst.get_node('/2.txt'))
         self.assertIn('Stopped (Ctrl-C)', printed)
-        self.assertEqual(printed[-1], 'Copied 1 of 3 files to %s' % (os.path.realpath(self.dst_root),))
+        self.assertEqual(printed[-1], 'Copy stopped: copied 1 of 3 files to %s' % (os.path.realpath(self.dst_root),))
 
     def test_ctrl_c_while_copying_keeps_a_file_that_was_there(self):
         # A file the tree didn't know of (e.g. find couldn't read it) isn't deleted
@@ -136,7 +136,7 @@ class LocalDiskDirTreeTest(unittest.TestCase):
 
         self.assertEqual(sorted(os.listdir(self.src_root)), ['2.txt'])
         self.assertIsNotNone(tree.get_node('/2.txt'))
-        self.assertEqual(printed[-1], 'Removed 1 of 2 files from %s' % (os.path.realpath(self.src_root),))
+        self.assertEqual(printed[-1], 'Remove stopped: removed 1 of 2 files from %s' % (os.path.realpath(self.src_root),))
 
 
 if __name__ == '__main__':

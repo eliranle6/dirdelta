@@ -27,8 +27,9 @@ class LocalDiskDirTree(dirtree.DirTree):
         self.scan_errors = []
 
     def update_from_filesystem(self, max_depth=None, file_extentions=None, dirs_only=False,
-                               include_hidden=True):
-        if not self._silent:
+                               include_hidden=True, silent=None):
+        """Add what's on disk. silent (by default, the tree's) skips saying it's scanning."""
+        if not (self._silent if silent is None else silent):
             messages.print_line("Scanning directory %s..." % (self._rootpath,))
         errors = []
         if not dirs_only:
@@ -53,6 +54,7 @@ class LocalDiskDirTree(dirtree.DirTree):
         # In a dry run nothing is written (dirs included), but the tree is updated as if it was
         verb = "Dry run, not copying" if DRYRUN else "Copying"
         nr_copied = 0
+        is_stopped = False
         try:
             for index, file_entry in enumerate(files):
                 messages.print_line("%s %s (%d out of %d)" % (verb, file_entry, index + 1, len(files)))
@@ -60,10 +62,13 @@ class LocalDiskDirTree(dirtree.DirTree):
                     nr_copied += 1
         except KeyboardInterrupt:
             messages.note_stopped()
+            is_stopped = True
+        ended = "stopped" if is_stopped else "complete"
         if DRYRUN:
-            messages.print_line("Dry run: nothing was copied to %s (DRYRUN=0 copies)" % (self._rootpath,))
+            messages.print_line("Dry run %s: nothing was copied to %s (DRYRUN=0 copies)" % (ended, self._rootpath))
         else:
-            messages.print_line("Copied %d of %d files to %s" % (nr_copied, len(files), self._rootpath))
+            messages.print_line("Copy %s: copied %d of %d files to %s" % (ended, nr_copied, len(files),
+                                                                        self._rootpath))
 
     def _copy_file(self, file_entry):
         """Copy file_entry (of another tree) into this tree, at the same relative path. Returns whether
@@ -96,6 +101,7 @@ class LocalDiskDirTree(dirtree.DirTree):
         """Delete the files, and drop them from the tree (so the next diff doesn't list them)."""
         verb = "Dry run, not removing" if DRYRUN else "Removing"
         nr_removed = 0
+        is_stopped = False
         try:
             for index, file_entry in enumerate(file_entries):
                 messages.print_line("%s %s (%d out of %d)" % (verb, file_entry, index + 1, len(file_entries)))
@@ -105,11 +111,14 @@ class LocalDiskDirTree(dirtree.DirTree):
                 nr_removed += 1
         except KeyboardInterrupt:
             messages.note_stopped()
+            is_stopped = True
+        ended = "stopped" if is_stopped else "complete"
         if DRYRUN:
-            messages.print_line("Dry run: nothing was removed from %s (DRYRUN=0 removes)" % (self._rootpath,))
+            messages.print_line("Dry run %s: nothing was removed from %s (DRYRUN=0 removes)" % (ended,
+                                                                                          self._rootpath))
         else:
-            messages.print_line("Removed %d of %d files from %s" % (nr_removed, len(file_entries),
-                                                                   self._rootpath))
+            messages.print_line("Remove %s: removed %d of %d files from %s" % (ended, nr_removed,
+                                                                             len(file_entries), self._rootpath))
 
     def _copy_local_file_to_tree_with_path(self, src, dst):
         if DRYRUN:

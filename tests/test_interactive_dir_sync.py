@@ -1,3 +1,4 @@
+import contextlib
 import os
 import shutil
 import tempfile
@@ -63,7 +64,7 @@ class InteractiveDirSyncTest(unittest.TestCase):
             self._sync(COPY)
 
         self.assertIn('Dry run, not copying /sub/b.txt (1 out of 1)', self.messages)
-        self.assertTrue(any(message.startswith('Dry run: nothing was copied to')
+        self.assertTrue(any(message.startswith('Dry run complete: nothing was copied to')
                             for message in self.messages))
 
     def test_copy_reports_what_it_copied(self):
@@ -71,7 +72,26 @@ class InteractiveDirSyncTest(unittest.TestCase):
             self._sync(COPY)
 
         self.assertIn('Copying /sub/b.txt (1 out of 1)', self.messages)
-        self.assertIn('Copied 1 of 1 files to %s' % (os.path.realpath(self.dst_root),), self.messages)
+        self.assertIn('Copy complete: copied 1 of 1 files to %s' % (os.path.realpath(self.dst_root),), self.messages)
+
+    def test_copy_report_ends_saying_its_complete(self):
+        # The destination is rescanned after copying, quietly
+        src = localdiskdirtree.factory(self.src_root)
+        dst = localdiskdirtree.factory(self.dst_root)
+        last_lines = []
+
+        @contextlib.contextmanager
+        def progress_screen(title):
+            yield
+            last_lines.append(self.messages[-1])
+
+        with helpers.scripted_tree_picker(helpers.all_files), \
+                mock.patch('dirdelta.picker.pick_option', return_value=YES), \
+                mock.patch('dirdelta.messages.progress_screen', progress_screen):
+            interactive_dir_sync.InteractiveDirSync(src, dst).sync(COPY)
+
+        self.assertEqual(len(last_lines), 1)
+        self.assertTrue(last_lines[0].startswith('Dry run complete: nothing was copied to'), last_lines)
 
     def test_remove_deletes_file_from_src_and_from_the_diff(self):
         with mock.patch('dirdelta.localdiskdirtree.DRYRUN', False):
@@ -80,7 +100,7 @@ class InteractiveDirSyncTest(unittest.TestCase):
         self.assertFalse(os.path.exists(os.path.join(self.src_root, 'sub/b.txt')))
         self.assertIsNone(src.get_node('/sub/b.txt'))
         self.assertIn('Removing /sub/b.txt (1 out of 1)', self.messages)
-        self.assertIn('Removed 1 of 1 files from %s' % (os.path.realpath(self.src_root),), self.messages)
+        self.assertIn('Remove complete: removed 1 of 1 files from %s' % (os.path.realpath(self.src_root),), self.messages)
         self.assertIn('Nothing to synchronize', self.messages[-1])
 
     def test_dry_run_remove_leaves_disk_untouched(self):
@@ -91,7 +111,7 @@ class InteractiveDirSyncTest(unittest.TestCase):
         # The tree is updated as if it was removed, like a dry run copy's
         self.assertIsNone(src.get_node('/sub/b.txt'))
         self.assertIn('Dry run, not removing /sub/b.txt (1 out of 1)', self.messages)
-        self.assertTrue(any(message.startswith('Dry run: nothing was removed from')
+        self.assertTrue(any(message.startswith('Dry run complete: nothing was removed from')
                             for message in self.messages))
 
     def test_confirmation_starts_with_no_and_says_what_it_will_do(self):

@@ -94,7 +94,8 @@ class InteractiveDirSync(object):
         _dirtree = dirtree.factory_from_list_of_file_entries(self._selected.values(),
                                                               self._src.fullpath())
         self._dst.copy_inner_entries_from_dirtree(_dirtree)
-        self._dst.update_from_filesystem()
+        # Quietly: the copy's report ends with whether it's complete
+        self._dst.update_from_filesystem(silent=True)
 
     def _remove(self):
         self._src.remove_files(list(self._selected.values()))
