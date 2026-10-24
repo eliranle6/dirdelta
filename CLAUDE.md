@@ -54,7 +54,7 @@ report) is on a full screen that waits for Enter (`messages.show()`,
 `messages.progress_screen()`); plain progress lines ("Scanning...") just
 print. Copy and Remove run on the progress screen, stoppable with Ctrl-C,
 and ask for confirmation first. A "cloud" path is any path whose
-first component is literally `cloud` (see `utils.py`).
+first component is literally `cloud` (see `paths.py`).
 
 Env vars that change execution mode:
 - `DIRDELTA_PICKER` — the dirpicker program to run (default: the first of

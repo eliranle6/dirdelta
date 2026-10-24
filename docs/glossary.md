@@ -5,8 +5,8 @@ filesystem directory, or a Google Drive subtree). The user picks two
 replicas per run; the app's job is to reconcile them.
 
 **Cloud path** — any path string whose first `/`-separated component is
-literally `"cloud"` (e.g. `cloud/mein`). Detected in `utils.py`'s
-`__is_cloud_path` / `clouddirtree.CloudDirTree.path_components`. Everything
+literally `"cloud"` (e.g. `cloud/mein`). Detected by
+`paths.is_cloud_path()`. Everything
 after the leading `cloud/` segment is the path *inside* the Drive tree, not
 a real filesystem path.
 

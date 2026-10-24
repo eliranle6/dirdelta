@@ -1,12 +1,13 @@
 import os
 
+from dirdelta import paths
 from dirdelta import picker
 from dirdelta import utils
 
 
 def run(args):
     """Let the user pick a file or dir under args.dir_a_path. Returns its path, or None if they quit."""
-    if utils.is_cloud_path(args.dir_a_path):
+    if paths.is_cloud_path(args.dir_a_path):
         tree = utils.create_dirtree_from_arg(args.dir_a_path, args.max_depth)
         picked = picker.pick_from_tree(tree)
         return picked[0].full_filesystem_path() if picked else None

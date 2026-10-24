@@ -31,11 +31,11 @@ missing or failing) exits with its message.
 
 ### `utils.py`
 `create_dirtree_from_arg(rootpath)` is the single dispatch point deciding
-cloud vs local: a path is "cloud" iff its first path component
-(`CloudDirTree.path_components`) is literally the string `"cloud"`.
-`validate_dir` checks the path is an existing directory for the local
-case, exiting with a message (via `messages.print_line`) otherwise.
-`is_cloud_path` is public too, for `dirpick_main`.
+cloud vs local, with `paths.is_cloud_path()`: a path is "cloud" iff its
+first path component is literally the string `"cloud"` (`paths.py`, which
+also has `path_in_cloud()`, used by `CloudDirTree`). `validate_dir` checks
+the path is an existing directory for the local case, exiting with a
+message (via `messages.print_line`) otherwise.
 
 ### `entries.py`, `dirtree.py` — the core data structure
 `DirTree` models a filesystem tree, holding a `treelib.Tree` (it offers

@@ -1,14 +1,14 @@
 import os
 import sys
 
-from dirdelta import clouddirtree
 from dirdelta import clouddirtreefactory
 from dirdelta import localdiskdirtree
 from dirdelta import messages
+from dirdelta import paths
 
 
 def create_dirtree_from_arg(rootpath, max_depth=None):
-    if is_cloud_path(rootpath):
+    if paths.is_cloud_path(rootpath):
         # Create a cloud dir tree
         dirtree = clouddirtreefactory.factory_interactive(rootpath)
     else:
@@ -17,10 +17,6 @@ def create_dirtree_from_arg(rootpath, max_depth=None):
         dirtree = localdiskdirtree.factory(rootpath, max_depth=max_depth)
 
     return dirtree
-
-
-def is_cloud_path(path):
-    return clouddirtree.CloudDirTree.path_components(path)[:1] == ['cloud']
 
 
 def validate_dir(replica_path):

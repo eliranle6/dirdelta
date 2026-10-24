@@ -41,7 +41,7 @@ removed Python picker.)
    being a `DirTree`. Move it to its own module (e.g. `drivecache.py`)
    that hands `CloudDirTree` an already-built index.
 
-5. **Move cloud-path detection out of `CloudDirTree`.** `utils.py` reaches
+5. ~~Move cloud-path detection out of `CloudDirTree`~~ — done 2026-10-24: `paths.py`. Was: **Move cloud-path detection out of `CloudDirTree`.** `utils.py` reaches
    into `clouddirtree.CloudDirTree.path_components` just to check "does
    this path start with `cloud/`" — a generic path utility living inside a
    tree class. Give it its own home (e.g. `paths.py`) so `utils.py` doesn't

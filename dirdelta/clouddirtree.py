@@ -2,6 +2,7 @@ import json
 import os
 
 from dirdelta import dirtree
+from dirdelta import paths
 
 
 FILE_LIST_CACHE = os.path.expanduser('~/.cache/dirman/files.txt')
@@ -14,7 +15,7 @@ class CloudDirTree(dirtree.DirTree):
     in the cloud exists and is updated.
     """
     def __init__(self, rootpath):
-        rootpath = self._path_in_cloud(rootpath)
+        rootpath = paths.path_in_cloud(rootpath)
         id_child_map, id_md_map, root_id = self._parsefile(FILE_LIST_CACHE)
         super(CloudDirTree, self).__init__(rootpath=rootpath)
         self._dirdict_to_dirtree(id_child_map, id_md_map, root_id, rootpath)
@@ -107,13 +108,3 @@ class CloudDirTree(dirtree.DirTree):
             # Add children to stack
             for child_cloud_id in id_child_map[node_cloud_id]:
                 dfs_stack.append((child_cloud_id, node_path))
-
-    @staticmethod
-    def _path_in_cloud(path):
-        # Assume first component is 'cloud'
-        components = CloudDirTree.path_components(path)
-        return '/' + '/'.join(components[1:])
-
-    @staticmethod
-    def path_components(path):
-        return [p for p in path.split('/') if p]

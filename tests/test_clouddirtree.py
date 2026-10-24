@@ -67,9 +67,6 @@ class CloudDirTreeTest(unittest.TestCase):
         tree = clouddirtree.CloudDirTree('cloud/mein')
         self.assertEqual(tree.get_node('album/track.mp3').data.fullpath, '/mein/album/track.mp3')
 
-    def test_path_components_ignores_empty_parts(self):
-        self.assertEqual(clouddirtree.CloudDirTree.path_components('/cloud//mein/'), ['cloud', 'mein'])
-
 
 if __name__ == '__main__':
     unittest.main()
