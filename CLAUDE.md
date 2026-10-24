@@ -22,7 +22,7 @@ Deep dives live in `docs/`:
 - `docs/architecture.md` — module-by-module breakdown and data flow (scan → diff → pick → copy/remove)
 - `docs/known-issues.md` — real bugs and dead code found while reading the source, with file:line
 - `docs/glossary.md` — project-specific terms (replica, dirtree, cloud path convention, etc.)
-- `docs/improvement-ideas.md` — proposed refactors/simplifications, not implemented; a backlog to pick from (#17-25: the 2026-10-24 review's concept, UI and code simplifications)
+- `docs/improvement-ideas.md` — what's left to do, not implemented: a backlog to pick from
 - `lib/cpptree/CLAUDE.md` and `lib/cpptree/docs/improvement-ideas.md` — dirpicker's own (read before changing picker behavior; picker changes are made in cpptree, not here)
 - `docs/dirpicker-integration.md` — how dirdelta runs cpptree's C++ `dirpicker` for its pickers and menus (it replaced the Python picker), and what's left
 

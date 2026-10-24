@@ -76,8 +76,7 @@ dirdelta, each a commit:
 
 - The leaf jumps (Ctrl-J/K), Ctrl-H and Ctrl-L, which the Python picker had
   (not needed, so far).
-- Sync mode's startup is now mostly building both replicas' trees in Python
-  (~3s each for 119k files); moving the scan and diff into C++ would cut it
-  (improvement-ideas.md #16).
+- For a big diff of two local dirs, the file picker waits ~2s more than it
+  needs, for a Python tree of dirdiff's output (improvement-ideas.md #1).
 - The cloud flow hasn't been run end to end with dirpicker (it needs Drive
   credentials); its pieces are covered by the unit tests.
