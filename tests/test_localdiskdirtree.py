@@ -29,7 +29,8 @@ class LocalDiskDirTreeTest(unittest.TestCase):
         return dst
 
     def test_copy_inner_entries_from_dirtree_adds_node_with_correct_paths(self):
-        dst = self._copy_subdir_file()
+        with mock.patch('dirdelta.dryrun.DRYRUN', False):
+            dst = self._copy_subdir_file()
 
         files = list(dst.iter_files())
         self.assertEqual(len(files), 1)
@@ -46,8 +47,10 @@ class LocalDiskDirTreeTest(unittest.TestCase):
 
     def test_dry_run_copy_creates_no_dirs(self):
         with mock.patch('dirdelta.dryrun.DRYRUN', True):
-            self._copy_subdir_file()
+            dst = self._copy_subdir_file()
         self.assertFalse(os.path.exists(os.path.join(self.dst_root, 'subdir')))
+        # Nor nodes in the tree
+        self.assertEqual(list(dst.iter_files()), [])
 
 
     @unittest.skipIf(os.geteuid() == 0, 'root can read anything')

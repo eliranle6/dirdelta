@@ -123,7 +123,8 @@ The library was removed on 2026-10-24 (#15); kept for the record.
 Concepts and UI first, then code. cpptree's own (dirpicker's) are in
 `lib/cpptree/docs/improvement-ideas.md`.
 
-17. **A dry run shouldn't pretend in the trees.** Copy's and Remove's dry
+17. ~~A dry run shouldn't pretend in the trees~~ — done 2026-10-24 (and the rescan after a copy is
+    gone: a live copy adds what it copies to the tree). Was: **A dry run shouldn't pretend in the trees.** Copy's and Remove's dry
     runs update the in-memory trees as if they had acted, so right after a
     dry run sync says "Nothing to synchronize" although nothing changed on
     disk. If a dry run left the trees alone, it would offer the same files

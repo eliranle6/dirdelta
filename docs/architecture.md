@@ -80,10 +80,10 @@ ensures the destination directory exists (`os.makedirs`, tolerant of
 already-exists, path derived from `full_filesystem_path()`), then calls
 `_copy_local_file_to_tree_with_path`. **Writing is gated behind
 `dryrun.DRYRUN`** (`dryrun.py`; known-issues.md #5): dry-run is the default,
-so nodes get added to the tree, but no directory is created and no bytes
-are copied unless `DRYRUN=0` is set in the environment. `remove_files()`
-is gated the same way: it deletes only with `DRYRUN=0`, and drops the
-nodes from the tree either way. Both print a progress line per file, and a
+in which nothing changes, neither on disk (no directory is created, no
+bytes are copied) nor in the tree; only `DRYRUN=0` copies, adding each
+copied file to the tree. `remove_files()` is gated the same way: with
+`DRYRUN=0` it deletes and drops the nodes from the tree, else neither. Both print a progress line per file, and a
 summary. (Previously called a nonexistent
 `self._add_file_by_path(...)` and referenced a `filesystem_dirpath`
 attribute that doesn't exist on the current `FileEntry`/`DirEntry` — both
@@ -127,9 +127,9 @@ sit alongside it as `scandrive.py`; it's now archived at
   the module-level `dirtree.factory_from_list_of_file_entries` (previously
   miscalled as a `DirTree` classmethod — fixed, known-issues.md #3), then
   calls `dst.copy_inner_entries_from_dirtree(...)` — which is a dry run
-  unless `DRYRUN=0` (see `localdiskdirtree.py` above) — and rescans `dst`.
+  unless `DRYRUN=0` (see `localdiskdirtree.py` above).
 - `_remove()` calls `src.remove_files(...)` (see `localdiskdirtree.py`
-  above), which deletes the selected files unless it's a dry run, and drops
+  above), which, unless it's a dry run, deletes the selected files and drops
   them from the in-memory `src` tree so the next diff doesn't list them
   again. (The `TypeError` from mixing `{}` placeholders with `%` that used
   to crash it is fixed, known-issues.md #16.)

@@ -63,8 +63,8 @@ Env vars that change execution mode:
   `localdiskdirtree.py`). Every screen shows the mode: "DRY RUN" in green, or
   "LIVE" in red.
   Any other value, or unset, means a dry run: nothing on disk changes (no
-  copies, no new dirs, no deletes), the progress lines say so, and only the
-  in-memory trees are updated as if it was done.
+  copies, no new dirs, no deletes) and neither do the in-memory trees, and
+  the progress lines say so.
 
 Developer tasks all live in the Makefile (`make` lists them): `test`,
 `clean`, `install`, `deploy`, `undeploy`. Keep new ones there too rather

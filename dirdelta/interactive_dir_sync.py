@@ -88,9 +88,8 @@ class InteractiveDirSync(object):
 
     def _copy(self, files):
         _dirtree = dirtree.factory_from_list_of_file_entries(files, self._src.fullpath())
+        # It adds what it copies to dst's tree, so the next diff doesn't list them
         self._dst.copy_inner_entries_from_dirtree(_dirtree)
-        # Quietly: the copy's report ends with whether it's complete
-        self._dst.update_from_filesystem(silent=True)
 
     def _remove(self, files):
         self._src.remove_files(files)

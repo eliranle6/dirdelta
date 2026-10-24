@@ -60,6 +60,13 @@ class InteractiveDirSyncTest(unittest.TestCase):
         # Not even the dir it would have gone into
         self.assertFalse(os.path.exists(os.path.join(self.dst_root, 'sub')))
 
+    def test_dry_run_copy_leaves_the_trees_untouched(self):
+        with mock.patch('dirdelta.dryrun.DRYRUN', True):
+            src, dst = self._sync(COPY)
+
+        self.assertIsNone(dst.get_node('/sub/b.txt'))
+        self.assertIsNone(dst.get_node('/sub'))
+
     def test_dry_run_copy_says_so(self):
         with mock.patch('dirdelta.dryrun.DRYRUN', True):
             self._sync(COPY)
@@ -108,8 +115,8 @@ class InteractiveDirSyncTest(unittest.TestCase):
             src, dst = self._sync(REMOVE)
 
         self.assertTrue(os.path.exists(os.path.join(self.src_root, 'sub/b.txt')))
-        # The tree is updated as if it was removed, like a dry run copy's
-        self.assertIsNone(src.get_node('/sub/b.txt'))
+        # Nor the tree: the next diff still lists it
+        self.assertIsNotNone(src.get_node('/sub/b.txt'))
         self.assertIn('Dry run, not removing /sub/b.txt (1 out of 1)', self.messages)
         self.assertTrue(any(message.startswith('Dry run complete: nothing was removed from')
                             for message in self.messages))
