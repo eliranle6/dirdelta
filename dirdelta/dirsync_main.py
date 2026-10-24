@@ -1,7 +1,7 @@
-from dirdelta import localdiskdirtree
 from dirdelta import interactive_dir_sync
-from dirdelta import menu
+from dirdelta import localdiskdirtree
 from dirdelta import messages
+from dirdelta import picker
 from dirdelta import utils
 
 
@@ -31,16 +31,6 @@ def warn_about_scan_errors(tree):
         messages.print_line("  (and %d more)" % (len(errors) - MAX_SCAN_ERRORS_SHOWN,), 'red')
 
 
-def _sync_from_src_to_dst(src, dst, action):
-    dirsync = interactive_dir_sync.InteractiveDirSync(src, dst)
-    dirsync.sync(action)
-
-
-def _view_diff(src, dst):
-    dirsync = interactive_dir_sync.InteractiveDirSync(src, dst)
-    dirsync.view_diff(src, dst)
-
-
 def _sync(replica_a, replica_b, replica_a_path, replica_b_path):
     QUIT = "Quit"
     # Copying and removing only between dirs on the local disk. Each acts on the files in one dir
@@ -52,26 +42,27 @@ def _sync(replica_a, replica_b, replica_a_path, replica_b_path):
         remove = interactive_dir_sync.InteractiveDirSync.REMOVE
         actions = [
             ("Copy files from %s to %s (the ones it lacks)" % (replica_a_path, replica_b_path),
-             lambda: _sync_from_src_to_dst(src=replica_a, dst=replica_b, action=copy)),
+             lambda: interactive_dir_sync.InteractiveDirSync(replica_a, replica_b).sync(copy)),
             ("Copy files from %s to %s (the ones it lacks)" % (replica_b_path, replica_a_path),
-             lambda: _sync_from_src_to_dst(src=replica_b, dst=replica_a, action=copy)),
+             lambda: interactive_dir_sync.InteractiveDirSync(replica_b, replica_a).sync(copy)),
             ("Remove files from %s (the ones %s lacks)" % (replica_a_path, replica_b_path),
-             lambda: _sync_from_src_to_dst(src=replica_a, dst=replica_b, action=remove)),
+             lambda: interactive_dir_sync.InteractiveDirSync(replica_a, replica_b).sync(remove)),
             ("Remove files from %s (the ones %s lacks)" % (replica_b_path, replica_a_path),
-             lambda: _sync_from_src_to_dst(src=replica_b, dst=replica_a, action=remove)),
+             lambda: interactive_dir_sync.InteractiveDirSync(replica_b, replica_a).sync(remove)),
         ]
     else:
         actions = [
             ("View files in %s, not %s" % (replica_a_path, replica_b_path),
-             lambda: _view_diff(src=replica_a, dst=replica_b)),
+             lambda: interactive_dir_sync.InteractiveDirSync(replica_a, replica_b).view_diff()),
             ("View files in %s, not %s" % (replica_b_path, replica_a_path),
-             lambda: _view_diff(src=replica_b, dst=replica_a)),
+             lambda: interactive_dir_sync.InteractiveDirSync(replica_b, replica_a).view_diff()),
         ]
     actions.append((QUIT, None))
 
     # Present sync options until user quits
-    option = None
-    while option != QUIT:
-        option = menu.run_menu(actions)
-        if option is None:
+    handlers = dict(actions)
+    while True:
+        option = picker.pick_option([label for label, _ in actions])
+        if option in (None, QUIT):
             break
+        handlers[option]()

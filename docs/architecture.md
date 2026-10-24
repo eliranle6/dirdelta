@@ -12,7 +12,7 @@ shell script (dirsync-*.sh / dirpick-*.sh)
        dirsync_main: utils.create_dirtree_from_arg(path)   for each replica path
             → clouddirtreefactory.factory_interactive()   if path starts with "cloud"
             → localdiskdirtree.factory()                   otherwise
-       → menu.run_menu([...]) → picker.pick_option()       (the top-level menu)
+       → picker.pick_option([...])                         (the top-level menu, in _sync)
        → interactive_dir_sync.InteractiveDirSync(src, dst)
             .sync(COPY or REMOVE) / .view_diff()
               → DirTree.get_unknown_entries_in_given_dirtree()   (the diff)
@@ -133,17 +133,13 @@ sit alongside it as `scandrive.py`; it's now archived at
   again. (The `TypeError` from mixing `{}` placeholders with `%` that used
   to crash it is fixed, known-issues.md #16.)
 
-### `menu.py`
-`run_menu([(label, handler), ...])` shows the labels with
-`picker.pick_option` (in the order given), calls the chosen label's handler (if not
-`None`), and returns the label, or `None` if the user quit the menu. Both
-the top-level sync menu and `InteractiveDirSync`'s Copy/Remove menu use it.
-
 ### `dirsync_main.py` / `dirpick_main.py`
 Thin wiring: build both `DirTree`s, warn (`warn_about_scan_errors`) about
 each local one whose scan couldn't read everything, since its diff may then
 be wrong (the warning is in the main menu's header, like other messages),
-present a top-level menu: `Copy A→B`, `Copy B→A`, `Remove from A` (A's
+present a top-level menu (`_sync`: a loop of `picker.pick_option()` over
+(label, action) pairs, each action an `InteractiveDirSync(src, dst)`'s
+`sync(COPY or REMOVE)` or `view_diff()`, until Quit): `Copy A→B`, `Copy B→A`, `Remove from A` (A's
 files that B lacks), `Remove from B`, `Quit` when **both** replicas are
 `LocalDiskDirTree`s; else (a cloud replica) only `View diff A-not-B`,
 `View diff B-not-A`, `Quit`, since cloud replicas are view-only (and the

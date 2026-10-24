@@ -3,6 +3,7 @@ from unittest import mock
 
 from dirdelta import dirsync_main
 from dirdelta import dirtree
+from dirdelta import interactive_dir_sync
 from dirdelta import localdiskdirtree
 
 
@@ -68,3 +69,20 @@ class MainMenuTest(unittest.TestCase):
             'View files in /b, not /a',
             'Quit',
         ])
+
+    def test_the_chosen_action_runs_and_the_menu_comes_back(self):
+        a = localdiskdirtree.LocalDiskDirTree('/a', silent=True)
+        b = localdiskdirtree.LocalDiskDirTree('/b', silent=True)
+        answers = ['Remove files from /b (the ones /a lacks)', 'Quit']
+        with mock.patch('dirdelta.picker.pick_option', side_effect=lambda *_, **__: answers.pop(0)), \
+                mock.patch('dirdelta.interactive_dir_sync.InteractiveDirSync.sync') as sync:
+            dirsync_main._sync(a, b, '/a', '/b')
+        sync.assert_called_once_with(interactive_dir_sync.InteractiveDirSync.REMOVE)
+        self.assertEqual(answers, [])
+
+    def test_quitting_the_menu_ends(self):
+        a = localdiskdirtree.LocalDiskDirTree('/a', silent=True)
+        b = localdiskdirtree.LocalDiskDirTree('/b', silent=True)
+        with mock.patch('dirdelta.picker.pick_option', return_value=None) as pick_option:
+            dirsync_main._sync(a, b, '/a', '/b')
+        pick_option.assert_called_once()

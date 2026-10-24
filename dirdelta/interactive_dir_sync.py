@@ -19,9 +19,10 @@ class InteractiveDirSync(object):
         self._src = src
         self._dst = dst
 
-    def view_diff(self, src, dst):
-        missing = dst.get_unknown_entries_in_given_dirtree(src)
-        header = "Files in %s, which are not in %s:" % (src.fullpath(), dst.fullpath())
+    def view_diff(self):
+        """Show the files in src that aren't in dst"""
+        missing = self._dst.get_unknown_entries_in_given_dirtree(self._src)
+        header = "Files in %s, which are not in %s:" % (self._src.fullpath(), self._dst.fullpath())
         picker.pick_from_tree(missing, header=header)
 
     def sync(self, action):

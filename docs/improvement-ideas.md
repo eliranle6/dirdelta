@@ -64,7 +64,8 @@ removed Python picker.)
    alongside the real package.
 
 8. ~~Extract a small "labeled-action menu" helper~~ — done (2026-10-23):
-   `dirdelta/menu.py`'s `run_menu([(label, handler), ...])` now drives both
+   `dirdelta/menu.py`'s `run_menu([(label, handler), ...])` (since folded into
+   `dirsync_main._sync`, #23) drove both
    `dirsync_main._sync` and `InteractiveDirSync.sync`.
 
 9. ~~Break up `InteractiveDirSync.sync()`~~ — done 2026-10-24, with #22: it's one pass now, and
@@ -166,7 +167,8 @@ Concepts and UI first, then code. cpptree's own (dirpicker's) are in
     menu instead would make the loop a single pass (pick, confirm, act), at
     the cost of re-choosing the action to continue.
 
-23. **Thin wrappers.** `dirsync_main._view_diff()` and
+23. ~~Thin wrappers~~ — done 2026-10-24 (menu.py is gone too: the menu loop is in
+    `dirsync_main._sync`). Was: **Thin wrappers.** `dirsync_main._view_diff()` and
     `_sync_from_src_to_dst()` only construct an `InteractiveDirSync` and call
     one method; `InteractiveDirSync.view_diff(src, dst)` takes src and dst
     although the object holds them. And `menu.run_menu()` has one caller.
