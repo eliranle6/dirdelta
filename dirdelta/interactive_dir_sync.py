@@ -1,4 +1,5 @@
 from dirdelta import dirtree
+from dirdelta import entries
 from dirdelta import dryrun
 from dirdelta import messages
 from dirdelta import picker
@@ -37,15 +38,15 @@ class InteractiveDirSync(object):
             return
         picked = None
         while True:
-            entries = self._chooseFiles(missing, action, picked)
-            if entries is None:
+            picked_entries = self._chooseFiles(missing, action, picked)
+            if picked_entries is None:
                 return
-            files = self._files(entries)
+            files = self._files(picked_entries)
             if not files:
                 return
             if self._confirm(action, files):
                 break
-            picked = entries
+            picked = picked_entries
 
         if action == self.COPY:
             title = "Copying %d files from %s to %s" % (len(files), self._src.fullpath(),
@@ -69,10 +70,10 @@ class InteractiveDirSync(object):
         return picker.pick_from_tree(missing, header=tree_header, multi=True, picked=picked)
 
     @staticmethod
-    def _files(entries):
+    def _files(picked_entries):
         """The picked entries' files: picking a dir also picks it, but only its files are copied or
         removed"""
-        return [entry for entry in entries if isinstance(entry, dirtree.FileEntry)]
+        return [entry for entry in picked_entries if isinstance(entry, entries.FileEntry)]
 
     def _confirm(self, action, files):
         if action == self.COPY:
@@ -89,7 +90,7 @@ class InteractiveDirSync(object):
         return answer == self.CONFIRM_YES
 
     def _copy(self, files):
-        _dirtree = dirtree.factory_from_list_of_file_entries(files, self._src.fullpath())
+        _dirtree = dirtree.DirTree.from_file_entries(files, self._src.fullpath())
         # It adds what it copies to dst's tree, so the next diff doesn't list them
         self._dst.copy_inner_entries_from_dirtree(_dirtree)
 

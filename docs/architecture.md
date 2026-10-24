@@ -37,10 +37,11 @@ cloud vs local: a path is "cloud" iff its first path component
 case, exiting with a message (via `messages.print_line`) otherwise.
 `is_cloud_path` is public too, for `dirpick_main`.
 
-### `dirtree.py` — the core data structure
-`DirTree(treelib.Tree)` models a filesystem tree. Two entry types:
-- `DirEntry(name, parent_relpath, parent_fullpath)` — directory node
-- `FileEntry(name, parent_dir_entry)` — file node, no size/hash/mtime stored
+### `entries.py`, `dirtree.py` — the core data structure
+`DirTree(treelib.Tree)` models a filesystem tree. Its nodes' data are entries
+(`entries.py`), each with `name`, `relpath` and `fullpath`:
+- `DirEntry` — directory node
+- `FileEntry` — file node, no size/hash/mtime stored
 
 Construction is deliberately locked down: `DirTree.__init__` overrides
 `self.create_node` after root creation to always raise
@@ -57,9 +58,9 @@ This is called as `dst.get_unknown_entries_in_given_dirtree(src)`, i.e. it
 answers "what's in src that dst doesn't have" — pure path-string membership
 test, no content comparison at all, matching the stated scope.
 
-`factory_from_list_of_file_entries` (module-level function, despite living
-next to the class) builds a `DirTree` holding a flat list of `FileEntry`
-objects at their relpaths: the "chosen files" sub-tree, just before a copy.
+`DirTree.from_file_entries(files, root)` (a classmethod) builds a `DirTree`
+holding a flat list of `FileEntry` objects at their relpaths: the "chosen
+files" sub-tree, just before a copy.
 `add_file_by_relpath` returns the existing entry for a file already in the
 tree, which is what lets `update_from_filesystem` rescan a tree in place.
 
@@ -123,7 +124,7 @@ sit alongside it as `scandrive.py`; it's now archived at
   the progress screen) → back to the main menu. The picked files are
   passed to `_copy(files)`/`_remove(files)`.
 - `_copy()` rebuilds a `DirTree` from just the selected `FileEntry`s via
-  the module-level `dirtree.factory_from_list_of_file_entries` (previously
+  `dirtree.DirTree.from_file_entries` (previously
   miscalled as a `DirTree` classmethod — fixed, known-issues.md #3), then
   calls `dst.copy_inner_entries_from_dirtree(...)` — which is a dry run
   unless `DRYRUN=0` (see `localdiskdirtree.py` above).

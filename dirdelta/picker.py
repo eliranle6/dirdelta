@@ -11,7 +11,7 @@ import subprocess
 import sys
 import tempfile
 
-from dirdelta import dirtree
+from dirdelta import entries
 from dirdelta import dryrun
 
 PROGRAM_ENV_VAR = 'DIRDELTA_PICKER'
@@ -72,7 +72,7 @@ def _tree_paths(tree):
     stack = list(reversed(_sorted_children(tree, tree.root)))
     while stack:
         node = stack.pop()
-        kind = 'f' if isinstance(node.data, dirtree.FileEntry) else 'd'
+        kind = 'f' if isinstance(node.data, entries.FileEntry) else 'd'
         yield '%s %s' % (kind, node.identifier)
         stack.extend(reversed(_sorted_children(tree, node.identifier)))
 

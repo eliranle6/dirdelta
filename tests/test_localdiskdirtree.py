@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from unittest import mock
 
-from dirdelta import dirtree
+from dirdelta import entries
 from dirdelta import localdiskdirtree
 
 
@@ -154,13 +154,13 @@ class LocalDiskDirTreeTest(unittest.TestCase):
         tree = self._scan(['visible.txt', 'sub/nested.txt', '.hidden/inner.txt', '.hidden_at_root.txt'])
         self.assertEqual(sorted(entry.relpath for entry in tree.iter_files()),
                          ['.hidden/inner.txt', '.hidden_at_root.txt', 'sub/nested.txt', 'visible.txt'])
-        self.assertIsInstance(tree.get_node('sub').data, dirtree.DirEntry)
-        self.assertIsInstance(tree.get_node('.hidden').data, dirtree.DirEntry)
+        self.assertIsInstance(tree.get_node('sub').data, entries.DirEntry)
+        self.assertIsInstance(tree.get_node('.hidden').data, entries.DirEntry)
 
     def test_scan_keeps_empty_dirs(self):
         os.makedirs(os.path.join(self.src_root, 'empty'))
         tree = self._scan([])
-        self.assertIsInstance(tree.get_node('empty').data, dirtree.DirEntry)
+        self.assertIsInstance(tree.get_node('empty').data, entries.DirEntry)
 
     def test_scan_max_depth(self):
         tree = self._scan(['top.txt', 'a/b/deep.txt'], max_depth=2)

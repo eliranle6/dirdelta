@@ -13,7 +13,7 @@ removed Python picker.)
 
 ## Application layer (`dirdelta/`)
 
-1. **Split `dirtree.py`** into `entries.py` (`DirEntry`/`FileEntry`, plain
+1. ~~Split `dirtree.py`~~ — done 2026-10-24: `entries.py`, and `DirTree.from_file_entries()`. Was: **Split `dirtree.py`** into `entries.py` (`DirEntry`/`FileEntry`, plain
    data holders) and `dirtree.py` (the `DirTree` class plus the orphaned
    module-level `factory_from_list_of_file_entries` function, which reads
    like a method but isn't one — make it `DirTree.from_file_entries()` so

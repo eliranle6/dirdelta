@@ -8,6 +8,7 @@ import unittest
 from unittest import mock
 
 from dirdelta import dirtree
+from dirdelta import entries
 from dirdelta import picker
 
 # Stands in for dirpicker: records its arguments and stdin into $FAKE_PICKER_LOG, then prints
@@ -85,7 +86,7 @@ class PickerTest(unittest.TestCase):
         self.answer('a/1.txt')
         picked = picker.pick_from_tree(self.make_tree())
         self.assertEqual([entry.relpath for entry in picked], ['a/1.txt'])
-        self.assertIsInstance(picked[0], dirtree.FileEntry)
+        self.assertIsInstance(picked[0], entries.FileEntry)
 
     def test_pick_the_root(self):
         tree = self.make_tree()

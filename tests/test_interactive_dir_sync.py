@@ -6,7 +6,7 @@ import unittest
 from unittest import mock
 
 import helpers
-from dirdelta import dirtree
+from dirdelta import entries
 from dirdelta import interactive_dir_sync
 from dirdelta import localdiskdirtree
 
@@ -200,7 +200,7 @@ class InteractiveDirSyncTest(unittest.TestCase):
     def test_picking_only_dirs_ends_sync(self):
         # Enter with nothing picked doesn't return; picking only dirs picks no files
         self._sync(COPY, choose=lambda tree: [node.data for node in tree.all_nodes()
-                                              if isinstance(node.data, dirtree.DirEntry)])
+                                              if isinstance(node.data, entries.DirEntry)])
         self.assertFalse(os.path.exists(os.path.join(self.dst_root, 'sub/b.txt')))
 
 if __name__ == '__main__':
