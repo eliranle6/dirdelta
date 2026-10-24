@@ -38,7 +38,7 @@ class CloudDirTreeTest(unittest.TestCase):
         with os.fdopen(fd, 'w') as f:
             for item in ITEMS:
                 f.write(json.dumps(item) + '\n')
-        patcher = mock.patch('dirdelta.clouddirtree.FILE_LIST_CACHE', self.cache)
+        patcher = mock.patch('dirdelta.drivecache.FILE_LIST_CACHE', self.cache)
         patcher.start()
         self.addCleanup(patcher.stop)
         self.addCleanup(os.remove, self.cache)

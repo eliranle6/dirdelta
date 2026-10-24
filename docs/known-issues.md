@@ -193,7 +193,7 @@ entries here are history).
   now, which keeps the order given.
 
 24. **Cloud scanning is untested against real Drive data.**
-  `CloudDirTree._parsefile` asserts exactly one id has children but no
+  `drivecache._parsefile` asserts exactly one id has children but no
   metadata (the Drive root); files whose parent folder isn't in the listing
   (e.g. shared folders) would break that assumption. And a `___DUP__`-renamed
   folder's children still attach to the first folder of that name.

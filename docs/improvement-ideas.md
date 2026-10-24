@@ -35,7 +35,7 @@ removed Python picker.)
    `CloudDirTree` the same `factory()` shape so both replica types are
    constructed the same way.
 
-4. **Pull Drive-cache parsing out of `CloudDirTree`.**
+4. ~~Pull Drive-cache parsing out of `CloudDirTree`~~ — done 2026-10-24: `drivecache.py`. Was: **Pull Drive-cache parsing out of `CloudDirTree`.**
    `_parsefile`/`_parseline`/`_dirdict_to_dirtree` turn a metadata cache
    file into id→children/id→metadata maps — a generic concern unrelated to
    being a `DirTree`. Move it to its own module (e.g. `drivecache.py`)

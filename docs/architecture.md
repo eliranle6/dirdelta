@@ -90,23 +90,24 @@ attribute that doesn't exist on the current `FileEntry`/`DirEntry` — both
 fixed, see known-issues.md #2 — and is now covered by
 `tests/test_localdiskdirtree.py`.)
 
-### `clouddirtree.py` / `clouddirtreefactory.py`
+### `clouddirtree.py` / `drivecache.py` / `clouddirtreefactory.py`
 Cloud state is never queried live per-scan. Instead:
 1. `utils.create_dirtree_from_arg` calls `factory_interactive(rootpath)`
    for any path whose first component is `cloud`. It ensures a cache file exists at
-   `CloudDirTree.FILE_LIST_CACHE` (`~/.cache/dirman/files.txt`), prompting
-   the user via `OptionPickerByMenuTraverse` to refresh it if it already
-   exists.
+   `drivecache.FILE_LIST_CACHE` (`~/.cache/dirman/files.txt`), prompting
+   the user (`picker.pick_option`) to refresh it if it already exists.
 2. `_refresh_cache()` → `_scan_drive_files_list()` calls the Drive v3 API
    (`files().list`, paged, `fields=... files(id,name,parents,kind,size,
    mimeType,sha256Checksum)`) and writes one JSON line per file to the
    cache.
-3. `CloudDirTree.__init__` reads that cache with `_parsefile`, which
-   `json.loads`es each `{...}` line into a dict (id→children map + id→metadata
-   map), finds the root (the one id with children but no metadata), then
-   `_dirdict_to_dirtree` DFS-walks id→children building `DirTree` nodes,
-   only for entries under the requested `inner_rootpath`. Handles Drive's
-   "two files, same path" case by suffixing `___DUP__<id>` on collision.
+3. `drivecache.entries(inner_rootpath)` reads that cache with `_parsefile`,
+   which `json.loads`es each `{...}` line into a dict (id→children map +
+   id→metadata map), finds the root (the one id with children but no
+   metadata), then DFS-walks id→children, yielding `(relpath, cloud_id,
+   is_dir)` for what's under the requested `inner_rootpath`, each folder
+   before its contents. `CloudDirTree` adds them as `DirTree` nodes, and
+   handles Drive's "two files, same path" case by suffixing `___DUP__<id>`
+   on collision.
 
 OAuth token handling (`token.json`/`credentials.json`,
 `SCOPES=[drive.metadata.readonly]`) lives in `clouddirtreefactory.py`'s

@@ -8,6 +8,7 @@ from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
 from dirdelta import clouddirtree
+from dirdelta import drivecache
 from dirdelta import picker
 
 
@@ -21,7 +22,7 @@ CREDENTIALS_PATH = os.path.join(SECRETS_DIR, 'credentials.json')
 
 def factory_interactive(rootpath):
     # Make sure cloud files list cache exists
-    if os.path.exists(clouddirtree.FILE_LIST_CACHE):
+    if os.path.exists(drivecache.FILE_LIST_CACHE):
 
         # Ask user whether to refresh files list cache
         if _does_user_want_to_refresh_cache(rootpath):
@@ -29,7 +30,7 @@ def factory_interactive(rootpath):
 
     # Create files list cache as it doesn't exist
     else:
-        os.makedirs(os.path.dirname(clouddirtree.FILE_LIST_CACHE), exist_ok=True)
+        os.makedirs(os.path.dirname(drivecache.FILE_LIST_CACHE), exist_ok=True)
         _refresh_cache()
 
     return clouddirtree.CloudDirTree(rootpath)
@@ -44,10 +45,10 @@ def _does_user_want_to_refresh_cache(rootpath):
 
 def _refresh_cache():
     # Scan into a temporary file first, so a failed scan doesn't leave a truncated cache behind
-    tmp_path = clouddirtree.FILE_LIST_CACHE + '.tmp'
+    tmp_path = drivecache.FILE_LIST_CACHE + '.tmp'
     with open(tmp_path, 'w') as fp:
         _scan_drive_files_list(outfile=fp)
-    os.replace(tmp_path, clouddirtree.FILE_LIST_CACHE)
+    os.replace(tmp_path, drivecache.FILE_LIST_CACHE)
 
 
 def _scan_drive_files_list(outfile):
