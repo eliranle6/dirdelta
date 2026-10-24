@@ -31,9 +31,9 @@ def warn_about_scan_errors(tree):
         messages.print_line("  (and %d more)" % (len(errors) - MAX_SCAN_ERRORS_SHOWN,), 'red')
 
 
-def _sync_from_src_to_dst(src, dst):
+def _sync_from_src_to_dst(src, dst, action):
     dirsync = interactive_dir_sync.InteractiveDirSync(src, dst)
-    dirsync.sync()
+    dirsync.sync(action)
 
 
 def _view_diff(src, dst):
@@ -48,18 +48,25 @@ def _sync(replica_a, replica_b, replica_a_path, replica_b_path):
          lambda: _view_diff(src=replica_a, dst=replica_b)),
         ("View files in %s, not %s" % (replica_b_path, replica_a_path),
          lambda: _view_diff(src=replica_b, dst=replica_a)),
-        (QUIT, None),
     ]
 
-    # Allow sync (copy/remove) only if both dirs are in local disk
+    # Allow sync (copy/remove) only if both dirs are in local disk. Each acts on the files in one
+    # dir that aren't in the other.
     if (isinstance(replica_a, localdiskdirtree.LocalDiskDirTree)
         and isinstance(replica_b, localdiskdirtree.LocalDiskDirTree)):
+        copy = interactive_dir_sync.InteractiveDirSync.COPY
+        remove = interactive_dir_sync.InteractiveDirSync.REMOVE
         actions.extend([
-            ("Remove/Copy files from %s to %s" % (replica_a_path, replica_b_path),
-             lambda: _sync_from_src_to_dst(src=replica_a, dst=replica_b)),
-            ("Remove/Copy files from %s to %s" % (replica_b_path, replica_a_path),
-             lambda: _sync_from_src_to_dst(src=replica_b, dst=replica_a)),
+            ("Copy files from %s to %s (the ones it lacks)" % (replica_a_path, replica_b_path),
+             lambda: _sync_from_src_to_dst(src=replica_a, dst=replica_b, action=copy)),
+            ("Copy files from %s to %s (the ones it lacks)" % (replica_b_path, replica_a_path),
+             lambda: _sync_from_src_to_dst(src=replica_b, dst=replica_a, action=copy)),
+            ("Remove files from %s (the ones %s lacks)" % (replica_a_path, replica_b_path),
+             lambda: _sync_from_src_to_dst(src=replica_a, dst=replica_b, action=remove)),
+            ("Remove files from %s (the ones %s lacks)" % (replica_b_path, replica_a_path),
+             lambda: _sync_from_src_to_dst(src=replica_b, dst=replica_a, action=remove)),
         ])
+    actions.append((QUIT, None))
 
     # Present sync options until user quits
     option = None

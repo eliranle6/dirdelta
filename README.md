@@ -66,9 +66,10 @@ dir is scanned by `dirpicker` itself, so even big trees open fast.
 DRYRUN=0 .venv/bin/python3 -m dirdelta /tmp/dd/alpha /tmp/dd/bravo    # Copy and Remove really do
 ```
 
-Choose "Remove/Copy files from ... to ..." in the menu, select files with `Space` (on a directory it
-selects everything under it), press `Enter`, then choose Copy or Remove. Copy copies the selected files from the entry's source ("from") directory into its
-destination ("to"); Remove deletes them from the source. Unless `DRYRUN=0` is set, both are dry
+The menu offers, for each direction, "Copy files from A to B" (the files in A that aren't in B, copied
+into B) and "Remove files from A" (the files in A that aren't in B, deleted from A). Choose one, pick
+files with `Space` (on a directory it picks everything under it), and press `Enter`. Then the files
+that are left are offered again, until you quit the picker (`q`). Unless `DRYRUN=0` is set, both are dry
 runs: they change nothing on disk (not even the dirs copied files would go into), and say what they
 would have done.
 

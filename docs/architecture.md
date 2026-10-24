@@ -14,11 +14,10 @@ shell script (dirsync-*.sh / dirpick-*.sh)
             → localdiskdirtree.factory()                   otherwise
        → menu.run_menu([...]) → picker.pick_option()       (the top-level menu)
        → interactive_dir_sync.InteractiveDirSync(src, dst)
-            .sync() / .view_diff()
+            .sync(COPY or REMOVE) / .view_diff()
               → DirTree.get_unknown_entries_in_given_dirtree()   (the diff)
               → picker.pick_from_tree(missing_tree, multi=True)  (selection UI)
-              → menu.run_menu([...])                             (Copy/Remove/Nothing/Reselect menu)
-              → LocalDiskDirTree.copy_inner_entries_from_dirtree() / os.unlink()
+              → LocalDiskDirTree.copy_inner_entries_from_dirtree() / .remove_files()
 ```
 
 ## `dirdelta/` — the application
@@ -117,10 +116,10 @@ sit alongside it as `scandrive.py`; it's now archived at
 
 ### `interactive_dir_sync.py`
 `InteractiveDirSync(src, dst)`:
-- `sync()` loop: diff → `picker.pick_from_tree(missing, multi=True)` to select
-  files → `menu.run_menu` (`Do nothing` / `Reselect files` / `Copy` /
-  `Remove`) → act → recompute diff → repeat until nothing is selected, the
-  user picks "Do nothing", or quits either picker.
+- `sync(action)` loop, for `COPY` (src's missing files into dst) or
+  `REMOVE` (them from src): diff → `picker.pick_from_tree(missing,
+  multi=True)` to select files → act → recompute diff → repeat until
+  nothing is missing, or the user quits the picker.
 - `_copy()` rebuilds a `DirTree` from just the selected `FileEntry`s via
   the module-level `dirtree.factory_from_list_of_file_entries` (previously
   miscalled as a `DirTree` classmethod — fixed, known-issues.md #3), then
@@ -143,7 +142,8 @@ Thin wiring: build both `DirTree`s, warn (`warn_about_scan_errors`) about
 each local one whose scan couldn't read everything, since its diff may then
 be wrong (the warning is in the main menu's header, like other messages),
 present a top-level menu (`View diff
-A-not-B`, `View diff B-not-A`, `Remove/Copy A→B`, `Remove/Copy B→A`, `Quit`).
+A-not-B`, `View diff B-not-A`, `Copy A→B`, `Copy B→A`, `Remove from A`
+(A's files that B lacks), `Remove from B`, `Quit`).
 Copy/Remove options are only offered when **both** replicas are
 `LocalDiskDirTree` — cloud replicas are diff/view-only from this menu.
 `dirpick_main.run` returns the picked path: for a local dir it lets

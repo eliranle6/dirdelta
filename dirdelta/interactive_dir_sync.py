@@ -1,14 +1,12 @@
 from dirdelta import dirtree
-from dirdelta import menu
 from dirdelta import messages
 from dirdelta import picker
 
 
 class InteractiveDirSync(object):
-    _OPTION_COPY = "Copy selected files"
-    _OPTION_REMOVE = "Remove selected files"
-    _OPTION_NOTHING = "Do nothing"
-    _OPTION_RESELECT = "Reselect files"
+    """Copying or removing the files in src that aren't in dst, picked by the user."""
+    COPY = 'copy'
+    REMOVE = 'remove'
 
     def __init__(self, src, dst):
         self._src = src
@@ -17,35 +15,35 @@ class InteractiveDirSync(object):
 
     def view_diff(self, src, dst):
         missing = dst.get_unknown_entries_in_given_dirtree(src)
-        self._chooseFiles(missing)
+        header = "Files in %s, which are not in %s:" % (src.fullpath(), dst.fullpath())
+        picker.pick_from_tree(missing, header=header)
 
-    def sync(self):
+    def sync(self, action):
+        """Let the user pick files of src that aren't in dst, then copy them to dst (action COPY) or
+        remove them from src (REMOVE); repeat with what's left, until the user quits."""
         while True:
             missing = self._dst.get_unknown_entries_in_given_dirtree(self._src)
             if not missing.does_dir_contain_any_files():
                 messages.print_line("Nothing to synchronize; Destination dir alread contains all files "
                                      "in source dir.")
                 break
-            self._selected = self._chooseFiles(missing)
+            self._selected = self._chooseFiles(missing, action)
             if self._selected is None:
                 messages.print_line("Sync ended by user's request.")
                 break
             if not self._selected:
                 break
-            messages.print_line("%d files were chosen to copy so far." % (len(self._selected),))
-            option = menu.run_menu([
-                (self._OPTION_NOTHING, None),
-                (self._OPTION_RESELECT, None),
-                (self._OPTION_COPY, self._copy),
-                (self._OPTION_REMOVE, self._remove),
-            ])
-            if option in (None, self._OPTION_NOTHING):
-                break
+            if action == self.COPY:
+                self._copy()
+            else:
+                self._remove()
 
-    def _chooseFiles(self, missing):
-        tree_header = ("Files in %s, which are not in %s:\n"
+    def _chooseFiles(self, missing, action):
+        purpose = ("copy to %s" % (self._dst.fullpath(),) if action == self.COPY else
+                   "remove from %s" % (self._src.fullpath(),))
+        tree_header = ("Files in %s, which are not in %s. Pick the ones to %s:\n"
                        "(To select a file, press Space. When finished, press Enter.)" %
-                       (self._src.fullpath(), self._dst.fullpath()))
+                       (self._src.fullpath(), self._dst.fullpath(), purpose))
         entries = picker.pick_from_tree(missing, header=tree_header, multi=True)
         if entries is None:
             return None
@@ -63,4 +61,3 @@ class InteractiveDirSync(object):
 
     def _remove(self):
         self._src.remove_files(list(self._selected.values()))
-
