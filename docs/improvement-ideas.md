@@ -5,6 +5,12 @@ the source (see `architecture.md`,
 `known-issues.md`). Ordered roughly by impact. None of these are required;
 treat as a backlog to pick from.
 
+**In progress (2026-10-24): doing all of the open ideas below**, one commit
+each, in this order: a dry-run label on every screen (a new request, not an
+idea here); #17; #18, #19 and #6; #20; #22 with #9; #23; #21; #25; #24, #1-#5;
+#16. Each is marked done here when committed. (#10 and #11 were about the
+removed Python picker.)
+
 ## Application layer (`dirdelta/`)
 
 1. **Split `dirtree.py`** into `entries.py` (`DirEntry`/`FileEntry`, plain
