@@ -4,6 +4,7 @@ import sys
 
 from dirdelta import dirsync_main
 from dirdelta import dirpick_main
+from dirdelta import drivecache
 from dirdelta import programs
 
 
@@ -22,7 +23,7 @@ def main():
     # are plain prints in between
     try:
         picked_path = _run(args)
-    except programs.ProgramError as error:
+    except (programs.ProgramError, drivecache.DriveCacheError) as error:
         sys.exit('dirdelta: %s' % (error,))
 
     if picked_path is not None:

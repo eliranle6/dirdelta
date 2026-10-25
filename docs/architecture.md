@@ -98,19 +98,28 @@ Cloud state is never queried live per-scan. Instead:
    `drivecache.FILE_LIST_CACHE` (`~/.cache/dirman/files.txt`), prompting
    the user (`picker.pick_option`) to refresh it if it already exists.
 2. `_refresh_cache()` → `_scan_drive_files_list()` calls the Drive v3 API
-   (`files().list`, paged, `fields=... files(id,name,parents,kind,size,
-   mimeType,sha256Checksum)`) and writes one JSON line per file to the
-   cache.
+   and writes My Drive's root folder's id (`files().get('root')`) as the
+   cache's first JSON line (`{"myDriveRootId": ...}`), then one JSON line per
+   file not in the trash (`files().list`, paged, `q='trashed = false'`,
+   `fields=... files(id,name,parents,kind,size,mimeType,sha256Checksum)`).
 3. `drivecache.entries(inner_rootpath)` reads that cache with `_parsefile`,
    which `json.loads`es each `{...}` line into a dict (id→children map +
-   id→metadata map), finds the root (the one id with children but no
-   metadata), then DFS-walks id→children, yielding `(relpath, cloud_id,
-   is_dir)` for what's under the requested `inner_rootpath`, each folder
-   before its contents. `clouddirtree.factory(rootpath)` builds the tree like
+   id→metadata map), leaving out Google's own types (Docs, Sheets,
+   shortcuts...: `application/vnd.google-apps.*` but folders), and takes the
+   root from the root line (a cache from before it guesses: the one id with
+   children but no metadata). Files outside My Drive (no parents, or a parent
+   that isn't listed) are never reached. It then DFS-walks id→children from
+   the root, only into folders on the way to `inner_rootpath` and under it,
+   yielding `(relpath, cloud_id, is_dir)` for what's under it, each folder
+   before its contents. It raises `DriveCacheError` (which `main.py` prints
+   and exits with) if there's no such folder, or if names there can't be
+   paths: a `/` in a name, or a folder's name shared with another folder or
+   file in one folder (also on the way to it): the user renames them in Drive
+   and refreshes the cache. `clouddirtree.factory(rootpath)` builds the tree like
    `localdiskdirtree.factory()` does: a `CloudDirTree(rootpath)`, then its
    `update_from_cache()`, which adds them as `DirTree` nodes, and handles
    Drive's "two files, same path" case by suffixing `___DUP__<id>` on
-   collision.
+   collision (same-named folders are an error, above).
 
 OAuth token handling (`token.json`/`credentials.json`,
 `SCOPES=[drive.metadata.readonly]`) lives in `clouddirtreefactory.py`'s

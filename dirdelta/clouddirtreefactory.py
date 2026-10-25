@@ -82,12 +82,17 @@ def _scan_drive_files_list(outfile):
     #try:
     service = build('drive', 'v3', credentials=creds)
 
+    # My Drive's root folder isn't listed itself, so write down its id
+    root = service.files().get(fileId='root', fields='id').execute()
+    outfile.write(json.dumps({drivecache.ROOT_ID_KEY: root['id']}) + '\n')
+
     # Call the Drive v3 API
     page_token = None
     iter_cnt = 0
     while True:
         req = service.files().list(
             pageSize=1000,
+            q='trashed = false',
             fields="nextPageToken, files(id, name, parents, kind, size, mimeType, sha256Checksum)",
             pageToken=page_token)
         results = req.execute()

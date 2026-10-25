@@ -13,6 +13,7 @@ import helpers
 def _fake_drive_service(pages):
     """A Drive service whose files().list(...).execute() returns the given pages in order."""
     service = mock.Mock()
+    service.files.return_value.get.return_value.execute.return_value = {'id': 'ROOT'}
     service.files.return_value.list.return_value.execute.side_effect = pages
     return service
 
@@ -59,7 +60,18 @@ class CloudDirTreeFactoryTest(unittest.TestCase):
              mock.patch('os.path.exists', return_value=True), mock.patch('builtins.print'):
             credentials.from_authorized_user_file.return_value.valid = True
             clouddirtreefactory._scan_drive_files_list(out)
-        self.assertEqual([json.loads(line)['id'] for line in out.getvalue().splitlines()], ['a', 'b', 'c'])
+        root_line, *file_lines = out.getvalue().splitlines()
+        self.assertEqual(json.loads(root_line), {'myDriveRootId': 'ROOT'})
+        self.assertEqual([json.loads(line)['id'] for line in file_lines], ['a', 'b', 'c'])
+
+    def test_scan_skips_the_trash(self):
+        service = _fake_drive_service([{'files': []}])
+        with mock.patch('dirdelta.clouddirtreefactory.Credentials') as credentials, \
+             mock.patch('dirdelta.clouddirtreefactory.build', return_value=service), \
+             mock.patch('os.path.exists', return_value=True), mock.patch('builtins.print'):
+            credentials.from_authorized_user_file.return_value.valid = True
+            clouddirtreefactory._scan_drive_files_list(io.StringIO())
+        self.assertEqual(service.files.return_value.list.call_args.kwargs['q'], 'trashed = false')
 
     def test_rejected_token_refresh_logs_in_again(self):
         token_dir = tempfile.mkdtemp(prefix='dirstuff-token-')

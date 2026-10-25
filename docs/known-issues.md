@@ -192,8 +192,14 @@ entries here are history).
   `str(node.data)`.~~ **FIXED** (2026-10-23): menus are `treepick --list`
   now, which keeps the order given.
 
-24. **Cloud scanning is untested against real Drive data.**
+24. ~~**Cloud scanning is untested against real Drive data.**
   `drivecache._parsefile` asserts exactly one id has children but no
   metadata (the Drive root); files whose parent folder isn't in the listing
   (e.g. shared folders) would break that assumption. And a `___DUP__`-renamed
-  folder's children still attach to the first folder of that name.
+  folder's children still attach to the first folder of that name.~~
+  **FIXED** (2026-10-25): the scan writes down My Drive's root id, so files
+  outside My Drive are left out rather than breaking the assert, and
+  same-named folders (or a `/` in a name) are an error telling the user to
+  rename them. Also from reading the code then: the scan skips the trash,
+  Google Docs/Sheets/shortcuts are left out (they're not files to sync), and
+  a cloud folder that isn't there is an error rather than an empty tree.
