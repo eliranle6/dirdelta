@@ -69,15 +69,13 @@ dirdelta, each a commit:
   g/G go to the first/last sibling, Ctrl-/ searches only when Enter is
   pressed, and f switches between the matches-only tree and the whole tree
   with matches highlighted. ? shows the keys (the stats line says so).
-  Missing: the leaf jumps (Ctrl-J/K), Ctrl-H,
-  Ctrl-L, u/d (use Ctrl-U/Ctrl-D or PageUp/PageDown).
+  Not there: the leaf jumps (Ctrl-J/K) and u/d (use Ctrl-U/Ctrl-D or
+  PageUp/PageDown); not needed.
 - Search is smartcase (case-insensitive unless the keyword has uppercase)
   and matches names, like the Python picker's.
 - With -m, Enter with nothing picked does nothing, like the Python picker.
 
 ## What's left
 
-- The leaf jumps (Ctrl-J/K), Ctrl-H and Ctrl-L, which the Python picker had
-  (not needed, so far).
 - The cloud flow hasn't been run end to end with dirpicker (it needs Drive
   credentials); its pieces are covered by the unit tests.
