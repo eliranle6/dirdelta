@@ -61,6 +61,25 @@ class CloudDirTreeFactoryTest(unittest.TestCase):
             clouddirtreefactory._scan_drive_files_list(out)
         self.assertEqual([json.loads(line)['id'] for line in out.getvalue().splitlines()], ['a', 'b', 'c'])
 
+    def test_rejected_token_refresh_logs_in_again(self):
+        token_dir = tempfile.mkdtemp(prefix='dirstuff-token-')
+        self.addCleanup(shutil.rmtree, token_dir, ignore_errors=True)
+        token_path = os.path.join(token_dir, 'token.json')
+        with mock.patch('dirdelta.clouddirtreefactory.TOKEN_PATH', token_path), \
+             mock.patch('dirdelta.clouddirtreefactory.Credentials') as credentials, \
+             mock.patch('dirdelta.clouddirtreefactory.InstalledAppFlow') as flow, \
+             mock.patch('dirdelta.clouddirtreefactory.build', return_value=_fake_drive_service([{'files': []}])), \
+             mock.patch('os.path.exists', return_value=True), mock.patch('builtins.print'):
+            saved = credentials.from_authorized_user_file.return_value
+            saved.valid = False
+            saved.refresh.side_effect = clouddirtreefactory.RefreshError('invalid_grant')
+            fresh = flow.from_client_secrets_file.return_value.run_local_server.return_value
+            fresh.to_json.return_value = '{"fresh": true}'
+            clouddirtreefactory._scan_drive_files_list(io.StringIO())
+        flow.from_client_secrets_file.return_value.run_local_server.assert_called_once()
+        with open(token_path) as f:
+            self.assertEqual(f.read(), '{"fresh": true}')
+
     def test_failed_refresh_keeps_the_old_cache(self):
         os.makedirs(os.path.dirname(self.cache))
         with open(self.cache, 'w') as f:

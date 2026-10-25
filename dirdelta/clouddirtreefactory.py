@@ -1,6 +1,7 @@
 import json
 import os.path
 
+from google.auth.exceptions import RefreshError
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
@@ -64,8 +65,13 @@ def _scan_drive_files_list(outfile):
     # If there are no (valid) credentials available, let the user log in.
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())
-        else:
+            try:
+                creds.refresh(Request())
+            except RefreshError as error:
+                # The refresh token was revoked or expired (an app in "Testing" gets 7-day ones)
+                print(f'Saved Drive login was rejected ({error}), logging in again...')
+                creds = None
+        if not creds or not creds.valid:
             flow = InstalledAppFlow.from_client_secrets_file(
                 CREDENTIALS_PATH, SCOPES)
             creds = flow.run_local_server(port=0)
