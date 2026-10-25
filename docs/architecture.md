@@ -167,7 +167,7 @@ both `DirTree`s, warn (`scan_errors_warning`, shown with
 `messages.show()`) about each local one whose scan couldn't read everything,
 since its diff may then be wrong,
 present a top-level menu (`_sync`: a loop of `picker.pick_option()` over
-(label, action) pairs, each action an `InteractiveDirSync(src, dst)`'s
+`_Action`s, each an `InteractiveDirSync(src, dst, missing)`'s
 `sync(COPY or REMOVE)` or `view_diff()`, until Quit), by what's writable
 (`_is_writable`: a `LocalDiskDirTree` with write permission, so not one on a
 read-only mount, and never a cloud replica, which dirdelta only reads): each
@@ -175,7 +175,15 @@ way, `Copy A→B` if A is local and B writable, `Remove from A` (A's files
 that B lacks) if A is writable, and if neither, `View diff A-not-B` (the
 others' pickers already show that diff); then `Quit`. Before the menu, a
 "Read-only" screen (`messages.show()`) says which replicas are read-only and
-why.
+why. Each way's diff (`interactive_dir_sync.find_missing()`: dirdiff for two
+local dirs, else the trees as they are, so a cloud tree is never scanned
+again) is found once, on a daemon thread (`_Way.find_missing()`, a
+`concurrent.futures.Future`), as the menu opens, and shared by that way's
+options: while it's being found they're shown as "(loading...)", with the
+dots moving, then with how many files it has (`pick_option(shown_as=...)`,
+which sends treepick the changes through `--updates`). Choosing an option
+waits for both ways (an action may change what the other is diffing), and
+after a live (not dry run) action both are found again.
 `dirpick_main.run` returns the picked path: for a local dir it lets
 treepick scan the dir itself (`picker.pick_under_dir`, much faster than
 building a `DirTree`, ~3s for 119k files); for a cloud path it builds the

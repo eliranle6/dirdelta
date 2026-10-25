@@ -30,7 +30,10 @@ Like fzf: dirdelta starts `treepick`, which draws on the terminal itself
 - Showing a picker again with the user's picks: `--picked FILE`, FILE
   holding the paths treepick printed.
 - Menus: `treepick -0 --list [--header TEXT] -`, with the labels on stdin
-  (`--list` keeps them flat, since labels contain '/').
+  (`--list` keeps them flat, since labels contain '/'). With `shown_as`,
+  `pick_option` adds `--updates FD`, a pipe that a thread writes `LABEL<tab>TEXT\0`
+  to whenever an option's text changes (e.g. the main menu's file counts coming
+  in); treepick still prints the label when it's picked.
 - Output: the picked paths (or labels), each ending with `\0`, the root as
   `.`. Exit code 0: something was picked; 1: the user quit; anything else:
   an error (its message is on stderr).

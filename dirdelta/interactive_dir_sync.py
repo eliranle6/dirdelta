@@ -1,3 +1,4 @@
+import collections
 import os
 
 from dirdelta import dirdiff
@@ -7,6 +8,27 @@ from dirdelta import dryrun
 from dirdelta import localdiskdirtree
 from dirdelta import messages
 from dirdelta import picker
+
+
+# The relpaths of the files in a dir that another lacks (see find_missing()), and the lines of a
+# warning if scanning couldn't read everything, so the diff may be wrong (or none)
+Missing = collections.namedtuple('Missing', ['relpaths', 'warning'])
+
+
+def find_missing(src, dst):
+    """The files of src that dst lacks (Missing), each dir's together, sorted. Two local dirs are
+    diffed with dirdiff, which scans them anew (so dirdelta needn't keep their trees, and its diff
+    isn't from a stale scan); other trees are diffed as they are. Shows nothing, so it can run in
+    the background."""
+    if not (isinstance(src, localdiskdirtree.LocalDiskDirTree) and
+            isinstance(dst, localdiskdirtree.LocalDiskDirTree)):
+        missing = dst.get_unknown_entries_in_given_dirtree(src)
+        # By path components, so a dir's files and subdirs stay together
+        return Missing(sorted((entry.relpath for entry in missing.iter_files()),
+                              key=lambda relpath: relpath.split('/')), [])
+    relpaths, errors = dirdiff.files_not_in(src.fullpath(), dst.fullpath(), src.max_depth)
+    return Missing(relpaths, localdiskdirtree.scan_warning(
+        "%s or %s" % (src.fullpath(), dst.fullpath()), errors))
 
 
 class InteractiveDirSync(object):
@@ -20,13 +42,18 @@ class InteractiveDirSync(object):
     # How many of the picked files the confirmation lists
     MAX_FILES_LISTED = 5
 
-    def __init__(self, src, dst):
+    def __init__(self, src, dst, missing=None):
+        """missing: a future (concurrent.futures.Future) of find_missing(src, dst), e.g. found in
+        the background, to use rather than finding it again"""
         self._src = src
         self._dst = dst
+        self._missing_future = missing
 
     def view_diff(self):
         """Show the files in src that aren't in dst"""
-        missing = self._dst.get_unknown_entries_in_given_dirtree(self._src)
+        missing = dirtree.DirTree(self._src.fullpath())
+        for relpath in self._missing():
+            missing.add_file_by_relpath(relpath)
         header = "Files in %s, which are not in %s:" % (self._src.fullpath(), self._dst.fullpath())
         picker.pick_from_tree(missing, header=header)
 
@@ -63,23 +90,16 @@ class InteractiveDirSync(object):
                 self._remove(files)
 
     def _missing(self):
-        """The relpaths of src's files that dst lacks, each dir's together, sorted. Two local dirs
-        are diffed with dirdiff, which scans them anew (so dirdelta needn't keep their trees, and
-        its diff isn't from a stale scan), warning if find couldn't read everything; other trees
-        are diffed as they are."""
-        if not (isinstance(self._src, localdiskdirtree.LocalDiskDirTree) and
-                isinstance(self._dst, localdiskdirtree.LocalDiskDirTree)):
-            missing = self._dst.get_unknown_entries_in_given_dirtree(self._src)
-            # By path components, so a dir's files and subdirs stay together
-            return sorted((entry.relpath for entry in missing.iter_files()),
-                          key=lambda relpath: relpath.split('/'))
-        relpaths, errors = dirdiff.files_not_in(self._src.fullpath(), self._dst.fullpath(),
-                                                self._src.max_depth)
-        warning = localdiskdirtree.scan_warning(
-            "%s or %s" % (self._src.fullpath(), self._dst.fullpath()), errors)
-        if warning:
-            messages.show("Warning: find couldn't read everything", warning, dryrun.label(), 'red')
-        return relpaths
+        """The relpaths of src's files that dst lacks (see find_missing()), warning if scanning
+        couldn't read everything"""
+        if self._missing_future is not None:
+            missing = self._missing_future.result()
+        else:
+            missing = find_missing(self._src, self._dst)
+        if missing.warning:
+            messages.show("Warning: find couldn't read everything", missing.warning, dryrun.label(),
+                          'red')
+        return missing.relpaths
 
     def _chooseFiles(self, missing, action, picked=None):
         purpose = ("copy to %s" % (self._dst.fullpath(),) if action == self.COPY else

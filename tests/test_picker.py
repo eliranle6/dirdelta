@@ -12,14 +12,23 @@ from dirdelta import entries
 from dirdelta import picker
 from dirdelta import programs
 
-# Stands in for treepick: records its arguments and stdin into $FAKE_PICKER_LOG, then prints
+# Stands in for treepick: records its arguments and stdin into $FAKE_PICKER_LOG, and with
+# --updates, what it read from that fd until it read $FAKE_PICKER_WAIT_FOR; then prints
 # $FAKE_PICKER_OUTPUT (items separated by '|', printed '\0'-terminated) and exits with
 # $FAKE_PICKER_EXIT_CODE
 FAKE_PICKER = '''#!%s
 import json, os, sys
+stdin = sys.stdin.buffer.read().decode('utf-8', 'surrogateescape')
+updates = b''
+if '--updates' in sys.argv:
+    fd = int(sys.argv[sys.argv.index('--updates') + 1])
+    while os.environ['FAKE_PICKER_WAIT_FOR'].encode() not in updates:
+        chunk = os.read(fd, 4096)
+        if not chunk:
+            break
+        updates += chunk
 with open(os.environ['FAKE_PICKER_LOG'], 'w') as log:
-    json.dump({'args': sys.argv[1:],
-               'stdin': sys.stdin.buffer.read().decode('utf-8', 'surrogateescape')}, log)
+    json.dump({'args': sys.argv[1:], 'stdin': stdin, 'updates': updates.decode()}, log)
 output = os.environ.get('FAKE_PICKER_OUTPUT', '')
 sys.stdout.buffer.write(b''.join(item.encode('utf-8', 'surrogateescape') + b'\\0'
                                  for item in output.split('|') if item))
@@ -112,12 +121,12 @@ class PickerTest(unittest.TestCase):
         self.answer('b/2.txt')
 
         # The fake records the --picked file's contents, which is gone once the picker returns
-        def run(command, **kwargs):
+        def popen(command, **kwargs):
             with open(command[command.index('--picked') + 1], 'rb') as f:
                 self.picked_file_contents = f.read()
-            return real_run(command, **kwargs)
-        real_run = picker.subprocess.run
-        with mock.patch('dirdelta.picker.subprocess.run', side_effect=run):
+            return real_popen(command, **kwargs)
+        real_popen = picker.subprocess.Popen
+        with mock.patch('dirdelta.picker.subprocess.Popen', side_effect=popen):
             picker.pick_files('/some/root', ['a/1.txt', 'b/2.txt'], picked=['b/2.txt'])
 
         self.assertEqual(self.picked_file_contents, b'b/2.txt\0')
@@ -159,6 +168,32 @@ class PickerTest(unittest.TestCase):
         args, items = self.call()
         self.assertEqual(args, ['-0', '--list', '--root', 'Options', '--header', 'What now?'])
         self.assertEqual(items, options)
+
+    def test_pick_option_sends_what_options_are_shown_as_as_it_changes(self):
+        options = ['Copy', 'Quit']
+        # Loading until asked a few times, then counted
+        calls = []
+        def shown_as():
+            calls.append(None)
+            return {'Copy': 'Copy (loading)' if len(calls) < 3 else 'Copy (3 files)'}
+        os.environ['FAKE_PICKER_WAIT_FOR'] = '3 files'
+        self.answer('Copy')
+        with mock.patch('dirdelta.picker.SHOWN_AS_INTERVAL', 0.01):
+            self.assertEqual(picker.pick_option(options, shown_as=shown_as), 'Copy')
+        args, items = self.call()
+        self.assertEqual(args[:-2], ['-0', '--list', '--root', 'Options'])
+        self.assertEqual(args[-2], '--updates')
+        self.assertEqual(items, options)
+        with open(self.log) as f:
+            updates = json.load(f)['updates']
+        # Each change once, in order
+        self.assertEqual(updates, 'Copy\tCopy (loading)\0Copy\tCopy (3 files)\0')
+
+    def test_a_menu_without_shown_as_gets_no_updates(self):
+        self.answer('Quit')
+        picker.pick_option(['Quit'])
+        args, _ = self.call()
+        self.assertNotIn('--updates', args)
 
     def test_pick_under_dir(self):
         self.answer('sub/file.txt')

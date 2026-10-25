@@ -1,3 +1,5 @@
+import concurrent.futures
+import time
 import unittest
 from unittest import mock
 
@@ -42,6 +44,26 @@ class MainMenuTest(unittest.TestCase):
                         mock.patch('dirdelta.messages.show')):
             self.addCleanup(patcher.stop)
             self.show = patcher.start()
+        # Each dir's files that the other lacks: /a's 3, /b's 1
+        self.missing = {'/a': ['x', 'y', 'z'], '/b': ['w']}
+        self.find_missing_calls = []
+        def find_missing(src, dst):
+            self.find_missing_calls.append(src.fullpath())
+            return interactive_dir_sync.Missing(self.missing[src.fullpath()], [])
+        patcher = mock.patch('dirdelta.interactive_dir_sync.find_missing', side_effect=find_missing)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def shown(self, replica_a, replica_b):
+        """What the main menu's options are shown as, once each way's files are found"""
+        def pick_option(options, shown_as):
+            while any('loading' in shown for shown in shown_as().values()):
+                time.sleep(0.01)
+            self.shown_options = [shown_as().get(option, option) for option in options]
+            return 'Quit'
+        with mock.patch('dirdelta.picker.pick_option', side_effect=pick_option):
+            dirsync_main._sync(replica_a, replica_b, '/a', '/b')
+        return self.shown_options
 
     def options(self, replica_a, replica_b):
         with mock.patch('dirdelta.picker.pick_option', return_value='Quit') as pick_option:
@@ -53,10 +75,10 @@ class MainMenuTest(unittest.TestCase):
         a = localdiskdirtree.LocalDiskDirTree('/a', silent=True)
         b = localdiskdirtree.LocalDiskDirTree('/b', silent=True)
         self.assertEqual(self.options(a, b), [
-            'Copy files from /a to /b (the ones it lacks)',
-            'Copy files from /b to /a (the ones it lacks)',
-            'Remove files from /a (the ones /b lacks)',
-            'Remove files from /b (the ones /a lacks)',
+            'Copy files from /a to /b',
+            'Copy files from /b to /a',
+            'Remove files from /a',
+            'Remove files from /b',
             'Quit',
         ])
 
@@ -64,7 +86,7 @@ class MainMenuTest(unittest.TestCase):
         a = localdiskdirtree.LocalDiskDirTree('/a', silent=True)
         b = dirtree.DirTree('cloud/b')
         self.assertEqual(self.options(a, b), [
-            'Remove files from /a (the ones /b lacks)',
+            'Remove files from /a',
             'View files in /b, not /a',
             'Quit',
         ])
@@ -74,8 +96,8 @@ class MainMenuTest(unittest.TestCase):
         a = localdiskdirtree.LocalDiskDirTree('/a', silent=True)
         b = localdiskdirtree.LocalDiskDirTree('/b', silent=True)
         self.assertEqual(self.options(a, b), [
-            'Copy files from /a to /b (the ones it lacks)',
-            'Remove files from /b (the ones /a lacks)',
+            'Copy files from /a to /b',
+            'Remove files from /b',
             'Quit',
         ])
 
@@ -103,7 +125,7 @@ class MainMenuTest(unittest.TestCase):
     def test_the_chosen_action_runs_and_the_menu_comes_back(self):
         a = localdiskdirtree.LocalDiskDirTree('/a', silent=True)
         b = localdiskdirtree.LocalDiskDirTree('/b', silent=True)
-        answers = ['Remove files from /b (the ones /a lacks)', 'Quit']
+        answers = ['Remove files from /b', 'Quit']
         with mock.patch('dirdelta.picker.pick_option', side_effect=lambda *_, **__: answers.pop(0)), \
                 mock.patch('dirdelta.interactive_dir_sync.InteractiveDirSync.sync') as sync:
             dirsync_main._sync(a, b, '/a', '/b')
@@ -116,3 +138,65 @@ class MainMenuTest(unittest.TestCase):
         with mock.patch('dirdelta.picker.pick_option', return_value=None) as pick_option:
             dirsync_main._sync(a, b, '/a', '/b')
         pick_option.assert_called_once()
+
+    def test_options_say_how_many_files_they_are_about(self):
+        a = localdiskdirtree.LocalDiskDirTree('/a', silent=True)
+        b = localdiskdirtree.LocalDiskDirTree('/b', silent=True)
+        self.assertEqual(self.shown(a, b), [
+            'Copy files from /a to /b (the 3 files it lacks)',
+            'Copy files from /b to /a (the 1 file it lacks)',
+            'Remove files from /a (the 3 files /b lacks)',
+            'Remove files from /b (the 1 file /a lacks)',
+            'Quit',
+        ])
+
+    def test_view_options_say_how_many_files_too(self):
+        self.writable = set()
+        a = localdiskdirtree.LocalDiskDirTree('/a', silent=True)
+        b = dirtree.DirTree('/b')
+        self.assertEqual(self.shown(a, b), [
+            'View files in /a, not /b (3 files)',
+            'View files in /b, not /a (1 file)',
+            'Quit',
+        ])
+
+    def test_options_are_loading_until_their_files_are_found(self):
+        way = dirsync_main._Way(None, None)
+        way.missing = concurrent.futures.Future()
+        action = dirsync_main._Action('Copy', way, lambda count: '%d files' % (count,))
+        shown = set()
+        for now in (0, 0.4, 0.8, 1.2, 1.6):
+            with mock.patch('dirdelta.dirsync_main.time.monotonic', return_value=now + 0.1):
+                shown.add(action.shown_as())
+        self.assertEqual(shown, {'Copy (loading)', 'Copy (loading.)', 'Copy (loading..)',
+                                 'Copy (loading...)'})
+        way.missing.set_result(interactive_dir_sync.Missing(['x'], []))
+        self.assertEqual(action.shown_as(), 'Copy (1 files)')
+
+    def test_an_option_whose_files_couldnt_be_found_says_so(self):
+        way = dirsync_main._Way(None, None)
+        way.missing = concurrent.futures.Future()
+        way.missing.set_exception(RuntimeError('dirdiff failed'))
+        action = dirsync_main._Action('Copy', way, lambda count: '%d files' % (count,))
+        self.assertEqual(action.shown_as(), "Copy (couldn't count the files)")
+
+    def test_actions_use_the_files_found_in_the_background(self):
+        a = localdiskdirtree.LocalDiskDirTree('/a', silent=True)
+        b = localdiskdirtree.LocalDiskDirTree('/b', silent=True)
+        answers = ['Copy files from /a to /b', 'Remove files from /a', 'Quit']
+        with mock.patch('dirdelta.picker.pick_option', side_effect=lambda *_, **__: answers.pop(0)), \
+                mock.patch('dirdelta.picker.pick_files', return_value=None) as pick_files:
+            dirsync_main._sync(a, b, '/a', '/b')
+        # A dry run changes nothing, so each way's files are found once
+        self.assertEqual(sorted(self.find_missing_calls), ['/a', '/b'])
+        self.assertEqual([call.args[1] for call in pick_files.call_args_list], [['x', 'y', 'z']] * 2)
+
+    def test_a_live_action_finds_the_files_again(self):
+        a = localdiskdirtree.LocalDiskDirTree('/a', silent=True)
+        b = localdiskdirtree.LocalDiskDirTree('/b', silent=True)
+        answers = ['Copy files from /a to /b', 'Quit']
+        with mock.patch('dirdelta.picker.pick_option', side_effect=lambda *_, **__: answers.pop(0)), \
+                mock.patch('dirdelta.picker.pick_files', return_value=None), \
+                mock.patch('dirdelta.dryrun.DRYRUN', False):
+            dirsync_main._sync(a, b, '/a', '/b')
+        self.assertEqual(sorted(self.find_missing_calls), ['/a', '/a', '/b', '/b'])
