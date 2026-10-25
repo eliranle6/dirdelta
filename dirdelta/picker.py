@@ -23,25 +23,36 @@ class PickerError(programs.ProgramError):
     pass
 
 
-def pick_from_tree(tree, header='', multi=False, picked=None):
-    """Let the user pick from a DirTree. Returns the picked nodes' data (entries), in the tree's
-    order, or None if the user quit.
-
-    With multi, they pick several: picking a dir picks everything under it, dirs included. picked
-    (entries, e.g. what an earlier call returned) start picked.
-    """
-    paths = list(_tree_paths(tree))
-    args = ['--typed', '--root', tree.fullpath()] + (['-m'] if multi else []) + _header_args(header)
-    with tempfile.NamedTemporaryFile('wb', prefix='dirdelta-picked-') as picked_file:
-        if picked:
-            picked_file.write(_null_terminated(entry.relpath or '.' for entry in picked))
-            picked_file.flush()
-            args += ['--picked', picked_file.name]
-        picked_paths = _run(args + ['-'], paths)
+def pick_from_tree(tree, header=''):
+    """Let the user pick a node of a DirTree. Returns [the picked node's data (entry)], or None if
+    the user quit."""
+    args = ['--typed', '--root', tree.fullpath()] + _header_args(header)
+    picked_paths = _run(args + ['-'], list(_tree_paths(tree)))
     if picked_paths is None:
         return None
     # The root is printed as '.'; its id is ''
     return [tree.get_node('' if path == '.' else path).data for path in picked_paths]
+
+
+def pick_files(rootpath, relpaths, header='', picked=None):
+    """Let the user pick some of the files at relpaths (relative to rootpath, each dir's files and
+    subdirs together, in the order to show them, as dirdiff lists them). Picking a dir picks the
+    files under it. Returns the picked ones (of relpaths), in that order, or None if the user quit.
+    picked (relpaths, e.g. what an earlier call returned) start picked.
+
+    Only the files are sent: dirpicker adds their dirs, so no tree is built here."""
+    args = ['--typed', '--root', rootpath, '-m'] + _header_args(header)
+    with tempfile.NamedTemporaryFile('wb', prefix='dirdelta-picked-') as picked_file:
+        if picked:
+            picked_file.write(_null_terminated(picked))
+            picked_file.flush()
+            args += ['--picked', picked_file.name]
+        picked_paths = _run(args + ['-'], ('f ' + relpath for relpath in relpaths))
+    if picked_paths is None:
+        return None
+    # What's picked includes the dirs whose files all are
+    files = set(relpaths)
+    return [path for path in picked_paths if path in files]
 
 
 def pick_under_dir(dirpath, max_depth=None):

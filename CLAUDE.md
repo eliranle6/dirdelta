@@ -126,11 +126,11 @@ module:
 PYTHONPATH=.:tests .venv/bin/python3 -m unittest test_interactive_dir_sync -v
 ```
 
-Every module has a test file (91 tests, all passing as of 2026-10-24) except
+Every module has a test file (108 tests, all passing as of 2026-10-25) except
 the thin wiring in `main.py`/`dirsync_main.py`, covered only by running the
 app. Shared fakes:
 - `tests/helpers.py`: `scripted_option_picker` / `scripted_tree_picker` /
-  `scripted_dir_picker` patch `dirdelta.picker`'s functions to return
+  `scripted_files_picker` / `scripted_dir_picker` patch `dirdelta.picker`'s functions to return
   scripted answers, so no test runs dirpicker, plus `make_files` for
   temp dir fixtures. `tests/test_picker.py` tests `picker.py` itself against
   a fake dirpicker script. App tests build their own `tempfile.mkdtemp()` trees

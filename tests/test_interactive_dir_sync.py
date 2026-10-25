@@ -6,7 +6,7 @@ import unittest
 from unittest import mock
 
 import helpers
-from dirdelta import entries
+from dirdelta import dirtree
 from dirdelta import interactive_dir_sync
 from dirdelta import localdiskdirtree
 
@@ -33,13 +33,13 @@ class InteractiveDirSyncTest(unittest.TestCase):
         shutil.rmtree(self.src_root, ignore_errors=True)
         shutil.rmtree(self.dst_root, ignore_errors=True)
 
-    def _sync(self, action, choose=helpers.all_files, confirmations=None):
+    def _sync(self, action, choose=list, confirmations=None):
         """Sync, answering each confirmation with the next of confirmations (by default, Yes to all)"""
         src = localdiskdirtree.factory(self.src_root, silent=True)
         dst = localdiskdirtree.factory(self.dst_root, silent=True)
         answers = (helpers.scripted_option_picker(confirmations) if confirmations is not None else
                    mock.patch('dirdelta.picker.pick_option', return_value=YES))
-        with helpers.scripted_tree_picker(choose), answers as self.pick_option:
+        with helpers.scripted_files_picker(choose), answers as self.pick_option:
             interactive_dir_sync.InteractiveDirSync(src, dst).sync(action)
         return src, dst
 
@@ -93,7 +93,7 @@ class InteractiveDirSyncTest(unittest.TestCase):
             yield
             last_lines.append(self.messages[-1])
 
-        with helpers.scripted_tree_picker(helpers.all_files), \
+        with helpers.scripted_files_picker(list), \
                 mock.patch('dirdelta.picker.pick_option', return_value=YES), \
                 mock.patch('dirdelta.messages.progress_screen', progress_screen):
             interactive_dir_sync.InteractiveDirSync(src, dst).sync(COPY)
@@ -136,29 +136,29 @@ class InteractiveDirSyncTest(unittest.TestCase):
     def test_no_picks_again_from_the_same_picks_and_changes_nothing(self):
         picked_args = []
 
-        def pick_from_tree(tree, picked=None, **_):
+        def pick_files(rootpath, relpaths, picked=None, **_):
             picked_args.append(picked)
             # The files, then quit
-            return helpers.all_files(tree) if len(picked_args) == 1 else None
+            return list(relpaths) if len(picked_args) == 1 else None
 
         src = localdiskdirtree.factory(self.src_root, silent=True)
         dst = localdiskdirtree.factory(self.dst_root, silent=True)
-        with mock.patch('dirdelta.picker.pick_from_tree', side_effect=pick_from_tree), \
+        with mock.patch('dirdelta.picker.pick_files', side_effect=pick_files), \
                 helpers.scripted_option_picker([NO]), \
                 mock.patch('dirdelta.dryrun.DRYRUN', False):
             interactive_dir_sync.InteractiveDirSync(src, dst).sync(REMOVE)
 
         self.assertIsNone(picked_args[0])
-        self.assertEqual([entry.relpath for entry in picked_args[1]], ['sub/b.txt'])
+        self.assertEqual(picked_args[1], ['sub/b.txt'])
         self.assertTrue(os.path.exists(os.path.join(self.src_root, 'sub/b.txt')))
 
     def test_quitting_the_confirmation_is_no(self):
         nr_picks = []
 
-        def choose(tree):
+        def choose(relpaths):
             # The files, then quit
             nr_picks.append(1)
-            return helpers.all_files(tree) if len(nr_picks) == 1 else None
+            return list(relpaths) if len(nr_picks) == 1 else None
 
         with mock.patch('dirdelta.dryrun.DRYRUN', False):
             self._sync(REMOVE, choose, confirmations=[None])
@@ -167,7 +167,7 @@ class InteractiveDirSyncTest(unittest.TestCase):
         self.assertTrue(os.path.exists(os.path.join(self.src_root, 'sub/b.txt')))
 
     def test_quitting_the_file_picker_ends_sync(self):
-        self._sync(COPY, choose=lambda tree: None)
+        self._sync(COPY, choose=lambda relpaths: None)
 
         self.assertFalse(os.path.exists(os.path.join(self.dst_root, 'sub/b.txt')))
 
@@ -176,10 +176,9 @@ class InteractiveDirSyncTest(unittest.TestCase):
         helpers.make_files(self.src_root, ['sub/c.txt'])
         offered = []
 
-        def choose(tree):
-            files = helpers.all_files(tree)
-            offered.append([entry.relpath for entry in files])
-            return files[:1]
+        def choose(relpaths):
+            offered.append(list(relpaths))
+            return relpaths[:1]
 
         with mock.patch('dirdelta.dryrun.DRYRUN', False):
             self._sync(COPY, choose)
@@ -191,17 +190,37 @@ class InteractiveDirSyncTest(unittest.TestCase):
     def test_nothing_missing_says_so_without_a_picker(self):
         helpers.make_files(self.dst_root, ['sub/b.txt'])
         with mock.patch('dirdelta.messages.show') as show:
-            self._sync(COPY, choose=lambda tree: self.fail('no picker expected'))
+            self._sync(COPY, choose=lambda relpaths: self.fail('no picker expected'))
         title, lines, _ = show.call_args.args
         self.assertEqual(title, 'Nothing to copy')
         self.assertEqual(lines, ["%s has all of %s's files." % (os.path.realpath(self.dst_root),
                                                               os.path.realpath(self.src_root))])
 
-    def test_picking_only_dirs_ends_sync(self):
-        # Enter with nothing picked doesn't return; picking only dirs picks no files
-        self._sync(COPY, choose=lambda tree: [node.data for node in tree.all_nodes()
-                                              if isinstance(node.data, entries.DirEntry)])
+    def test_picking_nothing_ends_sync(self):
+        self._sync(COPY, choose=lambda relpaths: [])
         self.assertFalse(os.path.exists(os.path.join(self.dst_root, 'sub/b.txt')))
+
+    def test_picked_files_are_copied_from_src(self):
+        # Their entries are made from the picked relpaths only
+        copied = []
+        with mock.patch('dirdelta.dryrun.DRYRUN', False), \
+                mock.patch('dirdelta.localdiskdirtree.LocalDiskDirTree.copy_inner_entries_from_dirtree',
+                           side_effect=lambda tree: copied.extend(tree.iter_files())):
+            self._sync(COPY)
+        self.assertEqual([(entry.relpath, entry.full_filesystem_path()) for entry in copied],
+                         [('sub/b.txt', os.path.join(os.path.realpath(self.src_root), 'sub/b.txt'))])
+
+    def test_trees_other_than_two_local_dirs_are_diffed_as_they_are(self):
+        # (A cloud tree, say.) Sorted by path components, so each dir's files stay together.
+        src = dirtree.DirTree('/src')
+        for relpath in ['b/2.txt', 'a b/1.txt', 'a/1.txt', 'c.txt']:
+            src.add_file_by_relpath(relpath)
+        dst = dirtree.DirTree('/dst')
+        dst.add_file_by_relpath('c.txt')
+        offered = []
+        with helpers.scripted_files_picker(lambda relpaths: offered.append(relpaths)):
+            interactive_dir_sync.InteractiveDirSync(src, dst).sync(COPY)
+        self.assertEqual(offered, [['a/1.txt', 'a b/1.txt', 'b/2.txt']])
 
 if __name__ == '__main__':
     unittest.main()

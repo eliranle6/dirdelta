@@ -15,8 +15,9 @@ shell script (dirsync-*.sh / dirpick-*.sh)
        → picker.pick_option([...])                         (the top-level menu, in _sync)
        → interactive_dir_sync.InteractiveDirSync(src, dst)
             .sync(COPY or REMOVE) / .view_diff()
-              → DirTree.get_unknown_entries_in_given_dirtree()   (the diff)
-              → picker.pick_from_tree(missing_tree, multi=True)  (selection UI)
+              → dirdiff.files_not_in() for two local dirs, else
+                DirTree.get_unknown_entries_in_given_dirtree()   (the diff: relpaths)
+              → picker.pick_files(src, missing_relpaths)         (selection UI)
               → LocalDiskDirTree.copy_inner_entries_from_dirtree() / .remove_files()
 ```
 
@@ -129,14 +130,16 @@ dirdiff: `$env_var`, next to the running python, `lib/cpptree/build/`, `PATH`.
 `dirdiff`, run anew for each action (so the dirs' own trees are never
 scanned: `dirsync_main` makes them empty, and there's no stale scan), with a
 warning screen if find couldn't read everything; with a cloud replica, the
-trees' `get_unknown_entries_in_given_dirtree()`.
+trees' `get_unknown_entries_in_given_dirtree()`. Either way it's a list of
+relpaths: no Python tree is built of the missing files (for 111k of them that
+took ~2.5s; the picker now opens 0.2s after the diff).
 - `sync(action)`, one pass, for `COPY` (src's missing files into dst) or
-  `REMOVE` (them from src): diff → `picker.pick_from_tree(missing,
-  multi=True)` to select files → confirm (`picker.pick_option(['No',
-  'Yes'])`, No first so it's selected; No, or quitting it, picks again,
-  starting from the same picks via `pick_from_tree(picked=...)`) → act (on
-  the progress screen) → back to the main menu. The picked files are
-  passed to `_copy(files)`/`_remove(files)`.
+  `REMOVE` (them from src): diff → `picker.pick_files(src, missing)` to
+  select files → confirm (`picker.pick_option(['No', 'Yes'])`, No first so
+  it's selected; No, or quitting it, picks again, starting from the same
+  picks via `pick_files(picked=...)`) → act (on the progress screen) → back
+  to the main menu. `FileEntry`s are made for the picked files only
+  (`_file_entry()`), and passed to `_copy(files)`/`_remove(files)`.
 - `_copy()` rebuilds a `DirTree` from just the selected `FileEntry`s via
   `dirtree.DirTree.from_file_entries` (previously
   miscalled as a `DirTree` classmethod — fixed, known-issues.md #3), then
@@ -193,11 +196,17 @@ Runs `dirpicker` (from github.com/levioctl/cpptree; `$DIRDELTA_PICKER`, or
 draws on `/dev/tty`, reads its input on stdin and prints what was picked on
 stdout, all `\0`-separated (`-0`). Exit code 1 means the user quit (→
 `None`); others raise `PickerError`. See `docs/dirpicker-integration.md`.
-- `pick_from_tree(tree, header, multi)`: sends a `DirTree`'s node ids
-  (relative paths, like dirpicker's; the root, `''`, is dirpicker's `.`), each after its type
-  (`--typed`: `f sub/x`, `d sub`, so the picker counts files), each dir
-  before its contents, siblings sorted by tag; maps the picked paths back to the nodes'
-  entries (`.` is the root).
+- `pick_from_tree(tree, header)`: picks one node of a `DirTree` (cloud
+  picker mode, the cloud diff view). Sends its node ids (relative paths,
+  like dirpicker's; the root, `''`, is dirpicker's `.`), each after its type
+  (`--typed`: `f sub/x`, `d sub`), each dir before its contents, siblings
+  sorted by tag; maps the picked path back to the node's entry (`.` is the
+  root).
+- `pick_files(rootpath, relpaths, header, picked)`: picks several of a
+  list of files (`-m`), sent as `f sub/x` lines only: dirpicker adds their
+  dirs. Returns the picked files' relpaths (dirpicker also prints the dirs
+  whose files are all picked; those are dropped). `picked` start picked
+  (`--picked FILE`).
 - `pick_under_dir(dirpath, max_depth)`: `dirpicker [--max-depth N] DIR`.
 - `pick_option(options, header)`: `dirpicker --list`, for menus.
 Names are passed as bytes with `surrogateescape`, so non-UTF-8 file names

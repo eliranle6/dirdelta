@@ -15,12 +15,15 @@ Done as of 2026-10-23 (see the plan below); what's left is at the end.
 Like fzf: dirdelta starts `dirpicker`, which draws on the terminal itself
 (/dev/tty) and prints what was picked on stdout.
 
-- Picking from a tree dirdelta already has (sync mode's diff tree, a cloud
-  tree): `dirpicker -0 [-m] [--header TEXT] [--root NAME] -`, with the tree's
+- Picking from a tree dirdelta already has (a cloud tree):
+  `dirpicker -0 --typed [--header TEXT] [--root NAME] -`, with the tree's
   paths on stdin, each ending with `\0`, relative to the root (`sub/x`, the
-  same as dirdelta's ids). Each folder before what's in it, in the order to
-  show. `-m` picks several (Space picks a node and everything under it,
-  Enter finishes).
+  same as dirdelta's ids), after their type (`f `, `d `). Each folder before
+  what's in it, in the order to show.
+- Picking files of a diff (sync mode): the same with `-m`, but only the
+  files are sent (`f sub/x`), as dirdiff lists them: dirpicker adds their
+  dirs, so dirdelta builds no tree of them. `-m` picks several (Space picks
+  a node and everything under it, Enter finishes).
 - Picking under a local dir (picker mode): `dirpicker -0 --max-depth N DIR`.
   dirpicker scans it with `find` itself, so dirdelta builds no Python tree;
   if find couldn't read everything, dirpicker warns in its header.
@@ -76,7 +79,5 @@ dirdelta, each a commit:
 
 - The leaf jumps (Ctrl-J/K), Ctrl-H and Ctrl-L, which the Python picker had
   (not needed, so far).
-- For a big diff of two local dirs, the file picker waits ~2s more than it
-  needs, for a Python tree of dirdiff's output (improvement-ideas.md #1).
 - The cloud flow hasn't been run end to end with dirpicker (it needs Drive
   credentials); its pieces are covered by the unit tests.

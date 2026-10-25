@@ -94,15 +94,21 @@ class PickerTest(unittest.TestCase):
         self.answer('.')
         self.assertEqual(picker.pick_from_tree(tree), [tree.get_node('').data])
 
-    def test_pick_several(self):
-        self.answer('b|b/2.txt|b/sub|b/sub/3.txt')
-        picked = picker.pick_from_tree(self.make_tree(), header='Pick\nfiles', multi=True)
-        self.assertEqual([entry.relpath for entry in picked], ['b', 'b/2.txt', 'b/sub', 'b/sub/3.txt'])
-        args, _ = self.call()
+    def test_pick_files_sends_only_the_files(self):
+        # dirpicker adds their dirs
+        self.answer('b/2.txt')
+        picker.pick_files('/some/root', ['a/1.txt', 'b/2.txt'], header='Pick\nfiles')
+        args, items = self.call()
+        self.assertEqual(items, ['f a/1.txt', 'f b/2.txt'])
         self.assertEqual(args, ['-0', '--typed', '--root', '/some/root', '-m', '--header', 'Pick\nfiles', '-'])
 
-    def test_picked_entries_start_picked(self):
-        tree = self.make_tree()
+    def test_pick_files_returns_only_files(self):
+        # A dir is printed when all its files are picked
+        self.answer('b|b/2.txt|b/sub|b/sub/3.txt')
+        picked = picker.pick_files('/some/root', ['a/1.txt', 'b/2.txt', 'b/sub/3.txt'])
+        self.assertEqual(picked, ['b/2.txt', 'b/sub/3.txt'])
+
+    def test_picked_files_start_picked(self):
         self.answer('b/2.txt')
 
         # The fake records the --picked file's contents, which is gone once the picker returns
@@ -112,23 +118,20 @@ class PickerTest(unittest.TestCase):
             return real_run(command, **kwargs)
         real_run = picker.subprocess.run
         with mock.patch('dirdelta.picker.subprocess.run', side_effect=run):
-            picker.pick_from_tree(tree, multi=True,
-                                  picked=[tree.get_node('b').data, tree.get_node('b/2.txt').data,
-                                          tree.get_node('').data])
+            picker.pick_files('/some/root', ['a/1.txt', 'b/2.txt'], picked=['b/2.txt'])
 
-        self.assertEqual(self.picked_file_contents, b'b\0b/2.txt\0.\0')
-        args, _ = self.call()
-        self.assertIn('--picked', args)
+        self.assertEqual(self.picked_file_contents, b'b/2.txt\0')
 
     def test_nothing_picked_passes_no_picked_file(self):
         self.answer('a/1.txt')
-        picker.pick_from_tree(self.make_tree(), multi=True, picked=[])
+        picker.pick_files('/some/root', ['a/1.txt'], picked=[])
         args, _ = self.call()
         self.assertNotIn('--picked', args)
 
     def test_quitting_returns_none(self):
         self.answer(exit_code=1)
         self.assertIsNone(picker.pick_from_tree(self.make_tree()))
+        self.assertIsNone(picker.pick_files('/some/root', ['a/1.txt']))
         self.assertIsNone(picker.pick_option(['x']))
         self.assertIsNone(picker.pick_under_dir('/some/dir'))
 
@@ -174,6 +177,9 @@ class PickerTest(unittest.TestCase):
         tree.add_file_by_relpath(name)
         self.answer(name)
         self.assertEqual([entry.name for entry in picker.pick_from_tree(tree)], [name])
+        self.assertEqual(picker.pick_files('/root', [name]), [name])
+        _, items = self.call()
+        self.assertEqual(items, ['f ' + name])
 
 
 if __name__ == '__main__':

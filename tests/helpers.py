@@ -15,6 +15,13 @@ def scripted_tree_picker(choose):
                       side_effect=lambda tree, *_, **__: choose(tree))
 
 
+def scripted_files_picker(choose):
+    """Patch picker.pick_files so it returns choose(relpaths), called with the relpaths it was
+    given."""
+    return mock.patch('dirdelta.picker.pick_files',
+                      side_effect=lambda rootpath, relpaths, *_, **__: choose(relpaths))
+
+
 def scripted_dir_picker(picked_path):
     """Patch picker.pick_under_dir so it returns picked_path."""
     return mock.patch('dirdelta.picker.pick_under_dir', return_value=picked_path)
