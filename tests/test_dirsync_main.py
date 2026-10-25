@@ -34,6 +34,15 @@ class ScanErrorsWarningTest(unittest.TestCase):
 
 
 class MainMenuTest(unittest.TestCase):
+    def setUp(self):
+        # The local dirs are writable unless a test says otherwise, and no message waits for Enter
+        self.writable = {'/a', '/b'}
+        for patcher in (mock.patch('dirdelta.dirsync_main.os.access',
+                                   side_effect=lambda path, mode: path in self.writable),
+                        mock.patch('dirdelta.messages.show')):
+            self.addCleanup(patcher.stop)
+            self.show = patcher.start()
+
     def options(self, replica_a, replica_b):
         with mock.patch('dirdelta.picker.pick_option', return_value='Quit') as pick_option:
             dirsync_main._sync(replica_a, replica_b, '/a', '/b')
@@ -51,7 +60,27 @@ class MainMenuTest(unittest.TestCase):
             'Quit',
         ])
 
-    def test_a_cloud_replica_gets_viewing_only(self):
+    def test_a_writable_local_dir_beside_a_cloud_replica_gets_remove(self):
+        a = localdiskdirtree.LocalDiskDirTree('/a', silent=True)
+        b = dirtree.DirTree('cloud/b')
+        self.assertEqual(self.options(a, b), [
+            'Remove files from /a (the ones /b lacks)',
+            'View files in /b, not /a',
+            'Quit',
+        ])
+
+    def test_a_read_only_dir_gets_nothing_copied_into_or_removed_from_it(self):
+        self.writable = {'/b'}
+        a = localdiskdirtree.LocalDiskDirTree('/a', silent=True)
+        b = localdiskdirtree.LocalDiskDirTree('/b', silent=True)
+        self.assertEqual(self.options(a, b), [
+            'Copy files from /a to /b (the ones it lacks)',
+            'Remove files from /b (the ones /a lacks)',
+            'Quit',
+        ])
+
+    def test_read_only_replicas_are_said_to_be_before_the_menu(self):
+        self.writable = set()
         a = localdiskdirtree.LocalDiskDirTree('/a', silent=True)
         b = dirtree.DirTree('cloud/b')
         self.assertEqual(self.options(a, b), [
@@ -59,6 +88,17 @@ class MainMenuTest(unittest.TestCase):
             'View files in /b, not /a',
             'Quit',
         ])
+        title, lines, _ = self.show.call_args.args
+        self.assertEqual(title, 'Read-only')
+        self.assertEqual(len(lines), 2)
+        self.assertIn('/a is read-only', lines[0])
+        self.assertIn('/b is on Google Drive', lines[1])
+
+    def test_writable_replicas_get_no_read_only_message(self):
+        a = localdiskdirtree.LocalDiskDirTree('/a', silent=True)
+        b = localdiskdirtree.LocalDiskDirTree('/b', silent=True)
+        self.options(a, b)
+        self.show.assert_not_called()
 
     def test_the_chosen_action_runs_and_the_menu_comes_back(self):
         a = localdiskdirtree.LocalDiskDirTree('/a', silent=True)

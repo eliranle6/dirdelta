@@ -168,11 +168,14 @@ both `DirTree`s, warn (`scan_errors_warning`, shown with
 since its diff may then be wrong,
 present a top-level menu (`_sync`: a loop of `picker.pick_option()` over
 (label, action) pairs, each action an `InteractiveDirSync(src, dst)`'s
-`sync(COPY or REMOVE)` or `view_diff()`, until Quit): `Copy A→B`, `Copy B→A`, `Remove from A` (A's
-files that B lacks), `Remove from B`, `Quit` when **both** replicas are
-`LocalDiskDirTree`s; else (a cloud replica) only `View diff A-not-B`,
-`View diff B-not-A`, `Quit`, since cloud replicas are view-only (and the
-local menu's pickers already show those diffs).
+`sync(COPY or REMOVE)` or `view_diff()`, until Quit), by what's writable
+(`_is_writable`: a `LocalDiskDirTree` with write permission, so not one on a
+read-only mount, and never a cloud replica, which dirdelta only reads): each
+way, `Copy A→B` if A is local and B writable, `Remove from A` (A's files
+that B lacks) if A is writable, and if neither, `View diff A-not-B` (the
+others' pickers already show that diff); then `Quit`. Before the menu, a
+"Read-only" screen (`messages.show()`) says which replicas are read-only and
+why.
 `dirpick_main.run` returns the picked path: for a local dir it lets
 treepick scan the dir itself (`picker.pick_under_dir`, much faster than
 building a `DirTree`, ~3s for 119k files); for a cloud path it builds the
