@@ -189,7 +189,7 @@ entries here are history).
 
 23. ~~**Menus are shown in alphabetical order**, not the order the code lists
   options in, because the picker sorts every sibling group by
-  `str(node.data)`.~~ **FIXED** (2026-10-23): menus are `dirpicker --list`
+  `str(node.data)`.~~ **FIXED** (2026-10-23): menus are `treepick --list`
   now, which keeps the order given.
 
 24. **Cloud scanning is untested against real Drive data.**

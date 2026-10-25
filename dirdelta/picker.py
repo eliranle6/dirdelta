@@ -1,7 +1,7 @@
-"""dirdelta's pickers: they run the dirpicker program, from github.com/levioctl/cpptree.
+"""dirdelta's pickers: they run the treepick program, from github.com/levioctl/cpptree.
 
-Like fzf, dirpicker draws on the terminal itself and prints what was picked, so each pick runs it as
-a subprocess (see docs/dirpicker-integration.md), found by programs.find() ($DIRDELTA_PICKER, or
+Like fzf, treepick draws on the terminal itself and prints what was picked, so each pick runs it as
+a subprocess (see docs/treepick-integration.md), found by programs.find() ($DIRDELTA_PICKER, or
 else where make install, make deploy or make build put it, or else on PATH).
 """
 import os
@@ -13,9 +13,9 @@ from dirdelta import dryrun
 from dirdelta import programs
 
 PROGRAM_ENV_VAR = 'DIRDELTA_PICKER'
-PROGRAM_NAME = 'dirpicker'
+PROGRAM_NAME = 'treepick'
 
-# dirpicker's exit code when the user quit without picking
+# treepick's exit code when the user quit without picking
 _EXIT_CODE_QUIT = 1
 
 
@@ -40,7 +40,7 @@ def pick_files(rootpath, relpaths, header='', picked=None):
     files under it. Returns the picked ones (of relpaths), in that order, or None if the user quit.
     picked (relpaths, e.g. what an earlier call returned) start picked.
 
-    Only the files are sent: dirpicker adds their dirs, so no tree is built here."""
+    Only the files are sent: treepick adds their dirs, so no tree is built here."""
     args = ['--typed', '--root', rootpath, '-m'] + _header_args(header)
     with tempfile.NamedTemporaryFile('wb', prefix='dirdelta-picked-') as picked_file:
         if picked:
@@ -56,7 +56,7 @@ def pick_files(rootpath, relpaths, header='', picked=None):
 
 
 def pick_under_dir(dirpath, max_depth=None):
-    """Let the user pick a file or dir under the local dir dirpath, scanned by dirpicker itself.
+    """Let the user pick a file or dir under the local dir dirpath, scanned by treepick itself.
     Returns the picked one's full path, or None if the user quit."""
     args = [] if max_depth is None else ['--max-depth', str(max_depth)]
     picked = _run(args + _header_args('') + [dirpath], None)
@@ -72,9 +72,9 @@ def pick_option(options, header=''):
 
 
 def _tree_paths(tree):
-    """The tree's nodes' paths for dirpicker (relative, '/'-separated), each dir before what's in
+    """The tree's nodes' paths for treepick (relative, '/'-separated), each dir before what's in
     it, siblings sorted by name, each after its type for --typed ('f ' a file, 'd ' a dir). The root
-    isn't one: it's dirpicker's root."""
+    isn't one: it's treepick's root."""
     stack = list(reversed(_sorted_children(tree, tree.root)))
     while stack:
         node = stack.pop()
@@ -92,7 +92,7 @@ def _header_args(header):
 
 
 def _run(args, input_items):
-    """Run dirpicker with args and the items (or None) on its stdin. Returns what was picked, or
+    """Run treepick with args and the items (or None) on its stdin. Returns what was picked, or
     None if the user quit. Every picker shows whether it's a dry run."""
     label, label_color = dryrun.label()
     command = [_find_program(), '-0', '--label', label, '--label-color', label_color] + args

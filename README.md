@@ -18,14 +18,14 @@ dirdelta is Python 3, plus its picker, which is C++ and built with `make`: you c
 from the source tree, or install it (see below). From the repo root:
 
 ```bash
-git submodule update --init       # fetches lib/cpptree (dirpicker)
+git submodule update --init       # fetches lib/cpptree (treepick)
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt
-make                              # builds dirpicker: needs g++ and libncurses-dev
+make                              # builds treepick: needs g++ and libncurses-dev
 ```
 
-dirdelta's pickers and menus are `dirpicker`, and it diffs two local dirs with `dirdiff`: C++
-programs from [cpptree](https://github.com/levioctl/cpptree) (see `docs/dirpicker-integration.md`), a
+dirdelta's pickers and menus are `treepick`, and it diffs two local dirs with `dirdiff`: C++
+programs from [cpptree](https://github.com/levioctl/cpptree) (see `docs/treepick-integration.md`), a
 submodule at `lib/cpptree`. `make` builds them into `lib/cpptree/build/`, where dirdelta finds them
 when run from the source tree. `$DIRDELTA_PICKER` and `$DIRDELTA_DIRDIFF` override which programs it
 runs.
@@ -36,7 +36,7 @@ so an already activated venv works too. `make PYTHON=/path/to/python3 ...` overr
 
 ## Running from source
 
-Run the `dirdelta` package as a module from the repo root (after `make`, which builds dirpicker):
+Run the `dirdelta` package as a module from the repo root (after `make`, which builds treepick):
 
 ```bash
 .venv/bin/python3 -m dirdelta --help
@@ -58,7 +58,7 @@ rm -rf /tmp/dd && cp -r tests/fixtures /tmp/dd
 
 Move with `h`/`j`/`k`/`l` or the arrows, `Ctrl-D`/`Ctrl-U` to page, `/` to search (`Enter` keeps
 the filter, `Esc` drops it), `Enter` to pick the selected entry, `q` to quit without picking. A local
-dir is scanned by `dirpicker` itself, so even big trees open fast.
+dir is scanned by `treepick` itself, so even big trees open fast.
 
 ### Sync mode (two paths)
 
@@ -94,7 +94,7 @@ copy of the fixtures, so `DRYRUN=0 ./bin/example-sync-local.sh` is safe too.
 make test             # or make test ARGS=-v
 ```
 
-It also runs dirpicker's own tests (in `lib/cpptree`), which need Google Test (`libgtest-dev`).
+It also runs treepick's own tests (in `lib/cpptree`), which need Google Test (`libgtest-dev`).
 
 ## Cleaning
 
@@ -103,7 +103,7 @@ make clean
 ```
 
 Removes `__pycache__`, `*.pyc`, `build/`, `*.egg-info`, `.eggs` and pbr's generated
-`AUTHORS`/`ChangeLog`, and dirpicker's build (`lib/cpptree/build`). It leaves `.venv`, `secrets/` and the Drive cache
+`AUTHORS`/`ChangeLog`, and treepick's build (`lib/cpptree/build`). It leaves `.venv`, `secrets/` and the Drive cache
 (`~/.cache/dirman/files.txt`) alone; delete `.venv` yourself to start over.
 
 ## Deploying to your system
@@ -122,15 +122,15 @@ source tree. `make undeploy` removes it.
 For cloud paths, the deployed copy can't find the repo's `secrets/` folder, so point
 `DIRDELTA_SECRETS_DIR` at the folder holding `credentials.json`/`token.json`.
 
-`make deploy` builds dirpicker too, and puts it in dirdelta's pipx venv (next to its python, where
+`make deploy` builds treepick too, and puts it in dirdelta's pipx venv (next to its python, where
 dirdelta looks first), so it needs g++ and libncurses-dev, and `make undeploy` removes it with the
 venv.
 
 ## Installing into a venv
 
 ```bash
-make install          # pip install . (and dirpicker next to that python)
+make install          # pip install . (and treepick next to that python)
 ```
 
 Installs dirdelta into the same environment the other targets use (`.venv` if it exists, else the
-`python3` on your `PATH`), and dirpicker next to that environment's python. Useful for trying the packaged `dirdelta` command without deploying it.
+`python3` on your `PATH`), and treepick next to that environment's python. Useful for trying the packaged `dirdelta` command without deploying it.

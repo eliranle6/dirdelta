@@ -43,4 +43,4 @@ for).
 
 **`treepicker`** — the Python curses tree-picker library (github.com/levioctl/treepicker)
 that was dirdelta's UI, as the `lib/treepicker` submodule (with `cursesswitch`, its
-curses/plain printing shim), until dirpicker replaced it; removed 2026-10-24.
+curses/plain printing shim), until treepick replaced it; removed 2026-10-24.

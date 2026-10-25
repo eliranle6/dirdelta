@@ -12,7 +12,7 @@ from dirdelta import entries
 from dirdelta import picker
 from dirdelta import programs
 
-# Stands in for dirpicker: records its arguments and stdin into $FAKE_PICKER_LOG, then prints
+# Stands in for treepick: records its arguments and stdin into $FAKE_PICKER_LOG, then prints
 # $FAKE_PICKER_OUTPUT (items separated by '|', printed '\0'-terminated) and exits with
 # $FAKE_PICKER_EXIT_CODE
 FAKE_PICKER = '''#!%s
@@ -30,7 +30,7 @@ sys.exit(int(os.environ.get('FAKE_PICKER_EXIT_CODE', '0')))
 class PickerTest(unittest.TestCase):
     def setUp(self):
         self.tmpdir = tempfile.mkdtemp()
-        self.program = os.path.join(self.tmpdir, 'dirpicker')
+        self.program = os.path.join(self.tmpdir, 'treepick')
         with open(self.program, 'w') as f:
             f.write(FAKE_PICKER)
         os.chmod(self.program, os.stat(self.program).st_mode | stat.S_IEXEC)
@@ -48,7 +48,7 @@ class PickerTest(unittest.TestCase):
         os.environ['FAKE_PICKER_EXIT_CODE'] = str(exit_code)
 
     def call(self, with_label=False):
-        """The arguments and the stdin items the fake dirpicker got (the arguments without the
+        """The arguments and the stdin items the fake treepick got (the arguments without the
         dry run label every call has, unless with_label)"""
         with open(self.log) as f:
             log = json.load(f)
@@ -95,7 +95,7 @@ class PickerTest(unittest.TestCase):
         self.assertEqual(picker.pick_from_tree(tree), [tree.get_node('').data])
 
     def test_pick_files_sends_only_the_files(self):
-        # dirpicker adds their dirs
+        # treepick adds their dirs
         self.answer('b/2.txt')
         picker.pick_files('/some/root', ['a/1.txt', 'b/2.txt'], header='Pick\nfiles')
         args, items = self.call()

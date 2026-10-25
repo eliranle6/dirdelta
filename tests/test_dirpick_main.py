@@ -22,7 +22,7 @@ class DirpickMainTest(unittest.TestCase):
     def tearDown(self):
         shutil.rmtree(self.root, ignore_errors=True)
 
-    def test_local_dir_is_scanned_by_dirpicker(self):
+    def test_local_dir_is_scanned_by_treepick(self):
         picked = os.path.join(self.root, 'song.mp3')
         with helpers.scripted_dir_picker(picked) as pick_under_dir:
             self.assertEqual(dirpick_main.run(self.args), picked)

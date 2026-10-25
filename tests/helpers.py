@@ -1,4 +1,4 @@
-"""Fakes shared by the dirdelta tests, for code that would otherwise run dirpicker (dirdelta.picker)."""
+"""Fakes shared by the dirdelta tests, for code that would otherwise run treepick (dirdelta.picker)."""
 import os
 from unittest import mock
 

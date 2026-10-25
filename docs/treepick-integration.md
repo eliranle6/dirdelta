@@ -1,49 +1,49 @@
-# dirdelta's picker: cpptree's dirpicker
+# dirdelta's picker: cpptree's treepick
 
 The Python `treepicker` (the lib/treepicker submodule, removed since) was too slow for big trees: in a
 119k file tree (/usr/share) one search keystroke took over 70s, and building
-dirdelta's own Python tree takes ~3s. `dirpicker`, from the C++ project at
+dirdelta's own Python tree takes ~3s. `treepick`, from the C++ project at
 /home/eliran/code/cpptree (github.com/levioctl/cpptree), shows the same
 kind of tree picker: a search keystroke takes milliseconds, and it opens
-/usr/share in ~0.5s. So dirdelta runs `dirpicker` as a subprocess for every
+/usr/share in ~0.5s. So dirdelta runs `treepick` as a subprocess for every
 pick and every menu (`dirdelta/picker.py`), and no longer uses curses itself.
 
 Done as of 2026-10-23 (see the plan below); what's left is at the end.
 
-## How dirdelta talks to dirpicker
+## How dirdelta talks to treepick
 
-Like fzf: dirdelta starts `dirpicker`, which draws on the terminal itself
+Like fzf: dirdelta starts `treepick`, which draws on the terminal itself
 (/dev/tty) and prints what was picked on stdout.
 
 - Picking from a tree dirdelta already has (a cloud tree):
-  `dirpicker -0 --typed [--header TEXT] [--root NAME] -`, with the tree's
+  `treepick -0 --typed [--header TEXT] [--root NAME] -`, with the tree's
   paths on stdin, each ending with `\0`, relative to the root (`sub/x`, the
   same as dirdelta's ids), after their type (`f `, `d `). Each folder before
   what's in it, in the order to show.
 - Picking files of a diff (sync mode): the same with `-m`, but only the
-  files are sent (`f sub/x`), as dirdiff lists them: dirpicker adds their
+  files are sent (`f sub/x`), as dirdiff lists them: treepick adds their
   dirs, so dirdelta builds no tree of them. `-m` picks several (Space picks
   a node and everything under it, Enter finishes).
-- Picking under a local dir (picker mode): `dirpicker -0 --max-depth N DIR`.
-  dirpicker scans it with `find` itself, so dirdelta builds no Python tree;
-  if find couldn't read everything, dirpicker warns in its header.
+- Picking under a local dir (picker mode): `treepick -0 --max-depth N DIR`.
+  treepick scans it with `find` itself, so dirdelta builds no Python tree;
+  if find couldn't read everything, treepick warns in its header.
 - Showing a picker again with the user's picks: `--picked FILE`, FILE
-  holding the paths dirpicker printed.
-- Menus: `dirpicker -0 --list [--header TEXT] -`, with the labels on stdin
+  holding the paths treepick printed.
+- Menus: `treepick -0 --list [--header TEXT] -`, with the labels on stdin
   (`--list` keeps them flat, since labels contain '/').
 - Output: the picked paths (or labels), each ending with `\0`, the root as
   `.`. Exit code 0: something was picked; 1: the user quit; anything else:
   an error (its message is on stderr).
 
-dirpicker is the `lib/cpptree` submodule, built by `make` (make build) into
-`lib/cpptree/build/dirpicker`; `make install` and `make deploy` put a copy
+treepick is the `lib/cpptree` submodule, built by `make` (make build) into
+`lib/cpptree/build/treepick`; `make install` and `make deploy` put a copy
 next to the environment's python. dirdelta runs `$DIRDELTA_PICKER` if set,
-else the first of: dirpicker next to the running python, that build,
-dirpicker on `PATH`.
+else the first of: treepick next to the running python, that build,
+treepick on `PATH`.
 
 ## Plan and status
 
-cpptree (dirpicker), each a commit:
+cpptree (treepick), each a commit:
 1. [done] Read the tree from stdin (`-`, `-0`)
 2. [done] Pick with Enter, print the result, exit codes
 3. [done] Multi-select (`-m`)
@@ -54,8 +54,8 @@ cpptree (dirpicker), each a commit:
 8. [done] `--max-depth N` for scanning a dir
 
 dirdelta, each a commit:
-9. [done] `dirdelta/picker.py`: runs dirpicker (tree → stdin, stdout → picked
-   entries), with tests using a fake dirpicker script
+9. [done] `dirdelta/picker.py`: runs treepick (tree → stdin, stdout → picked
+   entries), with tests using a fake treepick script
 10. [done] Use it for the sync picker (`interactive_dir_sync.py`), menus
    (`menu.py`, since folded into `dirsync_main.py`; `clouddirtreefactory.py`) and picker mode (`dirpick_main.py`)
 11. [done] Stop using curses: `main.py` no longer wraps the app in
@@ -77,5 +77,5 @@ dirdelta, each a commit:
 
 ## What's left
 
-- The cloud flow hasn't been run end to end with dirpicker (it needs Drive
+- The cloud flow hasn't been run end to end with treepick (it needs Drive
   credentials); its pieces are covered by the unit tests.

@@ -1,4 +1,4 @@
-"""dirdelta's C++ programs (dirpicker, dirdiff), from the lib/cpptree submodule: finding them."""
+"""dirdelta's C++ programs (treepick, dirdiff), from the lib/cpptree submodule: finding them."""
 import os
 import shutil
 import sys
