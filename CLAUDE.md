@@ -41,9 +41,9 @@ to `python3`); "local" in their names is the local disk, as opposed to
 "cloud" (Drive):
 
 - `./bin/example-sync-local.sh` — sync temp copies of `tests/fixtures/alpha` and `.../bravo`
-- `./bin/example-sync-cloud.sh` — sync a local WSL path against `cloud/mein` (Drive)
+- `./bin/example-sync-cloud.sh` — sync a local WSL path against `cloud/eliran` (Drive)
 - `./bin/example-pick-local.sh` — browse/pick a file under wherever it's run from
-- `./bin/example-pick-cloud.sh` — browse/pick a file under `cloud/mein`
+- `./bin/example-pick-cloud.sh` — browse/pick a file under `cloud/eliran`
 
 `main.py` picks mode by arg count: one path → picker mode (`dirpick_main.py`,
 which prints the picked path, or `execvp`s the `-x` program on it), two
@@ -126,7 +126,7 @@ module:
 PYTHONPATH=.:tests .venv/bin/python3 -m unittest test_interactive_dir_sync -v
 ```
 
-Every module has a test file (108 tests, all passing as of 2026-10-25) except
+Every module has a test file (109 tests, all passing as of 2026-10-25) except
 the thin wiring in `main.py`/`dirsync_main.py`, covered only by running the
 app. Shared fakes:
 - `tests/helpers.py`: `scripted_option_picker` / `scripted_tree_picker` /

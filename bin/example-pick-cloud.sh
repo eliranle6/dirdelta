@@ -4,4 +4,4 @@ PY="$ROOT/.venv/bin/python3"
 [ -x "$PY" ] || PY=python3
 
 PYTHONPATH="$ROOT" \
-           "$PY" -m dirdelta cloud/mein
+           "$PY" -m dirdelta cloud/eliran

@@ -6,4 +6,4 @@ PY="$ROOT/.venv/bin/python3"
 PYTHONPATH="$ROOT" \
            "$PY" -m dirdelta \
            /mnt/c/Users/Johabab\ Glizerin/eliran/ \
-           cloud/mein
+           cloud/eliran
