@@ -205,7 +205,7 @@ class InteractiveDirSyncTest(unittest.TestCase):
         copied = []
         with mock.patch('dirdelta.dryrun.DRYRUN', False), \
                 mock.patch('dirdelta.localdiskdirtree.LocalDiskDirTree.copy_inner_entries_from_dirtree',
-                           side_effect=lambda tree: copied.extend(tree.iter_files())):
+                           side_effect=lambda tree, source: copied.extend(tree.iter_files())):
             self._sync(COPY)
         self.assertEqual([(entry.relpath, entry.full_filesystem_path()) for entry in copied],
                          [('sub/b.txt', os.path.join(os.path.realpath(self.src_root), 'sub/b.txt'))])

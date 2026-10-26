@@ -82,12 +82,22 @@ class MainMenuTest(unittest.TestCase):
             'Quit',
         ])
 
-    def test_a_writable_local_dir_beside_a_cloud_replica_gets_remove(self):
+    def test_a_cloud_replica_gets_copy_and_remove_each_way(self):
         a = localdiskdirtree.LocalDiskDirTree('/a', silent=True)
         b = dirtree.DirTree('cloud/b')
         self.assertEqual(self.options(a, b), [
+            'Copy files from /a to /b',
+            'Copy files from /b to /a',
             'Remove files from /a',
-            'View files in /b, not /a',
+            'Remove files from /b',
+            'Quit',
+        ])
+
+    def test_two_cloud_replicas_get_remove_only(self):
+        # Copying within Drive isn't done
+        self.assertEqual(self.options(dirtree.DirTree('cloud/a'), dirtree.DirTree('cloud/b')), [
+            'Remove files from /a',
+            'Remove files from /b',
             'Quit',
         ])
 
@@ -106,15 +116,14 @@ class MainMenuTest(unittest.TestCase):
         a = localdiskdirtree.LocalDiskDirTree('/a', silent=True)
         b = dirtree.DirTree('cloud/b')
         self.assertEqual(self.options(a, b), [
-            'View files in /a, not /b',
-            'View files in /b, not /a',
+            'Copy files from /a to /b',
+            'Remove files from /b',
             'Quit',
         ])
         title, lines, _ = self.show.call_args.args
         self.assertEqual(title, 'Read-only')
-        self.assertEqual(len(lines), 2)
+        self.assertEqual(len(lines), 1)
         self.assertIn('/a is read-only', lines[0])
-        self.assertIn('/b is on Google Drive', lines[1])
 
     def test_writable_replicas_get_no_read_only_message(self):
         a = localdiskdirtree.LocalDiskDirTree('/a', silent=True)
@@ -153,7 +162,7 @@ class MainMenuTest(unittest.TestCase):
     def test_view_options_say_how_many_files_too(self):
         self.writable = set()
         a = localdiskdirtree.LocalDiskDirTree('/a', silent=True)
-        b = dirtree.DirTree('/b')
+        b = localdiskdirtree.LocalDiskDirTree('/b', silent=True)
         self.assertEqual(self.shown(a, b), [
             'View files in /a, not /b (3 files)',
             'View files in /b, not /a (1 file)',

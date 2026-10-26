@@ -26,6 +26,35 @@ class PrintLineTest(unittest.TestCase):
         self.assertEqual(self.print_line('Removing ' + name), b'Removing caf\xe9.txt\n')
 
 
+class PrintProgressTest(unittest.TestCase):
+    def setUp(self):
+        self.stdout = mock.Mock()
+        self.stdout.buffer = io.BytesIO()
+        patcher = mock.patch('sys.stdout', self.stdout)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        self.addCleanup(setattr, messages, '_is_progress_shown', False)
+
+    def test_each_progress_line_overwrites_the_last(self):
+        self.stdout.isatty.return_value = True
+        messages.print_progress('Read 1 of 3')
+        messages.print_progress('Read 3 of 3')
+        self.assertEqual(self.stdout.buffer.getvalue(), b'\rRead 1 of 3\x1b[K\rRead 3 of 3\x1b[K')
+
+    def test_the_next_line_starts_after_it(self):
+        self.stdout.isatty.return_value = True
+        messages.print_progress('Read 3')
+        messages.print_line('Done')
+        messages.print_line('Next')
+        self.assertEqual(self.stdout.buffer.getvalue(), b'\rRead 3\x1b[K\nDone\nNext\n')
+
+    def test_nothing_without_a_terminal(self):
+        self.stdout.isatty.return_value = False
+        messages.print_progress('Read 3')
+        messages.print_line('Done')
+        self.assertEqual(self.stdout.buffer.getvalue(), b'Done\n')
+
+
 class ProgressScreenTest(unittest.TestCase):
     def run_screen(self, is_terminal, body, label=None, screen=None):
         stdout = mock.Mock()

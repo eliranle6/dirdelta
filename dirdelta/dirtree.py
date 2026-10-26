@@ -2,7 +2,9 @@ import os
 
 import treelib
 
+from dirdelta import dryrun
 from dirdelta import entries
+from dirdelta import messages
 
 
 class DirTree(object):
@@ -11,7 +13,14 @@ class DirTree(object):
 
     It holds a treelib.Tree, rather than being one, so nodes are only added through its own methods
     (add_file_by_relpath() and the like), which keep the entries' paths consistent.
+
+    A tree of a place that files can be copied into and removed from has _copy_file() and
+    _remove_file(), for copy_inner_entries_from_dirtree() and remove_files(), and fetch_file(), to
+    copy its files elsewhere.
     """
+    # What remove_files() says about the removed files' fate, after "removed N of M files from X"
+    REMOVED_TO = ""
+
     @classmethod
     def from_file_entries(cls, files, filesystem_dirpath):
         """A DirTree rooted at filesystem_dirpath holding the given files, at the same relative paths."""
@@ -92,6 +101,65 @@ class DirTree(object):
             data=_file,
             parent=parent_dir_node)
         return file_entry.data
+
+    def copy_inner_entries_from_dirtree(self, dirtree, source=None):
+        """Copy dirtree's files into this tree's dir, at the same relative paths, and add them to
+        the tree (so the next diff doesn't list them): from source (a tree, by its fetch_file()), or
+        else from their entries' full paths on the local disk. A dry run changes neither."""
+        files = list(dirtree.iter_files())
+        # In a dry run nothing changes: no files or dirs, and not the tree
+        verb = "Dry run, not copying" if dryrun.DRYRUN else "Copying"
+        nr_copied = 0
+        is_stopped = False
+        try:
+            for index, file_entry in enumerate(files):
+                messages.print_line("%s %s (%d out of %d)" % (verb, file_entry, index + 1, len(files)))
+                if dryrun.DRYRUN or self._copy_file(file_entry, source):
+                    nr_copied += 1
+        except KeyboardInterrupt:
+            messages.note_stopped()
+            is_stopped = True
+        ended = "stopped" if is_stopped else "complete"
+        if dryrun.DRYRUN:
+            messages.print_line("Dry run %s: nothing was copied to %s (DRYRUN=0 copies)" % (ended, self._rootpath))
+        else:
+            messages.print_line("Copy %s: copied %d of %d files to %s" % (ended, nr_copied, len(files),
+                                                                        self._rootpath))
+
+    def remove_files(self, file_entries):
+        """Remove the files, and drop them from the tree (so the next diff doesn't list them). A dry
+        run changes neither."""
+        verb = "Dry run, not removing" if dryrun.DRYRUN else "Removing"
+        nr_removed = 0
+        is_stopped = False
+        try:
+            for index, file_entry in enumerate(file_entries):
+                messages.print_line("%s %s (%d out of %d)" % (verb, file_entry, index + 1, len(file_entries)))
+                if dryrun.DRYRUN or self._remove_file(file_entry):
+                    nr_removed += 1
+        except KeyboardInterrupt:
+            messages.note_stopped()
+            is_stopped = True
+        ended = "stopped" if is_stopped else "complete"
+        if dryrun.DRYRUN:
+            messages.print_line("Dry run %s: nothing was removed from %s (DRYRUN=0 removes)" % (ended,
+                                                                                          self._rootpath))
+        else:
+            messages.print_line("Remove %s: removed %d of %d files from %s%s" % (
+                ended, nr_removed, len(file_entries), self._rootpath, self.REMOVED_TO))
+
+    def _copy_file(self, file_entry, source):
+        """Copy file_entry (of another tree, from source, if given) into this tree, at the same
+        relative path. Returns whether it was copied."""
+        raise NotImplementedError("Can't copy files to %s" % (self._rootpath,))
+
+    def _remove_file(self, file_entry):
+        """Remove file_entry, and its node. Returns whether it was removed."""
+        raise NotImplementedError("Can't remove files from %s" % (self._rootpath,))
+
+    def fetch_file(self, relpath, local_path):
+        """Copy the file at relpath to local_path, on the local disk"""
+        raise NotImplementedError("Can't copy files from %s" % (self._rootpath,))
 
     def iter_files(self):
         for node in self._tree.all_nodes_itr():

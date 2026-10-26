@@ -18,13 +18,35 @@ ROOT_ID_KEY = 'myDriveRootId'
 # How many of the names to fix an error lists
 MAX_PROBLEMS_SHOWN = 20
 
+def _stale_marker_path():
+    # Next to the cache (wherever it is, e.g. in tests)
+    return FILE_LIST_CACHE + '.stale'
+
+
+def mark_stale():
+    """Note that Drive was changed since the cache was made (by dirdelta), so it's out of date"""
+    with open(_stale_marker_path(), 'w') as marker:
+        marker.write("dirdelta changed Google Drive after this cache was made\n")
+
+
+def is_stale():
+    return os.path.exists(_stale_marker_path())
+
+
+def mark_fresh():
+    """Note that the cache was just made, so it's up to date"""
+    if is_stale():
+        os.remove(_stale_marker_path())
+
+
 class DriveCacheError(Exception):
     """The cache can't be read into a tree; the message says why, and what to do"""
 
 
 def entries(inner_rootpath):
-    """Yield (relpath, cloud_id, is_dir) for each file and folder under inner_rootpath (a path in the
-    cloud, like /eliran), each folder before what's in it. relpath is relative to inner_rootpath; two
+    """Yield (relpath, cloud_id, is_dir) for inner_rootpath (a path in the cloud, like /eliran), whose
+    relpath is '', and each file and folder under it, each folder before what's in it. relpath is
+    relative to inner_rootpath; two
     entries can have the same one, since Drive allows same-named files. Raises DriveCacheError if
     there's no such folder, or if names under it can't be paths: same-named folders (or a folder and
     a file) in one folder, or a '/' in a name."""
@@ -39,7 +61,9 @@ def entries(inner_rootpath):
         children = [id_md_map[child_id] for child_id in id_child_map.get(folder_cloud_id, [])]
 
         if _is_at_or_under(folder_path, inner_rootpath):
-            found = found or folder_path == inner_rootpath
+            if folder_path == inner_rootpath:
+                found = True
+                yield ('', folder_cloud_id, True)
             problems += _name_problems(folder_path, children)
             for md in children:
                 path = posixpath.join(folder_path, md['name'])
@@ -68,6 +92,13 @@ def entries(inner_rootpath):
     if not found:
         raise DriveCacheError("Google Drive has no folder %s (as of the cloud files list cache). Check "
                               "the path, or if the folder is new, refresh the cache." % (inner_rootpath,))
+
+
+def count_entries():
+    """How many files and folders the cache lists (Google's own types and what's outside My Drive
+    too, as the Drive API lists them)"""
+    with open(FILE_LIST_CACHE) as f:
+        return sum(1 for line in f if line.startswith('{') and ROOT_ID_KEY not in line)
 
 
 def _is_at_or_under(path, folder_path):

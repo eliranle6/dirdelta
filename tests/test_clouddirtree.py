@@ -1,10 +1,16 @@
 import json
 import os
+import shutil
 import tempfile
 import unittest
 from unittest import mock
 
+from googleapiclient.errors import HttpError
+
 from dirdelta import clouddirtree
+from dirdelta import dirtree
+from dirdelta import entries
+from dirdelta import localdiskdirtree
 
 FOLDER = 'application/vnd.google-apps.folder'
 
@@ -66,6 +72,147 @@ class CloudDirTreeTest(unittest.TestCase):
     def test_fullpath_is_the_path_inside_the_drive(self):
         tree = clouddirtree.factory('cloud/mein')
         self.assertEqual(tree.get_node('album/track.mp3').data.fullpath, '/mein/album/track.mp3')
+
+
+
+def _http_error():
+    return HttpError(mock.Mock(status=403, reason='Forbidden'), b'{}')
+
+
+class CloudDirTreeChangesTest(unittest.TestCase):
+    """Copying into, out of and removing from cloud/mein (ITEMS), with Drive faked: nothing here
+    reaches Drive"""
+    def setUp(self):
+        fd, self.cache = tempfile.mkstemp(prefix='dirstuff-cloud-cache-')
+        with os.fdopen(fd, 'w') as f:
+            for item in ITEMS:
+                f.write(json.dumps(item) + '\n')
+        self.service = mock.Mock()
+        created_ids = iter('new%d' % (i,) for i in range(100))
+        self.service.files.return_value.create.return_value.execute.side_effect = \
+            lambda: {'id': next(created_ids)}
+        self.local_dir = tempfile.mkdtemp(prefix='dirstuff-cloud-local-')
+        for patcher in (mock.patch('dirdelta.drivecache.FILE_LIST_CACHE', self.cache),
+                        mock.patch('dirdelta.driveapi.service', return_value=self.service),
+                        mock.patch('dirdelta.clouddirtree.MediaFileUpload'),
+                        mock.patch('dirdelta.messages.print_line'),
+                        mock.patch('dirdelta.dryrun.DRYRUN', False)):
+            patcher.start()
+            self.addCleanup(patcher.stop)
+        self.addCleanup(os.remove, self.cache)
+        self.addCleanup(clouddirtree.drivecache.mark_fresh)
+        self.addCleanup(shutil.rmtree, self.local_dir, ignore_errors=True)
+        self.tree = clouddirtree.factory('cloud/mein')
+
+    def creates(self):
+        return [call.kwargs['body'] for call in self.service.files.return_value.create.call_args_list]
+
+    def upload(self, relpaths):
+        files = [entries.FileEntry(os.path.basename(relpath), relpath, os.path.join('/local', relpath))
+                 for relpath in relpaths]
+        self.tree.copy_inner_entries_from_dirtree(dirtree.DirTree.from_file_entries(files, '/local'))
+
+    def test_upload_into_an_existing_folder(self):
+        self.upload(['album/new.mp3'])
+        self.assertEqual(self.creates(), [{'name': 'new.mp3', 'parents': ['album']}])
+        clouddirtree.MediaFileUpload.assert_called_once_with('/local/album/new.mp3', resumable=True)
+        self.assertIn('album/new.mp3', self.tree)
+
+    def test_changing_drive_makes_the_cache_stale(self):
+        self.assertFalse(clouddirtree.drivecache.is_stale())
+        self.upload(['new.mp3'])
+        self.assertTrue(clouddirtree.drivecache.is_stale())
+        clouddirtree.drivecache.mark_fresh()
+        self.tree.remove_files([self.tree.get_node('song.mp3').data])
+        self.assertTrue(clouddirtree.drivecache.is_stale())
+
+    def test_a_dry_run_leaves_the_cache_fresh(self):
+        with mock.patch('dirdelta.dryrun.DRYRUN', True):
+            self.upload(['new.mp3'])
+            self.tree.remove_files([self.tree.get_node('song.mp3').data])
+        self.assertFalse(clouddirtree.drivecache.is_stale())
+
+    def test_upload_into_the_root(self):
+        self.upload(['new.mp3'])
+        self.assertEqual(self.creates(), [{'name': 'new.mp3', 'parents': ['mein']}])
+
+    def test_upload_makes_the_folders_its_in_once(self):
+        self.upload(['a/b/1.mp3', 'a/b/2.mp3'])
+        self.assertEqual(self.creates(), [
+            {'name': 'a', 'mimeType': clouddirtree.drivecache.FOLDER_MIME_TYPE, 'parents': ['mein']},
+            {'name': 'b', 'mimeType': clouddirtree.drivecache.FOLDER_MIME_TYPE, 'parents': ['new0']},
+            {'name': '1.mp3', 'parents': ['new1']},
+            {'name': '2.mp3', 'parents': ['new1']},
+        ])
+        self.assertIn('a/b/2.mp3', self.tree)
+
+    def test_dry_run_uploads_nothing(self):
+        with mock.patch('dirdelta.dryrun.DRYRUN', True):
+            self.upload(['new.mp3'])
+        self.service.files.return_value.create.assert_not_called()
+        self.assertNotIn('new.mp3', self.tree)
+
+    def test_a_failed_upload_is_said_and_the_rest_go_on(self):
+        results = iter([_http_error(), {'id': 'ok'}])
+        def execute():
+            result = next(results)
+            if isinstance(result, Exception):
+                raise result
+            return result
+        self.service.files.return_value.create.return_value.execute.side_effect = execute
+        self.upload(['bad.mp3', 'good.mp3'])
+        self.assertNotIn('bad.mp3', self.tree)
+        self.assertIn('good.mp3', self.tree)
+        lines = [call.args[0] for call in clouddirtree.messages.print_line.call_args_list]
+        self.assertTrue(any(line.startswith('Copy failed') for line in lines))
+        self.assertIn('Copy complete: copied 1 of 2 files to /mein', lines)
+
+    def test_remove_moves_to_the_trash(self):
+        self.tree.remove_files([self.tree.get_node('album/track.mp3').data])
+        self.service.files.return_value.update.assert_called_once_with(fileId='track',
+                                                                       body={'trashed': True})
+        self.assertNotIn('album/track.mp3', self.tree)
+        lines = [call.args[0] for call in clouddirtree.messages.print_line.call_args_list]
+        self.assertIn("Remove complete: removed 1 of 1 files from /mein (to Drive's trash)", lines)
+
+    def test_dry_run_removes_nothing(self):
+        with mock.patch('dirdelta.dryrun.DRYRUN', True):
+            self.tree.remove_files([self.tree.get_node('song.mp3').data])
+        self.service.files.return_value.update.assert_not_called()
+        self.assertIn('song.mp3', self.tree)
+
+    def test_a_failed_remove_keeps_the_file(self):
+        self.service.files.return_value.update.return_value.execute.side_effect = _http_error()
+        self.tree.remove_files([self.tree.get_node('song.mp3').data])
+        self.assertIn('song.mp3', self.tree)
+
+    def download_to_local_dir(self, relpaths):
+        local = localdiskdirtree.LocalDiskDirTree(self.local_dir, silent=True)
+        files = [self.tree.get_node(relpath).data for relpath in relpaths]
+        local.copy_inner_entries_from_dirtree(dirtree.DirTree.from_file_entries(files, '/mein'),
+                                              self.tree)
+        return local
+
+    def test_download(self):
+        def downloader(local_file, request):
+            local_file.write(b'track content')
+            return mock.Mock(next_chunk=mock.Mock(return_value=(None, True)))
+        with mock.patch('dirdelta.clouddirtree.MediaIoBaseDownload', side_effect=downloader):
+            local = self.download_to_local_dir(['album/track.mp3'])
+        self.service.files.return_value.get_media.assert_called_once_with(fileId='track')
+        with open(os.path.join(self.local_dir, 'album', 'track.mp3'), 'rb') as f:
+            self.assertEqual(f.read(), b'track content')
+        self.assertIn('album/track.mp3', local)
+
+    def test_a_failed_download_leaves_no_file_and_the_rest_go_on(self):
+        def downloader(local_file, request):
+            local_file.write(b'part of it')
+            return mock.Mock(next_chunk=mock.Mock(side_effect=_http_error()))
+        with mock.patch('dirdelta.clouddirtree.MediaIoBaseDownload', side_effect=downloader):
+            local = self.download_to_local_dir(['song.mp3', 'album/track.mp3'])
+        self.assertEqual(os.listdir(self.local_dir), ['album'])
+        self.assertEqual(os.listdir(os.path.join(self.local_dir, 'album')), [])
+        self.assertNotIn('song.mp3', local)
 
 
 if __name__ == '__main__':

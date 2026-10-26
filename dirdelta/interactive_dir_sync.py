@@ -131,7 +131,7 @@ class InteractiveDirSync(object):
     def _copy(self, files):
         _dirtree = dirtree.DirTree.from_file_entries(files, self._src.fullpath())
         # It adds what it copies to dst's tree, so the next diff doesn't list them
-        self._dst.copy_inner_entries_from_dirtree(_dirtree)
+        self._dst.copy_inner_entries_from_dirtree(_dirtree, self._src)
 
     def _remove(self, files):
         self._src.remove_files(files)

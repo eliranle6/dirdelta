@@ -102,6 +102,11 @@ Cloud state is never queried live per-scan. Instead:
    cache's first JSON line (`{"myDriveRootId": ...}`), then one JSON line per
    file not in the trash (`files().list`, paged, `q='trashed = false'`,
    `fields=... files(id,name,parents,kind,size,mimeType,sha256Checksum)`).
+   It prints "Scanning Google Drive...", like a local scan, and then how far
+   it got on a line that changes in place (`messages.print_progress()`):
+   "Read N of about M files and folders (P%)", where M is how many the last
+   scan's cache lists (`drivecache.count_entries()`), since the Drive API
+   can't count them; without a cache, just N.
 3. `drivecache.entries(inner_rootpath)` reads that cache with `_parsefile`,
    which `json.loads`es each `{...}` line into a dict (id→children map +
    id→metadata map), leaving out Google's own types (Docs, Sheets,
@@ -121,9 +126,26 @@ Cloud state is never queried live per-scan. Instead:
    Drive's "two files, same path" case by suffixing `___DUP__<id>` on
    collision (same-named folders are an error, above).
 
-OAuth token handling (`token.json`/`credentials.json`,
-`SCOPES=[drive.metadata.readonly]`) lives in `clouddirtreefactory.py`'s
-`_scan_drive_files_list`. A near-duplicate, unused implementation used to
+Copying and removing: `CloudDirTree` keeps each file's and folder's Drive id
+(`_cloud_ids`, by relpath; the root's from `entries()`' first, `''`, entry).
+Copying into it (`_copy_file()`, from a local dir) uploads each file
+(`MediaFileUpload`), making the folders on its way (`_folder_id()`); copying out
+of it, into a local dir, downloads (`fetch_file()`, which
+`LocalDiskDirTree._copy_file()` calls on the source tree); removing
+(`_remove_file()`) moves files to Drive's trash, so they can be restored. The
+loops around these (progress lines, dry run, Ctrl-C, the report) are
+`DirTree`'s `copy_inner_entries_from_dirtree()` and `remove_files()`, shared
+with `LocalDiskDirTree`. A file that fails is said in red, and the rest go on.
+The cache on disk isn't updated, but it's marked stale (`drivecache.mark_stale()`,
+a `files.txt.stale` file next to it) before each change to Drive (not in a dry
+run): the next run's refresh prompt then says it's out of date, and a refresh
+(which brings the changes) clears the mark.
+
+Logging in to Drive (`token.json`/`credentials.json`, `SCOPES=[drive]`: all of
+Drive, to change files too) is `driveapi.service()`, which also makes the
+service once for all callers. A saved login without those scopes (e.g. from
+when dirdelta only listed files) means logging in again, as does a rejected
+refresh. A near-duplicate, unused implementation used to
 sit alongside it as `scandrive.py`; it's now archived at
 `unused/scandrive.py` (outside any package), not part of the app.
 
@@ -169,9 +191,9 @@ since its diff may then be wrong,
 present a top-level menu (`_sync`: a loop of `picker.pick_option()` over
 `_Action`s, each an `InteractiveDirSync(src, dst, missing)`'s
 `sync(COPY or REMOVE)` or `view_diff()`, until Quit), by what's writable
-(`_is_writable`: a `LocalDiskDirTree` with write permission, so not one on a
-read-only mount, and never a cloud replica, which dirdelta only reads): each
-way, `Copy A→B` if A is local and B writable, `Remove from A` (A's files
+(`_is_writable`: a cloud replica, or a `LocalDiskDirTree` with write
+permission, so not one on a read-only mount): each way, `Copy A→B` if B is
+writable and A or B is local (not within Drive), `Remove from A` (A's files
 that B lacks) if A is writable, and if neither, `View diff A-not-B` (the
 others' pickers already show that diff); then `Quit`. Before the menu, a
 "Read-only" screen (`messages.show()`) says which replicas are read-only and

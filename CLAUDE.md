@@ -72,7 +72,8 @@ Developer tasks all live in the Makefile (`make` lists them): `test`,
 than adding shell scripts; `bin/` is only for example app launchers. `make clean`
 removes `__pycache__`/`*.pyc`/`*.egg-info`/`build/`/pbr's `AUTHORS` and
 `ChangeLog` in this repo and the submodule, skipping `.venv`. It does not
-touch `~/.cache/dirman/files.txt` (the real Drive-scan cache) or `secrets/`.
+touch `~/.cache/dirman/files.txt` (the real Drive-scan cache, with a
+`files.txt.stale` next to it after dirdelta changed Drive) or `secrets/`.
 
 ## Structure
 
@@ -101,7 +102,7 @@ fast-forwarding, then committing the new pin here. Don't push either repo.)
 ## Secrets
 
 `credentials.json` and `token.json` live in `secrets/` (gitignored), loaded
-via a path computed in `clouddirtreefactory.py` from `__file__` rather than
+via a path computed in `driveapi.py` from `__file__` rather than
 the process's CWD. These are Google Drive OAuth client secret / access-token
 files. Never read their contents into a response, log them, or
 commit-adjacent-copy them anywhere.
@@ -126,7 +127,7 @@ module:
 PYTHONPATH=.:tests .venv/bin/python3 -m unittest test_interactive_dir_sync -v
 ```
 
-Every module has a test file (135 tests, all passing as of 2026-10-25) except
+Every module has a test file (164 tests, all passing as of 2026-10-25) except
 the thin wiring in `main.py`/`dirsync_main.py`, covered only by running the
 app. Shared fakes:
 - `tests/helpers.py`: `scripted_option_picker` / `scripted_tree_picker` /
@@ -137,7 +138,9 @@ app. Shared fakes:
   rather than using `tests/fixtures/`, so they never depend on (or modify)
   the repo.
 - Drive is never contacted: `test_clouddirtree` writes a JSON-lines cache to
-  a temp file, and `test_clouddirtreefactory` mocks `Credentials`/`build`.
+  a temp file, `test_driveapi` mocks `Credentials`/`build`, and the rest patch
+  `driveapi.service()` with a fake (e.g. `test_clouddirtree`'s uploads, downloads
+  and trashing).
 
 `tests/fixtures/{alpha,bravo}` are sample trees for manual runs (see
 README.md); `bin/example-sync-local.sh` syncs a temp copy of them. As of 2026-10-23

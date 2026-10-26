@@ -20,8 +20,11 @@ class EntriesTest(unittest.TestCase):
         self.addCleanup(patcher.stop)
         self.addCleanup(os.remove, self.cache)
 
+    def test_the_folder_itself_comes_first(self):
+        self.assertEqual(next(drivecache.entries('/mein')), ('', 'mein', True))
+
     def test_entries_under_a_folder(self):
-        entries = list(drivecache.entries('/mein'))
+        entries = list(drivecache.entries('/mein'))[1:]
         self.assertEqual(sorted(entries), sorted([
             ('song.mp3', 'song', False),
             ('album', 'album', True),
@@ -31,7 +34,7 @@ class EntriesTest(unittest.TestCase):
         ]))
 
     def test_each_folder_comes_before_whats_in_it(self):
-        relpaths = [relpath for relpath, _, _ in drivecache.entries('/mein')]
+        relpaths = [relpath for relpath, _, _ in drivecache.entries('/mein')][1:]
         self.assertLess(relpaths.index('album'), relpaths.index('album/track.mp3'))
 
 
@@ -58,7 +61,8 @@ class CacheContentsTest(unittest.TestCase):
                 f.write(json.dumps({'myDriveRootId': 'ROOT'}) + '\n')
             for item in items:
                 f.write(json.dumps(item) + '\n')
-        return sorted(drivecache.entries(inner_rootpath))
+        # Without the folder itself
+        return sorted(drivecache.entries(inner_rootpath))[1:]
 
     def test_google_docs_and_shortcuts_are_left_out(self):
         self.assertEqual(self.entries('/eliran', [

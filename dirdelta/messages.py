@@ -10,15 +10,34 @@ import termcolor
 
 # Whether the action on the progress screen was stopped (Ctrl-C)
 _is_stopped = False
+# Whether the last line printed is print_progress()'s, so it hasn't ended
+_is_progress_shown = False
 
 
 def print_line(line, color=None):
     """Print line (in color, a termcolor name like 'red', if given)."""
+    global _is_progress_shown
     if color is not None:
         line = termcolor.colored(line, color)
+    if _is_progress_shown:
+        line = '\n' + line
+        _is_progress_shown = False
     # surrogateescape: lines may hold file names that aren't valid UTF-8
     sys.stdout.buffer.write((line + '\n').encode('utf-8', 'surrogateescape'))
     sys.stdout.flush()
+
+
+def print_progress(line):
+    """Print line over the one print_progress() printed last, if it's the last line printed, for
+    progress that changes often (e.g. a count). Only on a terminal: elsewhere it would be a line per
+    change."""
+    global _is_progress_shown
+    if not sys.stdout.isatty():
+        return
+    # Back to the line's start, and clear it, in case the new one is shorter
+    sys.stdout.buffer.write(('\r' + line + '\033[K').encode('utf-8', 'surrogateescape'))
+    sys.stdout.flush()
+    _is_progress_shown = True
 
 
 def note_stopped():

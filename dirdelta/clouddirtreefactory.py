@@ -1,24 +1,11 @@
 import json
 import os.path
 
-from google.auth.exceptions import RefreshError
-from google.auth.transport.requests import Request
-from google.oauth2.credentials import Credentials
-from google_auth_oauthlib.flow import InstalledAppFlow
-from googleapiclient.discovery import build
-from googleapiclient.errors import HttpError
-
 from dirdelta import clouddirtree
+from dirdelta import driveapi
 from dirdelta import drivecache
+from dirdelta import messages
 from dirdelta import picker
-
-
-# secrets/ at the repo root when running from source; an installed copy needs DIRDELTA_SECRETS_DIR
-SECRETS_DIR = os.environ.get(
-    'DIRDELTA_SECRETS_DIR',
-    os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'secrets'))
-TOKEN_PATH = os.path.join(SECRETS_DIR, 'token.json')
-CREDENTIALS_PATH = os.path.join(SECRETS_DIR, 'credentials.json')
 
 
 def factory_interactive(rootpath):
@@ -41,54 +28,45 @@ def _does_user_want_to_refresh_cache(rootpath):
     OPTION_REFRESH = 'Refresh cloud files list cache'
     OPTION_NO_REFRESH = 'Continue with old cloud files list cache'
     options = [OPTION_REFRESH, OPTION_NO_REFRESH]
-    return picker.pick_option(options) == OPTION_REFRESH
+    header = ''
+    if drivecache.is_stale():
+        header = ("The cloud files list cache is out of date: dirdelta changed Google Drive after it "
+                  "was made.\nRefresh it to see those changes.")
+    return picker.pick_option(options, header=header) == OPTION_REFRESH
 
 
 def _refresh_cache():
     # Scan into a temporary file first, so a failed scan doesn't leave a truncated cache behind
     tmp_path = drivecache.FILE_LIST_CACHE + '.tmp'
+    # Drive can't say how many files it has, but the last scan can, roughly
+    expected_count = drivecache.count_entries() if os.path.exists(drivecache.FILE_LIST_CACHE) else None
     with open(tmp_path, 'w') as fp:
-        _scan_drive_files_list(outfile=fp)
+        _scan_drive_files_list(outfile=fp, expected_count=expected_count)
     os.replace(tmp_path, drivecache.FILE_LIST_CACHE)
+    drivecache.mark_fresh()
 
 
-def _scan_drive_files_list(outfile):
-    # If modifying these scopes, delete the file token.json.
-    SCOPES = ['https://www.googleapis.com/auth/drive.metadata.readonly']
+def _scan_progress(count, expected_count):
+    """How far scanning got, after count files (and folders), expecting about expected_count (or
+    None, if not known)"""
+    if expected_count and count < expected_count:
+        return "Read %s of about %s files and folders (%d%%)" % (
+            format(count, ','), format(expected_count, ','), 100 * count // expected_count)
+    return "Read %s files and folders" % (format(count, ','),)
 
-    creds = None
-    # The file token.json stores the user's access and refresh tokens, and is
-    # created automatically when the authorization flow completes for the first
-    # time.
-    if os.path.exists(TOKEN_PATH):
-        creds = Credentials.from_authorized_user_file(TOKEN_PATH, SCOPES)
-    # If there are no (valid) credentials available, let the user log in.
-    if not creds or not creds.valid:
-        if creds and creds.expired and creds.refresh_token:
-            try:
-                creds.refresh(Request())
-            except RefreshError as error:
-                # The refresh token was revoked or expired (an app in "Testing" gets 7-day ones)
-                print(f'Saved Drive login was rejected ({error}), logging in again...')
-                creds = None
-        if not creds or not creds.valid:
-            flow = InstalledAppFlow.from_client_secrets_file(
-                CREDENTIALS_PATH, SCOPES)
-            creds = flow.run_local_server(port=0)
-        # Save the credentials for the next run
-        with open(TOKEN_PATH, 'w') as token:
-            token.write(creds.to_json())
 
-    #try:
-    service = build('drive', 'v3', credentials=creds)
+def _scan_drive_files_list(outfile, expected_count=None):
+    service = driveapi.service()
 
     # My Drive's root folder isn't listed itself, so write down its id
     root = service.files().get(fileId='root', fields='id').execute()
     outfile.write(json.dumps({drivecache.ROOT_ID_KEY: root['id']}) + '\n')
 
     # Call the Drive v3 API
+    messages.print_line("Scanning Google Drive...")
     page_token = None
-    iter_cnt = 0
+    count = 0
+    messages.print_progress(_scan_progress(count, expected_count))
     while True:
         req = service.files().list(
             pageSize=1000,
@@ -98,15 +76,17 @@ def _scan_drive_files_list(outfile):
         results = req.execute()
 
         page_items = results.get('files', [])
-        print(f'#items in page: {len(page_items)}')
         for item in page_items:
             outfile.write(json.dumps(item) + '\n')
+        count += len(page_items)
 
         page_token = results.get('nextPageToken', None)
         if page_token is None:
             break
+        messages.print_progress(_scan_progress(count, expected_count))
 
-        iter_cnt += 1
+    # Done: the count, without the last scan's
+    messages.print_progress(_scan_progress(count, None))
 
     #except HttpError as error:
     #    # TODO(developer) - Handle errors from drive API.

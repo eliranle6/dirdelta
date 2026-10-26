@@ -40,7 +40,8 @@ def _sync(replica_a, replica_b, replica_a_path, replica_b_path):
     if read_only:
         messages.show("Read-only", read_only, dryrun.label())
     # Each way, what can be done with the files in one replica that aren't in the other: copy them
-    # (from a local dir into a writable one) and remove them (from a writable one). Their pickers
+    # into a writable one (between a local dir and anything: not within Drive) and remove them
+    # (from a writable one). Their pickers
     # show those files, so viewing them is offered only when neither can be done. Each way's
     # files are found once, in the background, and each option says how many there are once they
     # are.
@@ -48,7 +49,7 @@ def _sync(replica_a, replica_b, replica_a_path, replica_b_path):
     copies, removes, views = [], [], []
     for way, src_path, dst_path in ((ways[0], replica_a_path, replica_b_path),
                                     (ways[1], replica_b_path, replica_a_path)):
-        can_copy = isinstance(way.src, localdiskdirtree.LocalDiskDirTree) and _is_writable(way.dst)
+        can_copy = _is_writable(way.dst) and (_is_local(way.src) or _is_local(way.dst))
         if can_copy:
             copies.append(_Action("Copy files from %s to %s" % (src_path, dst_path), way,
                                   lambda count: "the %s it lacks" % (_files(count),),
@@ -140,19 +141,18 @@ class _Action(object):
             sync.sync(self.action)
 
 
+def _is_local(replica):
+    return isinstance(replica, localdiskdirtree.LocalDiskDirTree)
+
+
 def _is_writable(replica):
-    """Whether files can be copied into the replica and removed from it: a local dir with write
-    permission (none on a read-only mount). Drive is read-only: dirdelta reads it with a read-only
-    scope, and has no code to upload or remove files there."""
-    return (isinstance(replica, localdiskdirtree.LocalDiskDirTree)
-            and os.access(replica.fullpath(), os.W_OK))
+    """Whether files can be copied into the replica and removed from it: Drive, or a local dir with
+    write permission (none on a read-only mount)"""
+    return not _is_local(replica) or os.access(replica.fullpath(), os.W_OK)
 
 
 def _read_only_lines(replica, replica_path):
     """Why nothing will be copied into or removed from the replica, if it's read-only"""
-    if not isinstance(replica, localdiskdirtree.LocalDiskDirTree):
-        return ["%s is on Google Drive, which dirdelta only reads: it can't copy files into it or "
-                "out of it, or remove files from it." % (replica_path,)]
     if not _is_writable(replica):
         return ["%s is read-only (no write permission): dirdelta won't copy files into it or "
                 "remove files from it." % (replica_path,)]

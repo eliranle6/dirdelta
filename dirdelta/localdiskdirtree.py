@@ -61,32 +61,7 @@ class LocalDiskDirTree(dirtree.DirTree):
             elif kind == b'd':
                 self.create_dir_node_from_fullpath_if_not_exists(path)
 
-    def copy_inner_entries_from_dirtree(self, dirtree):
-        files = list(dirtree.iter_files())
-        # In a dry run nothing changes: no files or dirs, and not the tree
-        verb = "Dry run, not copying" if dryrun.DRYRUN else "Copying"
-        nr_copied = 0
-        is_stopped = False
-        try:
-            for index, file_entry in enumerate(files):
-                messages.print_line("%s %s (%d out of %d)" % (verb, file_entry, index + 1, len(files)))
-                if self._copy_file(file_entry):
-                    nr_copied += 1
-        except KeyboardInterrupt:
-            messages.note_stopped()
-            is_stopped = True
-        ended = "stopped" if is_stopped else "complete"
-        if dryrun.DRYRUN:
-            messages.print_line("Dry run %s: nothing was copied to %s (DRYRUN=0 copies)" % (ended, self._rootpath))
-        else:
-            messages.print_line("Copy %s: copied %d of %d files to %s" % (ended, nr_copied, len(files),
-                                                                        self._rootpath))
-
-    def _copy_file(self, file_entry):
-        """Copy file_entry (of another tree) into this tree, at the same relative path. Returns whether
-        it was copied (or, in a dry run, would have been)."""
-        if dryrun.DRYRUN:
-            return True
+    def _copy_file(self, file_entry, source):
         new_file_entry = self.add_file_by_relpath(file_entry.relpath)
         dest_path = new_file_entry.full_filesystem_path()
         did_dest_exist = os.path.exists(dest_path)
@@ -101,41 +76,37 @@ class LocalDiskDirTree(dirtree.DirTree):
                     messages.print_line("Copy failed: %s" % (str(ex),), "red")
                     self.remove_node(new_file_entry.relpath)
                     return False
-            self._copy_local_file_to_tree_with_path(file_entry.full_filesystem_path(), dest_path)
+            if source is not None:
+                source.fetch_file(file_entry.relpath, dest_path)
+            else:
+                self._copy_local_file_to_tree_with_path(file_entry.full_filesystem_path(), dest_path)
             return True
+        except OSError as ex:
+            messages.print_line("Copy failed: %s" % (str(ex),), "red")
+            self._drop_copy(new_file_entry, dest_path, did_dest_exist)
+            return False
         except BaseException:
-            self.remove_node(new_file_entry.relpath)
-            # A copy cut off in the middle (e.g. Ctrl-C) leaves part of the file: drop it, unless
-            # it's a file that was there before
-            if not did_dest_exist and os.path.exists(dest_path):
-                os.unlink(dest_path)
+            self._drop_copy(new_file_entry, dest_path, did_dest_exist)
             raise
 
-    def remove_files(self, file_entries):
-        """Delete the files, and drop them from the tree (so the next diff doesn't list them). A dry run
-        changes neither."""
-        verb = "Dry run, not removing" if dryrun.DRYRUN else "Removing"
-        nr_removed = 0
-        is_stopped = False
-        try:
-            for index, file_entry in enumerate(file_entries):
-                messages.print_line("%s %s (%d out of %d)" % (verb, file_entry, index + 1, len(file_entries)))
-                if not dryrun.DRYRUN:
-                    os.unlink(file_entry.full_filesystem_path())
-                    # The tree may not have it, if it wasn't scanned (see dirdiff.py)
-                    if file_entry.relpath in self:
-                        self.remove_node(file_entry.relpath)
-                nr_removed += 1
-        except KeyboardInterrupt:
-            messages.note_stopped()
-            is_stopped = True
-        ended = "stopped" if is_stopped else "complete"
-        if dryrun.DRYRUN:
-            messages.print_line("Dry run %s: nothing was removed from %s (DRYRUN=0 removes)" % (ended,
-                                                                                          self._rootpath))
-        else:
-            messages.print_line("Remove %s: removed %d of %d files from %s" % (ended, nr_removed,
-                                                                             len(file_entries), self._rootpath))
+    def _drop_copy(self, new_file_entry, dest_path, did_dest_exist):
+        """Undo a copy that failed or was cut off (e.g. by Ctrl-C), if it started"""
+        if new_file_entry.relpath in self:
+            self.remove_node(new_file_entry.relpath)
+        # A copy cut off in the middle leaves part of the file: drop it, unless it's a file that
+        # was there before
+        if not did_dest_exist and os.path.exists(dest_path):
+            os.unlink(dest_path)
+
+    def _remove_file(self, file_entry):
+        os.unlink(file_entry.full_filesystem_path())
+        # The tree may not have it, if it wasn't scanned (see dirdiff.py)
+        if file_entry.relpath in self:
+            self.remove_node(file_entry.relpath)
+        return True
+
+    def fetch_file(self, relpath, local_path):
+        self._copy_local_file_to_tree_with_path(os.path.join(self._rootpath, relpath), local_path)
 
     def _copy_local_file_to_tree_with_path(self, src, dst):
         shutil.copy(src, dst)
