@@ -3,7 +3,7 @@
 ## Data flow, end to end
 
 ```
-shell script (dirsync-*.sh / dirpick-*.sh)
+dirdelta command, or a bin/example-*.sh launcher (python -m dirdelta)
   → main.py: parse_args() → dirsync_main.run(args)  OR  dirpick_main.run(args)
      (no curses: each picker is a treepick run, which has the terminal while
       it's open; messages in between are plain lines, via messages.print_line)

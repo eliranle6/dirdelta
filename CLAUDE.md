@@ -5,7 +5,7 @@ filesystem path or a Google Drive ("cloud") tree — by **filename only** (no
 content/hash comparison). For each file present in one replica but not the
 other, the user can choose to copy it across or delete it.
 
-This is the main repo. Its pickers and menus are `treepick`, a C++ program
+This is the main repo (github.com/eliranle6/dirdelta). Its pickers and menus are `treepick`, a C++ program
 from cpptree (github.com/levioctl/cpptree), vendored as a git submodule at
 `lib/cpptree` (its own history/remote, pinned to a specific commit here) and
 built with `make`; `dirdelta/picker.py` runs it as a subprocess (see

@@ -18,7 +18,8 @@ dirdelta is Python 3, plus its picker, which is C++ and built with `make`: you c
 from the source tree, or install it (see below). From the repo root:
 
 ```bash
-git submodule update --init       # fetches lib/cpptree (treepick)
+git clone --recursive https://github.com/eliranle6/dirdelta && cd dirdelta
+git submodule update --init       # fetches lib/cpptree (treepick), if cloned without --recursive
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt
 make                              # builds treepick: needs g++ and libncurses-dev

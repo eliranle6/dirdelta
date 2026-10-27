@@ -13,7 +13,7 @@ entries here are history).
 1. ~~**`full_filesystem_path()` is called but never defined anywhere in the
   codebase.**~~ **FIXED** (2026-07-19, `dirtree.py`): `DirEntry`/`FileEntry`
   now implement `full_filesystem_path()`. While implementing it, also found
-  and fixed the reason it had never been restored after the dirsync→dirdelta
+  and fixed the reason it had never been restored after an earlier
   rewrite: the root `DirEntry`'s `.fullpath` was collapsing to `'/'` because
   `os.path.join(parent_fullpath, name)` discards `parent_fullpath` whenever
   `name` is itself absolute, and the root's `name` is the literal string
@@ -182,7 +182,7 @@ entries here are history).
   writes `files.txt.tmp` and renames it over the cache, so a failed scan
   keeps the old cache); `_CursesWindowPrinter.print_line` called itself
   forever; the `bin/` scripts ran system `python3`, which lacks `treelib`
-  (they now prefer the venv's), and `bin/dirsync-fs.sh` synced the repo's
+  (they now prefer the venv's), and `bin/example-sync-local.sh` synced the repo's
   own fixtures, where a Remove would delete them (it now syncs a temp copy).
 
 ## Still open
