@@ -3,7 +3,7 @@
 The old Python picker library (a submodule, removed since) was too slow for big trees: in a
 119k file tree (/usr/share) one search keystroke took over 70s, and building
 dirdelta's own Python tree takes ~3s. `treepicker`, from the C++ project at
-/home/eliran/code/cpptree (github.com/eliranle6/treepicker), shows the same
+/home/eliran/code/treepicker (github.com/eliranle6/treepicker), shows the same
 kind of tree picker: a search keystroke takes milliseconds, and it opens
 /usr/share in ~0.5s. So dirdelta runs `treepicker` as a subprocess for every
 pick and every menu (`dirdelta/picker.py`), and no longer uses curses itself.

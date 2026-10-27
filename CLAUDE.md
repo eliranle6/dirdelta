@@ -94,7 +94,7 @@ dirstuff/                    the original dev machine's local folder, not a git 
 ```
 
 (`treepicker` is a C++ learning project of the same author. Its own working copy
-is at `/home/eliran/code/cpptree`, where changes are committed; `lib/treepicker`
+is at `/home/eliran/code/treepicker`, where changes are committed; `lib/treepicker`
 is a separate clone of it, updated by fetching from that copy and
 fast-forwarding, then committing the new pin here. Don't push either repo.)
 
