@@ -211,6 +211,59 @@ history. treepicker's own are in
     - Could replace ideas 5 (options with nothing to do: there are no options) and 9 (the mode
       label: each entry says its action).
 
+11. **Know each replica and when it was last updated.** The user keeps a `last_update.txt` at
+    a replica's root, a log of changes, newest last, e.g. (`/mnt/win/.../eliran`'s, as of
+    2026-10-27, also in `cloud/eliran`):
+    ```
+    15.12.2025 - copied DCIM pictures from old pixel 8 (not whatsapp pictures)
+    17.05.2026 - removed old money.ods
+                 remove Resume.* files
+    ```
+    (a `DD.MM.YYYY - text` line per entry, its continuation lines indented, an early entry a
+    bare date). dirdelta could read it, and remember its replicas:
+    - A replica's identity: for a local one, the filesystem it's on (its UUID, `findmnt -no
+      UUID` / `blkid`, or on WSL's `/mnt/c` drives the Windows volume serial, e.g. via
+      `cmd.exe /c vol`) plus the path in it, so an external disk is the same replica whatever
+      it's mounted as; for Drive, the account (My Drive's root id, already in the cache) plus
+      the path. Also a marker file it could write at the root (`.dirdelta-replica` with an id),
+      which survives the disk being replaced or copied; but it's a file in the replica, which
+      the user may not want.
+    - What's kept, in `~/.config/dirdelta/` next to `replicas.json` (or in it): each replica's
+      id, the paths it was seen at, the last entry of its `last_update.txt` (date and text), when
+      dirdelta last saw it, and when dirdelta last changed it (a live Copy/Remove into it).
+    - Shown: in the menu of a run without paths ("cloud/eliran: updated 17.05.2026, removed old
+      money.ods"), and a replica list ("which disk did I last update, and when?"), including
+      disks not plugged in now, from what was kept.
+    - Written by dirdelta too: after a live Copy/Remove, offer to add an entry ("27.10.2026 -
+      copied 12 files from cloud/eliran") to the replica's `last_update.txt`, so the log stays
+      up to date without writing it by hand (and the other replica's copy of the file, which
+      is itself a file that differs between them).
+    - The format: parse the fixed one above (the date at a line's start); lines it can't parse
+      are kept as text. Asking a model to read free text is possible but not needed while the
+      user writes it this way: a fixed format is cheaper, offline, and predictable. A model
+      could still summarize a long log, if ever wanted.
+
+12. **Compare sizes or contents, not only paths.** The diff is by path only, so a file at the
+    same path on both sides counts as the same, even if one was edited or is a half-copied
+    file. Two more modes, for the files at the same path:
+    - By size (a "medium" diff): a local file's size is a `stat` (find's `-printf '%s'`, in the
+      same scan, so nearly free), and a Drive file's is in the cache (`size`: all 20,806 cached
+      files have one, as of 2026-10-27). Catches truncated or different files, cheaply.
+    - By contents (a "hard" diff): Drive does have hashes, returned as metadata, with no
+      download: `md5Checksum`, `sha1Checksum`, `sha256Checksum` (all but Google's own types,
+      whose content isn't a file). The scan already asks for `sha256Checksum`, and 20,804 of the
+      20,806 cached files have one. So the Drive side is free; the cost is the local side,
+      which must read every file to hash it (slow for a big replica, on `/mnt/win` more so).
+      A local hash cache, keyed by path, size and mtime, makes the next run hash only what
+      changed; and hashing only the files whose sizes match (a different size is already a
+      different file). Between two local dirs, both sides are hashed, the same way.
+    - The result: a third kind of entry besides "only in A" and "only in B": "in both, but
+      different" (by size, or by contents), with its own actions: copy A's over B's, or B's
+      over A's, comparing their mtimes (Drive's `modifiedTime`, which the scan could ask for)
+      to suggest which is newer. This fits idea 10's combined tree.
+    - Hashes also find moved files for idea 3 better than names: the same sha256 at another
+      path is surely the same file, whatever it's named.
+
 ## Parked: performance
 
 Decided 2026-10-25: speed is good enough, so no more work on it until decided otherwise. A sync
