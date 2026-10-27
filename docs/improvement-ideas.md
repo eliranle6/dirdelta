@@ -264,6 +264,47 @@ history. treepicker's own are in
     - Hashes also find moved files for idea 3 better than names: the same sha256 at another
       path is surely the same file, whatever it's named.
 
+13. **Bring the phone's new photos in, periodically.** The user connects the phone to the laptop
+    now and then, to copy its new pictures into the laptop's replica (photos are kept in Drive,
+    not Google Photos). Today that's a plain sync of two dirs, which doesn't fit well:
+    - Reaching the phone: plugged in by USB, an Android phone is MTP, not a disk. GNOME's gvfs
+      mounts it under `/run/user/UID/gvfs/mtp:host=.../Internal shared storage/DCIM/Camera`, a
+      path `find` can walk, but slowly and sometimes not at all (gvfs's MTP drops out on big
+      folders). `adb` (USB debugging on) is faster and steadier: `adb shell find` to list,
+      `adb pull` to copy. A phone replica type (like `CloudDirTree`, a `PhoneDirTree` listing
+      and fetching through `adb`) would hide which is used.
+    - Matching by path doesn't work: the phone keeps one flat `DCIM/Camera`, while the laptop's
+      replica is sorted into folders (by year, by event), so every photo looks missing. What's
+      already copied is found by name and size anywhere in the destination (or by hash, idea 12),
+      like idea 3's moved files, not by path.
+    - Only what's new: remember, per phone (its serial, `adb get-serialno`, or the MTP device's),
+      the newest photo time imported last time, and list only what's newer (by the file's
+      mtime, or the date in its name: `IMG_20261027_...`, `PXL_20261027_...`). Then the flow is:
+      plug in, choose "Import from phone" (or a favorite pair, phone → destination), see the new
+      photos (idea 7's thumbnails help), Enter, done.
+    - Where they go: into an inbox folder (e.g. `photos/unsorted`), to sort later with idea 6,
+      or straight into a folder by date (`photos/2026/10`, from EXIF's DateTimeOriginal, or the
+      name), set once per destination.
+    - One way only: never remove from the phone by default. Optionally, once the photos are
+      copied and checked (sizes match, or hashes), offer to remove them from the phone to free
+      its space.
+    - Then to Drive: the laptop's replica goes to `cloud/...` as today, by a sync, or the
+      import could copy to both at once.
+
+    Straight from the phone into Drive, with no laptop and no dirdelta server (idea 8):
+    - Before writing an app: apps that already do this exist, e.g. Autosync for Google Drive
+      (MetaCtrl) or FolderSync, which keep a phone folder synced (one way, upload only, on
+      Wi-Fi) into a Drive folder. The Drive app itself uploads by hand only.
+    - A dirdelta phone app doing it would be a Drive API client of its own: Android sign-in
+      with the user's account, then the same uploads as `CloudDirTree._copy_file()`. The
+      `drive.file` scope (only the files the app made) is enough to upload but not to see
+      what's already there; checking for duplicates in Drive's folders needs the full `drive`
+      scope, a "restricted" one, fine for the user's own app left in Testing (which Google
+      doesn't review), but its sign-ins then expire every 7 days.
+    - Either way the laptop's Drive cache doesn't know of these uploads: a refresh (the full
+      one, or idea 2's per folder) picks them up, and the laptop's replica gets them by a sync
+      from `cloud/...`.
+
 ## Parked: performance
 
 Decided 2026-10-25: speed is good enough, so no more work on it until decided otherwise. A sync
