@@ -1,4 +1,5 @@
 import os
+import threading
 import shutil
 import tempfile
 import unittest
@@ -21,7 +22,8 @@ class ServiceTest(unittest.TestCase):
             'build': mock.patch('dirdelta.driveapi.build'),
         }
         for patcher in [mock.patch('dirdelta.driveapi.TOKEN_PATH', self.token_path),
-                        mock.patch('dirdelta.driveapi._service', None),
+                        mock.patch('dirdelta.driveapi._local', threading.local()),
+                        mock.patch('dirdelta.driveapi._shared_credentials', None),
                         mock.patch('dirdelta.messages.print_line')]:
             patcher.start()
             self.addCleanup(patcher.stop)
@@ -47,6 +49,16 @@ class ServiceTest(unittest.TestCase):
         self.saved.valid = True
         self.assertIs(driveapi.service(), driveapi.service())
         self.build.assert_called_once()
+
+    def test_each_thread_has_its_own_service_with_one_login(self):
+        self.saved.valid = True
+        self.build.side_effect = lambda *_, **__: mock.Mock()
+        services = [driveapi.service()]
+        thread = threading.Thread(target=lambda: services.append(driveapi.service()))
+        thread.start()
+        thread.join()
+        self.assertIsNot(services[0], services[1])
+        self.credentials.from_authorized_user_file.assert_called_once()
 
     def test_an_expired_login_is_refreshed_and_saved(self):
         self.saved.valid = False

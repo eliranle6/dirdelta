@@ -155,8 +155,18 @@ Cloud state is never queried live per-scan. Instead:
 
 Copying and removing: `CloudDirTree` keeps each file's and folder's Drive id
 (`_cloud_ids`, by relpath; the root's from `entries()`' first, `''`, entry).
-Copying into it (`_copy_file()`, from a local dir) uploads each file
-(`MediaFileUpload`), making the folders on its way (`_folder_id()`); copying out
+Copying into it (`_copy_files()`, from a local dir) first makes the folders the
+files are in that Drive lacks (`_make_folders()`: ids from `generateIds`, then
+a batch request per level of folders, up to 100 each; one that fails is made
+later by `_folder_id()`, with its files), then uploads the files
+(`MediaFileUpload`: in one request under 5 MB, else resumable),
+`UPLOAD_THREADS` (4) at a time, each thread with its own `driveapi.service()`.
+What Drive says of each upload goes into the tree and the cache on the main
+thread, as it ends. Every request is retried by the client on rate limit and
+server errors (`execute(num_retries=5)`, with exponential backoff). Ctrl-C
+starts no more uploads and waits for the ones under way (Ctrl-C again
+doesn't). Drive limits how fast a user makes files (about 2-3 a second), so
+more threads wouldn't help. Copying out
 of it, into a local dir, downloads (`fetch_file()`, which
 `LocalDiskDirTree._copy_file()` calls on the source tree); removing
 (`_remove_file()`) moves files to Drive's trash, so they can be restored. The
@@ -168,7 +178,8 @@ a JSON line per file or folder made (`drivecache.add()`, with the fields
 Drive returns, `FILE_FIELDS`, as a scan lists them), and a
 `{"trashedId": ID}` line per file trashed (`drivecache.trash()`), which
 `_parsefile()` drops the file for. So the cache stays up to date, and the
-next run needn't refresh it. Around each change the cache is marked stale
+next run needn't refresh it. Around each change (an upload's: around all of
+them) the cache is marked stale
 (`drivecache.mark_stale()`, a `files.txt.stale` file next to it), and the
 mark is taken away once the change is in the cache, unless it was there
 before: a change cut off in the middle (e.g. Ctrl-C during an upload, when
@@ -177,7 +188,8 @@ prompt says the cache may be out of date, and a refresh clears the mark.
 
 Logging in to Drive (`token.json`/`credentials.json`, `SCOPES=[drive]`: all of
 Drive, to change files too) is `driveapi.service()`, which also makes the
-service once for all callers. A saved login without those scopes (e.g. from
+service once per thread (the client's HTTP connection isn't thread-safe), with
+one login for all. A saved login without those scopes (e.g. from
 when dirdelta only listed files) means logging in again, as does a rejected
 refresh. A near-duplicate, unused implementation used to
 sit alongside it as `scandrive.py`; it's now archived at

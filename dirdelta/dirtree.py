@@ -16,7 +16,7 @@ class DirTree(object):
 
     A tree of a place that files can be copied into and removed from has _copy_file() and
     _remove_file(), for copy_inner_entries_from_dirtree() and remove_files(), and fetch_file(), to
-    copy its files elsewhere.
+    copy its files elsewhere. One that copies several files at once has _copy_files() too.
     """
     # What remove_files() says about the removed files' fate, after "removed N of M files from X"
     REMOVED_TO = ""
@@ -109,13 +109,25 @@ class DirTree(object):
         files = list(dirtree.iter_files())
         # In a dry run nothing changes: no files or dirs, and not the tree
         verb = "Dry run, not copying" if dryrun.DRYRUN else "Copying"
-        nr_copied = 0
+        nr_started = nr_copied = 0
         is_stopped = False
+
+        def starting(file_entry):
+            nonlocal nr_started
+            nr_started += 1
+            messages.print_line("%s %s (%d out of %d)" % (verb, file_entry, nr_started, len(files)))
+
+        def copied(is_copied):
+            nonlocal nr_copied
+            nr_copied += bool(is_copied)
+
         try:
-            for index, file_entry in enumerate(files):
-                messages.print_line("%s %s (%d out of %d)" % (verb, file_entry, index + 1, len(files)))
-                if dryrun.DRYRUN or self._copy_file(file_entry, source):
-                    nr_copied += 1
+            if dryrun.DRYRUN:
+                for file_entry in files:
+                    starting(file_entry)
+                    copied(True)
+            else:
+                self._copy_files(files, source, starting, copied)
         except KeyboardInterrupt:
             messages.note_stopped()
             is_stopped = True
@@ -147,6 +159,14 @@ class DirTree(object):
         else:
             messages.print_line("Remove %s: removed %d of %d files from %s%s" % (
                 ended, nr_removed, len(file_entries), self.displayname(), self.REMOVED_TO))
+
+    def _copy_files(self, files, source, starting, copied):
+        """Copy the files (see _copy_file()), calling starting(file_entry) as each one's copy
+        starts, and copied(whether it was copied) as it ends. One at a time, unless a tree does it
+        otherwise."""
+        for file_entry in files:
+            starting(file_entry)
+            copied(self._copy_file(file_entry, source))
 
     def _copy_file(self, file_entry, source):
         """Copy file_entry (of another tree, from source, if given) into this tree, at the same

@@ -2,6 +2,7 @@
 SECRETS_DIR: credentials.json (the OAuth client) and token.json (the user's login, written after
 logging in in the browser)."""
 import os.path
+import threading
 
 from google.auth.exceptions import RefreshError
 from google.auth.transport.requests import Request
@@ -22,17 +23,23 @@ CREDENTIALS_PATH = os.path.join(SECRETS_DIR, 'credentials.json')
 # them (e.g. from when dirdelta only listed files) makes the user log in again.
 SCOPES = ['https://www.googleapis.com/auth/drive']
 
-# The service, once logged in
-_service = None
+# Each thread's service (the client's HTTP connection isn't thread-safe, so uploads in parallel each
+# need their own), and the login they share, once logged in
+_local = threading.local()
+_shared_credentials = None
+_login_lock = threading.Lock()
 
 
 def service():
-    """The Drive API (v3) service, logging in first if needed (in the browser, unless there's a
-    saved login with SCOPES)"""
-    global _service
-    if _service is None:
-        _service = build('drive', 'v3', credentials=_credentials())
-    return _service
+    """The Drive API (v3) service of this thread, logging in first if needed (once, for all threads:
+    in the browser, unless there's a saved login with SCOPES)"""
+    global _shared_credentials
+    if getattr(_local, 'service', None) is None:
+        with _login_lock:
+            if _shared_credentials is None:
+                _shared_credentials = _credentials()
+        _local.service = build('drive', 'v3', credentials=_shared_credentials)
+    return _local.service
 
 
 def _credentials():

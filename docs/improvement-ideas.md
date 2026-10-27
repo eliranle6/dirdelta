@@ -1,9 +1,9 @@
 # Improvement ideas
 
 Not implemented: proposed changes, a backlog to pick from. The ones done so far (the 2026-10-23
-and 2026-10-24 reviews' #1-25; naming a cloud replica as given, the COPY/REMOVE label and
-greying out an option with nothing to do, 2026-10-27) are in git history. treepicker's own are in
-`lib/treepicker/docs/improvement-ideas.md`.
+and 2026-10-24 reviews' #1-25; naming a cloud replica as given, the COPY/REMOVE label, greying
+out an option with nothing to do, and faster uploads, 2026-10-27) are in git history.
+treepicker's own are in `lib/treepicker/docs/improvement-ideas.md`.
 
 1. **Remove a whole Drive folder in one call.** A Remove from Drive trashes each picked file on
    its own (`CloudDirTree._remove_file()`, one API call each), even when a whole folder is
@@ -76,28 +76,7 @@ greying out an option with nothing to do, 2026-10-27) are in git history. treepi
      Copy/Remove pickers could say which of their files have a match ("moved?"), and the
      confirmation offer Rename for those.
 
-4. **Upload many small files faster.** A Copy into Drive uploads file by file
-   (`CloudDirTree._copy_file()`), each a resumable upload (`MediaFileUpload(resumable=True)`:
-   two requests, one to start it and one with the data) and each folder on the way its own
-   `files().create`, one after the other. For a folder of many small files, the round trips
-   are most of the time. The Drive API has no "upload a folder" call (and doesn't unpack an
-   uploaded zip), so a picked dir is still its files, but:
-   - A simple (multipart) upload for small files (`resumable=False`, say under 5 MB): one
-     request each rather than two. Resumable only for big ones, where a cut-off upload can go on.
-   - Uploads in parallel, a few at a time (e.g. 4-8 threads). The client's `httplib2` isn't
-     thread-safe, so each thread needs its own `driveapi.service()` (its own `Http`). Drive
-     limits requests per user (on the order of 10 per second sustained), so a few threads,
-     with retries on 403/429 rate-limit errors (exponential backoff), not dozens. The progress
-     lines, Ctrl-C (stop starting new ones, let the running ones finish or cancel), and the
-     cache lines (`drivecache.add()`, from one thread) would need care.
-   - The folders first, in batches: `files().generateIds()` gives ids up front, so the folders
-     of a whole picked tree can be made in a `BatchHttpRequest` (up to 100 creates in one
-     request; batches can't carry file data, only metadata), and then the files uploaded
-     into them, in parallel.
-   Measure first (one big folder of small files), since how much each step saves depends on
-   the round-trip time.
-
-5. **Sort an inbox folder: file each one away, or remove it.** A mode for a folder of files
+4. **Sort an inbox folder: file each one away, or remove it.** A mode for a folder of files
    not yet sorted (e.g. `cloud/unsorted`), rather than a diff of two replicas: for each file
    (or dir), decide to move it into the sorted tree (`cloud/eliran/...`, at a path picked in its
    tree, and into the other replicas too, if any, e.g. a copy into
@@ -118,7 +97,7 @@ greying out an option with nothing to do, 2026-10-27) are in git history. treepi
    - Entry: e.g. `dirdelta --sort cloud/unsorted`, or an option in the menu of a run without
      paths.
 
-6. **A GUI, with the image beside the tree.** The same flows and keys as the TUI (the menus,
+5. **A GUI, with the image beside the tree.** The same flows and keys as the TUI (the menus,
    the file pickers, `j`/`k`/Space/Enter, search), in a window, with a pane on the right that
    shows the selected file: an image (or a video's frame, a PDF's first page, a text's start),
    since a name like `IMG_2041.jpg` says little when deciding what to copy or remove. For a
@@ -128,32 +107,32 @@ greying out an option with nothing to do, 2026-10-27) are in git history. treepi
      another implementation of `picker.py`'s functions (`pick_files`, `pick_option`, ...), a
      window instead of a treepicker run, with the rest unchanged. A Python toolkit (Qt via
      PySide6 has tree views and image viewing built in; or a local web page served by dirdelta,
-     opened in a browser, which also suits idea 7).
+     opened in a browser, which also suits idea 6).
    - A cheaper first step, in the terminal: treepicker's side column (idea 3's) showing the image
      with a terminal graphics protocol (kitty's, sixel, or iTerm2's, via e.g. `chafa`), in
      terminals that support one. Windows Terminal supports sixel (WSL included).
 
-7. **A dirdelta server, used from a phone.** A daemon on an always-on machine that holds the
+6. **A dirdelta server, used from a phone.** A daemon on an always-on machine that holds the
    replicas' state (the Drive cache, scans of local dirs it can reach) and runs the actions
-   (Copy, Remove, idea 5's sorting), with an API that a phone app (or the browser) connects to:
+   (Copy, Remove, idea 4's sorting), with an API that a phone app (or the browser) connects to:
    the same choices, made remotely, e.g. sorting `cloud/unsorted` from the phone.
    - The core first: the flows (diff, pick, confirm, act) separated from the terminal, so they
      can be driven by an API rather than by treepicker runs and `messages` screens (the same
-     separation idea 6 needs, and treepicker's own improvement-ideas mention driving it from
+     separation idea 5 needs, and treepicker's own improvement-ideas mention driving it from
      somewhere other than the keyboard).
    - The server: an HTTP API (e.g. FastAPI): list replicas and pairs (`replicas.json`), a pair's
      diff, a tree's page of entries, an action on picked files, and an action's progress
      (polled or streamed, since actions take minutes), with the dry run as the default there
      too. Long actions run in the background and survive the phone disconnecting.
    - The phone app: a web app (a page served by the daemon, added to the home screen) is the
-     cheapest, over a native one; it shows trees, thumbnails (idea 6) and the confirmations.
+     cheapest, over a native one; it shows trees, thumbnails (idea 5) and the confirmations.
    - Access: it can delete files in Drive and on disk, so it must not be open: reached over a
      VPN (e.g. Tailscale) rather than the internet, with authentication on top, and the Drive
      token stays on the server. Which local dirs it can reach is the server's, not the
      laptop's (`/mnt/win` is the laptop's Windows drive), so the replicas it serves may
      differ.
 
-8. **One combined diff tree of both replicas, decided per file or dir.** Today's flow is per
+7. **One combined diff tree of both replicas, decided per file or dir.** Today's flow is per
    action: the main menu offers four (copy each way, remove from each), each picker shows one
    way's files, and a decision about a file is spread over passes (copy A's new files to B,
    then remove B's old ones from B, ...). The other way to work, like a sync tool's
@@ -182,7 +161,7 @@ greying out an option with nothing to do, 2026-10-27) are in git history. treepi
    - Would replace the greyed-out options with nothing to do (there are no options) and the
      COPY/REMOVE label (each entry says its action).
 
-9. **Know each replica and when it was last updated.** The user keeps a `last_update.txt` at
+8. **Know each replica and when it was last updated.** The user keeps a `last_update.txt` at
    a replica's root, a log of changes, newest last, e.g. (`/mnt/win/.../eliran`'s, as of
    2026-10-27, also in `cloud/eliran`):
    ```
@@ -214,28 +193,28 @@ greying out an option with nothing to do, 2026-10-27) are in git history. treepi
      user writes it this way: a fixed format is cheaper, offline, and predictable. A model
      could still summarize a long log, if ever wanted.
 
-10. **Compare sizes or contents, not only paths.** The diff is by path only, so a file at the
-    same path on both sides counts as the same, even if one was edited or is a half-copied
-    file. Two more modes, for the files at the same path:
-    - By size (a "medium" diff): a local file's size is a `stat` (find's `-printf '%s'`, in the
-      same scan, so nearly free), and a Drive file's is in the cache (`size`: all 20,806 cached
-      files have one, as of 2026-10-27). Catches truncated or different files, cheaply.
-    - By contents (a "hard" diff): Drive does have hashes, returned as metadata, with no
-      download: `md5Checksum`, `sha1Checksum`, `sha256Checksum` (all but Google's own types,
-      whose content isn't a file). The scan already asks for `sha256Checksum`, and 20,804 of the
-      20,806 cached files have one. So the Drive side is free; the cost is the local side,
-      which must read every file to hash it (slow for a big replica, on `/mnt/win` more so).
-      A local hash cache, keyed by path, size and mtime, makes the next run hash only what
-      changed; and hashing only the files whose sizes match (a different size is already a
-      different file). Between two local dirs, both sides are hashed, the same way.
-    - The result: a third kind of entry besides "only in A" and "only in B": "in both, but
-      different" (by size, or by contents), with its own actions: copy A's over B's, or B's
-      over A's, comparing their mtimes (Drive's `modifiedTime`, which the scan could ask for)
-      to suggest which is newer. This fits idea 8's combined tree.
-    - Hashes also find moved files for idea 3 better than names: the same sha256 at another
-      path is surely the same file, whatever it's named.
+9. **Compare sizes or contents, not only paths.** The diff is by path only, so a file at the
+   same path on both sides counts as the same, even if one was edited or is a half-copied
+   file. Two more modes, for the files at the same path:
+   - By size (a "medium" diff): a local file's size is a `stat` (find's `-printf '%s'`, in the
+     same scan, so nearly free), and a Drive file's is in the cache (`size`: all 20,806 cached
+     files have one, as of 2026-10-27). Catches truncated or different files, cheaply.
+   - By contents (a "hard" diff): Drive does have hashes, returned as metadata, with no
+     download: `md5Checksum`, `sha1Checksum`, `sha256Checksum` (all but Google's own types,
+     whose content isn't a file). The scan already asks for `sha256Checksum`, and 20,804 of the
+     20,806 cached files have one. So the Drive side is free; the cost is the local side,
+     which must read every file to hash it (slow for a big replica, on `/mnt/win` more so).
+     A local hash cache, keyed by path, size and mtime, makes the next run hash only what
+     changed; and hashing only the files whose sizes match (a different size is already a
+     different file). Between two local dirs, both sides are hashed, the same way.
+   - The result: a third kind of entry besides "only in A" and "only in B": "in both, but
+     different" (by size, or by contents), with its own actions: copy A's over B's, or B's
+     over A's, comparing their mtimes (Drive's `modifiedTime`, which the scan could ask for)
+     to suggest which is newer. This fits idea 7's combined tree.
+   - Hashes also find moved files for idea 3 better than names: the same sha256 at another
+     path is surely the same file, whatever it's named.
 
-11. **Bring the phone's new photos in, periodically.** The user connects the phone to the laptop
+10. **Bring the phone's new photos in, periodically.** The user connects the phone to the laptop
     now and then, to copy its new pictures into the laptop's replica (photos are kept in Drive,
     not Google Photos). Today that's a plain sync of two dirs, which doesn't fit well:
     - Reaching the phone: plugged in by USB, an Android phone is MTP, not a disk. GNOME's gvfs
@@ -246,14 +225,14 @@ greying out an option with nothing to do, 2026-10-27) are in git history. treepi
       and fetching through `adb`) would hide which is used.
     - Matching by path doesn't work: the phone keeps one flat `DCIM/Camera`, while the laptop's
       replica is sorted into folders (by year, by event), so every photo looks missing. What's
-      already copied is found by name and size anywhere in the destination (or by hash, idea 10),
+      already copied is found by name and size anywhere in the destination (or by hash, idea 9),
       like idea 3's moved files, not by path.
     - Only what's new: remember, per phone (its serial, `adb get-serialno`, or the MTP device's),
       the newest photo time imported last time, and list only what's newer (by the file's
       mtime, or the date in its name: `IMG_20261027_...`, `PXL_20261027_...`). Then the flow is:
       plug in, choose "Import from phone" (or a favorite pair, phone → destination), see the new
-      photos (idea 6's thumbnails help), Enter, done.
-    - Where they go: into an inbox folder (e.g. `photos/unsorted`), to sort later with idea 5,
+      photos (idea 5's thumbnails help), Enter, done.
+    - Where they go: into an inbox folder (e.g. `photos/unsorted`), to sort later with idea 4,
       or straight into a folder by date (`photos/2026/10`, from EXIF's DateTimeOriginal, or the
       name), set once per destination.
     - One way only: never remove from the phone by default. Optionally, once the photos are
@@ -262,12 +241,12 @@ greying out an option with nothing to do, 2026-10-27) are in git history. treepi
     - Then to Drive: the laptop's replica goes to `cloud/...` as today, by a sync, or the
       import could copy to both at once.
 
-    Straight from the phone into Drive, with no laptop and no dirdelta server (idea 7):
+    Straight from the phone into Drive, with no laptop and no dirdelta server (idea 6):
     - Before writing an app: apps that already do this exist, e.g. Autosync for Google Drive
       (MetaCtrl) or FolderSync, which keep a phone folder synced (one way, upload only, on
       Wi-Fi) into a Drive folder. The Drive app itself uploads by hand only.
     - A dirdelta phone app doing it would be a Drive API client of its own: Android sign-in
-      with the user's account, then the same uploads as `CloudDirTree._copy_file()`. The
+      with the user's account, then the same uploads as `CloudDirTree._copy_files()`. The
       `drive.file` scope (only the files the app made) is enough to upload but not to see
       what's already there; checking for duplicates in Drive's folders needs the full `drive`
       scope, a "restricted" one, fine for the user's own app left in Testing (which Google
