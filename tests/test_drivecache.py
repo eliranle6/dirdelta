@@ -37,6 +37,30 @@ class EntriesTest(unittest.TestCase):
         relpaths = [relpath for relpath, _, _ in drivecache.entries('/mein')][1:]
         self.assertLess(relpaths.index('album'), relpaths.index('album/track.mp3'))
 
+    def append(self, line):
+        with open(self.cache, 'a') as f:
+            f.write(json.dumps(line) + '\n')
+
+    def test_trashed_files_are_left_out(self):
+        self.append({drivecache.TRASHED_ID_KEY: 'song'})
+        relpaths = [relpath for relpath, _, _ in drivecache.entries('/mein')]
+        self.assertNotIn('song.mp3', relpaths)
+        self.assertIn('album/track.mp3', relpaths)
+
+    def test_added_files_and_folders_are_in(self):
+        drivecache.add({'id': 'new', 'name': 'new', 'parents': ['album'],
+                        'mimeType': drivecache.FOLDER_MIME_TYPE})
+        # Without a mimeType (Drive didn't say), a file
+        drivecache.add({'id': 'n1', 'name': '1.mp3', 'parents': ['new']})
+        drivecache.trash('track')
+        found = {relpath: is_dir for relpath, _, is_dir in drivecache.entries('/mein/album')}
+        self.assertEqual(found, {'': True, 'new': True, 'new/1.mp3': False})
+
+    def test_count_leaves_out_the_trashed_lines(self):
+        before = drivecache.count_entries()
+        drivecache.trash('song')
+        self.assertEqual(drivecache.count_entries(), before)
+
 
 FOLDER = drivecache.FOLDER_MIME_TYPE
 

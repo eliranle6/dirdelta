@@ -58,17 +58,21 @@ class CloudDirTree(dirtree.DirTree):
     def _copy_file(self, file_entry, source):
         """Upload file_entry (of a local dir: its full path is on the local disk) into the same
         relative path, making the folders it's in"""
-        # Before changing Drive, in case it's cut off in the middle
+        # Stale until the change is in the cache, in case it's cut off in the middle
+        was_stale = drivecache.is_stale()
         drivecache.mark_stale()
         try:
             parent_id = self._folder_id(os.path.dirname(file_entry.relpath))
             media = MediaFileUpload(file_entry.full_filesystem_path(), resumable=True)
+            body = {'name': os.path.basename(file_entry.relpath), 'parents': [parent_id]}
             created = driveapi.service().files().create(
-                body={'name': os.path.basename(file_entry.relpath), 'parents': [parent_id]},
-                media_body=media, fields='id').execute()
+                body=body, media_body=media, fields=drivecache.FILE_FIELDS).execute()
         except (HttpError, OSError) as error:
             messages.print_line("Copy failed: %s" % (error,), "red")
             return False
+        drivecache.add(dict(body, **created))
+        if not was_stale:
+            drivecache.mark_fresh()
         self.add_file_by_relpath(file_entry.relpath)
         self._cloud_ids[file_entry.relpath] = created['id']
         return True
@@ -77,23 +81,29 @@ class CloudDirTree(dirtree.DirTree):
         """The Drive id of the folder at relpath, making it (and the folders it's in) if needed"""
         if relpath not in self._cloud_ids:
             parent_id = self._folder_id(os.path.dirname(relpath))
+            body = {'name': os.path.basename(relpath), 'mimeType': drivecache.FOLDER_MIME_TYPE,
+                    'parents': [parent_id]}
             created = driveapi.service().files().create(
-                body={'name': os.path.basename(relpath), 'mimeType': drivecache.FOLDER_MIME_TYPE,
-                      'parents': [parent_id]},
-                fields='id').execute()
+                body=body, fields=drivecache.FILE_FIELDS).execute()
+            drivecache.add(dict(body, **created))
             self.create_dir_node_from_relpath_if_not_exists(relpath)
             self._cloud_ids[relpath] = created['id']
         return self._cloud_ids[relpath]
 
     def _remove_file(self, file_entry):
         """Move file_entry to Drive's trash, where it can be restored from (for 30 days)"""
+        # Stale until the change is in the cache, in case it's cut off in the middle
+        was_stale = drivecache.is_stale()
         drivecache.mark_stale()
+        cloud_id = self._cloud_ids[file_entry.relpath]
         try:
-            driveapi.service().files().update(fileId=self._cloud_ids[file_entry.relpath],
-                                              body={'trashed': True}).execute()
+            driveapi.service().files().update(fileId=cloud_id, body={'trashed': True}).execute()
         except HttpError as error:
             messages.print_line("Remove failed: %s" % (error,), "red")
             return False
+        drivecache.trash(cloud_id)
+        if not was_stale:
+            drivecache.mark_fresh()
         self.remove_node(file_entry.relpath)
         del self._cloud_ids[file_entry.relpath]
         return True

@@ -159,10 +159,17 @@ of it, into a local dir, downloads (`fetch_file()`, which
 loops around these (progress lines, dry run, Ctrl-C, the report) are
 `DirTree`'s `copy_inner_entries_from_dirtree()` and `remove_files()`, shared
 with `LocalDiskDirTree`. A file that fails is said in red, and the rest go on.
-The cache on disk isn't updated, but it's marked stale (`drivecache.mark_stale()`,
-a `files.txt.stale` file next to it) before each change to Drive (not in a dry
-run): the next run's refresh prompt then says it's out of date, and a refresh
-(which brings the changes) clears the mark.
+Each change is added to the cache on disk as it's made (not in a dry run):
+a JSON line per file or folder made (`drivecache.add()`, with the fields
+Drive returns, `FILE_FIELDS`, as a scan lists them), and a
+`{"trashedId": ID}` line per file trashed (`drivecache.trash()`), which
+`_parsefile()` drops the file for. So the cache stays up to date, and the
+next run needn't refresh it. Around each change the cache is marked stale
+(`drivecache.mark_stale()`, a `files.txt.stale` file next to it), and the
+mark is taken away once the change is in the cache, unless it was there
+before: a change cut off in the middle (e.g. Ctrl-C during an upload, when
+Drive may or may not have the file) leaves it, so the next run's refresh
+prompt says the cache may be out of date, and a refresh clears the mark.
 
 Logging in to Drive (`token.json`/`credentials.json`, `SCOPES=[drive]`: all of
 Drive, to change files too) is `driveapi.service()`, which also makes the

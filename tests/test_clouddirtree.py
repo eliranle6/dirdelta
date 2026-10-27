@@ -118,13 +118,47 @@ class CloudDirTreeChangesTest(unittest.TestCase):
         clouddirtree.MediaFileUpload.assert_called_once_with('/local/album/new.mp3', resumable=True)
         self.assertIn('album/new.mp3', self.tree)
 
-    def test_changing_drive_makes_the_cache_stale(self):
+    def test_changes_are_kept_in_the_cache(self):
+        self.upload(['a/b/new.mp3'])
+        self.tree.remove_files([self.tree.get_node('song.mp3').data])
+        # Read anew from the cache, as the next run would
+        relpaths = sorted(entry.relpath for entry in clouddirtree.factory('cloud/mein').iter_files())
+        self.assertIn('a/b/new.mp3', relpaths)
+        self.assertNotIn('song.mp3', relpaths)
+        self.assertIsNotNone(clouddirtree.factory('cloud/mein').get_node('a/b'))
         self.assertFalse(clouddirtree.drivecache.is_stale())
+
+    def test_what_drive_says_of_a_new_file_is_kept(self):
+        self.service.files.return_value.create.return_value.execute.side_effect = \
+            lambda: {'id': 'x', 'mimeType': 'audio/mpeg', 'size': '3'}
         self.upload(['new.mp3'])
+        with open(self.cache) as f:
+            last = json.loads(f.readlines()[-1])
+        self.assertEqual(last, {'id': 'x', 'name': 'new.mp3', 'parents': ['mein'],
+                                'mimeType': 'audio/mpeg', 'size': '3'})
+        create = self.service.files.return_value.create
+        self.assertEqual(create.call_args.kwargs['fields'], clouddirtree.drivecache.FILE_FIELDS)
+
+    def test_a_change_cut_off_leaves_the_cache_stale(self):
+        # E.g. Ctrl-C while uploading: Drive may have the file or not
+        self.service.files.return_value.create.return_value.execute.side_effect = KeyboardInterrupt
+        with self.assertRaises(KeyboardInterrupt):
+            self.tree._copy_file(entries.FileEntry('new.mp3', 'new.mp3', '/local/new.mp3'), None)
         self.assertTrue(clouddirtree.drivecache.is_stale())
-        clouddirtree.drivecache.mark_fresh()
+        # And the next change, done, doesn't make it look fresh
+        self.service.files.return_value.create.return_value.execute.side_effect = \
+            lambda: {'id': 'ok'}
+        self.upload(['other.mp3'])
         self.tree.remove_files([self.tree.get_node('song.mp3').data])
         self.assertTrue(clouddirtree.drivecache.is_stale())
+
+    def test_a_failed_change_leaves_the_cache_as_it_was(self):
+        self.service.files.return_value.update.return_value.execute.side_effect = _http_error()
+        with open(self.cache) as f:
+            before = f.read()
+        self.tree.remove_files([self.tree.get_node('song.mp3').data])
+        with open(self.cache) as f:
+            self.assertEqual(f.read(), before)
 
     def test_a_dry_run_leaves_the_cache_fresh(self):
         with mock.patch('dirdelta.dryrun.DRYRUN', True):
