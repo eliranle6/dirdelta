@@ -116,6 +116,62 @@ history. treepicker's own are in
      repo. Without it, dirdelta could keep the option choosable and only reword it, since
      choosing it already just says so.
 
+6. **Sort an inbox folder: file each one away, or remove it.** A mode for a folder of files
+   not yet sorted (e.g. `cloud/unsorted`), rather than a diff of two replicas: for each file
+   (or dir), decide to move it into the sorted tree (`cloud/eliran/...`, at a path picked in its
+   tree, and into the other replicas too, if any, e.g. a copy into
+   `/mnt/win/Users/.../eliran/...`), or remove it (Drive's trash), or leave it for later.
+   - The flow: pick files in the inbox (`pick_files`), choose an action, and for "move", pick the
+     destination dir with the dir picker (`pick_from_tree(dirs_only=True)` for Drive). Moving
+     within Drive is one `files().update` with `addParents`/`removeParents` (no upload, keeps
+     the id), like idea 3's Rename; the other replicas get a download (`fetch_file()`) or a
+     local copy. A batch of decisions is confirmed together, like Copy/Remove now.
+   - A recommendation from Claude: for each file, an agent (the Claude API, with the file's name,
+     path, size, type, and its contents for text/PDF/images within limits) suggests where in
+     the sorted tree it belongs (given that tree's dirs, maybe a summary of each) or that it's
+     junk, with a reason. Shown beside the file, as the default answer, which the user accepts
+     or changes: never acted on without the user. It sends the files' contents to an outside
+     service, so off unless turned on (and maybe only for some folders), with an API key kept
+     like `secrets/`. Costly for many files: suggest per dir where a dir holds one thing, cache
+     the suggestions.
+   - Entry: e.g. `dirdelta --sort cloud/unsorted`, or an option in the menu of a run without
+     paths.
+
+7. **A GUI, with the image beside the tree.** The same flows and keys as the TUI (the menus,
+   the file pickers, `j`/`k`/Space/Enter, search), in a window, with a pane on the right that
+   shows the selected file: an image (or a video's frame, a PDF's first page, a text's start),
+   since a name like `IMG_2041.jpg` says little when deciding what to copy or remove. For a
+   Drive file, its thumbnail (`thumbnailLink`, small, no full download) or the file itself,
+   downloaded on demand and cached.
+   - Where to build it: dirdelta's flows are Python calling `picker.py`, so the GUI could be
+     another implementation of `picker.py`'s functions (`pick_files`, `pick_option`, ...), a
+     window instead of a treepicker run, with the rest unchanged. A Python toolkit (Qt via
+     PySide6 has tree views and image viewing built in; or a local web page served by dirdelta,
+     opened in a browser, which also suits idea 8).
+   - A cheaper first step, in the terminal: treepicker's side column (idea 3's) showing the image
+     with a terminal graphics protocol (kitty's, sixel, or iTerm2's, via e.g. `chafa`), in
+     terminals that support one. Windows Terminal supports sixel (WSL included).
+
+8. **A dirdelta server, used from a phone.** A daemon on an always-on machine that holds the
+   replicas' state (the Drive cache, scans of local dirs it can reach) and runs the actions
+   (Copy, Remove, idea 6's sorting), with an API that a phone app (or the browser) connects to:
+   the same choices, made remotely, e.g. sorting `cloud/unsorted` from the phone.
+   - The core first: the flows (diff, pick, confirm, act) separated from the terminal, so they
+     can be driven by an API rather than by treepicker runs and `messages` screens (the same
+     separation idea 7 needs, and treepicker's own improvement-ideas mention driving it from
+     somewhere other than the keyboard).
+   - The server: an HTTP API (e.g. FastAPI): list replicas and pairs (`replicas.json`), a pair's
+     diff, a tree's page of entries, an action on picked files, and an action's progress
+     (polled or streamed, since actions take minutes), with the dry run as the default there
+     too. Long actions run in the background and survive the phone disconnecting.
+   - The phone app: a web app (a page served by the daemon, added to the home screen) is the
+     cheapest, over a native one; it shows trees, thumbnails (idea 7) and the confirmations.
+   - Access: it can delete files in Drive and on disk, so it must not be open: reached over a
+     VPN (e.g. Tailscale) rather than the internet, with authentication on top, and the Drive
+     token stays on the server. Which local dirs it can reach is the server's, not the
+     laptop's (`/mnt/win` is the laptop's Windows drive), so the replicas it serves may
+     differ.
+
 ## Parked: performance
 
 Decided 2026-10-25: speed is good enough, so no more work on it until decided otherwise. A sync
