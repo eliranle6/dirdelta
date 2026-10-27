@@ -3,31 +3,31 @@
 # The repo's .venv if there is one, else whichever python3 is on PATH (e.g. an active venv)
 PYTHON ?= $(if $(wildcard .venv/bin/python3),.venv/bin/python3,python3)
 
-# dirdelta's C++ programs, built in their submodule: treepick (the pickers) and dirdiff (diffing
+# dirdelta's C++ programs, built in their submodule: treepicker (the pickers) and dirdiff (diffing
 # two local dirs)
-PROGRAMS = lib/cpptree/build/treepick lib/cpptree/build/dirdiff
+PROGRAMS = lib/treepicker/build/treepicker lib/treepicker/build/dirdiff
 
 build:
-	$(MAKE) -C lib/cpptree $(patsubst lib/cpptree/%,%,$(PROGRAMS))
+	$(MAKE) -C lib/treepicker $(patsubst lib/treepicker/%,%,$(PROGRAMS))
 
 help:
-	@echo "make build      build dirdelta's C++ programs (treepick, dirdiff) in lib/cpptree/build"
+	@echo "make build      build dirdelta's C++ programs (treepicker, dirdiff) in lib/treepicker/build"
 	@echo "make test       run the unit tests (ARGS=-v for per-test output)"
 	@echo "make clean      remove caches and build output (keeps .venv, secrets/)"
 	@echo "make install    pip install dirdelta (and its C++ programs) into \$$PYTHON's environment"
 	@echo "make deploy     install a dirdelta command into ~/.local/bin via pipx; rerun to update"
 	@echo "make undeploy   remove the deployed command"
 
-# The repo root makes the dirdelta package importable. treepick runs its own tests.
+# The repo root makes the dirdelta package importable. treepicker runs its own tests.
 # Some tests run dirdiff, so the programs are built first
 test: build
 	PYTHONPATH=. $(PYTHON) -m unittest discover -s tests $(ARGS)
-	$(MAKE) -C lib/cpptree test
+	$(MAKE) -C lib/treepicker test
 
 clean:
 	find . \( -path ./.venv -o -path ./lib \) -prune -o \( -name __pycache__ -o -name '*.pyc' \) -prune -exec rm -rf {} +
 	rm -rf build AUTHORS ChangeLog *.egg-info .eggs
-	$(MAKE) -C lib/cpptree clean
+	$(MAKE) -C lib/treepicker clean
 
 # The C++ programs go next to the environment's python (where its scripts go), which is where
 # programs.find() looks first

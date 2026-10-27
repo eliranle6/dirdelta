@@ -5,9 +5,9 @@
 ```
 dirdelta command, or a bin/example-*.sh launcher (python -m dirdelta)
   → main.py: parse_args() → dirsync_main.run(args)  OR  dirpick_main.run(args)
-     (no curses: each picker is a treepick run, which has the terminal while
+     (no curses: each picker is a treepicker run, which has the terminal while
       it's open; messages in between are plain lines, via messages.print_line)
-       dirpick_main: local dir → picker.pick_under_dir(dir)   (treepick scans it)
+       dirpick_main: local dir → picker.pick_under_dir(dir)   (treepicker scans it)
                      cloud    → utils.create_dirtree_from_arg() → picker.pick_from_tree()
        dirsync_main: utils.create_dirtree_from_arg(path)   for each replica path
             → clouddirtreefactory.factory_interactive()   if path starts with "cloud"
@@ -27,7 +27,7 @@ dirdelta command, or a bin/example-*.sh launcher (python -m dirdelta)
 Argparse: `dir_a_path` (required), `dir_b_path` (optional), `-x/--execute`,
 `-m/--max-depth` (default 20, passed down to `localdiskdirtree.factory` as
 `find -maxdepth`). One positional path → `dirpick_main.run`; two →
-`dirsync_main.run`. No curses setup: a `picker.PickerError` (treepick
+`dirsync_main.run`. No curses setup: a `picker.PickerError` (treepicker
 missing or failing) exits with its message.
 
 ### `utils.py`
@@ -50,7 +50,7 @@ Since it doesn't subclass treelib, it has no `create_node`: all callers go
 through `add_file_by_relpath` / `add_file_by_fullpath` /
 `create_dir_node_from_relpath_if_not_exists` so relpath/fullpath bookkeeping
 stays consistent. Node `identifier` in `treelib` is the file's `relpath`,
-relative (`sub/x`; the root's is `''`), like treepick's paths.
+relative (`sub/x`; the root's is `''`), like treepicker's paths.
 
 **The diff algorithm** — `get_unknown_entries_in_given_dirtree(self, other)`:
 for every file in `other`, if its `relpath` is not a node id in `self`,
@@ -153,8 +153,8 @@ sit alongside it as `scandrive.py`; it's now archived at
 `dirdiff.files_not_in(src_dir, dst_dir, max_depth)` runs `dirdiff -0 SRC DST`,
 returning src's files (relative paths) that dst lacks, and find's errors.
 It scans both dirs in C++ (~1s for two 119k-file dirs, where building their
-Python trees took ~6s). `programs.find(name, env_var)` finds treepick and
-dirdiff: `$env_var`, next to the running python, `lib/cpptree/build/`, `PATH`.
+Python trees took ~6s). `programs.find(name, env_var)` finds treepicker and
+dirdiff: `$env_var`, next to the running python, `lib/treepicker/build/`, `PATH`.
 
 ### `interactive_dir_sync.py`
 `InteractiveDirSync(src, dst)`. Its diff (`_missing()`): for two local dirs,
@@ -203,11 +203,11 @@ again) is found once, on a daemon thread (`_Way.find_missing()`, a
 `concurrent.futures.Future`), as the menu opens, and shared by that way's
 options: while it's being found they're shown as "(loading...)", with the
 dots moving, then with how many files it has (`pick_option(shown_as=...)`,
-which sends treepick the changes through `--updates`). Choosing an option
+which sends treepicker the changes through `--updates`). Choosing an option
 waits for both ways (an action may change what the other is diffing), and
 after a live (not dry run) action both are found again.
 `dirpick_main.run` returns the picked path: for a local dir it lets
-treepick scan the dir itself (`picker.pick_under_dir`, much faster than
+treepicker scan the dir itself (`picker.pick_under_dir`, much faster than
 building a `DirTree`, ~3s for 119k files); for a cloud path it builds the
 `CloudDirTree` and uses `picker.pick_from_tree`. `main.py` then prints the
 path, or `os.execvp`s the `-x` program on it.
@@ -229,36 +229,36 @@ terminal it only prints.
 ### `dryrun.py`
 `DRYRUN` (true unless `DRYRUN=0` is set), read at each use, and `label()`:
 ("DRY RUN", "green") or ("LIVE", "red"), which `picker.py` passes to every
-treepick run (`--label`, `--label-color`: at the start of its bottom line)
+treepicker run (`--label`, `--label-color`: at the start of its bottom line)
 and `interactive_dir_sync.py` to the progress screen (its top line).
 
 ### `picker.py`
-Runs `treepick` (from github.com/levioctl/cpptree; `$DIRDELTA_PICKER`, or
-`treepick` on `PATH`) as a subprocess for each pick, fzf-style: treepick
+Runs `treepicker` (from github.com/eliranle6/treepicker; `$DIRDELTA_PICKER`, or
+`treepicker` on `PATH`) as a subprocess for each pick, fzf-style: treepicker
 draws on `/dev/tty`, reads its input on stdin and prints what was picked on
 stdout, all `\0`-separated (`-0`). Exit code 1 means the user quit (→
-`None`); others raise `PickerError`. See `docs/treepick-integration.md`.
+`None`); others raise `PickerError`. See `docs/treepicker-integration.md`.
 - `pick_from_tree(tree, header)`: picks one node of a `DirTree` (cloud
   picker mode, the cloud diff view). Sends its node ids (relative paths,
-  like treepick's; the root, `''`, is treepick's `.`), each after its type
+  like treepicker's; the root, `''`, is treepicker's `.`), each after its type
   (`--typed`: `f sub/x`, `d sub`), each dir before its contents, siblings
   sorted by tag; maps the picked path back to the node's entry (`.` is the
   root).
 - `pick_files(rootpath, relpaths, header, picked)`: picks several of a
-  list of files (`-m`), sent as `f sub/x` lines only: treepick adds their
-  dirs. Returns the picked files' relpaths (treepick also prints the dirs
+  list of files (`-m`), sent as `f sub/x` lines only: treepicker adds their
+  dirs. Returns the picked files' relpaths (treepicker also prints the dirs
   whose files are all picked; those are dropped). `picked` start picked
   (`--picked FILE`).
-- `pick_under_dir(dirpath, max_depth)`: `treepick [--max-depth N] DIR`.
-- `pick_option(options, header)`: `treepick --list`, for menus.
+- `pick_under_dir(dirpath, max_depth)`: `treepicker [--max-depth N] DIR`.
+- `pick_option(options, header)`: `treepicker --list`, for menus.
 Names are passed as bytes with `surrogateescape`, so non-UTF-8 file names
-round-trip. Tests (`tests/test_picker.py`) run a fake treepick script.
+round-trip. Tests (`tests/test_picker.py`) run a fake treepicker script.
 
-## `lib/cpptree/` — treepick and dirdiff (git submodule)
+## `lib/treepicker/` — treepicker and dirdiff (git submodule)
 
-The C++ tree picker dirdelta runs, and `dirdiff` (github.com/levioctl/cpptree;
+The C++ tree picker dirdelta runs, and `dirdiff` (github.com/eliranle6/treepicker;
 its README and `--help` describe them). `make build` builds them in
-`lib/cpptree/build/`; `make install`/`make deploy` copy them next to the
+`lib/treepicker/build/`; `make install`/`make deploy` copy them next to the
 environment's python, where `programs.find()` looks first. The Python picker
-library that was the UI before (`lib/treepicker`, with `cursesswitch`) was
+library that was the UI before (with `cursesswitch`) was
 removed on 2026-10-24.

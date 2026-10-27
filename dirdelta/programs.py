@@ -1,11 +1,11 @@
-"""dirdelta's C++ programs (treepick, dirdiff), from the lib/cpptree submodule: finding them."""
+"""dirdelta's C++ programs (treepicker, dirdiff), from the lib/treepicker submodule: finding them."""
 import os
 import shutil
 import sys
 
 # Where make build puts them, when running from the source tree
 SOURCE_TREE_BUILD = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-                                 'lib', 'cpptree', 'build')
+                                 'lib', 'treepicker', 'build')
 
 
 class ProgramError(Exception):

@@ -41,6 +41,6 @@ for the `-x/--execute` launch-with-a-program flow); two paths → "sync"
 (`dirsync_main.py`, the diff/copy/remove flow this whole project exists
 for).
 
-**`treepicker`** — the Python curses tree-picker library (github.com/levioctl/treepicker)
-that was dirdelta's UI, as the `lib/treepicker` submodule (with `cursesswitch`, its
-curses/plain printing shim), until treepick replaced it; removed 2026-10-24.
+**Old Python picker** — the Python curses tree-picker library that was dirdelta's UI, as a
+submodule (with `cursesswitch`, its curses/plain printing shim), until treepicker replaced it;
+removed 2026-10-24.

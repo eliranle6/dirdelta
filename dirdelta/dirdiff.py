@@ -1,4 +1,4 @@
-"""Diffing two local dirs with the dirdiff program (from the lib/cpptree submodule): it scans them in
+"""Diffing two local dirs with the dirdiff program (from the lib/treepicker submodule): it scans them in
 C++, much faster than building their DirTrees in Python (~1s rather than ~6s for two 119k file
 dirs)."""
 import os

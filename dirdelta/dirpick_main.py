@@ -12,7 +12,7 @@ def run(args):
         picked = picker.pick_from_tree(tree)
         return picked[0].full_filesystem_path() if picked else None
 
-    # A local dir: treepick scans it itself, which is much faster than building a DirTree
+    # A local dir: treepicker scans it itself, which is much faster than building a DirTree
     utils.validate_dir(args.dir_a_path)
     return picker.pick_under_dir(os.path.realpath(args.dir_a_path), args.max_depth)
 

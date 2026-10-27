@@ -19,7 +19,7 @@ def parse_args():
 
 def main():
     args = parse_args()
-    # No curses here: the pickers (treepick) take over the terminal while they run, and messages
+    # No curses here: the pickers (treepicker) take over the terminal while they run, and messages
     # are plain prints in between
     try:
         picked_path = _run(args)

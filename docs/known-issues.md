@@ -4,9 +4,9 @@ Issues 1-15 were found by reading the code on 2026-07-13 and numbered
 2026-07-19; 16-24 were found later, mostly by running it. As of 2026-10-23
 everything except 23-24 is fixed. Fixed entries are kept, struck through,
 because their notes explain why the code looks the way it does. File paths
-are relative to `dirdelta/` unless noted (picker files live under
-`lib/treepicker/treepicker/`; that library was removed on 2026-10-24, so its
-entries here are history).
+are relative to `dirdelta/` unless noted ("old picker" files were in the
+old Python picker library, removed on 2026-10-24, so its entries here are
+history).
 
 ## Confirmed by grep (referenced symbol genuinely doesn't exist)
 
@@ -81,7 +81,7 @@ entries here are history).
   prints "Copying ... (n out of total)" for every file before this is
   called.
 
-6. ~~**`treepicker/treepicker.py:21`** constructs
+6. ~~**old picker's `treepicker.py:21`** constructs
   `TreePickerModel(tree, header, max_nr_lines, min_nr_options=..., 
   max_nr_options=...)` positionally, but
   `TreePickerModel.__init__(self, tree, including_root=True, header="",
@@ -126,11 +126,11 @@ entries here are history).
   modes, and it's parsed as an `int`. Note this means the default of 20 now
   actually applies.
 
-13. ~~**`treepicker/treesearch.py:48-56`** (`__main__` block) calls
+13. ~~**old picker's `treesearch.py:48-56`** (`__main__` block) calls
   `dirtree.DirTree.factory_from_filesystem(...)`, which does not
   exist.~~ **FIXED** (2026-10-23): removed.
 
-14. ~~**`treepicker/exampletree.py:6`** — `range(6) + range(10, 15)` is
+14. ~~**old picker's `exampletree.py:6`** — `range(6) + range(10, 15)` is
   Python 2 only.~~ **FIXED** (2026-10-23): uses `list(range(...))`.
 
 15. ~~`config.py`'s constants and `dirtree.py`'s `MUSIC_FILE_EXTENTIONS` were
@@ -189,7 +189,7 @@ entries here are history).
 
 23. ~~**Menus are shown in alphabetical order**, not the order the code lists
   options in, because the picker sorts every sibling group by
-  `str(node.data)`.~~ **FIXED** (2026-10-23): menus are `treepick --list`
+  `str(node.data)`.~~ **FIXED** (2026-10-23): menus are `treepicker --list`
   now, which keeps the order given.
 
 24. ~~**Cloud scanning is untested against real Drive data.**

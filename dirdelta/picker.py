@@ -1,7 +1,7 @@
-"""dirdelta's pickers: they run the treepick program, from github.com/levioctl/cpptree.
+"""dirdelta's pickers: they run the treepicker program, from github.com/eliranle6/treepicker.
 
-Like fzf, treepick draws on the terminal itself and prints what was picked, so each pick runs it as
-a subprocess (see docs/treepick-integration.md), found by programs.find() ($DIRDELTA_PICKER, or
+Like fzf, treepicker draws on the terminal itself and prints what was picked, so each pick runs it as
+a subprocess (see docs/treepicker-integration.md), found by programs.find() ($DIRDELTA_PICKER, or
 else where make install, make deploy or make build put it, or else on PATH).
 """
 import os
@@ -14,9 +14,9 @@ from dirdelta import dryrun
 from dirdelta import programs
 
 PROGRAM_ENV_VAR = 'DIRDELTA_PICKER'
-PROGRAM_NAME = 'treepick'
+PROGRAM_NAME = 'treepicker'
 
-# treepick's exit code when the user quit without picking
+# treepicker's exit code when the user quit without picking
 _EXIT_CODE_QUIT = 1
 
 # How often a menu's options are asked again what they're shown as (see pick_option())
@@ -44,7 +44,7 @@ def pick_files(rootpath, relpaths, header='', picked=None):
     files under it. Returns the picked ones (of relpaths), in that order, or None if the user quit.
     picked (relpaths, e.g. what an earlier call returned) start picked.
 
-    Only the files are sent: treepick adds their dirs, so no tree is built here."""
+    Only the files are sent: treepicker adds their dirs, so no tree is built here."""
     args = ['--typed', '--root', rootpath, '-m'] + _header_args(header)
     with tempfile.NamedTemporaryFile('wb', prefix='dirdelta-picked-') as picked_file:
         if picked:
@@ -60,7 +60,7 @@ def pick_files(rootpath, relpaths, header='', picked=None):
 
 
 def pick_under_dir(dirpath, max_depth=None):
-    """Let the user pick a file or dir under the local dir dirpath, scanned by treepick itself.
+    """Let the user pick a file or dir under the local dir dirpath, scanned by treepicker itself.
     Returns the picked one's full path, or None if the user quit."""
     args = [] if max_depth is None else ['--max-depth', str(max_depth)]
     picked = _run(args + _header_args('') + [dirpath], None)
@@ -82,9 +82,9 @@ def pick_option(options, header='', shown_as=None):
 
 
 def _tree_paths(tree):
-    """The tree's nodes' paths for treepick (relative, '/'-separated), each dir before what's in
+    """The tree's nodes' paths for treepicker (relative, '/'-separated), each dir before what's in
     it, siblings sorted by name, each after its type for --typed ('f ' a file, 'd ' a dir). The root
-    isn't one: it's treepick's root."""
+    isn't one: it's treepicker's root."""
     stack = list(reversed(_sorted_children(tree, tree.root)))
     while stack:
         node = stack.pop()
@@ -102,7 +102,7 @@ def _header_args(header):
 
 
 def _run(args, input_items, shown_as=None):
-    """Run treepick with args and the items (or None) on its stdin, and with shown_as (see
+    """Run treepicker with args and the items (or None) on its stdin, and with shown_as (see
     pick_option()) sending it what to show the items as. Returns what was picked, or None if the
     user quit. Every picker shows whether it's a dry run."""
     label, label_color = dryrun.label()
@@ -121,7 +121,7 @@ def _run(args, input_items, shown_as=None):
         except OSError as error:
             raise PickerError('Cannot run %s: %s' % (command[0], error))
         finally:
-            # treepick has its own copy
+            # treepicker has its own copy
             if updates_read_fd is not None:
                 os.close(updates_read_fd)
         is_done = threading.Event()
@@ -144,8 +144,8 @@ def _run(args, input_items, shown_as=None):
 
 
 def _send_updates(fd, shown_as, is_done):
-    """Send treepick what shown_as() says to show the items as, as it changes, until is_done (or
-    treepick is gone)"""
+    """Send treepicker what shown_as() says to show the items as, as it changes, until is_done (or
+    treepicker is gone)"""
     sent = {}
     with open(fd, 'wb') as updates:
         while True:
