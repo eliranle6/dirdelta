@@ -14,8 +14,8 @@ the UI before is gone (removed 2026-10-24). On the original dev machine this dir
 inside a local `dirstuff/` folder alongside a Python venv and an `unused/`
 scratch dir, but neither is part of this repo, and nothing in the repo may
 assume that layout (see Structure below). Dependencies go in a `.venv`
-inside the repo (gitignored; see README.md), which the Makefile targets and
-`bin/` scripts pick up automatically, falling back to `python3` on `PATH`.
+inside the repo (gitignored; see README.md), which the Makefile targets
+pick up automatically, falling back to `python3` on `PATH`.
 
 Deep dives live in `docs/`:
 - `docs/architecture.md` — module-by-module breakdown and data flow (scan → diff → pick → copy/remove)
@@ -33,16 +33,10 @@ re-deriving it from scratch.
 See README.md for running from source (`make` to build treepicker, then
 `python -m dirdelta` from the repo root), `make install` (into a venv) and
 `make deploy` (a pipx-managed `dirdelta` in `~/.local/bin`); both also
-install treepicker next to the environment's python. `bin/` has example
-launchers (`example-*.sh`), each putting the repo root on `PYTHONPATH` and
-running `python -m dirdelta` with the repo's `.venv` Python (falling back
-to `python3`); "local" in their names is the local disk, as opposed to
-"cloud" (Drive):
-
-- `./bin/example-sync-local.sh` — sync temp copies of `tests/fixtures/alpha` and `.../bravo`
-- `./bin/example-sync-cloud.sh` — sync a local WSL path against `cloud/eliran` (Drive)
-- `./bin/example-pick-local.sh` — browse/pick a file under wherever it's run from
-- `./bin/example-pick-cloud.sh` — browse/pick a file under `cloud/eliran`
+install treepicker next to the environment's python. There are no launcher
+scripts with paths in them (the `bin/example-*.sh` ones were removed
+2026-10-27): run it without paths and choose the replicas from the menu,
+which remembers the recent pairs and the favorites.
 
 `main.py` picks mode by arg count: no path → a menu that chooses the two
 replicas (`choose_replicas.py`: each slot browsed from `/` or Drive, or a
@@ -72,7 +66,7 @@ Env vars that change execution mode:
 
 Developer tasks all live in the Makefile (`make` lists them): `test`,
 `clean`, `install`, `deploy`, `undeploy`. Keep new ones there too rather
-than adding shell scripts; `bin/` is only for example app launchers. `make clean`
+than adding shell scripts. `make clean`
 removes `__pycache__`/`*.pyc`/`*.egg-info`/`build/`/pbr's `AUTHORS` and
 `ChangeLog` in this repo and the submodule, skipping `.venv`. It does not
 touch `~/.cache/dirman/files.txt` (the real Drive-scan cache, with a
@@ -88,7 +82,6 @@ dirstuff/                    the original dev machine's local folder, not a git 
 │   ├── scandrive.py           (near-dup of clouddirtreefactory.py's scan logic)
 │   └── parse-drive-files.py
 └── dirdelta/                 THIS repo
-    ├── bin/                   entry-point scripts
     ├── Makefile               dev tasks: build, test, clean, install, deploy, undeploy
     ├── dirdelta/              the application (see docs/architecture.md)
     ├── secrets/               Google OAuth secrets — never print/edit
@@ -151,7 +144,7 @@ app. Shared fakes:
   and trashing).
 
 `tests/fixtures/{alpha,bravo}` are sample trees for manual runs (see
-README.md); `bin/example-sync-local.sh` syncs a temp copy of them. As of 2026-10-23
+README.md), which says how to sync a temp copy of them. As of 2026-10-23
 picker mode, `-x`, and a sync with a real Copy (`DRYRUN=0`) have been run
 end to end in a real terminal with treepicker. The cloud flow has not, since it needs
 Drive credentials.

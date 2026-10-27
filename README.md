@@ -31,9 +31,9 @@ submodule at `lib/treepicker`. `make` builds them into `lib/treepicker/build/`, 
 when run from the source tree. `$DIRDELTA_PICKER` and `$DIRDELTA_DIRDIFF` override which programs it
 runs.
 
-Development tasks are Makefile targets (`make help` lists them). They and the launcher scripts in
-`bin/` use `.venv` automatically when it exists, and otherwise whichever `python3` is on your `PATH`,
-so an already activated venv works too. `make PYTHON=/path/to/python3 ...` overrides that.
+Development tasks are Makefile targets (`make help` lists them). They use `.venv` automatically
+when it exists, and otherwise whichever `python3` is on your `PATH`, so an already activated venv
+works too. `make PYTHON=/path/to/python3 ...` overrides that.
 
 ## Running from source
 
@@ -98,8 +98,8 @@ The fixtures are a small music library. Both have 106 files in common; only `alp
 (e.g. `audiobooks/Dune/`, `music/The Beatles/` and `third/anotherinthird/7.mp3`), so copying or
 removing them fills the progress screen. Some dirs are taller than a screen, to show the picker's
 pagination (`... N more` lines): `alpha/music/` has 36 artists, `alpha/podcasts/` 150 episodes, and
-`alpha/music/Bach/The Well-Tempered Clavier/` 48 tracks. `./bin/example-sync-local.sh` runs this sync on a fresh temp
-copy of the fixtures, so `DRYRUN=0 ./bin/example-sync-local.sh` is safe too.
+`alpha/music/Bach/The Well-Tempered Clavier/` 48 tracks. Sync copies of them (see above), since a
+live Remove deletes real files.
 
 ## Tests
 

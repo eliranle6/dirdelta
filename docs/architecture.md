@@ -3,7 +3,7 @@
 ## Data flow, end to end
 
 ```
-dirdelta command, or a bin/example-*.sh launcher (python -m dirdelta)
+dirdelta command (or python -m dirdelta)
   → main.py: parse_args() → dirsync_main.run(args)  OR  dirpick_main.run(args)
      (no paths: choose_replicas.run(replicas.load()) first, then dirsync_main.run)
      (no curses: each picker is a treepicker run, which has the terminal while
