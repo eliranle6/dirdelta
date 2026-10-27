@@ -97,6 +97,25 @@ history. treepicker's own are in
    Measure first (one big folder of small files), since how much each step saves depends on
    the round-trip time.
 
+5. **Grey out a main menu option with nothing to do.** Once a way's files are found, an option
+   whose count is 0 reads "Copy files from cloud/eliran to /mnt/win/Users/Johabab
+   Glizerin/eliran (the 0 files it lacks)": an option offered for nothing, and choosing it only
+   shows the "Nothing to copy" screen. It would be shown dimmed, can't be chosen (`j`/`k` skip
+   it, or Enter on it does nothing), and say why in its label, e.g.:
+   - "Copy files from cloud/eliran to /mnt/win/.../eliran: nothing to copy, it has them all"
+   - "Remove files from /mnt/win/.../eliran: nothing to remove, cloud/eliran has them all"
+   ("nothing to copy" says it at once, and "it has them all" why.) While loading, it stays as
+   it is ("(loading...)"), and if counting failed ("couldn't count the files"), choosable, so
+   choosing it shows the error. After a live action, the counts are found again
+   (`_Way.find_missing()`), so an option may become disabled, or enabled again (e.g. a Remove
+   that leaves the other way something to copy).
+   - The label: `_Action.shown_as()`, which already says the count, says this for 0 instead.
+   - Disabled needs treepicker: `--list` options are all pickable. Something like a
+     `--updates` line that marks an option disabled (`OPTION<tab>TEXT<tab>disabled`), drawn
+     dimmed, skipped by the selection, and never printed. A treepicker change, made in its
+     repo. Without it, dirdelta could keep the option choosable and only reword it, since
+     choosing it already just says so.
+
 ## Parked: performance
 
 Decided 2026-10-25: speed is good enough, so no more work on it until decided otherwise. A sync
