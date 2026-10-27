@@ -33,10 +33,13 @@ re-deriving it from scratch.
 See README.md for running from source (`make` to build treepicker, then
 `python -m dirdelta` from the repo root), `make install` (into a venv) and
 `make deploy` (a pipx-managed `dirdelta` in `~/.local/bin`); both also
-install treepicker next to the environment's python. There are no launcher
-scripts with paths in them (the `bin/example-*.sh` ones were removed
-2026-10-27): run it without paths and choose the replicas from the menu,
-which remembers the recent pairs and the favorites.
+install treepicker next to the environment's python. To sync, run it
+without paths and choose the replicas from the menu, which remembers the
+recent pairs and the favorites (so the `bin/example-*.sh` launchers with
+paths in them were removed, 2026-10-27). From the repo, with its `.venv`
+Python (falling back to `python3`): `bin/sync.sh` runs it that way, and
+`bin/pick.sh [PATH]` runs picker mode on PATH (default: the current dir;
+other arguments, e.g. `-x PROGRAM`, go to dirdelta too).
 
 `main.py` picks mode by arg count: no path → a menu that chooses the two
 replicas (`choose_replicas.py`: each slot browsed from `/` or Drive, or a
@@ -83,6 +86,7 @@ dirstuff/                    the original dev machine's local folder, not a git 
 │   ├── scandrive.py           (near-dup of clouddirtreefactory.py's scan logic)
 │   └── parse-drive-files.py
 └── dirdelta/                 THIS repo
+    ├── bin/                   sync.sh, pick.sh: sync and picker mode from source
     ├── Makefile               dev tasks: build, test, clean, install, deploy, undeploy
     ├── dirdelta/              the application (see docs/architecture.md)
     ├── secrets/               Google OAuth secrets — never print/edit

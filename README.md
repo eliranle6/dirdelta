@@ -52,7 +52,7 @@ rm -rf /tmp/dd && cp -r tests/fixtures /tmp/dd
 ### Choosing what to sync (no paths)
 
 ```bash
-.venv/bin/python3 -m dirdelta
+.venv/bin/python3 -m dirdelta      # or bin/sync.sh
 ```
 
 A menu: "Replica A" and "Replica B", each `<none: press Enter to choose one>` until chosen (a local
@@ -62,6 +62,8 @@ Choosing a pair, or both replicas, goes on to the sync menu below, which also ha
 latest first, each pair once, either way around), which you can also edit by hand.
 
 ### Picker mode (one path)
+
+`bin/pick.sh [PATH]` runs it from the repo on PATH (default: the current dir), or:
 
 ```bash
 .venv/bin/python3 -m dirdelta /tmp/dd/alpha            # prints the picked path after exiting
