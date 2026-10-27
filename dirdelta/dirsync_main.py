@@ -62,14 +62,16 @@ def _sync(replica_a, replica_b, replica_a_path, replica_b_path, known_replicas=N
         if can_copy:
             copies.append(_Action("Copy files from %s to %s" % (src_path, dst_path), way,
                                   lambda count: "the %s it lacks" % (_files(count),),
+                                  "nothing to copy, it has them all",
                                   interactive_dir_sync.InteractiveDirSync.COPY))
         if _is_writable(way.src):
             removes.append(_Action("Remove files from %s" % (src_path,), way,
                                    lambda count, dst_path=dst_path: "the %s %s lacks" % (_files(count), dst_path),
+                                   "nothing to remove, %s has them all" % (dst_path,),
                                    interactive_dir_sync.InteractiveDirSync.REMOVE))
         elif not can_copy:
             views.append(_Action("View files in %s, not %s" % (src_path, dst_path), way,
-                                 _files))
+                                 _files, "nothing to view, %s has them all" % (dst_path,)))
     actions = {action.label: action for action in copies + removes + views}
     for way in ways:
         way.find_missing()
@@ -133,22 +135,29 @@ class _Way(object):
 
 class _Action(object):
     """A main menu option: an InteractiveDirSync's sync(action) of a way, or its view_diff() if
-    action is None. describe_count(count) says how many files it's about (e.g. "3 files")."""
-    def __init__(self, label, way, describe_count, action=None):
+    action is None. describe_count(count) says how many files it's about (e.g. "3 files"), and
+    nothing that there are none, when it can't be picked."""
+    def __init__(self, label, way, describe_count, nothing, action=None):
         self.label = label
         self.way = way
         self.describe_count = describe_count
+        self.nothing = nothing
         self.action = action
 
     def shown_as(self):
-        """The label, with how many files it's about, or that they're still being found"""
+        """The label, with how many files it's about, or that they're still being found. With none,
+        it can't be picked (a picker.Disabled): it would only say so. Once the files are found
+        again (after a live action), it may be picked again."""
         missing = self.way.missing
         if not missing.done():
             dots = int(time.monotonic() / DOTS_INTERVAL) % 4
             return "%s (loading%s)" % (self.label, '.' * dots)
         if missing.exception() is not None:
             return "%s (couldn't count the files)" % (self.label,)
-        return "%s (%s)" % (self.label, self.describe_count(len(missing.result().relpaths)))
+        count = len(missing.result().relpaths)
+        if count == 0:
+            return picker.Disabled("%s: %s" % (self.label, self.nothing))
+        return "%s (%s)" % (self.label, self.describe_count(count))
 
     def run(self):
         sync = interactive_dir_sync.InteractiveDirSync(self.way.src, self.way.dst, self.way.missing)

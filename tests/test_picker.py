@@ -78,6 +78,14 @@ class PickerTest(unittest.TestCase):
         args, _ = self.call(with_label=True)
         self.assertEqual(args[1:5], ['--label', 'LIVE', '--label-color', 'red'])
 
+    def test_a_label_after_the_dry_runs(self):
+        self.answer('x')
+        with mock.patch('dirdelta.dryrun.DRYRUN', False):
+            picker.pick_files('/some/root', ['x'], label=('REMOVE', 'magenta'))
+        args, _ = self.call(with_label=True)
+        self.assertEqual(args[1:9], ['--label', 'LIVE', '--label-color', 'red',
+                                     '--label', 'REMOVE', '--label-color', 'magenta'])
+
     def make_tree(self):
         tree = dirtree.DirTree('/some/root')
         for relpath in ['b/2.txt', 'a/1.txt', 'b/sub/3.txt', 'c.txt']:
@@ -204,6 +212,16 @@ class PickerTest(unittest.TestCase):
             updates = json.load(f)['updates']
         # Each change once, in order
         self.assertEqual(updates, 'Copy\tCopy (loading)\0Copy\tCopy (3 files)\0')
+
+    def test_a_disabled_option_is_sent_as_such(self):
+        os.environ['FAKE_PICKER_WAIT_FOR'] = 'disabled'
+        self.answer('Quit')
+        with mock.patch('dirdelta.picker.SHOWN_AS_INTERVAL', 0.01):
+            picker.pick_option(['Copy', 'Quit'],
+                               shown_as=lambda: {'Copy': picker.Disabled('Copy: nothing to copy')})
+        with open(self.log) as f:
+            updates = json.load(f)['updates']
+        self.assertEqual(updates, 'Copy\tCopy: nothing to copy\tdisabled\0')
 
     def test_a_menu_without_shown_as_gets_no_updates(self):
         self.answer('Quit')

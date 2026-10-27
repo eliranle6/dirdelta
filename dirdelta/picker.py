@@ -4,6 +4,7 @@ Like fzf, treepicker draws on the terminal itself and prints what was picked, so
 a subprocess (see docs/treepicker-integration.md), found by programs.find() ($DIRDELTA_PICKER, or
 else where make install, make deploy or make build put it, or else on PATH).
 """
+import collections
 import os
 import subprocess
 import tempfile
@@ -27,6 +28,11 @@ class PickerError(programs.ProgramError):
     pass
 
 
+# What shown_as (see pick_option()) shows an option as when it can't be picked: in grey, with Enter
+# doing nothing on it
+Disabled = collections.namedtuple('Disabled', ['text'])
+
+
 def pick_from_tree(tree, header='', dirs_only=False, root_name=None):
     """Let the user pick a node of a DirTree (with dirs_only, only of its dirs), its root shown as
     root_name (default: the tree's displayname()). Returns [the picked node's data (entry)], or None
@@ -41,11 +47,12 @@ def pick_from_tree(tree, header='', dirs_only=False, root_name=None):
     return [tree.get_node('' if path == '.' else path).data for path in picked_paths]
 
 
-def pick_files(rootpath, relpaths, header='', picked=None):
+def pick_files(rootpath, relpaths, header='', picked=None, label=None):
     """Let the user pick some of the files at relpaths (relative to rootpath, each dir's files and
     subdirs together, in the order to show them, as dirdiff lists them). Picking a dir picks the
     files under it. Returns the picked ones (of relpaths), in that order, or None if the user quit.
-    picked (relpaths, e.g. what an earlier call returned) start picked.
+    picked (relpaths, e.g. what an earlier call returned) start picked. label, if given, is (text,
+    color): a label shown after the mode's, e.g. what the picks are for.
 
     Only the files are sent: treepicker adds their dirs, so no tree is built here."""
     args = ['--typed', '--root', rootpath, '-m'] + _header_args(header)
@@ -54,7 +61,8 @@ def pick_files(rootpath, relpaths, header='', picked=None):
             picked_file.write(_null_terminated(picked))
             picked_file.flush()
             args += ['--picked', picked_file.name]
-        picked_paths = _run(args + ['-'], ('f ' + relpath for relpath in relpaths))
+        picked_paths = _run(args + ['-'], ('f ' + relpath for relpath in relpaths),
+                            label=label)
     if picked_paths is None:
         return None
     # What's picked includes the dirs whose files all are
@@ -77,15 +85,16 @@ def pick_under_dir(dirpath, max_depth=None, dirs_only=False, lazy=False, header=
     return dirpath if picked[0] == '.' else os.path.join(dirpath, picked[0])
 
 
-def pick_option(options, header='', shown_as=None):
+def pick_option(options, header='', shown_as=None, label=None):
     """Let the user pick one of the options (strings). Returns it, or None if the user quit.
 
     shown_as, if given, is called again and again while the menu is shown (every
     SHOWN_AS_INTERVAL seconds, on another thread), and returns {option: what to show it as} for
-    the options to show otherwise than as themselves, e.g. with a count that's coming in. What's
-    returned is still the option itself."""
+    the options to show otherwise than as themselves, e.g. with a count that's coming in: a
+    string, or a Disabled for one that can't be picked (until shown_as says otherwise). What's
+    returned is still the option itself. label: as pick_files()'s."""
     args = ['--list', '--root', 'Options'] + _header_args(header)
-    picked = _run(args, options, shown_as)
+    picked = _run(args, options, shown_as, label)
     return None if picked is None else picked[0]
 
 
@@ -109,12 +118,14 @@ def _header_args(header):
     return ['--header', header] if header else []
 
 
-def _run(args, input_items, shown_as=None):
+def _run(args, input_items, shown_as=None, label=None):
     """Run treepicker with args and the items (or None) on its stdin, and with shown_as (see
     pick_option()) sending it what to show the items as. Returns what was picked, or None if the
-    user quit. Every picker shows whether it's a dry run."""
-    label, label_color = dryrun.label()
-    command = [_find_program(), '-0', '--label', label, '--label-color', label_color] + args
+    user quit. Every picker shows whether it's a dry run, and then label (text, color), if given."""
+    command = [_find_program(), '-0']
+    for text, color in [dryrun.label()] + ([label] if label else []):
+        command += ['--label', text, '--label-color', color]
+    command += args
     input_bytes = None if input_items is None else _null_terminated(input_items)
     updates_read_fd = updates_write_fd = None
     if shown_as is not None:
@@ -160,7 +171,7 @@ def _send_updates(fd, shown_as, is_done):
             changed = {item: shown for item, shown in shown_as().items() if sent.get(item) != shown}
             if changed:
                 try:
-                    updates.write(_null_terminated('%s\t%s' % (item, shown)
+                    updates.write(_null_terminated(_update(item, shown)
                                                    for item, shown in changed.items()))
                     updates.flush()
                 except BrokenPipeError:
@@ -168,6 +179,13 @@ def _send_updates(fd, shown_as, is_done):
                 sent.update(changed)
             if is_done.wait(SHOWN_AS_INTERVAL):
                 return
+
+
+def _update(item, shown):
+    """treepicker's --updates line showing item as shown (a string, or Disabled)"""
+    if isinstance(shown, Disabled):
+        return '%s\t%s\tdisabled' % (item, shown.text)
+    return '%s\t%s' % (item, shown)
 
 
 def _null_terminated(items):

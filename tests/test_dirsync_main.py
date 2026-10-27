@@ -7,6 +7,7 @@ from dirdelta import dirsync_main
 from dirdelta import dirtree
 from dirdelta import interactive_dir_sync
 from dirdelta import localdiskdirtree
+from dirdelta import picker
 from dirdelta import replicas
 
 
@@ -170,10 +171,30 @@ class MainMenuTest(unittest.TestCase):
             'Quit',
         ])
 
+    def test_options_with_nothing_to_do_cant_be_picked(self):
+        self.missing['/b'] = []
+        a = localdiskdirtree.LocalDiskDirTree('/a', silent=True)
+        b = localdiskdirtree.LocalDiskDirTree('/b', silent=True)
+        self.assertEqual(self.shown(a, b), [
+            'Copy files from /a to /b (the 3 files it lacks)',
+            picker.Disabled('Copy files from /b to /a: nothing to copy, it has them all'),
+            'Remove files from /a (the 3 files /b lacks)',
+            picker.Disabled('Remove files from /b: nothing to remove, /a has them all'),
+            'Quit',
+        ])
+
+    def test_a_view_option_with_nothing_to_view_cant_be_picked(self):
+        self.writable = set()
+        self.missing['/a'] = []
+        a = localdiskdirtree.LocalDiskDirTree('/a', silent=True)
+        b = localdiskdirtree.LocalDiskDirTree('/b', silent=True)
+        self.assertEqual(self.shown(a, b)[0],
+                         picker.Disabled('View files in /a, not /b: nothing to view, /b has them all'))
+
     def test_options_are_loading_until_their_files_are_found(self):
         way = dirsync_main._Way(None, None)
         way.missing = concurrent.futures.Future()
-        action = dirsync_main._Action('Copy', way, lambda count: '%d files' % (count,))
+        action = dirsync_main._Action('Copy', way, lambda count: '%d files' % (count,), 'none')
         shown = set()
         for now in (0, 0.4, 0.8, 1.2, 1.6):
             with mock.patch('dirdelta.dirsync_main.time.monotonic', return_value=now + 0.1):
@@ -187,7 +208,7 @@ class MainMenuTest(unittest.TestCase):
         way = dirsync_main._Way(None, None)
         way.missing = concurrent.futures.Future()
         way.missing.set_exception(RuntimeError('dirdiff failed'))
-        action = dirsync_main._Action('Copy', way, lambda count: '%d files' % (count,))
+        action = dirsync_main._Action('Copy', way, lambda count: '%d files' % (count,), 'none')
         self.assertEqual(action.shown_as(), "Copy (couldn't count the files)")
 
     def test_actions_use_the_files_found_in_the_background(self):

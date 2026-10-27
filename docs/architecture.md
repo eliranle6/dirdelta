@@ -237,7 +237,9 @@ again) is found once, on a daemon thread (`_Way.find_missing()`, a
 `concurrent.futures.Future`), as the menu opens, and shared by that way's
 options: while it's being found they're shown as "(loading...)", with the
 dots moving, then with how many files it has (`pick_option(shown_as=...)`,
-which sends treepicker the changes through `--updates`). Choosing an option
+which sends treepicker the changes through `--updates`); with none, it can't be
+picked, and is shown greyed out saying why ("nothing to copy, it has them
+all", a `picker.Disabled`). Choosing an option
 waits for both ways (an action may change what the other is diffing), and
 after a live (not dry run) action both are found again. Given a `Replicas`
 (as `run` does), the menu also has "Add to favorites" (or "Remove from
@@ -267,6 +269,8 @@ terminal it only prints.
 ("DRY RUN", "green") or ("LIVE", "red"), which `picker.py` passes to every
 treepicker run (`--label`, `--label-color`: at the start of its bottom line)
 and `interactive_dir_sync.py` to the progress screen (its top line).
+Copy's and Remove's file picker and confirmation add their own label after
+it (`InteractiveDirSync.LABELS`: COPY in blue, REMOVE in magenta).
 
 ### `picker.py`
 Runs `treepicker` (from github.com/eliranle6/treepicker; `$DIRDELTA_PICKER`, or

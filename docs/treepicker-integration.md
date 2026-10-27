@@ -37,7 +37,14 @@ Like fzf: dirdelta starts `treepicker`, which draws on the terminal itself
   (`--list` keeps them flat, since labels contain '/'). With `shown_as`,
   `pick_option` adds `--updates FD`, a pipe that a thread writes `LABEL<tab>TEXT\0`
   to whenever an option's text changes (e.g. the main menu's file counts coming
-  in); treepicker still prints the label when it's picked.
+  in); treepicker still prints the label when it's picked. `LABEL<tab>TEXT<tab>disabled\0`
+  (a `picker.Disabled` in `shown_as`) greys the option out, and Enter does
+  nothing on it, until an update without it: the main menu's options with
+  nothing to do.
+- Labels: every run gets the dry run's (`--label DRY RUN --label-color green`,
+  or LIVE in red), and Copy's and Remove's file picker and confirmation a
+  second one after it (COPY in blue, REMOVE in magenta), each `--label` with
+  its `--label-color` after it.
 - Output: the picked paths (or labels), each ending with `\0`, the root as
   `.`. Exit code 0: something was picked; 1: the user quit; anything else:
   an error (its message is on stderr).

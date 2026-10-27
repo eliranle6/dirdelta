@@ -223,6 +223,19 @@ class InteractiveDirSyncTest(unittest.TestCase):
             interactive_dir_sync.InteractiveDirSync(src, dst).sync(COPY)
         self.assertEqual(offered, [['a/1.txt', 'a b/1.txt', 'b/2.txt']])
 
+    def test_the_picker_and_confirmation_are_labeled_with_the_action(self):
+        for action, label in ((COPY, ('COPY', 'blue')), (REMOVE, ('REMOVE', 'magenta'))):
+            src = dirtree.DirTree('/src')
+            src.add_file_by_relpath('a.txt')
+            dst = dirtree.DirTree('/dst')
+            # No, then quitting the picker it goes back to
+            picks = [['a.txt'], None]
+            with helpers.scripted_files_picker(lambda relpaths: picks.pop(0)) as pick_files, \
+                    mock.patch('dirdelta.picker.pick_option', return_value=NO) as pick_option:
+                interactive_dir_sync.InteractiveDirSync(src, dst).sync(action)
+            self.assertEqual(pick_files.call_args.kwargs['label'], label)
+            self.assertEqual(pick_option.call_args.kwargs['label'], label)
+
     def test_a_cloud_replica_is_named_as_a_cloud_path(self):
         # Not by its path in Drive (/mein), which reads like a local dir
         src = clouddirtree.CloudDirTree('cloud/mein')

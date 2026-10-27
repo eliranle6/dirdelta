@@ -35,6 +35,9 @@ class InteractiveDirSync(object):
     """Copying or removing the files in src that aren't in dst, picked by the user."""
     COPY = 'copy'
     REMOVE = 'remove'
+    # The label of the file picker and the confirmation, by action, so what the picks are for shows
+    # at a glance (magenta, not red: red is LIVE's)
+    LABELS = {COPY: ('COPY', 'blue'), REMOVE: ('REMOVE', 'magenta')}
 
     # The confirmation menu's options: No first, so it's the one selected at first
     CONFIRM_NO = 'No'
@@ -110,7 +113,7 @@ class InteractiveDirSync(object):
                        "(To select a file, press Space. When finished, press Enter.)" %
                        (self._src.displayname(), self._dst.displayname(), purpose))
         return picker.pick_files(self._src.displayname(), missing, header=tree_header,
-                                 picked=picked)
+                                 picked=picked, label=self.LABELS[action])
 
     def _file_entry(self, relpath):
         """The entry of src's file at relpath, for copying or removing it"""
@@ -128,7 +131,8 @@ class InteractiveDirSync(object):
             lines.append("  (and %d more)" % (len(relpaths) - self.MAX_FILES_LISTED,))
         if dryrun.DRYRUN:
             lines.append("(A dry run: nothing on disk will change. DRYRUN=0 changes files.)")
-        answer = picker.pick_option([self.CONFIRM_NO, self.CONFIRM_YES], header='\n'.join(lines))
+        answer = picker.pick_option([self.CONFIRM_NO, self.CONFIRM_YES], header='\n'.join(lines),
+                                    label=self.LABELS[action])
         return answer == self.CONFIRM_YES
 
     def _copy(self, files):
