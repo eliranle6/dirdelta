@@ -7,6 +7,7 @@ from dirdelta import dirsync_main
 from dirdelta import dirtree
 from dirdelta import interactive_dir_sync
 from dirdelta import localdiskdirtree
+from dirdelta import replicas
 
 
 class ScanErrorsWarningTest(unittest.TestCase):
@@ -199,6 +200,35 @@ class MainMenuTest(unittest.TestCase):
         # A dry run changes nothing, so each way's files are found once
         self.assertEqual(sorted(self.find_missing_calls), ['/a', '/b'])
         self.assertEqual([call.args[1] for call in pick_files.call_args_list], [['x', 'y', 'z']] * 2)
+
+    def test_the_pair_can_be_made_a_favorite_and_not(self):
+        a = localdiskdirtree.LocalDiskDirTree('/a', silent=True)
+        b = localdiskdirtree.LocalDiskDirTree('/b', silent=True)
+        known = replicas.Replicas()
+        answers = ['Add to favorites', 'Remove from favorites', 'Quit']
+        menus, saved = [], []
+        def pick_option(options, **_):
+            menus.append(options[-2:])
+            return answers.pop(0)
+        with mock.patch('dirdelta.picker.pick_option', side_effect=pick_option), \
+                mock.patch('dirdelta.replicas.save',
+                           side_effect=lambda known: saved.append(list(known.favorites))):
+            dirsync_main._sync(a, b, '/a', '/b', known)
+        self.assertEqual(menus, [['Add to favorites', 'Quit'], ['Remove from favorites', 'Quit'],
+                                 ['Add to favorites', 'Quit']])
+        self.assertEqual(saved, [[('/a', '/b')], []])
+
+    def test_run_records_the_pair(self):
+        known = replicas.Replicas()
+        args = mock.Mock(dir_a_path='/a', dir_b_path='/b', max_depth=None)
+        with mock.patch('dirdelta.utils.validate_dir'), \
+                mock.patch('dirdelta.replicas.load', return_value=known), \
+                mock.patch('dirdelta.replicas.save') as save, \
+                mock.patch('dirdelta.dirsync_main._sync') as sync:
+            dirsync_main.run(args)
+        self.assertEqual(known.history, [('/a', '/b')])
+        save.assert_called_once_with(known)
+        self.assertIs(sync.call_args.args[4], known)
 
     def test_a_live_action_finds_the_files_again(self):
         a = localdiskdirtree.LocalDiskDirTree('/a', silent=True)

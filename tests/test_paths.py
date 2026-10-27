@@ -7,6 +7,10 @@ class PathsTest(unittest.TestCase):
     def test_components_ignore_empty_parts(self):
         self.assertEqual(paths.components('/cloud//mein/'), ['cloud', 'mein'])
 
+    def test_join_cloud(self):
+        self.assertEqual(paths.join_cloud('me/music'), 'cloud/me/music')
+        self.assertEqual(paths.join_cloud(''), 'cloud')
+
     def test_cloud_paths_start_with_cloud(self):
         self.assertTrue(paths.is_cloud_path('cloud/mein'))
         self.assertTrue(paths.is_cloud_path('/cloud/mein'))

@@ -27,6 +27,10 @@ Like fzf: dirdelta starts `treepicker`, which draws on the terminal itself
 - Picking under a local dir (picker mode): `treepicker -0 --max-depth N DIR`.
   treepicker scans it with `find` itself, so dirdelta builds no Python tree;
   if find couldn't read everything, treepicker warns in its header.
+- Picking a replica dir (the menu of a run without paths):
+  `treepicker -0 --dirs-only --lazy /` for a local one: only dirs, each read
+  when it's shown (so `/` opens at once; a search finds only what was read).
+  A Drive one is the cloud tree's picker with `--dirs-only`.
 - Showing a picker again with the user's picks: `--picked FILE`, FILE
   holding the paths treepicker printed.
 - Menus: `treepicker -0 --list [--header TEXT] -`, with the labels on stdin

@@ -27,10 +27,12 @@ class PickerError(programs.ProgramError):
     pass
 
 
-def pick_from_tree(tree, header=''):
-    """Let the user pick a node of a DirTree. Returns [the picked node's data (entry)], or None if
-    the user quit."""
+def pick_from_tree(tree, header='', dirs_only=False):
+    """Let the user pick a node of a DirTree (with dirs_only, only of its dirs). Returns [the picked
+    node's data (entry)], or None if the user quit."""
     args = ['--typed', '--root', tree.fullpath()] + _header_args(header)
+    if dirs_only:
+        args.append('--dirs-only')
     picked_paths = _run(args + ['-'], list(_tree_paths(tree)))
     if picked_paths is None:
         return None
@@ -59,11 +61,16 @@ def pick_files(rootpath, relpaths, header='', picked=None):
     return [path for path in picked_paths if path in files]
 
 
-def pick_under_dir(dirpath, max_depth=None):
-    """Let the user pick a file or dir under the local dir dirpath, scanned by treepicker itself.
-    Returns the picked one's full path, or None if the user quit."""
+def pick_under_dir(dirpath, max_depth=None, dirs_only=False, lazy=False, header=''):
+    """Let the user pick a file or dir (with dirs_only, a dir) under the local dir dirpath, scanned
+    by treepicker itself: all of it at the start, or with lazy, a dir at a time, as it's shown
+    (for a huge one, like /). Returns the picked one's full path, or None if the user quit."""
     args = [] if max_depth is None else ['--max-depth', str(max_depth)]
-    picked = _run(args + _header_args('') + [dirpath], None)
+    if dirs_only:
+        args.append('--dirs-only')
+    if lazy:
+        args.append('--lazy')
+    picked = _run(args + _header_args(header) + [dirpath], None)
     if picked is None:
         return None
     return dirpath if picked[0] == '.' else os.path.join(dirpath, picked[0])

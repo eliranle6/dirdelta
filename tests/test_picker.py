@@ -92,6 +92,16 @@ class PickerTest(unittest.TestCase):
         self.assertEqual(paths, ['d a', 'f a/1.txt', 'd b', 'f b/2.txt', 'd b/sub', 'f b/sub/3.txt', 'f c.txt'])
         self.assertEqual(args, ['-0', '--typed', '--root', '/some/root', '-'])
 
+    def test_pick_only_dirs(self):
+        self.answer('a')
+        picker.pick_from_tree(self.make_tree(), dirs_only=True)
+        args, _ = self.call()
+        self.assertIn('--dirs-only', args)
+        self.answer('.')
+        self.assertEqual(picker.pick_under_dir('/', dirs_only=True, lazy=True, header='Pick'), '/')
+        args, _ = self.call()
+        self.assertEqual(args, ['-0', '--dirs-only', '--lazy', '--header', 'Pick', '/'])
+
     def test_pick_from_tree_returns_the_entries(self):
         self.answer('a/1.txt')
         picked = picker.pick_from_tree(self.make_tree())

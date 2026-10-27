@@ -44,10 +44,14 @@ to `python3`); "local" in their names is the local disk, as opposed to
 - `./bin/example-pick-local.sh` — browse/pick a file under wherever it's run from
 - `./bin/example-pick-cloud.sh` — browse/pick a file under `cloud/eliran`
 
-`main.py` picks mode by arg count: one path → picker mode (`dirpick_main.py`,
+`main.py` picks mode by arg count: no path → a menu that chooses the two
+replicas (`choose_replicas.py`: each slot browsed from `/` or Drive, or a
+favorite or recent pair from `~/.config/dirdelta/replicas.json`, kept by
+`replicas.py`), then sync mode; one path → picker mode (`dirpick_main.py`,
 which prints the picked path, or `execvp`s the `-x` program on it), two
-paths → sync mode (`dirsync_main.py`). dirdelta doesn't use curses itself:
-each pick is a `treepicker` run, which has the terminal while it's open, and
+paths → sync mode (`dirsync_main.py`), which records the pair in that file.
+dirdelta doesn't use curses itself: each pick is a `treepicker` run, which
+has the terminal while it's open, and
 what's to be read in between (warnings, "Nothing to copy", an action's
 report) is on a full screen that waits for Enter (`messages.show()`,
 `messages.progress_screen()`); plain progress lines ("Scanning...") just
@@ -72,7 +76,8 @@ than adding shell scripts; `bin/` is only for example app launchers. `make clean
 removes `__pycache__`/`*.pyc`/`*.egg-info`/`build/`/pbr's `AUTHORS` and
 `ChangeLog` in this repo and the submodule, skipping `.venv`. It does not
 touch `~/.cache/dirman/files.txt` (the real Drive-scan cache, with a
-`files.txt.stale` next to it after dirdelta changed Drive) or `secrets/`.
+`files.txt.stale` next to it after dirdelta changed Drive),
+`~/.config/dirdelta/replicas.json` (the history and favorites) or `secrets/`.
 
 ## Structure
 
@@ -126,7 +131,7 @@ module:
 PYTHONPATH=.:tests .venv/bin/python3 -m unittest test_interactive_dir_sync -v
 ```
 
-Every module has a test file (164 tests, all passing as of 2026-10-25) except
+Every module has a test file (191 tests, all passing as of 2026-10-27) except
 the thin wiring in `main.py`/`dirsync_main.py`, covered only by running the
 app. Shared fakes:
 - `tests/helpers.py`: `scripted_option_picker` / `scripted_tree_picker` /
@@ -136,6 +141,10 @@ app. Shared fakes:
   a fake treepicker script. App tests build their own `tempfile.mkdtemp()` trees
   rather than using `tests/fixtures/`, so they never depend on (or modify)
   the repo.
+- The real `~/.config/dirdelta/replicas.json` is never written: tests patch
+  `dirdelta.replicas.REPLICAS_FILE` to a temp file (`test_replicas`), or
+  `replicas.load`/`replicas.save`. A manual run that shouldn't touch it can set
+  `HOME` to a scratch dir (but that hides the real Drive cache too).
 - Drive is never contacted: `test_clouddirtree` writes a JSON-lines cache to
   a temp file, `test_driveapi` mocks `Credentials`/`build`, and the rest patch
   `driveapi.service()` with a fake (e.g. `test_clouddirtree`'s uploads, downloads

@@ -9,6 +9,7 @@ from dirdelta import localdiskdirtree
 from dirdelta import messages
 from dirdelta import paths
 from dirdelta import picker
+from dirdelta import replicas
 from dirdelta import utils
 
 
@@ -26,7 +27,11 @@ def run(args):
         warnings = scan_errors_warning(dirtree_a) + scan_errors_warning(dirtree_b)
         if warnings:
             messages.show("Warning: find couldn't read everything", warnings, dryrun.label(), 'red')
-    _sync(dirtree_a, dirtree_b, args.dir_a_path, args.dir_b_path)
+    # Both are dirs (or Drive's), so they're the history's latest
+    known_replicas = replicas.load()
+    known_replicas.record(args.dir_a_path, args.dir_b_path)
+    replicas.save(known_replicas)
+    _sync(dirtree_a, dirtree_b, args.dir_a_path, args.dir_b_path, known_replicas)
 
 
 def scan_errors_warning(tree):
@@ -34,8 +39,12 @@ def scan_errors_warning(tree):
     return localdiskdirtree.scan_warning(tree.fullpath(), getattr(tree, 'scan_errors', []))
 
 
-def _sync(replica_a, replica_b, replica_a_path, replica_b_path):
+def _sync(replica_a, replica_b, replica_a_path, replica_b_path, known_replicas=None):
+    """The main menu, until the user quits. With known_replicas (a Replicas, saved when changed),
+    it also makes the pair a favorite, or not."""
     QUIT = "Quit"
+    ADD_FAVORITE = "Add to favorites"
+    REMOVE_FAVORITE = "Remove from favorites"
     read_only = _read_only_lines(replica_a, replica_a_path) + _read_only_lines(replica_b, replica_b_path)
     if read_only:
         messages.show("Read-only", read_only, dryrun.label())
@@ -67,11 +76,19 @@ def _sync(replica_a, replica_b, replica_a_path, replica_b_path):
 
     # Present sync options until user quits
     while True:
-        option = picker.pick_option(list(actions) + [QUIT],
+        favorite_options = []
+        if known_replicas is not None:
+            is_favorite = known_replicas.is_favorite(replica_a_path, replica_b_path)
+            favorite_options = [REMOVE_FAVORITE if is_favorite else ADD_FAVORITE]
+        option = picker.pick_option(list(actions) + favorite_options + [QUIT],
                                     shown_as=lambda: {label: action.shown_as()
                                                       for label, action in actions.items()})
         if option in (None, QUIT):
             break
+        if option in (ADD_FAVORITE, REMOVE_FAVORITE):
+            known_replicas.toggle_favorite(replica_a_path, replica_b_path)
+            replicas.save(known_replicas)
+            continue
         # An action may change the trees (or dirs) that the other way may still be diffing, so
         # both are waited for
         if not all(way.missing.done() for way in ways):

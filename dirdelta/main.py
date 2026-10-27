@@ -1,17 +1,19 @@
 import argparse
-import os
 import sys
 
+from dirdelta import choose_replicas
 from dirdelta import dirsync_main
 from dirdelta import dirpick_main
 from dirdelta import drivecache
 from dirdelta import programs
+from dirdelta import replicas
 
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument('dir_a_path', default=os.getcwd())  # Mandatory
-    parser.add_argument('dir_b_path', nargs='?', default=None)  # Optional
+    # Neither: a menu chooses the two (from the favorites and the history, or each on its own)
+    parser.add_argument('dir_a_path', nargs='?', default=None)
+    parser.add_argument('dir_b_path', nargs='?', default=None)
     parser.add_argument("-x", "--execute", default=None)
     parser.add_argument("-m", "--max-depth", type=int, default=20)
     return parser.parse_args()
@@ -23,7 +25,7 @@ def main():
     # are plain prints in between
     try:
         picked_path = _run(args)
-    except (programs.ProgramError, drivecache.DriveCacheError) as error:
+    except (programs.ProgramError, drivecache.DriveCacheError, replicas.ReplicasError) as error:
         sys.exit('dirdelta: %s' % (error,))
 
     if picked_path is not None:
@@ -31,8 +33,14 @@ def main():
 
 
 def _run(args):
-    # Run the right main (one arg is dir picker, two args are dirs synchronization)
-    if args.dir_b_path is None:
+    # Run the right main (no args is choosing the dirs to synchronize, one arg is dir picker, two
+    # args are dirs synchronization)
+    if args.dir_a_path is None:
+        chosen = choose_replicas.run(replicas.load())
+        if chosen is None:
+            return None
+        args.dir_a_path, args.dir_b_path = chosen
+    elif args.dir_b_path is None:
         return dirpick_main.run(args)
     dirsync_main.run(args)
     return None

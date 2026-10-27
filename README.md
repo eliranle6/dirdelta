@@ -49,6 +49,18 @@ Work on copies of the sample trees in `tests/fixtures`, since Remove deletes rea
 rm -rf /tmp/dd && cp -r tests/fixtures /tmp/dd
 ```
 
+### Choosing what to sync (no paths)
+
+```bash
+.venv/bin/python3 -m dirdelta
+```
+
+A menu: "Replica A" and "Replica B", each `<none: press Enter to choose one>` until chosen (a local
+dir, browsed from `/`, or a Google Drive folder), then your favorite pairs and the recent ones.
+Choosing a pair, or both replicas, goes on to the sync menu below, which also has "Add to favorites"
+(or "Remove from favorites"). Every sync's pair is kept in `~/.config/dirdelta/replicas.json` (the
+latest first, each pair once, either way around), which you can also edit by hand.
+
 ### Picker mode (one path)
 
 ```bash

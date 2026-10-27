@@ -5,6 +5,7 @@
 ```
 dirdelta command, or a bin/example-*.sh launcher (python -m dirdelta)
   → main.py: parse_args() → dirsync_main.run(args)  OR  dirpick_main.run(args)
+     (no paths: choose_replicas.run(replicas.load()) first, then dirsync_main.run)
      (no curses: each picker is a treepicker run, which has the terminal while
       it's open; messages in between are plain lines, via messages.print_line)
        dirpick_main: local dir → picker.pick_under_dir(dir)   (treepicker scans it)
@@ -24,11 +25,33 @@ dirdelta command, or a bin/example-*.sh launcher (python -m dirdelta)
 ## `dirdelta/` — the application
 
 ### `main.py`
-Argparse: `dir_a_path` (required), `dir_b_path` (optional), `-x/--execute`,
+Argparse: `dir_a_path`, `dir_b_path` (both optional), `-x/--execute`,
 `-m/--max-depth` (default 20, passed down to `localdiskdirtree.factory` as
-`find -maxdepth`). One positional path → `dirpick_main.run`; two →
+`find -maxdepth`). No positional path → `choose_replicas.run`, then
+`dirsync_main.run` on what it chose; one → `dirpick_main.run`; two →
 `dirsync_main.run`. No curses setup: a `picker.PickerError` (treepicker
-missing or failing) exits with its message.
+missing or failing), `DriveCacheError` or `replicas.ReplicasError` exits
+with its message.
+
+### `replicas.py` / `choose_replicas.py`
+`replicas.py` keeps the pairs of replicas synced (`history`, the latest
+first, at most `MAX_HISTORY`) and the favorite pairs, in
+`~/.config/dirdelta/replicas.json` (`REPLICAS_FILE`; JSON, hand-editable,
+written whole with `os.replace`). A pair is the same either way around, and
+a pair used again moves to the top rather than being added twice. Paths are
+normalized (`normalized()`: local ones absolute, cloud ones cleaned). A file
+that can't be read raises `ReplicasError` rather than being overwritten.
+`dirsync_main.run` records each sync's pair as it starts.
+`choose_replicas.run(replicas)` is the menu for a run without paths: two
+slots (Replica A, B), then the favorites, then the recent pairs (the
+history without the favorites), then Quit. A pair is chosen at once, unless
+one of its local dirs is gone (a screen says so, back to the menu; a cloud
+one is checked when the sync reads Drive's file list); a slot
+asks Local disk / Google Drive, then picks a dir: under `/` with
+`picker.pick_under_dir(dirs_only=True, lazy=True)` (treepicker reads a dir
+only when it's shown), or in the whole Drive tree (`cloud`) with
+`pick_from_tree(dirs_only=True)`. Once both slots are chosen (and differ),
+it returns them.
 
 ### `utils.py`
 `create_dirtree_from_arg(rootpath)` is the single dispatch point deciding
@@ -205,7 +228,9 @@ options: while it's being found they're shown as "(loading...)", with the
 dots moving, then with how many files it has (`pick_option(shown_as=...)`,
 which sends treepicker the changes through `--updates`). Choosing an option
 waits for both ways (an action may change what the other is diffing), and
-after a live (not dry run) action both are found again.
+after a live (not dry run) action both are found again. Given a `Replicas`
+(as `run` does), the menu also has "Add to favorites" (or "Remove from
+favorites") before Quit, which saves the change.
 `dirpick_main.run` returns the picked path: for a local dir it lets
 treepicker scan the dir itself (`picker.pick_under_dir`, much faster than
 building a `DirTree`, ~3s for 119k files); for a cloud path it builds the
@@ -238,7 +263,7 @@ Runs `treepicker` (from github.com/eliranle6/treepicker; `$DIRDELTA_PICKER`, or
 draws on `/dev/tty`, reads its input on stdin and prints what was picked on
 stdout, all `\0`-separated (`-0`). Exit code 1 means the user quit (→
 `None`); others raise `PickerError`. See `docs/treepicker-integration.md`.
-- `pick_from_tree(tree, header)`: picks one node of a `DirTree` (cloud
+- `pick_from_tree(tree, header, dirs_only)`: picks one node of a `DirTree` (cloud
   picker mode, the cloud diff view). Sends its node ids (relative paths,
   like treepicker's; the root, `''`, is treepicker's `.`), each after its type
   (`--typed`: `f sub/x`, `d sub`), each dir before its contents, siblings
@@ -249,7 +274,8 @@ stdout, all `\0`-separated (`-0`). Exit code 1 means the user quit (→
   dirs. Returns the picked files' relpaths (treepicker also prints the dirs
   whose files are all picked; those are dropped). `picked` start picked
   (`--picked FILE`).
-- `pick_under_dir(dirpath, max_depth)`: `treepicker [--max-depth N] DIR`.
+- `pick_under_dir(dirpath, max_depth, dirs_only, lazy, header)`:
+  `treepicker [--max-depth N] [--dirs-only] [--lazy] DIR`.
 - `pick_option(options, header)`: `treepicker --list`, for menus.
 Names are passed as bytes with `surrogateescape`, so non-UTF-8 file names
 round-trip. Tests (`tests/test_picker.py`) run a fake treepicker script.
