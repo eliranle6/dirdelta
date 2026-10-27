@@ -16,7 +16,9 @@ class DirTree(object):
 
     A tree of a place that files can be copied into and removed from has _copy_file() and
     _remove_file(), for copy_inner_entries_from_dirtree() and remove_files(), and fetch_file(), to
-    copy its files elsewhere. One that copies several files at once has _copy_files() too.
+    copy its files elsewhere. One that copies or removes several files at once has _copy_files()
+    or _remove_files() too, and one with something to say before a copy from it or a removal
+    (in the confirmation) has copy_notes() or removal_notes().
     """
     # What remove_files() says about the removed files' fate, after "removed N of M files from X"
     REMOVED_TO = ""
@@ -142,13 +144,21 @@ class DirTree(object):
         """Remove the files, and drop them from the tree (so the next diff doesn't list them). A dry
         run changes neither."""
         verb = "Dry run, not removing" if dryrun.DRYRUN else "Removing"
-        nr_removed = 0
+        nr_started = nr_removed = 0
         is_stopped = False
+
+        def starting(what, nr_files=1):
+            """Say that removing what starts: a file, or e.g. a folder of nr_files of the files"""
+            nonlocal nr_started
+            nr_started += nr_files
+            messages.print_line("%s %s (%d out of %d)" % (verb, what, nr_started, len(file_entries)))
+
+        def removed(nr_files=1):
+            nonlocal nr_removed
+            nr_removed += nr_files
+
         try:
-            for index, file_entry in enumerate(file_entries):
-                messages.print_line("%s %s (%d out of %d)" % (verb, file_entry, index + 1, len(file_entries)))
-                if dryrun.DRYRUN or self._remove_file(file_entry):
-                    nr_removed += 1
+            self._remove_files(file_entries, starting, removed)
         except KeyboardInterrupt:
             messages.note_stopped()
             is_stopped = True
@@ -167,6 +177,27 @@ class DirTree(object):
         for file_entry in files:
             starting(file_entry)
             copied(self._copy_file(file_entry, source))
+
+    def _remove_files(self, file_entries, starting, removed):
+        """Remove the files (see _remove_file()), or in a dry run only say so, calling
+        starting(what, nr_files) as removing each one (or some together) starts, and
+        removed(nr_files) for those removed. One at a time, unless a tree does it otherwise."""
+        for file_entry in file_entries:
+            starting(file_entry)
+            if dryrun.DRYRUN or self._remove_file(file_entry):
+                removed()
+
+    def copy_notes(self, relpaths):
+        """Lines for the confirmation of copying the files at relpaths out of this tree"""
+        return []
+
+    def removal_notes(self, relpaths):
+        """Lines for the confirmation of removing the files at relpaths"""
+        return []
+
+    def cant_fetch(self, relpath):
+        """Why the file at relpath can't be copied out (fetch_file()), or None if it can"""
+        return None
 
     def _copy_file(self, file_entry, source):
         """Copy file_entry (of another tree, from source, if given) into this tree, at the same

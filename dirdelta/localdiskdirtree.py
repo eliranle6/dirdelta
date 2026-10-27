@@ -62,6 +62,10 @@ class LocalDiskDirTree(dirtree.DirTree):
                 self.create_dir_node_from_fullpath_if_not_exists(path)
 
     def _copy_file(self, file_entry, source):
+        reason = source.cant_fetch(file_entry.relpath) if source is not None else None
+        if reason is not None:
+            messages.print_line("Skipped %s: %s" % (file_entry.relpath, reason), "yellow")
+            return False
         new_file_entry = self.add_file_by_relpath(file_entry.relpath)
         dest_path = new_file_entry.full_filesystem_path()
         did_dest_exist = os.path.exists(dest_path)
@@ -97,6 +101,36 @@ class LocalDiskDirTree(dirtree.DirTree):
         # was there before
         if not did_dest_exist and os.path.exists(dest_path):
             os.unlink(dest_path)
+
+    def _remove_files(self, file_entries, starting, removed):
+        """Remove the files, and then the dirs that removing them left empty"""
+        super(LocalDiskDirTree, self)._remove_files(file_entries, starting, removed)
+        if not dryrun.DRYRUN:
+            self._remove_emptied_dirs(file_entries)
+
+    def _remove_emptied_dirs(self, file_entries):
+        """Remove the dirs of the (removed) files that are empty, and the dirs they're in that this
+        leaves empty, up to (not including) the root. Only empty ones: rmdir fails on one with
+        anything in it, which is then kept, as are the dirs it's in."""
+        nr_removed = 0
+        dirpaths = {os.path.dirname(file_entry.full_filesystem_path()) for file_entry in file_entries}
+        # The deepest first, so a dir's emptied subdirs are gone when it's tried
+        for dirpath in sorted(dirpaths, key=lambda dirpath: dirpath.count(os.sep), reverse=True):
+            while dirpath.startswith(self._rootpath.rstrip(os.sep) + os.sep):
+                try:
+                    os.rmdir(dirpath)
+                except OSError:
+                    break
+                nr_removed += 1
+                relpath = os.path.relpath(dirpath, self._rootpath)
+                if relpath in self:
+                    self.remove_node(relpath)
+                dirpath = os.path.dirname(dirpath)
+        if nr_removed:
+            messages.print_line("Removed %d dirs left empty" % (nr_removed,))
+
+    def removal_notes(self, relpaths):
+        return ["Dirs left empty are removed too."]
 
     def _remove_file(self, file_entry):
         os.unlink(file_entry.full_filesystem_path())

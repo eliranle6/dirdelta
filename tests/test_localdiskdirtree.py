@@ -143,6 +143,58 @@ class LocalDiskDirTreeTest(unittest.TestCase):
         self.assertEqual(printed[-1], 'Remove stopped: removed 1 of 2 files from %s' % (os.path.realpath(self.src_root),))
 
 
+    def _remove(self, relpaths, existing):
+        """Remove relpaths from a src_root holding existing (relpaths: a trailing '/' an empty dir)"""
+        for relpath in existing:
+            path = os.path.join(self.src_root, relpath)
+            if relpath.endswith('/'):
+                os.makedirs(path, exist_ok=True)
+            else:
+                os.makedirs(os.path.dirname(path), exist_ok=True)
+                with open(path, 'w') as f:
+                    f.write(relpath)
+        tree = localdiskdirtree.factory(self.src_root, silent=True)
+        with mock.patch('dirdelta.messages.print_line') as print_line:
+            tree.remove_files([tree.get_node(relpath).data for relpath in relpaths])
+        self.lines = [call.args[0] for call in print_line.call_args_list]
+        return tree
+
+    def _left(self):
+        found = []
+        for dirpath, dirnames, filenames in os.walk(self.src_root):
+            for name in dirnames + filenames:
+                found.append(os.path.relpath(os.path.join(dirpath, name), self.src_root))
+        return sorted(found)
+
+    def test_removing_files_removes_the_dirs_left_empty(self):
+        with mock.patch('dirdelta.dryrun.DRYRUN', False):
+            tree = self._remove(['a/b/1.txt', 'a/b/c/2.txt', 'a/d/3.txt', 'e/4.txt'],
+                                ['a/b/1.txt', 'a/b/c/2.txt', 'a/d/3.txt', 'e/4.txt', 'e/5.txt', 'f/'])
+        # f was empty already, and wasn't removed from
+        self.assertEqual(self._left(), ['e', 'e/5.txt', 'f'])
+        self.assertNotIn('a', tree)
+        self.assertIn('Removed 4 dirs left empty', self.lines)
+
+    def test_a_dir_with_anything_left_in_it_is_kept(self):
+        with mock.patch('dirdelta.dryrun.DRYRUN', False):
+            self._remove(['a/1.txt'], ['a/1.txt', 'a/.hidden', 'a/sub/'])
+        self.assertEqual(self._left(), ['a', 'a/.hidden', 'a/sub'])
+
+    def test_the_root_is_kept_even_if_left_empty(self):
+        with mock.patch('dirdelta.dryrun.DRYRUN', False):
+            self._remove(['1.txt'], ['1.txt'])
+        self.assertTrue(os.path.isdir(self.src_root))
+        self.assertEqual(self._left(), [])
+
+    def test_a_dry_run_removes_no_dirs(self):
+        with mock.patch('dirdelta.dryrun.DRYRUN', True):
+            self._remove(['a/1.txt'], ['a/1.txt'])
+        self.assertEqual(self._left(), ['a', 'a/1.txt'])
+
+    def test_a_removal_says_that_empty_dirs_go_too(self):
+        tree = localdiskdirtree.LocalDiskDirTree(self.src_root, silent=True)
+        self.assertEqual(tree.removal_notes(['a/1.txt']), ['Dirs left empty are removed too.'])
+
     def _scan(self, relpaths, **kwargs):
         for relpath in relpaths:
             path = os.path.join(self.src_root, relpath)

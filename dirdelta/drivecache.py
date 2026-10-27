@@ -13,8 +13,20 @@ import posixpath
 FILE_LIST_CACHE = os.path.expanduser('~/.cache/dirman/files.txt')
 
 FOLDER_MIME_TYPE = 'application/vnd.google-apps.folder'
-# Google's own types (Docs, Sheets, Slides, shortcuts, ...): not files on disk, so never synced
+# Google's own types (Docs, Sheets, Slides, shortcuts, ...): not files, so they can't be downloaded
+# (only exported to another format), but they're in Drive's folders, so they're in the tree
 GOOGLE_APPS_MIME_PREFIX = 'application/vnd.google-apps.'
+# What's added to a Google file's name in its path, so it's told from a file, as Google Drive for
+# desktop names them on disk (a Google Sheet "Budget" is Budget.gsheet), by its mimeType's last part.
+# Others get ".g" and that part.
+GOOGLE_FILE_EXTENSIONS = {
+    'document': '.gdoc',
+    'spreadsheet': '.gsheet',
+    'presentation': '.gslides',
+    'drawing': '.gdraw',
+    'form': '.gform',
+    'shortcut': '.glink',
+}
 # The key of the cache's line with My Drive's root folder's id
 ROOT_ID_KEY = 'myDriveRootId'
 # The key of a line with the id of a file that dirdelta moved to the trash since the scan
@@ -65,13 +77,28 @@ class DriveCacheError(Exception):
     """The cache can't be read into a tree; the message says why, and what to do"""
 
 
+def is_google_file(md):
+    """Whether the file (its metadata) is one of Google's own types (a Google Doc, ...), not a folder"""
+    mime_type = md.get('mimeType', '')
+    return mime_type != FOLDER_MIME_TYPE and mime_type.startswith(GOOGLE_APPS_MIME_PREFIX)
+
+
+def path_name(md):
+    """A file's or folder's name in its path: its name, and for a Google file, its extension (see
+    GOOGLE_FILE_EXTENSIONS)"""
+    if not is_google_file(md):
+        return md['name']
+    kind = md['mimeType'][len(GOOGLE_APPS_MIME_PREFIX):]
+    return md['name'] + GOOGLE_FILE_EXTENSIONS.get(kind, '.g' + kind)
+
+
 def entries(inner_rootpath):
-    """Yield (relpath, cloud_id, is_dir) for inner_rootpath (a path in the cloud, like /eliran), whose
-    relpath is '', and each file and folder under it, each folder before what's in it. relpath is
-    relative to inner_rootpath; two
-    entries can have the same one, since Drive allows same-named files. Raises DriveCacheError if
-    there's no such folder, or if names under it can't be paths: same-named folders (or a folder and
-    a file) in one folder, or a '/' in a name."""
+    """Yield (relpath, cloud_id, is_dir, is_google_file) for inner_rootpath (a path in the cloud,
+    like /eliran), whose relpath is '', and each file and folder under it, each folder before what's
+    in it. relpath is relative to inner_rootpath, and ends with a Google file's extension (see
+    path_name()); two entries can have the same one, since Drive allows same-named files. Raises
+    DriveCacheError if there's no such folder, or if names under it can't be paths: same-named
+    folders (or a folder and a file) in one folder, or a '/' in a name."""
     id_child_map, id_md_map, root_cloud_id = _parsefile(FILE_LIST_CACHE)
     inner_rootpath = '/' + '/'.join(component for component in inner_rootpath.split('/') if component)
     found = False
@@ -85,12 +112,12 @@ def entries(inner_rootpath):
         if _is_at_or_under(folder_path, inner_rootpath):
             if folder_path == inner_rootpath:
                 found = True
-                yield ('', folder_cloud_id, True)
+                yield ('', folder_cloud_id, True, False)
             problems += _name_problems(folder_path, children)
             for md in children:
-                path = posixpath.join(folder_path, md['name'])
+                path = posixpath.join(folder_path, path_name(md))
                 is_dir = md.get('mimeType') == FOLDER_MIME_TYPE
-                yield (posixpath.relpath(path, inner_rootpath), md['id'], is_dir)
+                yield (posixpath.relpath(path, inner_rootpath), md['id'], is_dir, is_google_file(md))
                 if is_dir:
                     dfs_stack.append((md['id'], path))
         else:
@@ -135,7 +162,7 @@ def _name_problems(folder_path, children):
                 for md in children if '/' in md['name']]
     kinds_by_name = collections.defaultdict(list)
     for md in children:
-        kinds_by_name[md['name']].append(md.get('mimeType') == FOLDER_MIME_TYPE)
+        kinds_by_name[path_name(md)].append(md.get('mimeType') == FOLDER_MIME_TYPE)
     for name, kinds in kinds_by_name.items():
         if len(kinds) > 1 and any(kinds):
             problems.append("%d folders or files named %s, in one folder (a folder's name must be "
@@ -145,10 +172,11 @@ def _name_problems(folder_path, children):
 
 def _parsefile(filename):
     """Read the cache into an id->children map, an id->metadata map and My Drive's root folder's id.
-    Google's own types (Docs, shortcuts, ...) are left out, and so is what isn't in My Drive (files
-    shared with the user, which have no parents, or whose parent folder the user can't see)."""
+    What isn't in My Drive is left out (files shared with the user, which have no parents, or whose
+    parent folder the user can't see)."""
     id_child_map = collections.defaultdict(list)
     id_md_map = {}
+    trashed_ids = set()
     root = None
 
     with open(filename) as f:
@@ -161,24 +189,23 @@ def _parsefile(filename):
                 root = md[ROOT_ID_KEY]
             elif TRASHED_ID_KEY in md:
                 id_md_map.pop(md[TRASHED_ID_KEY], None)
+                trashed_ids.add(md[TRASHED_ID_KEY])
             else:
-                mime_type = md.get('mimeType', '')
-                if mime_type == FOLDER_MIME_TYPE or not mime_type.startswith(GOOGLE_APPS_MIME_PREFIX):
-                    id_md_map[md['id']] = md
+                id_md_map[md['id']] = md
     # Once all are read, since a line may trash what an earlier one listed
     for cloud_id, md in id_md_map.items():
         if md.get('parents'):
             id_child_map[md['parents'][0]].append(cloud_id)
 
     if root is None:
-        root = _guess_root(id_child_map, id_md_map)
+        root = _guess_root(id_child_map, id_md_map, trashed_ids)
     return id_child_map, id_md_map, root
 
 
-def _guess_root(id_child_map, id_md_map):
+def _guess_root(id_child_map, id_md_map, trashed_ids):
     """My Drive's root folder's id, in a cache from before it was written down: the one folder that
-    has children but isn't listed itself, if there's just one"""
-    unlisted = set(id_child_map).difference(id_md_map)
+    has children but isn't listed itself (and wasn't trashed), if there's just one"""
+    unlisted = set(id_child_map).difference(id_md_map, trashed_ids)
     if len(unlisted) != 1:
         raise DriveCacheError("Can't tell which folder is My Drive in the cloud files list cache, "
                               "which is from an older dirdelta: run dirdelta again and refresh it.")

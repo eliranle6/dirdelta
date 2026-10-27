@@ -21,10 +21,10 @@ class EntriesTest(unittest.TestCase):
         self.addCleanup(os.remove, self.cache)
 
     def test_the_folder_itself_comes_first(self):
-        self.assertEqual(next(drivecache.entries('/mein')), ('', 'mein', True))
+        self.assertEqual(next(drivecache.entries('/mein')), ('', 'mein', True, False))
 
     def test_entries_under_a_folder(self):
-        entries = list(drivecache.entries('/mein'))[1:]
+        entries = [entry[:3] for entry in drivecache.entries('/mein')][1:]
         self.assertEqual(sorted(entries), sorted([
             ('song.mp3', 'song', False),
             ('album', 'album', True),
@@ -34,7 +34,7 @@ class EntriesTest(unittest.TestCase):
         ]))
 
     def test_each_folder_comes_before_whats_in_it(self):
-        relpaths = [relpath for relpath, _, _ in drivecache.entries('/mein')][1:]
+        relpaths = [entry[0] for entry in drivecache.entries('/mein')][1:]
         self.assertLess(relpaths.index('album'), relpaths.index('album/track.mp3'))
 
     def append(self, line):
@@ -43,7 +43,7 @@ class EntriesTest(unittest.TestCase):
 
     def test_trashed_files_are_left_out(self):
         self.append({drivecache.TRASHED_ID_KEY: 'song'})
-        relpaths = [relpath for relpath, _, _ in drivecache.entries('/mein')]
+        relpaths = [entry[0] for entry in drivecache.entries('/mein')]
         self.assertNotIn('song.mp3', relpaths)
         self.assertIn('album/track.mp3', relpaths)
 
@@ -53,7 +53,7 @@ class EntriesTest(unittest.TestCase):
         # Without a mimeType (Drive didn't say), a file
         drivecache.add({'id': 'n1', 'name': '1.mp3', 'parents': ['new']})
         drivecache.trash('track')
-        found = {relpath: is_dir for relpath, _, is_dir in drivecache.entries('/mein/album')}
+        found = {relpath: is_dir for relpath, _, is_dir, _ in drivecache.entries('/mein/album')}
         self.assertEqual(found, {'': True, 'new': True, 'new/1.mp3': False})
 
     def test_count_leaves_out_the_trashed_lines(self):
@@ -79,22 +79,39 @@ class CacheContentsTest(unittest.TestCase):
         self.addCleanup(patcher.stop)
         self.addCleanup(os.remove, self.cache)
 
-    def entries(self, inner_rootpath, items, root_line=True):
+    def write(self, items, root_line=True):
         with open(self.cache, 'w') as f:
             if root_line:
                 f.write(json.dumps({'myDriveRootId': 'ROOT'}) + '\n')
             for item in items:
                 f.write(json.dumps(item) + '\n')
-        # Without the folder itself
-        return sorted(drivecache.entries(inner_rootpath))[1:]
 
-    def test_google_docs_and_shortcuts_are_left_out(self):
+    def entries(self, inner_rootpath, items, root_line=True):
+        self.write(items, root_line)
+        # Without the folder itself, and without whether each is a Google file
+        return sorted(entry[:3] for entry in drivecache.entries(inner_rootpath))[1:]
+
+    def test_google_files_are_in_with_their_extensions(self):
+        self.write([
+            _item('eliran', 'eliran', 'ROOT', FOLDER),
+            _item('sheet', 'Budget', 'eliran', 'application/vnd.google-apps.spreadsheet'),
+            _item('shortcut', 'Link', 'eliran', 'application/vnd.google-apps.shortcut'),
+            _item('jam', 'Board', 'eliran', 'application/vnd.google-apps.jam'),
+            _item('song', 'song.mp3', 'eliran'),
+        ])
+        self.assertEqual(sorted(drivecache.entries('/eliran'))[1:], [
+            ('Board.gjam', 'jam', False, True),
+            ('Budget.gsheet', 'sheet', False, True),
+            ('Link.glink', 'shortcut', False, True),
+            ('song.mp3', 'song', False, False),
+        ])
+
+    def test_a_google_file_named_like_a_folder_is_fine(self):
         self.assertEqual(self.entries('/eliran', [
             _item('eliran', 'eliran', 'ROOT', FOLDER),
-            _item('doc', 'Budget', 'eliran', 'application/vnd.google-apps.spreadsheet'),
-            _item('shortcut', 'Link', 'eliran', 'application/vnd.google-apps.shortcut'),
-            _item('song', 'song.mp3', 'eliran'),
-        ]), [('song.mp3', 'song', False)])
+            _item('folder', 'Budget', 'eliran', FOLDER),
+            _item('sheet', 'Budget', 'eliran', 'application/vnd.google-apps.spreadsheet'),
+        ]), [('Budget', 'folder', True), ('Budget.gsheet', 'sheet', False)])
 
     def test_a_missing_folder_is_an_error(self):
         with self.assertRaisesRegex(drivecache.DriveCacheError, 'no folder /nope'):

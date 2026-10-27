@@ -76,6 +76,32 @@ class CloudDirTreeTest(unittest.TestCase):
         self.assertEqual(clouddirtree.factory('cloud/mein').displayname(), 'cloud/mein')
         self.assertEqual(clouddirtree.CloudDirTree('cloud').displayname(), 'cloud')
 
+    def google_tree(self):
+        with open(self.cache, 'a') as f:
+            f.write(json.dumps(_item('sheet', 'Budget', 'mein', 'application/vnd.google-apps.spreadsheet')) + '\n')
+        return clouddirtree.factory('cloud/mein')
+
+    def test_google_files_are_in_but_cant_be_copied_out(self):
+        tree = self.google_tree()
+        self.assertIn('Budget.gsheet', self._relpaths(tree))
+        self.assertIn('Google file', tree.cant_fetch('Budget.gsheet'))
+        self.assertIsNone(tree.cant_fetch('song.mp3'))
+        with self.assertRaises(OSError):
+            tree.fetch_file('Budget.gsheet', '/nowhere')
+
+    def test_the_confirmation_of_copying_google_files_says_theyre_skipped(self):
+        notes = self.google_tree().copy_notes(['song.mp3', 'Budget.gsheet'])
+        self.assertIn("can't be copied", notes[0])
+        self.assertEqual(notes[1:], ['  Budget.gsheet'])
+        self.assertEqual(self.google_tree().copy_notes(['song.mp3']), [])
+
+    def test_the_confirmation_of_a_removal_says_what_is_trashed_whole_and_the_google_files(self):
+        notes = self.google_tree().removal_notes(['album/track.mp3', 'Budget.gsheet'])
+        self.assertTrue(notes[0].startswith('Trashing 1 folders whole'))
+        self.assertEqual(notes[1], '  album/')
+        self.assertTrue(notes[2].startswith('Including 1 Google files'))
+        self.assertEqual(notes[3], '  Budget.gsheet')
+
     def test_fullpath_is_the_path_inside_the_drive(self):
         tree = clouddirtree.factory('cloud/mein')
         self.assertEqual(tree.get_node('album/track.mp3').data.fullpath, '/mein/album/track.mp3')
@@ -129,6 +155,10 @@ class CloudDirTreeChangesTest(unittest.TestCase):
         files.generateIds.side_effect = lambda count, **_: mock.Mock(execute=lambda **_: {
             'ids': ['gen%d' % (next(generated_ids),) for _ in range(count)]})
         self.service.new_batch_http_request.side_effect = _FakeBatch
+        # What Drive lists for a query (what's in some folders), beyond what the cache has
+        self.listed = lambda query: []
+        files.list.side_effect = lambda q, **_: mock.Mock(
+            execute=lambda **_: {'files': self.listed(q)})
         self.local_dir = tempfile.mkdtemp(prefix='dirstuff-cloud-local-')
         for patcher in (mock.patch('dirdelta.drivecache.FILE_LIST_CACHE', self.cache),
                         mock.patch('dirdelta.driveapi.service', return_value=self.service),
@@ -335,13 +365,103 @@ class CloudDirTreeChangesTest(unittest.TestCase):
         self.assertNotIn('gone.mp3', self.tree)
         self.assertTrue(any(line.startswith('Copy failed') for line in self.lines()))
 
+    def remove(self, relpaths):
+        self.tree.remove_files([self.tree.get_node(relpath).data for relpath in relpaths])
+
+    def trashed(self):
+        return [call.kwargs['fileId'] for call in self.service.files.return_value.update.call_args_list]
+
+    def add(self, relpath, cloud_id):
+        """Add a file to the tree (and the dirs it's in, each with its name as its id)"""
+        self.tree.add_file_by_relpath(relpath)
+        self.tree._cloud_ids[relpath] = cloud_id
+        dirpath = os.path.dirname(relpath)
+        while dirpath:
+            self.tree._cloud_ids.setdefault(dirpath, os.path.basename(dirpath))
+            dirpath = os.path.dirname(dirpath)
+
     def test_remove_moves_to_the_trash(self):
-        self.tree.remove_files([self.tree.get_node('album/track.mp3').data])
-        self.service.files.return_value.update.assert_called_once_with(fileId='track',
+        self.remove(['song.mp3'])
+        self.service.files.return_value.update.assert_called_once_with(fileId='song',
                                                                        body={'trashed': True})
-        self.assertNotIn('album/track.mp3', self.tree)
-        lines = [call.args[0] for call in clouddirtree.messages.print_line.call_args_list]
-        self.assertIn("Remove complete: removed 1 of 1 files from cloud/mein (to Drive's trash)", lines)
+        self.assertNotIn('song.mp3', self.tree)
+        self.assertIn("Remove complete: removed 1 of 1 files from cloud/mein (to Drive's trash)",
+                      self.lines())
+
+    def test_a_folder_all_of_whose_files_are_removed_is_trashed_as_one(self):
+        self.remove(['album/track.mp3'])
+        self.assertEqual(self.trashed(), ['album'])
+        self.assertNotIn('album', self.tree)
+        self.assertIn('Removing folder album/ and its 1 files (1 out of 1)', self.lines())
+        self.assertIn("Remove complete: removed 1 of 1 files from cloud/mein (to Drive's trash)",
+                      self.lines())
+        # The cache has it trashed, and what's in it
+        self.assertIsNone(clouddirtree.factory('cloud/mein').get_node('album'))
+        self.assertFalse(clouddirtree.drivecache.is_stale())
+
+    def test_only_the_topmost_whole_folders_are_trashed(self):
+        for relpath, cloud_id in (('a/1.mp3', 'one'), ('a/b/2.mp3', 'two'), ('a/b/c/3.mp3', 'three'),
+                                  ('d/4.mp3', 'four'), ('d/e/5.mp3', 'five')):
+            self.add(relpath, cloud_id)
+        self.remove(['a/1.mp3', 'a/b/2.mp3', 'a/b/c/3.mp3', 'd/e/5.mp3'])
+        # d keeps 4.mp3, so only d/e goes whole
+        self.assertCountEqual(self.trashed(), ['a', 'e'])
+        self.assertIn('d/4.mp3', self.tree)
+
+    def test_a_folder_with_a_file_not_picked_is_kept(self):
+        # The picker didn't show it: the other replica has it too
+        self.add('album/also-elsewhere.mp3', 'elsewhere')
+        self.remove(['album/track.mp3'])
+        self.assertEqual(self.trashed(), ['track'])
+        self.assertIn('album/also-elsewhere.mp3', self.tree)
+        self.service.files.return_value.list.assert_not_called()
+
+    def test_files_at_the_root_are_trashed_one_by_one_not_the_root(self):
+        self.remove(['song.mp3', 'album/track.mp3', 'dup.mp3', 'dup.mp3___DUP__dup2'])
+        self.assertCountEqual(self.trashed(), ['song', 'album', 'dup1', 'dup2'])
+
+    def test_drive_is_asked_whats_in_the_folders_first(self):
+        self.add('a/b/1.mp3', 'one')
+        self.remove(['a/b/1.mp3'])
+        query = self.service.files.return_value.list.call_args.kwargs['q']
+        self.assertIn("'a' in parents", query)
+        self.assertIn("'b' in parents", query)
+        self.assertIn('trashed = false', query)
+
+    def test_a_folder_that_drive_has_more_in_is_kept(self):
+        # Since the cache was made, a file was added to a/b in Drive
+        for relpath, cloud_id in (('a/1.mp3', 'one'), ('a/b/2.mp3', 'two'), ('a/c/3.mp3', 'three')):
+            self.add(relpath, cloud_id)
+        self.listed = lambda query: ([{'id': 'new', 'parents': ['b']}]
+                                     if "'b' in parents" in query else [])
+        self.remove(['a/1.mp3', 'a/b/2.mp3', 'a/c/3.mp3'])
+        # a and b are kept; c goes whole, and the others one by one
+        self.assertCountEqual(self.trashed(), ['c', 'one', 'two'])
+        self.assertIn('a/b', self.tree)
+        self.assertTrue(any(line.startswith('Drive has files in 1 folders') for line in self.lines()))
+
+    def test_if_drive_cant_be_asked_the_files_are_trashed_one_by_one(self):
+        def listed(query):
+            raise _http_error()
+        self.listed = listed
+        self.remove(['album/track.mp3'])
+        self.assertEqual(self.trashed(), ['track'])
+
+    def test_many_folders_are_asked_about_in_a_few_queries(self):
+        for i in range(5):
+            self.add('f%d/x.mp3' % (i,), 'x%d' % (i,))
+        with mock.patch('dirdelta.clouddirtree.MAX_FOLDERS_PER_QUERY', 2):
+            self.remove(['f%d/x.mp3' % (i,) for i in range(5)])
+        self.assertEqual(self.service.files.return_value.list.call_count, 3)
+        self.assertEqual(len(self.trashed()), 5)
+
+    def test_a_dry_run_says_which_folders_it_would_trash(self):
+        with mock.patch('dirdelta.dryrun.DRYRUN', True):
+            self.remove(['album/track.mp3', 'song.mp3'])
+        self.service.files.return_value.update.assert_not_called()
+        self.service.files.return_value.list.assert_not_called()
+        self.assertIn('Dry run, not removing folder album/ and its 1 files (1 out of 2)', self.lines())
+        self.assertIn('album', self.tree)
 
     def test_dry_run_removes_nothing(self):
         with mock.patch('dirdelta.dryrun.DRYRUN', True):
@@ -371,6 +491,21 @@ class CloudDirTreeChangesTest(unittest.TestCase):
         with open(os.path.join(self.local_dir, 'album', 'track.mp3'), 'rb') as f:
             self.assertEqual(f.read(), b'track content')
         self.assertIn('album/track.mp3', local)
+
+    def test_a_google_file_isnt_copied_to_a_dir_and_the_rest_are(self):
+        self.tree.add_file_by_relpath('Budget.gsheet')
+        self.tree._cloud_ids['Budget.gsheet'] = 'sheet'
+        self.tree._google_files.add('Budget.gsheet')
+        def downloader(local_file, request):
+            local_file.write(b'content')
+            return mock.Mock(next_chunk=mock.Mock(return_value=(None, True)))
+        with mock.patch('dirdelta.clouddirtree.MediaIoBaseDownload', side_effect=downloader):
+            local = self.download_to_local_dir(['Budget.gsheet', 'song.mp3'])
+        self.assertEqual(os.listdir(self.local_dir), ['song.mp3'])
+        self.assertNotIn('Budget.gsheet', local)
+        self.assertTrue(any(line.startswith('Skipped Budget.gsheet') for line in self.lines()))
+        self.assertIn('Copy complete: copied 1 of 2 files to %s' % (os.path.realpath(self.local_dir),),
+                      self.lines())
 
     def test_a_failed_download_leaves_no_file_and_the_rest_go_on(self):
         def downloader(local_file, request):

@@ -107,8 +107,12 @@ already-exists, path derived from `full_filesystem_path()`), then calls
 in which nothing changes, neither on disk (no directory is created, no
 bytes are copied) nor in the tree; only `DRYRUN=0` copies, adding each
 copied file to the tree. `remove_files()` is gated the same way: with
-`DRYRUN=0` it deletes and drops the nodes from the tree, else neither. Both print a progress line per file, and a
-summary. (Previously called a nonexistent
+`DRYRUN=0` it deletes and drops the nodes from the tree, else neither, and
+then removes the dirs that left empty (`_remove_emptied_dirs()`: `os.rmdir`,
+deepest first, up to but not including the root; rmdir fails on a dir with
+anything in it, which is then kept). Both print a progress line per file, and a
+summary. A copy from a tree that says a file can't be copied out
+(`cant_fetch()`, a cloud tree's Google files) skips it, saying why. (Previously called a nonexistent
 `self._add_file_by_path(...)` and referenced a `filesystem_dirpath`
 attribute that doesn't exist on the current `FileEntry`/`DirEntry` — both
 fixed, see known-issues.md #2 — and is now covered by
@@ -132,14 +136,16 @@ Cloud state is never queried live per-scan. Instead:
    can't count them; without a cache, just N.
 3. `drivecache.entries(inner_rootpath)` reads that cache with `_parsefile`,
    which `json.loads`es each `{...}` line into a dict (id→children map +
-   id→metadata map), leaving out Google's own types (Docs, Sheets,
-   shortcuts...: `application/vnd.google-apps.*` but folders), and takes the
+   id→metadata map), and takes the
    root from the root line (a cache from before it guesses: the one id with
    children but no metadata). Files outside My Drive (no parents, or a parent
    that isn't listed) are never reached. It then DFS-walks id→children from
    the root, only into folders on the way to `inner_rootpath` and under it,
-   yielding `(relpath, cloud_id, is_dir)` for what's under it, each folder
-   before its contents. It raises `DriveCacheError` (which `main.py` prints
+   yielding `(relpath, cloud_id, is_dir, is_google_file)` for what's under
+   it, each folder before its contents. Google's own files (Docs, Sheets,
+   shortcuts...: `application/vnd.google-apps.*` but folders) are in it, by
+   their names and an extension, as Google Drive for desktop names them on
+   disk (`path_name()`: `Budget.gsheet`, `Notes.gdoc`, `Link.glink`). It raises `DriveCacheError` (which `main.py` prints
    and exits with) if there's no such folder, or if names there can't be
    paths: a `/` in a name, or a folder's name shared with another folder or
    file in one folder (also on the way to it): the user renames them in Drive
@@ -168,16 +174,28 @@ starts no more uploads and waits for the ones under way (Ctrl-C again
 doesn't). Drive limits how fast a user makes files (about 2-3 a second), so
 more threads wouldn't help. Copying out
 of it, into a local dir, downloads (`fetch_file()`, which
-`LocalDiskDirTree._copy_file()` calls on the source tree); removing
-(`_remove_file()`) moves files to Drive's trash, so they can be restored. The
+`LocalDiskDirTree._copy_file()` calls on the source tree; a Google file is
+skipped, since it's not a file to download); removing (`_remove_files()`)
+moves files to Drive's trash, so they can be restored: each topmost folder all
+of whose files are picked as one (`_whole_folders()`, from the whole tree, so a
+folder whose picker showed it fully picked, but that has files the other replica
+has too, isn't one), once Drive says it has nothing more in it, or in the
+folders in it, than the tree (`_folders_holding_more()`: `files().list` of
+what's in 30 folders a query, for a cache that's out of date), and the rest one
+by one. A folder Drive has more in is kept, and the folders in it are tried
+instead. Trashed as one, a folder is restored as one, and leaves no empty
+folders behind. The confirmation says which folders go whole and which Google
+files are removed (`removal_notes()`), or which Google files a copy skips
+(`copy_notes()`). The
 loops around these (progress lines, dry run, Ctrl-C, the report) are
 `DirTree`'s `copy_inner_entries_from_dirtree()` and `remove_files()`, shared
 with `LocalDiskDirTree`. A file that fails is said in red, and the rest go on.
 Each change is added to the cache on disk as it's made (not in a dry run):
 a JSON line per file or folder made (`drivecache.add()`, with the fields
 Drive returns, `FILE_FIELDS`, as a scan lists them), and a
-`{"trashedId": ID}` line per file trashed (`drivecache.trash()`), which
-`_parsefile()` drops the file for. So the cache stays up to date, and the
+`{"trashedId": ID}` line per file or folder trashed (`drivecache.trash()`),
+which `_parsefile()` drops it for (and with a folder, all that's in it, which
+the walk from the root no longer reaches). So the cache stays up to date, and the
 next run needn't refresh it. Around each change (an upload's: around all of
 them) the cache is marked stale
 (`drivecache.mark_stale()`, a `files.txt.stale` file next to it), and the

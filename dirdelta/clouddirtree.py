@@ -8,6 +8,8 @@ from googleapiclient.http import MediaFileUpload, MediaIoBaseDownload
 from dirdelta import dirtree
 from dirdelta import driveapi
 from dirdelta import drivecache
+from dirdelta import dryrun
+from dirdelta import entries
 from dirdelta import messages
 from dirdelta import paths
 
@@ -23,6 +25,11 @@ NUM_RETRIES = 5
 # The most requests in a batch request, and ids that generateIds gives at once (the API's limits)
 MAX_BATCH_SIZE = 100
 MAX_GENERATED_IDS = 1000
+# How many folders one files().list asks what's in ("'A' in parents or 'B' in parents ..."), short
+# of a query Drive finds too long or complex
+MAX_FOLDERS_PER_QUERY = 30
+# How many of the folders or files a confirmation's note lists
+MAX_LISTED = 5
 
 
 def factory(rootpath):
@@ -35,13 +42,20 @@ def factory(rootpath):
 
 class CloudDirTree(dirtree.DirTree):
     """A dir tree representing a directory on the cloud (Google Drive). Files are copied into it by
-    uploading them, out of it by downloading them, and removed from it to Drive's trash."""
+    uploading them, out of it by downloading them, and removed from it to Drive's trash: a folder all
+    of whose files are removed, as one.
+
+    Google's own files (Docs, Sheets, ...) are in it too, by their names and an extension (see
+    drivecache.path_name()). They can be removed, but not copied out: they're not files to
+    download."""
     REMOVED_TO = " (to Drive's trash)"
 
     def __init__(self, rootpath):
         super(CloudDirTree, self).__init__(rootpath=paths.path_in_cloud(rootpath))
         # Each file's and folder's Drive id, by its relpath (the root's is '')
         self._cloud_ids = {}
+        # The relpaths of the Google files
+        self._google_files = set()
 
     def displayname(self):
         """The cloud path, as given (cloud/mein), rather than the path in Drive (/mein), which
@@ -50,7 +64,7 @@ class CloudDirTree(dirtree.DirTree):
 
     def update_from_cache(self):
         """Add the files and folders in the Drive file list cache (drivecache) under the tree's root"""
-        for relpath, cloud_id, is_dir in drivecache.entries(self.fullpath()):
+        for relpath, cloud_id, is_dir, is_google_file in drivecache.entries(self.fullpath()):
             if relpath == '':
                 self._cloud_ids[relpath] = cloud_id
                 continue
@@ -61,10 +75,27 @@ class CloudDirTree(dirtree.DirTree):
                 self.create_dir_node_from_relpath_if_not_exists(relpath)
             else:
                 self.add_file_by_relpath(relpath)
+                if is_google_file:
+                    self._google_files.add(relpath)
             self._cloud_ids[relpath] = cloud_id
+
+    def cant_fetch(self, relpath):
+        if relpath in self._google_files:
+            return "a Google file, which is only in Drive, so it can't be copied to a dir"
+        return None
+
+    def copy_notes(self, relpaths):
+        google_files = [relpath for relpath in relpaths if relpath in self._google_files]
+        if not google_files:
+            return []
+        return (["%s Google files (Docs, Sheets, ...), which are only in Drive, so they can't be "
+                 "copied to a dir: skipped" % (len(google_files),)] + _listed(google_files))
 
     def fetch_file(self, relpath, local_path):
         """Download the file at relpath to local_path. Raises OSError if it can't."""
+        reason = self.cant_fetch(relpath)
+        if reason is not None:
+            raise OSError("Can't download %s: %s" % (relpath, reason))
         try:
             request = driveapi.service().files().get_media(fileId=self._cloud_ids[relpath])
             with open(local_path, 'wb') as local_file:
@@ -231,12 +262,156 @@ class CloudDirTree(dirtree.DirTree):
             self._cloud_ids[relpath] = created['id']
         return self._cloud_ids[relpath]
 
+    def removal_notes(self, relpaths):
+        lines = []
+        folders = self._whole_folders(set(relpaths))
+        if folders:
+            lines.append("Trashing %d folders whole, all of whose files are picked (checked with "
+                         "Drive first, for files the cache doesn't have):" % (len(folders),))
+            lines += _listed(folder + '/' for folder in folders)
+        google_files = [relpath for relpath in relpaths if relpath in self._google_files]
+        if google_files:
+            lines.append("Including %d Google files (Docs, Sheets, ...), which are only in Drive:" %
+                         (len(google_files),))
+            lines += _listed(google_files)
+        return lines
+
+    def _remove_files(self, file_entries, starting, removed):
+        """Move the files to Drive's trash: the topmost folders all of whose files are picked (see
+        _whole_folders()) each as one, once Drive says it has nothing more in them than the tree
+        does (it may, if the cache is out of date), and the other files one by one. Trashed as one,
+        a folder is restored as one, and leaves no empty folders behind."""
+        picked = {file_entry.relpath for file_entry in file_entries}
+        folders = self._whole_folders(picked)
+        if folders and not dryrun.DRYRUN:
+            holding_more = self._folders_holding_more(folders)
+            if holding_more is None:
+                folders = []
+            elif holding_more:
+                messages.print_line(
+                    "Drive has files in %d folders that the cache doesn't (it's out of date), so "
+                    "they're kept, and their picked files are removed one by one: %s" %
+                    (len(holding_more), ', '.join(sorted(holding_more)[:MAX_LISTED])), "yellow")
+                folders = self._whole_folders(picked, holding_more)
+        in_trashed_folders = set()
+        for folder in folders:
+            folder_files = [relpath for relpath in picked if _is_under(relpath, folder)]
+            starting("folder %s/ and its %d files" % (folder, len(folder_files)), len(folder_files))
+            if dryrun.DRYRUN or self._trash_folder(folder):
+                removed(len(folder_files))
+                in_trashed_folders.update(folder_files)
+        for file_entry in file_entries:
+            if file_entry.relpath not in in_trashed_folders:
+                starting(file_entry)
+                if dryrun.DRYRUN or self._remove_file(file_entry):
+                    removed()
+
+    def _whole_folders(self, picked, holding_more=frozenset()):
+        """The topmost folders (not the root) with a picked file (of picked, relpaths) in them, all
+        of whose files are picked: nothing in them would be left. Folders of holding_more (relpaths),
+        and those they're in, never are."""
+        # Each folder's (whether it has a picked file, whether all of its files are)
+        found = {}
+
+        def walk(relpath):
+            has_picked, is_whole = False, relpath not in holding_more
+            for node in self.children(relpath):
+                if isinstance(node.data, entries.FileEntry):
+                    if node.identifier in picked:
+                        has_picked = True
+                    else:
+                        is_whole = False
+                else:
+                    child_has_picked, child_is_whole = walk(node.identifier)
+                    has_picked = has_picked or child_has_picked
+                    is_whole = is_whole and child_is_whole
+            found[relpath] = (has_picked, is_whole)
+            return has_picked, is_whole
+
+        folders = []
+
+        def collect(relpath):
+            for node in self.children(relpath):
+                if isinstance(node.data, entries.DirEntry):
+                    has_picked, is_whole = found[node.identifier]
+                    if has_picked and is_whole:
+                        folders.append(node.identifier)
+                    elif has_picked:
+                        collect(node.identifier)
+
+        walk(self.root)
+        collect(self.root)
+        return folders
+
+    def _folders_holding_more(self, folders):
+        """Of folders (relpaths) and the folders in them, those that Drive has something in that
+        the tree doesn't (a relpath set), asking Drive what's in each (MAX_FOLDERS_PER_QUERY of them
+        a request); None if Drive couldn't be asked (said why)"""
+        folder_ids = {}
+        # A folder whose id the tree lacks can't be asked about
+        holding_more = set()
+        for folder in folders:
+            for node in self._tree.subtree(folder).all_nodes_itr():
+                if isinstance(node.data, entries.DirEntry):
+                    if node.identifier in self._cloud_ids:
+                        folder_ids[self._cloud_ids[node.identifier]] = node.identifier
+                    else:
+                        holding_more.add(node.identifier)
+        known_ids = set(self._cloud_ids.values())
+        messages.print_line("Checking %d folders with Drive before trashing them..." % (len(folder_ids),))
+        ids = sorted(folder_ids)
+        try:
+            for start in range(0, len(ids), MAX_FOLDERS_PER_QUERY):
+                query = "(%s) and trashed = false" % (' or '.join(
+                    "'%s' in parents" % (cloud_id,) for cloud_id in ids[start:start + MAX_FOLDERS_PER_QUERY]))
+                for md in self._list(query):
+                    if md['id'] not in known_ids:
+                        holding_more.update(folder_ids[parent] for parent in md.get('parents', [])
+                                            if parent in folder_ids)
+        except HttpError as error:
+            messages.print_line("Couldn't check the folders with Drive (%s): removing their files "
+                                "one by one" % (error,), "yellow")
+            return None
+        return holding_more
+
+    def _list(self, query):
+        """The files and folders (id and parents) that Drive lists for query, page by page"""
+        page_token = None
+        while True:
+            response = driveapi.service().files().list(
+                q=query, fields='nextPageToken, files(id, parents)', pageSize=1000,
+                pageToken=page_token).execute(num_retries=NUM_RETRIES)
+            yield from response.get('files', [])
+            page_token = response.get('nextPageToken')
+            if not page_token:
+                return
+
+    def _trash_folder(self, relpath):
+        """Move the folder at relpath, and all that's in it, to Drive's trash, and drop it from the
+        tree. Returns whether it was moved."""
+        if not self._trash(self._cloud_ids[relpath]):
+            return False
+        for node in self._tree.subtree(relpath).all_nodes_itr():
+            self._cloud_ids.pop(node.identifier, None)
+            self._google_files.discard(node.identifier)
+        self.remove_node(relpath)
+        return True
+
     def _remove_file(self, file_entry):
         """Move file_entry to Drive's trash, where it can be restored from (for 30 days)"""
+        if not self._trash(self._cloud_ids[file_entry.relpath]):
+            return False
+        self.remove_node(file_entry.relpath)
+        del self._cloud_ids[file_entry.relpath]
+        self._google_files.discard(file_entry.relpath)
+        return True
+
+    def _trash(self, cloud_id):
+        """Move the file or folder with cloud_id to Drive's trash (where it can be restored from, for
+        30 days), and note it in the cache. Returns whether it was moved (if not, says why)."""
         # Stale until the change is in the cache, in case it's cut off in the middle
         was_stale = drivecache.is_stale()
         drivecache.mark_stale()
-        cloud_id = self._cloud_ids[file_entry.relpath]
         try:
             driveapi.service().files().update(fileId=cloud_id, body={'trashed': True}).execute(
                 num_retries=NUM_RETRIES)
@@ -246,6 +421,17 @@ class CloudDirTree(dirtree.DirTree):
         drivecache.trash(cloud_id)
         if not was_stale:
             drivecache.mark_fresh()
-        self.remove_node(file_entry.relpath)
-        del self._cloud_ids[file_entry.relpath]
         return True
+
+
+def _is_under(relpath, folder):
+    return relpath.startswith(folder + '/')
+
+
+def _listed(items):
+    """Lines listing the first MAX_LISTED of items, indented, and how many more there are"""
+    items = list(items)
+    lines = ["  %s" % (item,) for item in items[:MAX_LISTED]]
+    if len(items) > MAX_LISTED:
+        lines.append("  (and %d more)" % (len(items) - MAX_LISTED,))
+    return lines
