@@ -69,6 +69,10 @@ class CloudDirTreeTest(unittest.TestCase):
         self.assertEqual(len(dups), 2)
         self.assertIn('dup.mp3', dups)
 
+    def test_displayname_is_the_cloud_path(self):
+        self.assertEqual(clouddirtree.factory('cloud/mein').displayname(), 'cloud/mein')
+        self.assertEqual(clouddirtree.CloudDirTree('cloud').displayname(), 'cloud')
+
     def test_fullpath_is_the_path_inside_the_drive(self):
         tree = clouddirtree.factory('cloud/mein')
         self.assertEqual(tree.get_node('album/track.mp3').data.fullpath, '/mein/album/track.mp3')
@@ -199,7 +203,7 @@ class CloudDirTreeChangesTest(unittest.TestCase):
         self.assertIn('good.mp3', self.tree)
         lines = [call.args[0] for call in clouddirtree.messages.print_line.call_args_list]
         self.assertTrue(any(line.startswith('Copy failed') for line in lines))
-        self.assertIn('Copy complete: copied 1 of 2 files to /mein', lines)
+        self.assertIn('Copy complete: copied 1 of 2 files to cloud/mein', lines)
 
     def test_remove_moves_to_the_trash(self):
         self.tree.remove_files([self.tree.get_node('album/track.mp3').data])
@@ -207,7 +211,7 @@ class CloudDirTreeChangesTest(unittest.TestCase):
                                                                        body={'trashed': True})
         self.assertNotIn('album/track.mp3', self.tree)
         lines = [call.args[0] for call in clouddirtree.messages.print_line.call_args_list]
-        self.assertIn("Remove complete: removed 1 of 1 files from /mein (to Drive's trash)", lines)
+        self.assertIn("Remove complete: removed 1 of 1 files from cloud/mein (to Drive's trash)", lines)
 
     def test_dry_run_removes_nothing(self):
         with mock.patch('dirdelta.dryrun.DRYRUN', True):

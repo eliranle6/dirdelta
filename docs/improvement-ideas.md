@@ -1,18 +1,11 @@
 # Improvement ideas
 
 Not implemented: proposed changes, a backlog to pick from. The ones done so far (the 2026-10-23
-and 2026-10-24 reviews' #1-25) are in git history. treepicker's own are in
+and 2026-10-24 reviews' #1-25, and naming a cloud replica as given, 2026-10-27) are in git
+history. treepicker's own are in
 `lib/treepicker/docs/improvement-ideas.md`.
 
-1. **Say which replica a cloud path is.** A `CloudDirTree`'s `fullpath()` is its path inside
-   Drive (`/eliran`), and that's what the Copy/Remove confirmation ("Remove 1400 files from
-   /eliran?"), the progress lines and the report ("removed 1400 of 1400 files from /eliran (to
-   Drive's trash)") show. It reads like a local dir. The main menu shows the replica as given
-   (`cloud/eliran`), so the screens after it should too, e.g. through a display name on each
-   tree (`cloud/eliran`, or "Google Drive: /eliran") rather than `fullpath()`. (Found
-   2026-10-27, removing 1400 files from Drive.)
-
-2. **Remove a whole Drive folder in one call.** A Remove from Drive trashes each picked file on
+1. **Remove a whole Drive folder in one call.** A Remove from Drive trashes each picked file on
    its own (`CloudDirTree._remove_file()`, one API call each), even when a whole folder is
    picked, and leaves the folders behind, now empty (a known gap: after removing
    `docs/archive`'s 1400 files on 2026-10-27, its 209 folders were still there, so Drive looked
@@ -31,7 +24,7 @@ and 2026-10-24 reviews' #1-25) are in git history. treepicker's own are in
    Smaller, and maybe enough: after the files, trash the folders the Remove left empty (by the
    cache, checked with Drive as above), so the folder tree doesn't stay behind.
 
-3. **Refresh only the cloud replica's folder, from the main menu, with a key.** The cache is
+2. **Refresh only the cloud replica's folder, from the main menu, with a key.** The cache is
    refreshed only all at once (`clouddirtreefactory._refresh_cache()`, a scan of all of Drive),
    and only at the start, by the "Refresh cloud files list cache" prompt. When the replica is one
    folder (`cloud/eliran/docs`), or Drive changed outside dirdelta while the main menu is open,
@@ -53,7 +46,7 @@ and 2026-10-24 reviews' #1-25) are in git history. treepicker's own are in
    change, made in its repo (see `lib/treepicker/docs/improvement-ideas.md`). Without it, a
    "Refresh cloud/eliran from Drive" option in the menu does the same, with no treepicker change.
 
-4. **Show where a file is in the other replica, beside the file picker.** The diff is by path
+3. **Show where a file is in the other replica, beside the file picker.** The diff is by path
    only, so a file moved (or renamed dir) in one replica shows up as missing from the other:
    Copy would make a second copy of it, and Remove would remove the one that moved. While
    picking files (Copy/Remove's picker, `picker.pick_files()`), a right-hand column would show,
@@ -83,7 +76,7 @@ and 2026-10-24 reviews' #1-25) are in git history. treepicker's own are in
      Copy/Remove pickers could say which of their files have a match ("moved?"), and the
      confirmation offer Rename for those.
 
-5. **Upload many small files faster.** A Copy into Drive uploads file by file
+4. **Upload many small files faster.** A Copy into Drive uploads file by file
    (`CloudDirTree._copy_file()`), each a resumable upload (`MediaFileUpload(resumable=True)`:
    two requests, one to start it and one with the data) and each folder on the way its own
    `files().create`, one after the other. For a folder of many small files, the round trips

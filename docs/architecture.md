@@ -147,7 +147,11 @@ Cloud state is never queried live per-scan. Instead:
    `localdiskdirtree.factory()` does: a `CloudDirTree(rootpath)`, then its
    `update_from_cache()`, which adds them as `DirTree` nodes, and handles
    Drive's "two files, same path" case by suffixing `___DUP__<id>` on
-   collision (same-named folders are an error, above).
+   collision (same-named folders are an error, above). A `CloudDirTree`'s
+   `fullpath()` is its path in Drive (`/mein`), and its `displayname()` the
+   cloud path (`cloud/mein`), which every screen names it by (the pickers'
+   roots and headers, the confirmation, the progress and the report): a
+   `DirTree`'s `displayname()` is its `fullpath()`.
 
 Copying and removing: `CloudDirTree` keeps each file's and folder's Drive id
 (`_cloud_ids`, by relpath; the root's from `entries()`' first, `''`, entry).
@@ -270,7 +274,7 @@ Runs `treepicker` (from github.com/eliranle6/treepicker; `$DIRDELTA_PICKER`, or
 draws on `/dev/tty`, reads its input on stdin and prints what was picked on
 stdout, all `\0`-separated (`-0`). Exit code 1 means the user quit (→
 `None`); others raise `PickerError`. See `docs/treepicker-integration.md`.
-- `pick_from_tree(tree, header, dirs_only)`: picks one node of a `DirTree` (cloud
+- `pick_from_tree(tree, header, dirs_only, root_name)`: picks one node of a `DirTree` (cloud
   picker mode, the cloud diff view). Sends its node ids (relative paths,
   like treepicker's; the root, `''`, is treepicker's `.`), each after its type
   (`--typed`: `f sub/x`, `d sub`), each dir before its contents, siblings

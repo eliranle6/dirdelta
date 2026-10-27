@@ -6,6 +6,7 @@ import unittest
 from unittest import mock
 
 import helpers
+from dirdelta import clouddirtree
 from dirdelta import dirtree
 from dirdelta import interactive_dir_sync
 from dirdelta import localdiskdirtree
@@ -221,6 +222,21 @@ class InteractiveDirSyncTest(unittest.TestCase):
         with helpers.scripted_files_picker(lambda relpaths: offered.append(relpaths)):
             interactive_dir_sync.InteractiveDirSync(src, dst).sync(COPY)
         self.assertEqual(offered, [['a/1.txt', 'a b/1.txt', 'b/2.txt']])
+
+    def test_a_cloud_replica_is_named_as_a_cloud_path(self):
+        # Not by its path in Drive (/mein), which reads like a local dir
+        src = clouddirtree.CloudDirTree('cloud/mein')
+        src.add_file_by_relpath('song.mp3')
+        dst = dirtree.DirTree('/local')
+        # No, then quitting the picker it goes back to
+        picks = [['song.mp3'], None]
+        with helpers.scripted_files_picker(lambda relpaths: picks.pop(0)) as pick_files, \
+                mock.patch('dirdelta.picker.pick_option', return_value=NO) as pick_option:
+            interactive_dir_sync.InteractiveDirSync(src, dst).sync(REMOVE)
+        self.assertEqual(pick_files.call_args.args[0], 'cloud/mein')
+        self.assertIn('from cloud/mein', pick_files.call_args.kwargs['header'])
+        header = pick_option.call_args.kwargs['header'].splitlines()
+        self.assertEqual(header[0], 'Remove 1 files from cloud/mein?')
 
 if __name__ == '__main__':
     unittest.main()

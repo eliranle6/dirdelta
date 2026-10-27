@@ -102,6 +102,12 @@ class PickerTest(unittest.TestCase):
         args, _ = self.call()
         self.assertEqual(args, ['-0', '--dirs-only', '--lazy', '--header', 'Pick', '/'])
 
+    def test_pick_from_tree_root_name(self):
+        self.answer('a')
+        picker.pick_from_tree(self.make_tree(), root_name='cloud/mein')
+        args, _ = self.call()
+        self.assertEqual(args[args.index('--root') + 1], 'cloud/mein')
+
     def test_pick_from_tree_returns_the_entries(self):
         self.answer('a/1.txt')
         picked = picker.pick_from_tree(self.make_tree())

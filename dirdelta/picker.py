@@ -27,10 +27,11 @@ class PickerError(programs.ProgramError):
     pass
 
 
-def pick_from_tree(tree, header='', dirs_only=False):
-    """Let the user pick a node of a DirTree (with dirs_only, only of its dirs). Returns [the picked
-    node's data (entry)], or None if the user quit."""
-    args = ['--typed', '--root', tree.fullpath()] + _header_args(header)
+def pick_from_tree(tree, header='', dirs_only=False, root_name=None):
+    """Let the user pick a node of a DirTree (with dirs_only, only of its dirs), its root shown as
+    root_name (default: the tree's displayname()). Returns [the picked node's data (entry)], or None
+    if the user quit."""
+    args = ['--typed', '--root', root_name or tree.displayname()] + _header_args(header)
     if dirs_only:
         args.append('--dirs-only')
     picked_paths = _run(args + ['-'], list(_tree_paths(tree)))

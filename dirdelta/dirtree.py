@@ -121,10 +121,10 @@ class DirTree(object):
             is_stopped = True
         ended = "stopped" if is_stopped else "complete"
         if dryrun.DRYRUN:
-            messages.print_line("Dry run %s: nothing was copied to %s (DRYRUN=0 copies)" % (ended, self._rootpath))
+            messages.print_line("Dry run %s: nothing was copied to %s (DRYRUN=0 copies)" % (ended, self.displayname()))
         else:
             messages.print_line("Copy %s: copied %d of %d files to %s" % (ended, nr_copied, len(files),
-                                                                        self._rootpath))
+                                                                        self.displayname()))
 
     def remove_files(self, file_entries):
         """Remove the files, and drop them from the tree (so the next diff doesn't list them). A dry
@@ -143,23 +143,23 @@ class DirTree(object):
         ended = "stopped" if is_stopped else "complete"
         if dryrun.DRYRUN:
             messages.print_line("Dry run %s: nothing was removed from %s (DRYRUN=0 removes)" % (ended,
-                                                                                          self._rootpath))
+                                                                                          self.displayname()))
         else:
             messages.print_line("Remove %s: removed %d of %d files from %s%s" % (
-                ended, nr_removed, len(file_entries), self._rootpath, self.REMOVED_TO))
+                ended, nr_removed, len(file_entries), self.displayname(), self.REMOVED_TO))
 
     def _copy_file(self, file_entry, source):
         """Copy file_entry (of another tree, from source, if given) into this tree, at the same
         relative path. Returns whether it was copied."""
-        raise NotImplementedError("Can't copy files to %s" % (self._rootpath,))
+        raise NotImplementedError("Can't copy files to %s" % (self.displayname(),))
 
     def _remove_file(self, file_entry):
         """Remove file_entry, and its node. Returns whether it was removed."""
-        raise NotImplementedError("Can't remove files from %s" % (self._rootpath,))
+        raise NotImplementedError("Can't remove files from %s" % (self.displayname(),))
 
     def fetch_file(self, relpath, local_path):
         """Copy the file at relpath to local_path, on the local disk"""
-        raise NotImplementedError("Can't copy files from %s" % (self._rootpath,))
+        raise NotImplementedError("Can't copy files from %s" % (self.displayname(),))
 
     def iter_files(self):
         for node in self._tree.all_nodes_itr():
@@ -177,6 +177,10 @@ class DirTree(object):
         return unknown_files_dirtree
 
     def fullpath(self):
+        return self._rootpath
+
+    def displayname(self):
+        """The replica's name for the screens: its path, as given (a cloud tree's says it's one)"""
         return self._rootpath
 
     def _set_default_subdir(self, parent, name):

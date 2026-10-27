@@ -54,8 +54,9 @@ class InteractiveDirSync(object):
         missing = dirtree.DirTree(self._src.fullpath())
         for relpath in self._missing():
             missing.add_file_by_relpath(relpath)
-        header = "Files in %s, which are not in %s:" % (self._src.fullpath(), self._dst.fullpath())
-        picker.pick_from_tree(missing, header=header)
+        header = "Files in %s, which are not in %s:" % (self._src.displayname(),
+                                                          self._dst.displayname())
+        picker.pick_from_tree(missing, header=header, root_name=self._src.displayname())
 
     def sync(self, action):
         """Let the user pick files of src that aren't in dst, then copy them to dst (action COPY) or
@@ -64,7 +65,8 @@ class InteractiveDirSync(object):
         missing = self._missing()
         if not missing:
             messages.show("Nothing to %s" % (action,),
-                          ["%s has all of %s's files." % (self._dst.fullpath(), self._src.fullpath())],
+                          ["%s has all of %s's files." % (self._dst.displayname(),
+                                                          self._src.displayname())],
                           dryrun.label())
             return
         picked = None
@@ -77,10 +79,10 @@ class InteractiveDirSync(object):
 
         files = [self._file_entry(relpath) for relpath in picked]
         if action == self.COPY:
-            title = "Copying %d files from %s to %s" % (len(files), self._src.fullpath(),
-                                                       self._dst.fullpath())
+            title = "Copying %d files from %s to %s" % (len(files), self._src.displayname(),
+                                                       self._dst.displayname())
         else:
-            title = "Removing %d files from %s" % (len(files), self._src.fullpath())
+            title = "Removing %d files from %s" % (len(files), self._src.displayname())
         if dryrun.DRYRUN:
             title += " (a dry run)"
         with messages.progress_screen(title, dryrun.label()):
@@ -102,12 +104,13 @@ class InteractiveDirSync(object):
         return missing.relpaths
 
     def _chooseFiles(self, missing, action, picked=None):
-        purpose = ("copy to %s" % (self._dst.fullpath(),) if action == self.COPY else
-                   "remove from %s" % (self._src.fullpath(),))
+        purpose = ("copy to %s" % (self._dst.displayname(),) if action == self.COPY else
+                   "remove from %s" % (self._src.displayname(),))
         tree_header = ("Files in %s, which are not in %s. Pick the ones to %s:\n"
                        "(To select a file, press Space. When finished, press Enter.)" %
-                       (self._src.fullpath(), self._dst.fullpath(), purpose))
-        return picker.pick_files(self._src.fullpath(), missing, header=tree_header, picked=picked)
+                       (self._src.displayname(), self._dst.displayname(), purpose))
+        return picker.pick_files(self._src.displayname(), missing, header=tree_header,
+                                 picked=picked)
 
     def _file_entry(self, relpath):
         """The entry of src's file at relpath, for copying or removing it"""
@@ -116,10 +119,10 @@ class InteractiveDirSync(object):
 
     def _confirm(self, action, relpaths):
         if action == self.COPY:
-            question = "Copy %d files from %s to %s?" % (len(relpaths), self._src.fullpath(),
-                                                         self._dst.fullpath())
+            question = "Copy %d files from %s to %s?" % (len(relpaths), self._src.displayname(),
+                                                         self._dst.displayname())
         else:
-            question = "Remove %d files from %s?" % (len(relpaths), self._src.fullpath())
+            question = "Remove %d files from %s?" % (len(relpaths), self._src.displayname())
         lines = [question] + ["  %s" % (relpath,) for relpath in relpaths[:self.MAX_FILES_LISTED]]
         if len(relpaths) > self.MAX_FILES_LISTED:
             lines.append("  (and %d more)" % (len(relpaths) - self.MAX_FILES_LISTED,))

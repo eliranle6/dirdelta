@@ -28,6 +28,11 @@ class CloudDirTree(dirtree.DirTree):
         # Each file's and folder's Drive id, by its relpath (the root's is '')
         self._cloud_ids = {}
 
+    def displayname(self):
+        """The cloud path, as given (cloud/mein), rather than the path in Drive (/mein), which
+        reads like a local dir"""
+        return paths.join_cloud(self.fullpath())
+
     def update_from_cache(self):
         """Add the files and folders in the Drive file list cache (drivecache) under the tree's root"""
         for relpath, cloud_id, is_dir in drivecache.entries(self.fullpath()):
