@@ -172,6 +172,45 @@ history. treepicker's own are in
      laptop's (`/mnt/win` is the laptop's Windows drive), so the replicas it serves may
      differ.
 
+9. **Say COPY or REMOVE in a colored label in the file picker.** The file picker's bottom line
+   has one label, the mode's (DRY RUN in green, LIVE in red, `--label`/`--label-color`), and
+   what the picks are for is only in the header's text ("Pick the ones to remove from ...").
+   Picking files to remove looks like picking files to copy. A second label, e.g. COPY in
+   blue and REMOVE in red (or magenta, to keep red for LIVE), before the header's text or next
+   to the mode's label, would say it at a glance; the confirmation's header could start with
+   it too. treepicker takes one `--label` today: it would take several (repeated `--label` and
+   `--label-color`, drawn side by side), or a label for the header line. A treepicker change,
+   small; then `interactive_dir_sync._chooseFiles()` passes it.
+
+10. **One combined diff tree of both replicas, decided per file or dir.** Today's flow is per
+    action: the main menu offers four (copy each way, remove from each), each picker shows one
+    way's files, and a decision about a file is spread over passes (copy A's new files to B,
+    then remove B's old ones from B, ...). The other way to work, like a sync tool's
+    (Unison, Beyond Compare): one tree of everything that differs, both sides together, each
+    entry marked by where it is (only in A: `A>`, only in B: `<B`), and an action per file or
+    dir, chosen there: copy it to the side that lacks it, remove it from the side that has it,
+    or skip. Then one confirmation of the whole plan ("copy 12 to B, remove 30 from B, copy 3
+    to A"), and it's done in one go.
+    - Better for: deciding about a dir as a whole whichever side it's on, seeing a moved file's
+      two halves together (idea 3: `A> old/x.jpg` and `<B new/x.jpg` side by side, and
+      Rename as an action that fits), and one plan to review. It's how one thinks of it ("make
+      these two the same, except ..."), rather than four passes.
+    - A default action per entry, so most need no decision: e.g. copy what's only in one
+      side (for a backup-like pair), or per pair (a favorite could keep its default: "B is
+      the backup of A": copy A>, remove <B). Space cycles the actions (copy, remove, skip), a
+      key sets one for a whole dir, and the stats line counts each.
+    - treepicker: each node has one picked state today; this needs a few states per node
+      (shown as a mark and a color, like `X`/`-` now), set by keys, and printed with the node
+      (`copy\tpath`, `remove\tpath`). Both sides' diffs are two dirdiff runs, merged in Python
+      into one `--typed` list with a side for each. A bigger treepicker change than the others,
+      made in its repo.
+    - What stays: the actions themselves (`copy_inner_entries_from_dirtree`, `remove_files`),
+      the progress screen, the dry run. The main menu becomes one "Sync" (plus maybe the
+      current per-action ones, for the simple cases, e.g. a read-only replica, where only one
+      way makes sense).
+    - Could replace ideas 5 (options with nothing to do: there are no options) and 9 (the mode
+      label: each entry says its action).
+
 ## Parked: performance
 
 Decided 2026-10-25: speed is good enough, so no more work on it until decided otherwise. A sync
