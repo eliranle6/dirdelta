@@ -59,8 +59,9 @@ class CloudDirTree(dirtree.DirTree):
         self._cloud_ids = {}
         # The relpaths of the Google files
         self._google_files = set()
-        # Each file's size, by its relpath (none for a Google file)
+        # Each file's size, by its relpath (none for a Google file), and a photo's date taken
         self._sizes = {}
+        self._dates_taken = {}
 
     def displayname(self):
         """The cloud path, as given (cloud/mein), rather than the path in Drive (/mein), which
@@ -72,7 +73,7 @@ class CloudDirTree(dirtree.DirTree):
         (or found: drivecache.entries() of it, already read)"""
         if found is None:
             found = drivecache.entries(self.fullpath())
-        for relpath, cloud_id, is_dir, is_google_file, size in found:
+        for relpath, cloud_id, is_dir, is_google_file, size, date_taken in found:
             if relpath == '':
                 self._cloud_ids[relpath] = cloud_id
                 continue
@@ -87,6 +88,8 @@ class CloudDirTree(dirtree.DirTree):
                     self._google_files.add(relpath)
                 if size is not None:
                     self._sizes[relpath] = size
+                if date_taken is not None:
+                    self._dates_taken[relpath] = date_taken
             self._cloud_ids[relpath] = cloud_id
 
     def refresh_from_drive(self, relpath=''):
@@ -104,11 +107,15 @@ class CloudDirTree(dirtree.DirTree):
         self._cloud_ids = {}
         self._google_files = set()
         self._sizes = {}
+        self._dates_taken = {}
         self.update_from_cache(found)
         return relpath
 
     def file_size(self, relpath):
         return self._sizes.get(relpath)
+
+    def date_taken(self, relpath):
+        return self._dates_taken.get(relpath)
 
     def files_by_name(self, progress=None):
         # A same-named file's relpath has a DUP_SUFFIX, its name doesn't
@@ -221,6 +228,8 @@ class CloudDirTree(dirtree.DirTree):
         self._cloud_ids[file_entry.relpath] = md['id']
         if 'size' in md:
             self._sizes[file_entry.relpath] = int(md['size'])
+        if drivecache.date_taken(md) is not None:
+            self._dates_taken[file_entry.relpath] = drivecache.date_taken(md)
         return True
 
     def _make_folders(self, dir_relpaths):
@@ -300,6 +309,44 @@ class CloudDirTree(dirtree.DirTree):
             self.create_dir_node_from_relpath_if_not_exists(relpath)
             self._cloud_ids[relpath] = created['id']
         return self._cloud_ids[relpath]
+
+    def cant_move(self, relpath):
+        if relpath in self._google_files:
+            return "a Google file, whose name in Drive has no extension"
+        if DUP_SUFFIX in relpath:
+            return "one of several files of the same name in its folder"
+        return None
+
+    def _move_file(self, relpath, new_relpath):
+        """Move the file in Drive (keeping its id, history and sharing): rename it, and put it in
+        new_relpath's folder (made if needed) instead of its own; and note it in the cache"""
+        reason = self.cant_move(relpath)
+        if reason is not None:
+            messages.print_line("Skipped %s: %s" % (relpath, reason), "yellow")
+            return False
+        # Stale until the change is in the cache, in case it's cut off in the middle
+        is_newly_stale = drivecache.mark_stale(self.fullpath())
+        try:
+            parent_id = self._folder_id(os.path.dirname(new_relpath))
+            old_parent_id = self._cloud_ids[os.path.dirname(relpath)]
+            md = driveapi.service().files().update(
+                fileId=self._cloud_ids[relpath], body={'name': os.path.basename(new_relpath)},
+                addParents=parent_id, removeParents=old_parent_id,
+                fields=drivecache.FILE_FIELDS).execute(num_retries=NUM_RETRIES)
+        except HttpError as error:
+            messages.print_line("Move failed: %s" % (error,), "red")
+            return False
+        # The file again, by its id: the cache's later line is the one it has
+        drivecache.add(dict(md, parents=[parent_id]))
+        if is_newly_stale:
+            drivecache.unmark_stale(self.fullpath())
+        self.remove_node(relpath)
+        self.add_file_by_relpath(new_relpath)
+        self._cloud_ids[new_relpath] = self._cloud_ids.pop(relpath)
+        for by_relpath in (self._sizes, self._dates_taken):
+            if relpath in by_relpath:
+                by_relpath[new_relpath] = by_relpath.pop(relpath)
+        return True
 
     def removal_notes(self, relpaths):
         lines = []

@@ -79,18 +79,24 @@ dir is scanned by `treepicker` itself, so even big trees open fast.
 
 ```bash
 .venv/bin/python3 -m dirdelta /tmp/dd/alpha /tmp/dd/bravo             # a dry run: changes nothing
-DRYRUN=0 .venv/bin/python3 -m dirdelta /tmp/dd/alpha /tmp/dd/bravo    # Copy and Remove really do
+DRYRUN=0 .venv/bin/python3 -m dirdelta /tmp/dd/alpha /tmp/dd/bravo    # Copy, Remove and Rename really do
 ```
 
-The menu offers, for each direction, "Copy files from A to B" (the files in A that aren't in B, copied
-into B) and "Remove files from A" (the files in A that aren't in B, deleted from A). Choose one, pick
-files with `Space` (on a directory it picks everything under it), and press `Enter`. A directory
-is marked picked (`X`, red) when everything under it is, and partly picked (`-`, magenta) when only
-some of it is. A confirmation
-follows, with No selected: No takes you back to the picker, with the same files picked; Yes goes
-ahead. Its progress fills the screen under a top line saying what's being done; `Ctrl-C` stops it
-(a file cut off in the middle of its copy is deleted), and when it's done or stopped, `Enter` goes
-on, back to the main menu. With a cloud replica, the menu also has "Refresh cloud/X from Google
+The menu offers, for each direction, "Files in A, not in B" (with how many there are). Choose one,
+pick files with `Space` (on a directory it picks everything under it), and press `Enter`. A
+directory is marked picked (`X`, red) when everything under it is, and partly picked (`-`, magenta)
+when only some of it is. Beside the tree, a column shows, for the selected file, where B has files
+of the same name (found while you look, with how far it's got), the likeliest first: the same
+size, the same date taken (photos), the file's neighbours there too; one that's surely the file,
+moved, says so (`p` hides the column). `Enter` then asks what to do with the picked files, with
+"Nothing" selected first: copy them to B, remove them from A, or, for the ones whose match in B is
+surely them, rename: move B's match to the file's path, or the file to the match's (greyed out
+when it can't be done). A confirmation follows, with No selected (a removal asks a second time,
+"Are you sure?", also with No selected): No takes you back to the picker, with the same files
+picked; Yes goes ahead. Its progress fills the screen under a top line saying what's being done;
+`Ctrl-C` stops it (a file cut off in the middle of its copy is deleted), and when it's done or
+stopped, `Enter` goes back to the picker, where you were, without the files done; `q` goes back
+to the main menu. With a cloud replica, the menu also has "Refresh cloud/X from Google
 Drive", which reads that folder anew from Drive (as the refresh offered at the start does), for when
 it changed outside dirdelta, and in the file picker `r` reads just the selected folder anew. Unless
 `DRYRUN=0` is set, both are dry

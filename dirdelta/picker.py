@@ -32,9 +32,9 @@ class PickerError(programs.ProgramError):
 # doing nothing on it
 Disabled = collections.namedtuple('Disabled', ['text'])
 
-# What pick_files() returns when one of its keys ended picking: the key, the selected node's relpath
-# ('' for the root) and the files picked so far
-KeyPressed = collections.namedtuple('KeyPressed', ['key', 'selected', 'picked'])
+# What pick_files() returns: the key that ended picking ('' for Enter), the selected node's relpath
+# ('' for the root), to show it again there, and the files picked
+Picked = collections.namedtuple('Picked', ['key', 'selected', 'files'])
 
 
 def pick_from_tree(tree, header='', dirs_only=False, root_name=None):
@@ -55,12 +55,12 @@ def pick_files(rootpath, relpaths, header='', picked=None, label=None, keys='', 
                previews=None):
     """Let the user pick some of the files at relpaths (relative to rootpath, each dir's files and
     subdirs together, in the order to show them, as dirdiff lists them). Picking a dir picks the
-    files under it. Returns the picked ones (of relpaths), in that order, or None if the user quit.
-    picked (relpaths, e.g. what an earlier call returned) start picked. label, if given, is (text,
-    color): a label shown after the mode's, e.g. what the picks are for. keys (e.g. 'r'): keys
-    that end picking too, for the caller to act on the selected file or dir, and then it returns a
-    KeyPressed. selected: the relpath of the file or dir to start with selected ('' the root),
-    e.g. the KeyPressed's, to go on where it was.
+    files under it. Returns a Picked: the picked ones (of relpaths), in that order, and where the
+    selection was; or None if the user quit. picked (relpaths, e.g. what an earlier call returned)
+    start picked. label, if given, is (text, color): a label shown after the mode's. keys (e.g.
+    'r'): keys that end picking too, for the caller to act on the selected file or dir (the
+    Picked's key), with what's picked so far. selected: the relpath of the file or dir to start
+    with selected ('' the root), e.g. the Picked's, to go on where it was.
 
     previews, if given, is called on a thread of its own as soon as the picker is shown, with a
     send(found=None, default=None) for what to show beside the tree, in a column on the right:
@@ -71,7 +71,7 @@ def pick_files(rootpath, relpaths, header='', picked=None, label=None, keys='', 
     once previews has returned.
 
     Only the files are sent: treepicker adds their dirs, so no tree is built here."""
-    args = ['--typed', '--root', rootpath, '-m'] + _header_args(header)
+    args = ['--typed', '--root', rootpath, '-m', '--print-selection'] + _header_args(header)
     if keys:
         args += ['--expect', keys]
     if selected is not None:
@@ -85,18 +85,16 @@ def pick_files(rootpath, relpaths, header='', picked=None, label=None, keys='', 
                             label=label, previews=previews)
     if picked_paths is None:
         return None
-    key = None
+    key = ''
     if keys:
-        # The key that ended it first (none for Enter), and then the selected node
+        # The key that ended it first (none for Enter)
         key, picked_paths = picked_paths[0], picked_paths[1:]
-        if key:
-            selected, picked_paths = picked_paths[0], picked_paths[1:]
+    # Then the selected node
+    selected, picked_paths = picked_paths[0], picked_paths[1:]
     # What's picked includes the dirs whose files all are
     files = set(relpaths)
-    picked_files = [path for path in picked_paths if path in files]
-    if key:
-        return KeyPressed(key, '' if selected == '.' else selected, picked_files)
-    return picked_files
+    return Picked(key, '' if selected == '.' else selected,
+                  [path for path in picked_paths if path in files])
 
 
 def pick_under_dir(dirpath, max_depth=None, dirs_only=False, lazy=False, header=''):

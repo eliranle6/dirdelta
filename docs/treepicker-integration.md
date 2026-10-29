@@ -34,6 +34,9 @@ Like fzf: dirdelta starts `treepicker`, which draws on the terminal itself
 - Showing a picker again with the user's picks: `--picked FILE`, FILE
   holding the paths treepicker printed, and `--select PATH` to start on the
   node it was on.
+- The file picker always prints the selected node first (`--print-selection`,
+  after `--expect`'s key), so after an action dirdelta shows it again where it
+  was (`--select`).
 - A key that ends the file picker for dirdelta to act on the selected node
   (`r`: read the selected folder anew from Drive): `--expect r`. Then the
   output starts with the key pressed (or an empty item for Enter) and, after

@@ -240,6 +240,29 @@ class LocalDiskDirTreeTest(unittest.TestCase):
         self.assertEqual(tree.file_size('y.txt'), 5)
         self.assertIsNone(tree.file_size('nope.txt'))
 
+    def test_move_moves_the_file_and_removes_the_dirs_left_empty(self):
+        tree = self._scan(['old/x.txt', 'keep/y.txt'])
+        with mock.patch('dirdelta.dryrun.DRYRUN', False), mock.patch('dirdelta.messages.print_line'):
+            self.assertEqual(tree.move_files([('old/x.txt', 'new/sub/x.txt')]),
+                             [('old/x.txt', 'new/sub/x.txt')])
+        self.assertTrue(os.path.isfile(os.path.join(self.src_root, 'new/sub/x.txt')))
+        self.assertFalse(os.path.exists(os.path.join(self.src_root, 'old')))
+        self.assertIsNotNone(tree.get_node('new/sub/x.txt'))
+        self.assertTrue(tree.has_file('new/sub/x.txt'))
+        self.assertFalse(tree.has_file('old/x.txt'))
+
+    def test_move_never_overwrites(self):
+        tree = self._scan(['x.txt', 'y.txt'])
+        with mock.patch('dirdelta.dryrun.DRYRUN', False), mock.patch('dirdelta.messages.print_line'):
+            self.assertEqual(tree.move_files([('x.txt', 'y.txt')]), [])
+        self.assertTrue(os.path.isfile(os.path.join(self.src_root, 'x.txt')))
+
+    def test_dry_run_moves_nothing(self):
+        tree = self._scan(['x.txt'])
+        with mock.patch('dirdelta.dryrun.DRYRUN', True), mock.patch('dirdelta.messages.print_line'):
+            self.assertEqual(tree.move_files([('x.txt', 'y.txt')]), [])
+        self.assertTrue(os.path.isfile(os.path.join(self.src_root, 'x.txt')))
+
     def test_files_by_name_max_depth(self):
         self._scan(['top.txt', 'a/b/deep.txt'])
         tree = localdiskdirtree.LocalDiskDirTree(self.src_root, silent=True, max_depth=2)

@@ -54,72 +54,121 @@ def refresh_replica(replica, relpath=''):
     return False
 
 
+def is_local(replica):
+    return isinstance(replica, localdiskdirtree.LocalDiskDirTree)
+
+
+def is_writable(replica):
+    """Whether files can be copied into the replica, removed from it and moved in it: Drive, or a
+    local dir with write permission (none on a read-only mount)"""
+    return not is_local(replica) or os.access(replica.fullpath(), os.W_OK)
+
+
+def can_copy(src, dst):
+    """Whether src's files can be copied into dst: between a local dir and anything (not within
+    Drive), into a writable one"""
+    return is_writable(dst) and (is_local(src) or is_local(dst))
+
+
+def _files(count):
+    return "1 file" if count == 1 else "%d files" % (count,)
+
+
 class InteractiveDirSync(object):
-    """Copying or removing the files in src that aren't in dst, picked by the user."""
+    """The files in src that aren't in dst, which the user picks and then copies to dst, removes
+    from src, or renames to match where the other replica has them (see elsewhere.py), again and
+    again, until they're done."""
     COPY = 'copy'
     REMOVE = 'remove'
-    # The label of the file picker and the confirmation, by action, so what the picks are for shows
-    # at a glance (magenta, not red: red is LIVE's)
-    LABELS = {COPY: ('COPY', 'blue'), REMOVE: ('REMOVE', 'magenta')}
+    # Moving dst's files of the same names to the picked files' paths, or the picked files to
+    # theirs
+    RENAME_IN_DST = 'rename in dst'
+    RENAME_IN_SRC = 'rename in src'
+    # The label of each action's confirmation, so what it's for shows at a glance (magenta, not
+    # red: red is LIVE's)
+    LABELS = {COPY: ('COPY', 'blue'), REMOVE: ('REMOVE', 'magenta'),
+              RENAME_IN_DST: ('RENAME', 'cyan'), RENAME_IN_SRC: ('RENAME', 'cyan')}
 
-    # The confirmation menu's options: No first, so it's the one selected at first
+    # The action menu's first option, so it's the one selected at first: doing nothing
+    NOTHING = "Nothing: back to the files"
+    # The confirmations' options: No first, so it's the one selected at first
     CONFIRM_NO = 'No'
     CONFIRM_YES = 'Yes'
+    # The second confirmation of a removal's
+    CONFIRM_SURE = 'Yes, remove them'
     # How many of the picked files the confirmation lists
     MAX_FILES_LISTED = 5
     # The file picker's key that reads the selected folder anew from Drive, when a replica is Drive's
     REFRESH_KEY = 'r'
 
-    def __init__(self, src, dst, missing=None):
+    def __init__(self, src, dst, missing=None, src_index=None, dst_index=None):
         """missing: a future (concurrent.futures.Future) of find_missing(src, dst), e.g. found in
-        the background, to use rather than finding it again"""
+        the background, to use rather than finding it again. src_index, dst_index: the replicas'
+        elsewhere.Index, kept by the caller so they're built once, and kept up to date here."""
         self._src = src
         self._dst = dst
         self._missing_future = missing
-        # Whether a replica was read anew from Drive (so what each lacks may have changed)
-        self.was_refreshed = False
+        self.src_index = src_index or elsewhere.Index(src)
+        self.dst_index = dst_index or elsewhere.Index(dst)
+        # Whether the replicas' files changed here (copied, removed, moved, or read anew from
+        # Drive), so what each lacks may have
+        self.has_changed = False
 
-    def view_diff(self):
-        """Show the files in src that aren't in dst"""
-        missing = dirtree.DirTree(self._src.fullpath())
-        for relpath in self._missing():
-            missing.add_file_by_relpath(relpath)
-        header = "Files in %s, which are not in %s:" % (self._src.displayname(),
-                                                          self._dst.displayname())
-        picker.pick_from_tree(missing, header=header, root_name=self._src.displayname())
-
-    def sync(self, action):
-        """Let the user pick files of src that aren't in dst, then copy them to dst (action COPY) or
-        remove them from src (REMOVE), once the user confirms. If the user doesn't confirm, they pick
-        again, starting from what they picked."""
+    def browse(self):
+        """Let the user pick some of the files of src that dst lacks, then choose what to do with
+        them (_act()): after that, or after choosing nothing, pick again, where they were, with the
+        files done no longer there (or, in a dry run, no longer picked), until they quit."""
         missing = self._missing()
         if not missing:
-            self._say_nothing_to(action)
+            self._say_nothing()
             return
-        picked = None
+        clouds = [replica for replica in (self._src, self._dst)
+                  if isinstance(replica, clouddirtree.CloudDirTree)]
+        header = ("Files in %s, which are not in %s. Pick some, then choose what to do with them:\n"
+                  "(To pick a file, press Space. When finished, press Enter.%s)" %
+                  (self._src.displayname(), self._dst.displayname(),
+                   " %s: read the selected folder anew from Google Drive." % (self.REFRESH_KEY,)
+                   if clouds else ""))
+        picked, selected = [], None
         while True:
-            picked, missing = self._chooseFiles(missing, action, picked)
-            if not picked:
+            chosen = picker.pick_files(
+                self._src.displayname(), missing, header=header, picked=picked,
+                keys=self.REFRESH_KEY if clouds else '', selected=selected,
+                previews=functools.partial(elsewhere.find_previews, missing, self._src, self.dst_index))
+            if chosen is None:
                 return
-            if self._confirm(action, picked):
-                break
-
-        files = [self._file_entry(relpath) for relpath in picked]
-        if action == self.COPY:
-            title = "Copying %d files from %s to %s" % (len(files), self._src.displayname(),
-                                                       self._dst.displayname())
-        else:
-            title = "Removing %d files from %s" % (len(files), self._src.displayname())
-        if dryrun.DRYRUN:
-            title += " (a dry run)"
-        with messages.progress_screen(title, dryrun.label()):
-            if action == self.COPY:
-                self._copy(files)
+            selected = chosen.selected
+            if chosen.key == self.REFRESH_KEY:
+                done = []
+                for replica in clouds:
+                    if refresh_replica(replica, selected):
+                        self.has_changed = True
+                        self._index_of(replica).invalidate()
+                is_changed = self.has_changed
             else:
-                self._remove(files)
+                done = self._act(chosen.files)
+                if done is None:
+                    picked = chosen.files
+                    continue
+                is_changed = bool(done) and not dryrun.DRYRUN
+                self.has_changed = self.has_changed or is_changed
+            if is_changed:
+                # Diffed anew (the trees as they are now: no background finding)
+                self._missing_future = None
+                missing = self._missing()
+                if not missing:
+                    self._say_nothing()
+                    return
+            still_missing = set(missing)
+            done = set(done)
+            picked = [relpath for relpath in chosen.files if relpath in still_missing and relpath not in done]
+            selected = _shown(selected, missing)
 
-    def _say_nothing_to(self, action):
-        messages.show("Nothing to %s" % (action,),
+    def _index_of(self, replica):
+        return self.src_index if replica is self._src else self.dst_index
+
+    def _say_nothing(self):
+        messages.show("Nothing to do",
                       ["%s has all of %s's files." % (self._dst.displayname(), self._src.displayname())],
                       dryrun.label())
 
@@ -135,45 +184,110 @@ class InteractiveDirSync(object):
                           'red')
         return missing.relpaths
 
-    def _chooseFiles(self, missing, action, picked=None):
-        """Let the user pick some of the missing files (picked start picked). Returns them (or None,
-        if the user quit) and what's missing, which a refresh (the REFRESH_KEY) changes: the picker
-        comes back where it was, with what's still missing of the picks picked. Beside it, where dst
-        has files of the selected file's name (see elsewhere.py), in case it's moved, not missing:
-        found while it's shown, on another thread."""
-        purpose = ("copy to %s" % (self._dst.displayname(),) if action == self.COPY else
-                   "remove from %s" % (self._src.displayname(),))
-        clouds = self._cloud_replicas()
-        tree_header = ("Files in %s, which are not in %s. Pick the ones to %s:\n"
-                       "(To select a file, press Space. When finished, press Enter.%s)" %
-                       (self._src.displayname(), self._dst.displayname(), purpose,
-                        " %s: read the selected folder anew from Google Drive." % (self.REFRESH_KEY,)
-                        if clouds else ""))
-        selected = None
-        while True:
-            chosen = picker.pick_files(self._src.displayname(), missing, header=tree_header,
-                                       picked=picked, label=self.LABELS[action],
-                                       keys=self.REFRESH_KEY if clouds else '', selected=selected,
-                                       previews=functools.partial(elsewhere.find_previews, missing,
-                                                                  self._src, self._dst))
-            if not isinstance(chosen, picker.KeyPressed):
-                return chosen, missing
-            selected = chosen.selected
-            for replica in clouds:
-                self.was_refreshed = refresh_replica(replica, selected) or self.was_refreshed
-            # Diffed anew (the trees as they are now: no background finding)
-            self._missing_future = None
-            missing = self._missing()
-            if not missing:
-                self._say_nothing_to(action)
-                return None, missing
-            still_missing = set(missing)
-            picked = [relpath for relpath in chosen.picked if relpath in still_missing]
+    def _act(self, relpaths):
+        """Let the user choose what to do with the picked files at relpaths, and do it once they
+        confirm. Returns the ones done (in a dry run, the ones it would have done), or None if the
+        user chose nothing (or didn't confirm)."""
+        if not self.dst_index.is_built():
+            messages.print_line("Looking for files of the same names in %s..." % (self._dst.displayname(),))
+        renames = elsewhere.sure_matches(relpaths, self._src, self.dst_index)
+        # Moving dst's matches to the picked files' paths, or the picked files to the matches'
+        moves = {
+            self.RENAME_IN_DST: [(match, relpath) for relpath, match in renames.items()
+                                 if self._dst.cant_move(match) is None],
+            self.RENAME_IN_SRC: [(relpath, match) for relpath, match in renames.items()
+                                 if self._src.cant_move(relpath) is None],
+        }
+        src_name, dst_name = self._src.displayname(), self._dst.displayname()
+        count = _files(len(relpaths))
+        options = {
+            self.COPY: ("Copy the %s to %s" % (count, dst_name),
+                        None if can_copy(self._src, self._dst) else
+                        "can't: %s" % ("it's read-only" if not is_writable(self._dst) else
+                                       "both are Google Drive's",)),
+            self.REMOVE: ("Remove the %s from %s" % (count, src_name),
+                          None if is_writable(self._src) else "can't: it's read-only"),
+            # Each counts the picked files with a match that's surely them, moved. The replica
+            # last, as in the others, so a long path doesn't hide what it does.
+            self.RENAME_IN_DST: ("Rename the %s matching these to these paths, in %s" %
+                                 (_files(len(moves[self.RENAME_IN_DST])), dst_name),
+                                 self._cant_rename(self._dst, moves[self.RENAME_IN_DST])),
+            self.RENAME_IN_SRC: ("Rename %s of these to their matches' paths, in %s" %
+                                 (_files(len(moves[self.RENAME_IN_SRC])), src_name),
+                                 self._cant_rename(self._src, moves[self.RENAME_IN_SRC])),
+        }
+        disabled = {label: picker.Disabled("%s: %s" % (label, reason))
+                    for label, reason in options.values() if reason is not None}
+        header = ("%s picked in %s, which %s lacks. What to do with them?" %
+                  (count, src_name, dst_name))
+        answer = picker.pick_option([self.NOTHING] + [label for label, _ in options.values()],
+                                    header=header, shown_as=lambda: disabled)
+        action = next((action for action, (label, _) in options.items() if label == answer), None)
+        if action is None:
+            return None
+        if action in (self.RENAME_IN_DST, self.RENAME_IN_SRC):
+            return self._rename(action, moves[action])
+        if not self._confirm(action, relpaths):
+            return None
+        files = [self._file_entry(relpath) for relpath in relpaths]
+        if action == self.COPY:
+            title = "Copying %s from %s to %s" % (count, src_name, dst_name)
+        else:
+            title = "Removing %s from %s" % (count, src_name)
+        if dryrun.DRYRUN:
+            title += " (a dry run)"
+        with messages.progress_screen(title, dryrun.label()):
+            if action == self.COPY:
+                self._copy(files)
+            else:
+                self._remove(files)
+        if dryrun.DRYRUN:
+            return relpaths
+        if action == self.COPY:
+            done = [relpath for relpath in relpaths if self._dst.has_file(relpath)]
+            for relpath in done:
+                self.dst_index.add(relpath, self._src.file_size(relpath))
+        else:
+            done = [relpath for relpath in relpaths if not self._src.has_file(relpath)]
+            for relpath in done:
+                self.src_index.remove(relpath)
+        return done
 
-    def _cloud_replicas(self):
-        """The replicas that are Drive's, so can be read anew from it"""
-        return [replica for replica in (self._src, self._dst)
-                if isinstance(replica, clouddirtree.CloudDirTree)]
+    def _cant_rename(self, replica, moves):
+        if not is_writable(replica):
+            return "can't: it's read-only"
+        if not moves:
+            return "none of these has a file of its name there that's surely it"
+        return None
+
+    def _rename(self, action, moves):
+        """Move files, each of moves (relpath, new_relpath), in dst (RENAME_IN_DST) or src, once the
+        user confirms. Returns the picked files done (or that would have been, in a dry run), or None
+        if the user didn't confirm."""
+        replica, index = ((self._dst, self.dst_index) if action == self.RENAME_IN_DST else
+                          (self._src, self.src_index))
+        # The picked file of each move
+        picked_of = {move: move[1] if action == self.RENAME_IN_DST else move[0] for move in moves}
+        lines = ["Move %s in %s?" % (_files(len(moves)), replica.displayname())]
+        lines += ["  %s -> %s" % move for move in moves[:self.MAX_FILES_LISTED]]
+        if len(moves) > self.MAX_FILES_LISTED:
+            lines.append("  (and %d more)" % (len(moves) - self.MAX_FILES_LISTED,))
+        if dryrun.DRYRUN:
+            lines.append("(A dry run: nothing on disk will change. DRYRUN=0 changes files.)")
+        answer = picker.pick_option([self.CONFIRM_NO, self.CONFIRM_YES], header='\n'.join(lines),
+                                    label=self.LABELS[action])
+        if answer != self.CONFIRM_YES:
+            return None
+        title = "Moving %s in %s" % (_files(len(moves)), replica.displayname())
+        if dryrun.DRYRUN:
+            title += " (a dry run)"
+        with messages.progress_screen(title, dryrun.label()):
+            done = replica.move_files(moves)
+        if dryrun.DRYRUN:
+            return [picked_of[move] for move in moves]
+        for relpath, new_relpath in done:
+            index.move(relpath, new_relpath)
+        return [picked_of[move] for move in done]
 
     def _file_entry(self, relpath):
         """The entry of src's file at relpath, for copying or removing it"""
@@ -181,11 +295,12 @@ class InteractiveDirSync(object):
                                  os.path.join(self._src.fullpath(), relpath))
 
     def _confirm(self, action, relpaths):
+        """Whether the user confirms copying or removing the files at relpaths; a removal, twice"""
         if action == self.COPY:
-            question = "Copy %d files from %s to %s?" % (len(relpaths), self._src.displayname(),
-                                                         self._dst.displayname())
+            question = "Copy %s from %s to %s?" % (_files(len(relpaths)), self._src.displayname(),
+                                                   self._dst.displayname())
         else:
-            question = "Remove %d files from %s?" % (len(relpaths), self._src.displayname())
+            question = "Remove %s from %s?" % (_files(len(relpaths)), self._src.displayname())
         lines = [question] + ["  %s" % (relpath,) for relpath in relpaths[:self.MAX_FILES_LISTED]]
         if len(relpaths) > self.MAX_FILES_LISTED:
             lines.append("  (and %d more)" % (len(relpaths) - self.MAX_FILES_LISTED,))
@@ -195,7 +310,16 @@ class InteractiveDirSync(object):
             lines.append("(A dry run: nothing on disk will change. DRYRUN=0 changes files.)")
         answer = picker.pick_option([self.CONFIRM_NO, self.CONFIRM_YES], header='\n'.join(lines),
                                     label=self.LABELS[action])
-        return answer == self.CONFIRM_YES
+        if answer != self.CONFIRM_YES:
+            return False
+        if action == self.REMOVE:
+            sure = ["Are you sure? %s will be removed from %s%s." %
+                    (_files(len(relpaths)), self._src.displayname(),
+                     " (to Drive's trash)" if not is_local(self._src) else ", for good")]
+            answer = picker.pick_option([self.CONFIRM_NO, self.CONFIRM_SURE], header='\n'.join(sure),
+                                        label=self.LABELS[action])
+            return answer == self.CONFIRM_SURE
+        return True
 
     def _copy(self, files):
         _dirtree = dirtree.DirTree.from_file_entries(files, self._src.fullpath())
@@ -204,3 +328,14 @@ class InteractiveDirSync(object):
 
     def _remove(self, files):
         self._src.remove_files(files)
+
+
+def _shown(relpath, missing):
+    """relpath (a picker's selection), or the closest dir above it that the picker of missing (files)
+    still shows ('' the root), if it's gone"""
+    while relpath:
+        prefix = relpath + '/'
+        if any(path == relpath or path.startswith(prefix) for path in missing):
+            return relpath
+        relpath = os.path.dirname(relpath)
+    return relpath

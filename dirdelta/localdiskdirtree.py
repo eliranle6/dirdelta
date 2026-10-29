@@ -5,6 +5,8 @@ import subprocess
 
 from dirdelta import dirtree
 from dirdelta import dryrun
+from dirdelta import entries
+from dirdelta import exif
 from dirdelta import messages
 
 
@@ -69,6 +71,13 @@ class LocalDiskDirTree(dirtree.DirTree):
             return os.lstat(os.path.join(self._rootpath, relpath)).st_size
         except OSError:
             return None
+
+    def date_taken(self, relpath):
+        return exif.date_taken(os.path.join(self._rootpath, relpath))
+
+    def has_file(self, relpath):
+        # On disk: the tree may not be scanned (see dirdiff.py)
+        return os.path.isfile(os.path.join(self._rootpath, relpath))
 
     def files_by_name(self, progress=None):
         """As DirTree's, but from a find of the dir (down to max_depth levels), with its files'
@@ -171,6 +180,26 @@ class LocalDiskDirTree(dirtree.DirTree):
 
     def removal_notes(self, relpaths):
         return ["Dirs left empty are removed too."]
+
+    def _move_file(self, relpath, new_relpath):
+        path = os.path.join(self._rootpath, relpath)
+        new_path = os.path.join(self._rootpath, new_relpath)
+        if os.path.lexists(new_path):
+            messages.print_line("Skipped %s: %s is there already" % (relpath, new_relpath), "yellow")
+            return False
+        try:
+            os.makedirs(os.path.dirname(new_path), exist_ok=True)
+            os.rename(path, new_path)
+        except OSError as error:
+            messages.print_line("Move failed: %s" % (error,), "red")
+            return False
+        # The tree may not have it, if it wasn't scanned (see dirdiff.py)
+        if relpath in self:
+            self.remove_node(relpath)
+            self.add_file_by_relpath(new_relpath)
+        # As a removal does
+        self._remove_emptied_dirs([entries.FileEntry(os.path.basename(relpath), relpath, path)])
+        return True
 
     def _remove_file(self, file_entry):
         os.unlink(file_entry.full_filesystem_path())

@@ -52,15 +52,16 @@ has the terminal while it's open, and
 what's to be read in between (warnings, "Nothing to copy", an action's
 report) is on a full screen that waits for Enter (`messages.show()`,
 `messages.progress_screen()`); plain progress lines ("Scanning...") just
-print. Copy and Remove run on the progress screen, stoppable with Ctrl-C,
-and ask for confirmation first. A "cloud" path is any path whose
+print. Copy, Remove and Rename (chosen after picking files in a
+direction's picker, which then comes back) run on the progress screen,
+stoppable with Ctrl-C, and ask for confirmation first (Remove twice). A "cloud" path is any path whose
 first component is literally `cloud` (see `paths.py`).
 
 Env vars that change execution mode:
 - `DIRDELTA_PICKER`, `DIRDELTA_DIRDIFF` — the treepicker and dirdiff programs
   to run (default, `programs.find()`: the first of the program next to the
   running python, in `lib/treepicker/build/`, on `PATH`)
-- `DRYRUN=0` — actually change files: Copy and Remove (`dryrun.py`, used by
+- `DRYRUN=0` — actually change files: Copy, Remove and Rename (`dryrun.py`, used by
   `localdiskdirtree.py`). Every screen shows the mode: "DRY RUN" in green, or
   "LIVE" in red.
   Any other value, or unset, means a dry run: nothing on disk changes (no
@@ -130,7 +131,7 @@ module:
 PYTHONPATH=.:tests .venv/bin/python3 -m unittest test_interactive_dir_sync -v
 ```
 
-Every module has a test file (278 tests, all passing as of 2026-10-29) except
+Every module has a test file (305 tests, all passing as of 2026-10-29) except
 the thin wiring in `main.py`/`dirsync_main.py`, covered only by running the
 app. Shared fakes:
 - `tests/helpers.py`: `scripted_option_picker` / `scripted_tree_picker` /

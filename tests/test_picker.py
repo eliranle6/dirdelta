@@ -144,13 +144,17 @@ class PickerTest(unittest.TestCase):
         picker.pick_files('/some/root', ['a/1.txt', 'b/2.txt'], header='Pick\nfiles')
         args, items = self.call()
         self.assertEqual(items, ['f a/1.txt', 'f b/2.txt'])
-        self.assertEqual(args, ['-0', '--typed', '--root', '/some/root', '-m', '--header', 'Pick\nfiles', '-'])
+        self.assertEqual(args, ['-0', '--typed', '--root', '/some/root', '-m', '--print-selection',
+                                '--header', 'Pick\nfiles', '-'])
 
-    def test_pick_files_returns_only_files(self):
-        # A dir is printed when all its files are picked
-        self.answer('b|b/2.txt|b/sub|b/sub/3.txt')
+    def test_pick_files_returns_only_files_and_the_selection(self):
+        # The selection first; a dir is printed when all its files are picked
+        self.answer('b/sub|b|b/2.txt|b/sub|b/sub/3.txt')
         picked = picker.pick_files('/some/root', ['a/1.txt', 'b/2.txt', 'b/sub/3.txt'])
-        self.assertEqual(picked, ['b/2.txt', 'b/sub/3.txt'])
+        self.assertEqual(picked, picker.Picked('', 'b/sub', ['b/2.txt', 'b/sub/3.txt']))
+        # The root is ''
+        self.answer('.|a/1.txt')
+        self.assertEqual(picker.pick_files('/r', ['a/1.txt']).selected, '')
 
     def test_picked_files_start_picked(self):
         self.answer('b/2.txt')
@@ -169,16 +173,14 @@ class PickerTest(unittest.TestCase):
     def test_pick_files_with_keys_says_which_ended_it(self):
         self.answer('r|b/sub|b/2.txt')
         self.assertEqual(picker.pick_files('/r', ['a/1.txt', 'b/2.txt'], keys='r'),
-                         picker.KeyPressed('r', 'b/sub', ['b/2.txt']))
+                         picker.Picked('r', 'b/sub', ['b/2.txt']))
         args, _ = self.call()
         self.assertEqual(args[args.index('--expect') + 1], 'r')
-        # The root is ''
-        self.answer('r|.')
-        self.assertEqual(picker.pick_files('/r', ['a/1.txt'], keys='r'), picker.KeyPressed('r', '', []))
 
     def test_pick_files_with_keys_ended_by_enter_returns_the_picks(self):
-        self.answer('|a/1.txt')
-        self.assertEqual(picker.pick_files('/r', ['a/1.txt', 'b/2.txt'], keys='r'), ['a/1.txt'])
+        self.answer('|a|a/1.txt')
+        self.assertEqual(picker.pick_files('/r', ['a/1.txt', 'b/2.txt'], keys='r'),
+                         picker.Picked('', 'a', ['a/1.txt']))
 
     def test_pick_files_without_keys_has_no_expect(self):
         self.answer('a/1.txt')
@@ -322,7 +324,8 @@ class PickerTest(unittest.TestCase):
         tree.add_file_by_relpath(name)
         self.answer(name)
         self.assertEqual([entry.name for entry in picker.pick_from_tree(tree)], [name])
-        self.assertEqual(picker.pick_files('/root', [name]), [name])
+        self.answer('.|' + name)
+        self.assertEqual(picker.pick_files('/root', [name]).files, [name])
         _, items = self.call()
         self.assertEqual(items, ['f ' + name])
 

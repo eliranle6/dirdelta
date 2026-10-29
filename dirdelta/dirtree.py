@@ -15,9 +15,9 @@ class DirTree(object):
     It holds a treelib.Tree, rather than being one, so nodes are only added through its own methods
     (add_file_by_relpath() and the like), which keep the entries' paths consistent.
 
-    A tree of a place that files can be copied into and removed from has _copy_file() and
-    _remove_file(), for copy_inner_entries_from_dirtree() and remove_files(), and fetch_file(), to
-    copy its files elsewhere. One that copies or removes several files at once has _copy_files()
+    A tree of a place that files can be copied into, removed from and moved in has _copy_file(),
+    _remove_file() and _move_file(), for copy_inner_entries_from_dirtree(), remove_files() and
+    move_files(), and fetch_file(), to copy its files elsewhere. One that copies or removes several files at once has _copy_files()
     or _remove_files() too, and one with something to say before a copy from it or a removal
     (in the confirmation) has copy_notes() or removal_notes().
     """
@@ -171,6 +171,29 @@ class DirTree(object):
             messages.print_line("Remove %s: removed %d of %d files from %s%s" % (
                 ended, nr_removed, len(file_entries), self.displayname(), self.REMOVED_TO))
 
+    def move_files(self, moves):
+        """Move files within the tree: each of moves is (relpath, new_relpath). Returns the moves
+        done. A dry run changes nothing (and returns none)."""
+        verb = "Dry run, not moving" if dryrun.DRYRUN else "Moving"
+        done = []
+        is_stopped = False
+        try:
+            for number, (relpath, new_relpath) in enumerate(moves, 1):
+                messages.print_line("%s %s to %s (%d out of %d)" % (verb, relpath, new_relpath, number,
+                                                                    len(moves)))
+                if not dryrun.DRYRUN and self._move_file(relpath, new_relpath):
+                    done.append((relpath, new_relpath))
+        except KeyboardInterrupt:
+            messages.note_stopped()
+            is_stopped = True
+        ended = "stopped" if is_stopped else "complete"
+        if dryrun.DRYRUN:
+            messages.print_line("Dry run %s: nothing was moved in %s (DRYRUN=0 moves)" % (ended, self.displayname()))
+        else:
+            messages.print_line("Move %s: moved %d of %d files in %s" % (ended, len(done), len(moves),
+                                                                       self.displayname()))
+        return done
+
     def _copy_files(self, files, source, starting, copied):
         """Copy the files (see _copy_file()), calling starting(file_entry) as each one's copy
         starts, and copied(whether it was copied) as it ends. One at a time, unless a tree does it
@@ -209,6 +232,15 @@ class DirTree(object):
         """Remove file_entry, and its node. Returns whether it was removed."""
         raise NotImplementedError("Can't remove files from %s" % (self.displayname(),))
 
+    def _move_file(self, relpath, new_relpath):
+        """Move the file at relpath to new_relpath (where there's none), and its node. Returns
+        whether it was moved (if not, says why)."""
+        raise NotImplementedError("Can't move files in %s" % (self.displayname(),))
+
+    def cant_move(self, relpath):
+        """Why the file at relpath can't be moved (move_files()), or None if it can"""
+        return None
+
     def fetch_file(self, relpath, local_path):
         """Copy the file at relpath to local_path, on the local disk"""
         raise NotImplementedError("Can't copy files from %s" % (self.displayname(),))
@@ -221,6 +253,16 @@ class DirTree(object):
     def file_size(self, relpath):
         """The size in bytes of the file at relpath, or None if it isn't known"""
         return None
+
+    def date_taken(self, relpath):
+        """When the photo at relpath was taken ('YYYY-MM-DD HH:MM:SS'), or None if it isn't one, or
+        that isn't known"""
+        return None
+
+    def has_file(self, relpath):
+        """Whether there's a file at relpath (e.g. after copying it here, or removing it)"""
+        node = self.get_node(relpath)
+        return node is not None and isinstance(node.data, entries.FileEntry)
 
     # How many files files_by_name() goes through between its progress() calls
     FILES_PER_PROGRESS = 1000

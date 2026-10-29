@@ -2,6 +2,8 @@
 import os
 from unittest import mock
 
+from dirdelta import picker
+
 
 def scripted_option_picker(answers):
     """Patch picker.pick_option so each call returns the next of the given labels."""
@@ -17,9 +19,25 @@ def scripted_tree_picker(choose):
 
 def scripted_files_picker(choose):
     """Patch picker.pick_files so it returns choose(relpaths), called with the relpaths it was
-    given."""
-    return mock.patch('dirdelta.picker.pick_files',
-                      side_effect=lambda rootpath, relpaths, *_, **__: choose(relpaths))
+    given: a picker.Picked, or a list of the picked files (Enter on the root), or None (quitting)."""
+    def pick_files(rootpath, relpaths, *_, **__):
+        chosen = choose(relpaths)
+        return picker.Picked('', '', chosen) if isinstance(chosen, list) else chosen
+    return mock.patch('dirdelta.picker.pick_files', side_effect=pick_files)
+
+
+def answering_option_picker(answers):
+    """Patch picker.pick_option so each call returns the option that the next of answers is, or
+    starts with (e.g. 'Copy' for "Copy the 2 files to ..."); None for quitting. Its calls are the
+    mock's."""
+    answers = list(answers)
+
+    def pick_option(options, *_, **__):
+        answer = answers.pop(0)
+        if answer is None:
+            return None
+        return next(option for option in options if option == answer or option.startswith(answer))
+    return mock.patch('dirdelta.picker.pick_option', side_effect=pick_option)
 
 
 def scripted_dir_picker(picked_path):

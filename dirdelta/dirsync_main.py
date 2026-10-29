@@ -1,10 +1,10 @@
 import concurrent.futures
-import os
 import threading
 import time
 
 from dirdelta import clouddirtree
 from dirdelta import dryrun
+from dirdelta import elsewhere
 from dirdelta import interactive_dir_sync
 from dirdelta import localdiskdirtree
 from dirdelta import messages
@@ -49,31 +49,17 @@ def _sync(replica_a, replica_b, replica_a_path, replica_b_path, known_replicas=N
     read_only = _read_only_lines(replica_a, replica_a_path) + _read_only_lines(replica_b, replica_b_path)
     if read_only:
         messages.show("Read-only", read_only, dryrun.label())
-    # Each way, what can be done with the files in one replica that aren't in the other: copy them
-    # into a writable one (between a local dir and anything: not within Drive) and remove them
-    # (from a writable one). Their pickers
-    # show those files, so viewing them is offered only when neither can be done. Each way's
-    # files are found once, in the background, and each option says how many there are once they
-    # are.
-    ways = [_Way(replica_a, replica_b), _Way(replica_b, replica_a)]
-    copies, removes, views = [], [], []
+    # Each way, the files in one replica that aren't in the other, to pick and then copy, remove or
+    # rename (interactive_dir_sync): found once, in the background, with each option saying how
+    # many there are once they are. Each replica's files by name (for finding where the other has a
+    # file of a name) are kept, so they're listed once.
+    indexes = {replica: elsewhere.Index(replica) for replica in (replica_a, replica_b)}
+    ways = [_Way(replica_a, replica_b, indexes), _Way(replica_b, replica_a, indexes)]
+    actions = {}
     for way, src_path, dst_path in ((ways[0], replica_a_path, replica_b_path),
                                     (ways[1], replica_b_path, replica_a_path)):
-        can_copy = _is_writable(way.dst) and (_is_local(way.src) or _is_local(way.dst))
-        if can_copy:
-            copies.append(_Action("Copy files from %s to %s" % (src_path, dst_path), way,
-                                  lambda count: "the %s it lacks" % (_files(count),),
-                                  "nothing to copy, it has them all",
-                                  interactive_dir_sync.InteractiveDirSync.COPY))
-        if _is_writable(way.src):
-            removes.append(_Action("Remove files from %s" % (src_path,), way,
-                                   lambda count, dst_path=dst_path: "the %s %s lacks" % (_files(count), dst_path),
-                                   "nothing to remove, %s has them all" % (dst_path,),
-                                   interactive_dir_sync.InteractiveDirSync.REMOVE))
-        elif not can_copy:
-            views.append(_Action("View files in %s, not %s" % (src_path, dst_path), way,
-                                 _files, "nothing to view, %s has them all" % (dst_path,)))
-    actions = {action.label: action for action in copies + removes + views}
+        label = "Files in %s, not in %s" % (src_path, dst_path)
+        actions[label] = _Action(label, way, "none, %s has them all" % (dst_path,))
     # A cloud replica's folder can be read anew from Drive, if Drive changed since the cache was made
     refreshes = {"Refresh %s from Google Drive" % (path,): replica
                  for replica, path in ((replica_a, replica_a_path), (replica_b, replica_b_path))
@@ -103,13 +89,13 @@ def _sync(replica_a, replica_b, replica_a_path, replica_b_path, known_replicas=N
         concurrent.futures.wait([way.missing for way in ways])
         if option in refreshes:
             if interactive_dir_sync.refresh_replica(refreshes[option]):
+                indexes[refreshes[option]].invalidate()
                 for way in ways:
                     way.find_missing()
             continue
-        was_refreshed = actions[option].run()
-        # Copying and removing change the files (unless it's a dry run), and so what each lacks, and
-        # so does reading a replica anew from Drive (in the file picker)
-        if was_refreshed or (actions[option].action is not None and not dryrun.DRYRUN):
+        # Copying, removing and renaming change the files (unless it's a dry run), and so what each
+        # lacks, and so does reading a replica anew from Drive (in the file picker)
+        if actions[option].run():
             for way in ways:
                 way.find_missing()
 
@@ -124,10 +110,11 @@ DOTS_INTERVAL = 0.4
 
 class _Way(object):
     """One way of the sync: src's files that dst lacks (a future of Missing), found in the
-    background"""
-    def __init__(self, src, dst):
+    background, and the replicas' indexes (elsewhere.Index, by replica)"""
+    def __init__(self, src, dst, indexes):
         self.src = src
         self.dst = dst
+        self.indexes = indexes
         self.missing = None
 
     def find_missing(self):
@@ -145,15 +132,12 @@ class _Way(object):
 
 
 class _Action(object):
-    """A main menu option: an InteractiveDirSync's sync(action) of a way, or its view_diff() if
-    action is None. describe_count(count) says how many files it's about (e.g. "3 files"), and
-    nothing that there are none, when it can't be picked."""
-    def __init__(self, label, way, describe_count, nothing, action=None):
+    """A main menu option: the files of a way (interactive_dir_sync), nothing saying that there are
+    none, when it can't be picked"""
+    def __init__(self, label, way, nothing):
         self.label = label
         self.way = way
-        self.describe_count = describe_count
         self.nothing = nothing
-        self.action = action
 
     def shown_as(self):
         """The label, with how many files it's about, or that they're still being found. With none,
@@ -168,31 +152,20 @@ class _Action(object):
         count = len(missing.result().relpaths)
         if count == 0:
             return picker.Disabled("%s: %s" % (self.label, self.nothing))
-        return "%s (%s)" % (self.label, self.describe_count(count))
+        return "%s (%s)" % (self.label, _files(count))
 
     def run(self):
-        """Returns whether a replica was read anew from Drive meanwhile"""
-        sync = interactive_dir_sync.InteractiveDirSync(self.way.src, self.way.dst, self.way.missing)
-        if self.action is None:
-            sync.view_diff()
-        else:
-            sync.sync(self.action)
-        return sync.was_refreshed
-
-
-def _is_local(replica):
-    return isinstance(replica, localdiskdirtree.LocalDiskDirTree)
-
-
-def _is_writable(replica):
-    """Whether files can be copied into the replica and removed from it: Drive, or a local dir with
-    write permission (none on a read-only mount)"""
-    return not _is_local(replica) or os.access(replica.fullpath(), os.W_OK)
+        """Returns whether the replicas' files changed meanwhile (see InteractiveDirSync)"""
+        way = self.way
+        sync = interactive_dir_sync.InteractiveDirSync(way.src, way.dst, way.missing,
+                                                       way.indexes[way.src], way.indexes[way.dst])
+        sync.browse()
+        return sync.has_changed
 
 
 def _read_only_lines(replica, replica_path):
-    """Why nothing will be copied into or removed from the replica, if it's read-only"""
-    if not _is_writable(replica):
-        return ["%s is read-only (no write permission): dirdelta won't copy files into it or "
-                "remove files from it." % (replica_path,)]
+    """Why nothing will be copied into, removed from or moved in the replica, if it's read-only"""
+    if not interactive_dir_sync.is_writable(replica):
+        return ["%s is read-only (no write permission): dirdelta won't copy files into it, "
+                "remove files from it or move them in it." % (replica_path,)]
     return []

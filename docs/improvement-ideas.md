@@ -5,30 +5,27 @@ and 2026-10-24 reviews' #1-25; naming a cloud replica as given, the COPY/REMOVE 
 out an option with nothing to do, faster uploads, and trashing whole Drive folders, 2026-10-27;
 refreshing a cloud folder at a time: at the start, from the main menu, or with `r` in the file
 picker, 2026-10-29; showing where the other replica has a file of the same name, beside the file
-picker, 2026-10-29) are in git history. treepicker's own are in `lib/treepicker/docs/improvement-ideas.md`.
+picker, one picker per direction with Copy, Remove and Rename in it, 2026-10-29) are in git history. treepicker's own are in `lib/treepicker/docs/improvement-ideas.md`.
 
-1. **Rename a moved file, rather than copying and removing it.** The diff is by path only, so a
-   file moved (or a dir renamed) in one replica shows up as missing from the other. The Copy and
-   Remove pickers now show, beside the selected file, where the other replica has files of its
-   name, with their sizes, likeliest first (`elsewhere.py`, treepicker's `--preview`, found while
-   the picker is shown, 2026-10-29), so the user can tell a moved file from a missing one. What's
-   left:
-   - A "Rename" action for a file whose match is found, that moves the match in the other
-     replica to this file's path (or this file to the match's), so both have it at one path,
-     rather than a Copy and a Remove. Cheap on both sides: `os.rename` (a move within one disk)
-     locally, and in Drive one `files().update` with the new `name` and
-     `addParents`/`removeParents` (making the folders on the way, like `_folder_id()`), which
-     keeps the file's id, history and sharing, unlike a new upload. The cache gets the change
-     as a line too (the file again, with its new name and parents). The Copy/Remove pickers
-     could say which of their files have a match ("moved?", e.g. by an `--updates` tag), and the
-     confirmation offer Rename for those.
-   - Matching is by name, ordered by size (and "same size" said). A hash would tell same-sized
-     files apart (idea 7): the Drive cache has `sha256Checksum`, a local dir would need to read
-     the file.
+1. **Find moved files better.** The diff is by path only, so a file moved (or a dir renamed) in
+   one replica shows up as missing from the other. Each direction's picker now shows, beside the
+   selected file, where the other replica has files of its name, likeliest first (by size, date
+   taken, and how many of its siblings are there too), and offers Rename for the ones surely moved
+   (`elsewhere.py`, 2026-10-29). What's left:
+   - A hash would tell same-sized files apart (idea 7): the Drive cache has `sha256Checksum`, a
+     local dir would need to read the file (only the same-sized candidates').
+   - Renamed files (another name, the same contents) aren't found: matching is by name. A
+     `{size: [paths]}` index of the big files (whose sizes are nearly unique), confirmed by hash,
+     would find them, as a second section of the column ("same contents, other name").
+   - A local HEIC photo has no date taken (only JPEGs' EXIF is read): HEIC's is in an ISO BMFF
+     box, more to parse.
+   - Modification times would help, but dirdelta doesn't keep them: a local copy is
+     `shutil.copy` (not `copy2`), a download gets the time it's made, and an upload doesn't set
+     Drive's `modifiedTime`. Keeping them first, then comparing them.
    - The previews are found in the picker's tree order, whatever is selected; the selected
-     file's could come first (treepicker telling dirdelta the selection as it moves). And they
-     are found anew each time the picker opens (for a local dst, one more `find` of it): they
-     could be kept while the diff is the same.
+     file's could come first (treepicker telling dirdelta the selection as it moves).
+   - A Rename in Drive leaves the folder it moved a file out of, even if empty (a local one is
+     removed, as a removal does).
 
 2. **Sort an inbox folder: file each one away, or remove it.** A mode for a folder of files
    not yet sorted (e.g. `cloud/unsorted`), rather than a diff of two replicas: for each file
@@ -87,9 +84,9 @@ picker, 2026-10-29) are in git history. treepicker's own are in `lib/treepicker/
      differ.
 
 5. **One combined diff tree of both replicas, decided per file or dir.** Today's flow is per
-   action: the main menu offers four (copy each way, remove from each), each picker shows one
-   way's files, and a decision about a file is spread over passes (copy A's new files to B,
-   then remove B's old ones from B, ...). The other way to work, like a sync tool's
+   direction: the main menu offers each way's files ("Files in A, not in B"), and its picker
+   acts on picks (copy, remove, rename), so a decision about a file is spread over the two
+   ways' screens (copy A's new files to B, then remove B's old ones from B, ...). The other way to work, like a sync tool's
    (Unison, Beyond Compare): one tree of everything that differs, both sides together, each
    entry marked by where it is (only in A: `A>`, only in B: `<B`), and an action per file or
    dir, chosen there: copy it to the side that lacks it, remove it from the side that has it,
@@ -97,8 +94,9 @@ picker, 2026-10-29) are in git history. treepicker's own are in `lib/treepicker/
    to A"), and it's done in one go.
    - Better for: deciding about a dir as a whole whichever side it's on, seeing a moved file's
      two halves together (idea 1: `A> old/x.jpg` and `<B new/x.jpg` side by side, and
-     Rename as an action that fits), and one plan to review. It's how one thinks of it ("make
-     these two the same, except ..."), rather than four passes.
+     Rename, done now from one side, with its two halves in one screen), and one plan to
+     review. It's how one thinks of it ("make these two the same, except ..."), rather than a
+     pass per direction.
    - A default action per entry, so most need no decision: e.g. copy what's only in one
      side (for a backup-like pair), or per pair (a favorite could keep its default: "B is
      the backup of A": copy A>, remove <B). Space cycles the actions (copy, remove, skip), a
@@ -108,12 +106,10 @@ picker, 2026-10-29) are in git history. treepicker's own are in `lib/treepicker/
      (`copy\tpath`, `remove\tpath`). Both sides' diffs are two dirdiff runs, merged in Python
      into one `--typed` list with a side for each. A bigger treepicker change than the others,
      made in its repo.
-   - What stays: the actions themselves (`copy_inner_entries_from_dirtree`, `remove_files`),
-     the progress screen, the dry run. The main menu becomes one "Sync" (plus maybe the
-     current per-action ones, for the simple cases, e.g. a read-only replica, where only one
-     way makes sense).
-   - Would replace the greyed-out options with nothing to do (there are no options) and the
-     COPY/REMOVE label (each entry says its action).
+   - What stays: the actions themselves (`copy_inner_entries_from_dirtree`, `remove_files`,
+     `move_files`), the progress screen, the dry run, the match indexes. The main menu becomes
+     one "Sync" (plus maybe the current per-direction ones, for the simple cases, e.g. a
+     read-only replica, where only one way makes sense).
 
 6. **Know each replica and when it was last updated.** The user keeps a `last_update.txt` at
    a replica's root, a log of changes, newest last, e.g. (`/mnt/win/.../eliran`'s, as of

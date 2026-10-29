@@ -111,6 +111,14 @@ class CloudDirTreeTest(unittest.TestCase):
         self.assertIsNone(tree.file_size('song.mp3'))
         self.assertIsNone(tree.file_size('Budget.gsheet'))
 
+    def test_dates_taken_are_the_caches(self):
+        with open(self.cache, 'a') as f:
+            f.write(json.dumps(dict(_item('photo', 'x.jpg', 'mein', 'image/jpeg'),
+                                    imageMediaMetadata={'time': '2024:07:01 14:03:22'})) + '\n')
+        tree = clouddirtree.factory('cloud/mein')
+        self.assertEqual(tree.date_taken('x.jpg'), '2024-07-01 14:03:22')
+        self.assertIsNone(tree.date_taken('song.mp3'))
+
     def test_files_by_name_has_same_named_files_by_their_name(self):
         found = clouddirtree.factory('cloud/mein').files_by_name()
         self.assertEqual(len(found['dup.mp3']), 2)
@@ -488,6 +496,54 @@ class CloudDirTreeChangesTest(unittest.TestCase):
     def test_a_failed_remove_keeps_the_file(self):
         self.service.files.return_value.update.return_value.execute.side_effect = _http_error()
         self.tree.remove_files([self.tree.get_node('song.mp3').data])
+        self.assertIn('song.mp3', self.tree)
+
+    def move(self, relpath, new_relpath):
+        update = self.service.files.return_value.update
+        update.return_value.execute.return_value = {
+            'id': self.tree._cloud_ids[relpath], 'name': os.path.basename(new_relpath),
+            'mimeType': 'audio/mpeg', 'size': '5'}
+        return self.tree.move_files([(relpath, new_relpath)])
+
+    def test_move_renames_and_reparents_the_file_in_drive(self):
+        self.assertEqual(self.move('song.mp3', 'album/moved.mp3'), [('song.mp3', 'album/moved.mp3')])
+        update = self.service.files.return_value.update
+        update.assert_called_once_with(fileId='song', body={'name': 'moved.mp3'}, addParents='album',
+                                       removeParents='mein', fields=clouddirtree.drivecache.FILE_FIELDS)
+        self.assertNotIn('song.mp3', self.tree)
+        self.assertEqual(self.tree._cloud_ids['album/moved.mp3'], 'song')
+        # The cache has it at its new path, by the same id
+        found = {entry.relpath: entry.cloud_id for entry in clouddirtree.drivecache.entries('/mein')}
+        self.assertEqual(found['album/moved.mp3'], 'song')
+        self.assertNotIn('song.mp3', found)
+        self.assertFalse(clouddirtree.drivecache.is_stale())
+        self.assertIn('Move complete: moved 1 of 1 files in cloud/mein', self.lines())
+
+    def test_move_into_a_new_folder_makes_it(self):
+        self.move('song.mp3', 'new/moved.mp3')
+        self.assertEqual([body['name'] for body in self.creates()], ['new'])
+        self.assertIn('new/moved.mp3', self.tree)
+
+    def test_google_files_and_same_named_ones_arent_moved(self):
+        with open(self.cache, 'a') as f:
+            f.write(json.dumps(_item('sheet', 'Budget', 'mein', 'application/vnd.google-apps.spreadsheet')) + '\n')
+        self.tree = clouddirtree.factory('cloud/mein')
+        self.assertIsNotNone(self.tree.cant_move('Budget.gsheet'))
+        dup = next(relpath for relpath in self.tree._cloud_ids if clouddirtree.DUP_SUFFIX in relpath)
+        self.assertIsNotNone(self.tree.cant_move(dup))
+        self.assertIsNone(self.tree.cant_move('song.mp3'))
+        self.assertEqual(self.tree.move_files([('Budget.gsheet', 'x.gsheet')]), [])
+        self.service.files.return_value.update.assert_not_called()
+
+    def test_a_failed_move_keeps_the_file(self):
+        self.service.files.return_value.update.return_value.execute.side_effect = _http_error()
+        self.assertEqual(self.tree.move_files([('song.mp3', 'moved.mp3')]), [])
+        self.assertIn('song.mp3', self.tree)
+
+    def test_dry_run_moves_nothing(self):
+        with mock.patch('dirdelta.dryrun.DRYRUN', True):
+            self.assertEqual(self.tree.move_files([('song.mp3', 'moved.mp3')]), [])
+        self.service.files.return_value.update.assert_not_called()
         self.assertIn('song.mp3', self.tree)
 
     def download_to_local_dir(self, relpaths):

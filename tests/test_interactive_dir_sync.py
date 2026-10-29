@@ -8,85 +8,90 @@ from unittest import mock
 import helpers
 from dirdelta import clouddirtree
 from dirdelta import dirtree
+from dirdelta import elsewhere
 from dirdelta import interactive_dir_sync
 from dirdelta import localdiskdirtree
+from dirdelta import picker
 
-COPY = interactive_dir_sync.InteractiveDirSync.COPY
-REMOVE = interactive_dir_sync.InteractiveDirSync.REMOVE
-YES = interactive_dir_sync.InteractiveDirSync.CONFIRM_YES
-NO = interactive_dir_sync.InteractiveDirSync.CONFIRM_NO
+Sync = interactive_dir_sync.InteractiveDirSync
+YES = Sync.CONFIRM_YES
+NO = Sync.CONFIRM_NO
+SURE = Sync.CONFIRM_SURE
+NOTHING = Sync.NOTHING
 
 
 class InteractiveDirSyncTest(unittest.TestCase):
-    """src has a.txt and sub/b.txt, dst has only a.txt, so sub/b.txt is the one missing file."""
+    """src has a.txt, sub/b.txt and sub/c.txt, dst has only a.txt, so sub/b.txt and sub/c.txt are
+    missing."""
 
     def setUp(self):
-        self.src_root = tempfile.mkdtemp(prefix='dirstuff-sync-src-')
-        self.dst_root = tempfile.mkdtemp(prefix='dirstuff-sync-dst-')
-        helpers.make_files(self.src_root, ['a.txt', 'sub/b.txt'])
+        self.src_root = os.path.realpath(tempfile.mkdtemp(prefix='dirstuff-sync-src-'))
+        self.dst_root = os.path.realpath(tempfile.mkdtemp(prefix='dirstuff-sync-dst-'))
+        helpers.make_files(self.src_root, ['a.txt', 'sub/b.txt', 'sub/c.txt'])
         helpers.make_files(self.dst_root, ['a.txt'])
         self.messages = []
-        patcher = mock.patch('dirdelta.messages.print_line', side_effect=lambda s, *a: self.messages.append(s))
-        patcher.start()
-        self.addCleanup(patcher.stop)
+        for patcher in (mock.patch('dirdelta.messages.print_line',
+                                   side_effect=lambda s, *a: self.messages.append(s)),
+                        mock.patch('dirdelta.messages.show')):
+            patcher.start()
+            self.addCleanup(patcher.stop)
+        self.addCleanup(shutil.rmtree, self.src_root, ignore_errors=True)
+        self.addCleanup(shutil.rmtree, self.dst_root, ignore_errors=True)
 
-    def tearDown(self):
-        shutil.rmtree(self.src_root, ignore_errors=True)
-        shutil.rmtree(self.dst_root, ignore_errors=True)
+    def _browse(self, picks, answers, src=None, dst=None):
+        """Browse src's files that dst lacks (by default, the local dirs', unscanned as dirsync_main
+        leaves them), the file picker answering picks in turn (see helpers.scripted_files_picker),
+        and the menus answers (see helpers.answering_option_picker). Returns the sync."""
+        src = src or localdiskdirtree.LocalDiskDirTree(self.src_root, True)
+        dst = dst or localdiskdirtree.LocalDiskDirTree(self.dst_root, True)
+        picks = list(picks)
+        self.sync = Sync(src, dst)
+        with helpers.scripted_files_picker(lambda relpaths: picks.pop(0)) as self.pick_files, \
+                helpers.answering_option_picker(answers) as self.pick_option:
+            self.sync.browse()
+        return self.sync
 
-    def _sync(self, action, choose=list, confirmations=None):
-        """Sync, answering each confirmation with the next of confirmations (by default, Yes to all)"""
-        src = localdiskdirtree.factory(self.src_root, silent=True)
-        dst = localdiskdirtree.factory(self.dst_root, silent=True)
-        answers = (helpers.scripted_option_picker(confirmations) if confirmations is not None else
-                   mock.patch('dirdelta.picker.pick_option', return_value=YES))
-        with helpers.scripted_files_picker(choose), answers as self.pick_option:
-            interactive_dir_sync.InteractiveDirSync(src, dst).sync(action)
-        return src, dst
+    def _exists(self, root, relpath):
+        return os.path.exists(os.path.join(root, relpath))
 
-    def test_copy_copies_missing_file(self):
+    def _offered(self):
+        """The files each file picker offered, and what was picked in it at first"""
+        return [(call.args[1], call.kwargs['picked']) for call in self.pick_files.call_args_list]
+
+    def test_copy_copies_and_goes_back_to_the_files_left(self):
         with mock.patch('dirdelta.dryrun.DRYRUN', False):
-            src, dst = self._sync(COPY)
-
+            self._browse([picker.Picked('', 'sub/b.txt', ['sub/b.txt']), None], ['Copy', YES])
         with open(os.path.join(self.dst_root, 'sub/b.txt')) as f:
             self.assertEqual(f.read(), 'sub/b.txt')
-        # So the next diff doesn't list it
-        self.assertIsNotNone(dst.get_node('sub/b.txt'))
+        self.assertFalse(self._exists(self.dst_root, 'sub/c.txt'))
+        # Back where it was (the dir, as the file's gone), with the file left, nothing picked
+        self.assertEqual(self._offered()[1], (['sub/c.txt'], []))
+        self.assertEqual(self.pick_files.call_args.kwargs['selected'], 'sub')
+        self.assertTrue(self.sync.has_changed)
+        self.assertIn('Copy complete: copied 1 of 1 files to %s' % (self.dst_root,), self.messages)
 
-    def test_dry_run_copy_leaves_disk_untouched(self):
+    def test_the_other_picks_stay_picked(self):
+        # Both picked, but only one copied: the other's copy fails
+        real_copy = localdiskdirtree.shutil.copy
+
+        def copy(src, dst):
+            if src.endswith('c.txt'):
+                raise OSError('disk full')
+            real_copy(src, dst)
+        with mock.patch('dirdelta.dryrun.DRYRUN', False), \
+                mock.patch('dirdelta.localdiskdirtree.shutil.copy', side_effect=copy):
+            self._browse([['sub/b.txt', 'sub/c.txt'], None], ['Copy', YES])
+        self.assertEqual(self._offered()[1], (['sub/c.txt'], ['sub/c.txt']))
+
+    def test_dry_run_copy_changes_nothing_and_drops_the_picks(self):
         with mock.patch('dirdelta.dryrun.DRYRUN', True):
-            self._sync(COPY)
-
-        self.assertFalse(os.path.exists(os.path.join(self.dst_root, 'sub/b.txt')))
-        # Not even the dir it would have gone into
-        self.assertFalse(os.path.exists(os.path.join(self.dst_root, 'sub')))
-
-    def test_dry_run_copy_leaves_the_trees_untouched(self):
-        with mock.patch('dirdelta.dryrun.DRYRUN', True):
-            src, dst = self._sync(COPY)
-
-        self.assertIsNone(dst.get_node('sub/b.txt'))
-        self.assertIsNone(dst.get_node('sub'))
-
-    def test_dry_run_copy_says_so(self):
-        with mock.patch('dirdelta.dryrun.DRYRUN', True):
-            self._sync(COPY)
-
-        self.assertIn('Dry run, not copying sub/b.txt (1 out of 1)', self.messages)
-        self.assertTrue(any(message.startswith('Dry run complete: nothing was copied to')
-                            for message in self.messages))
-
-    def test_copy_reports_what_it_copied(self):
-        with mock.patch('dirdelta.dryrun.DRYRUN', False):
-            self._sync(COPY)
-
-        self.assertIn('Copying sub/b.txt (1 out of 1)', self.messages)
-        self.assertIn('Copy complete: copied 1 of 1 files to %s' % (os.path.realpath(self.dst_root),), self.messages)
+            self._browse([['sub/b.txt', 'sub/c.txt'], None], ['Copy', YES])
+        self.assertFalse(self._exists(self.dst_root, 'sub'))
+        self.assertEqual(self._offered()[1], (['sub/b.txt', 'sub/c.txt'], []))
+        self.assertFalse(self.sync.has_changed)
+        self.assertIn('Dry run, not copying sub/b.txt (1 out of 2)', self.messages)
 
     def test_copy_report_ends_saying_its_complete(self):
-        # The destination is rescanned after copying, quietly
-        src = localdiskdirtree.factory(self.src_root)
-        dst = localdiskdirtree.factory(self.dst_root)
         last_lines = []
 
         @contextlib.contextmanager
@@ -94,122 +99,108 @@ class InteractiveDirSyncTest(unittest.TestCase):
             yield
             last_lines.append(self.messages[-1])
 
-        with helpers.scripted_files_picker(list), \
-                mock.patch('dirdelta.picker.pick_option', return_value=YES), \
-                mock.patch('dirdelta.messages.progress_screen', progress_screen):
-            interactive_dir_sync.InteractiveDirSync(src, dst).sync(COPY)
-
+        with mock.patch('dirdelta.messages.progress_screen', progress_screen):
+            self._browse([['sub/b.txt'], None], ['Copy', YES])
         self.assertEqual(len(last_lines), 1)
         self.assertTrue(last_lines[0].startswith('Dry run complete: nothing was copied to'), last_lines)
-
-    def test_remove_deletes_file_from_src_and_from_the_diff(self):
-        with mock.patch('dirdelta.dryrun.DRYRUN', False):
-            src, dst = self._sync(REMOVE)
-
-        self.assertFalse(os.path.exists(os.path.join(self.src_root, 'sub/b.txt')))
-        self.assertIsNone(src.get_node('sub/b.txt'))
-        self.assertIn('Removing sub/b.txt (1 out of 1)', self.messages)
-        self.assertIn('Remove complete: removed 1 of 1 files from %s' % (os.path.realpath(self.src_root),), self.messages)
-
-    def test_dry_run_remove_leaves_disk_untouched(self):
-        with mock.patch('dirdelta.dryrun.DRYRUN', True):
-            src, dst = self._sync(REMOVE)
-
-        self.assertTrue(os.path.exists(os.path.join(self.src_root, 'sub/b.txt')))
-        # Nor the tree: the next diff still lists it
-        self.assertIsNotNone(src.get_node('sub/b.txt'))
-        self.assertIn('Dry run, not removing sub/b.txt (1 out of 1)', self.messages)
-        self.assertTrue(any(message.startswith('Dry run complete: nothing was removed from')
-                            for message in self.messages))
-
-    def test_confirmation_starts_with_no_and_says_what_it_will_do(self):
-        with mock.patch('dirdelta.dryrun.DRYRUN', True):
-            self._sync(COPY)
-
-        options, = self.pick_option.call_args.args
-        self.assertEqual(options[0], NO)
-        header = self.pick_option.call_args.kwargs['header'].splitlines()
-        self.assertEqual(header[0], 'Copy 1 files from %s to %s?' % (os.path.realpath(self.src_root),
-                                                                     os.path.realpath(self.dst_root)))
-        self.assertEqual(header[1], '  sub/b.txt')
-        self.assertIn('dry run', header[-1])
-
-    def test_no_picks_again_from_the_same_picks_and_changes_nothing(self):
-        picked_args = []
-
-        def pick_files(rootpath, relpaths, picked=None, **_):
-            picked_args.append(picked)
-            # The files, then quit
-            return list(relpaths) if len(picked_args) == 1 else None
-
-        src = localdiskdirtree.factory(self.src_root, silent=True)
-        dst = localdiskdirtree.factory(self.dst_root, silent=True)
-        with mock.patch('dirdelta.picker.pick_files', side_effect=pick_files), \
-                helpers.scripted_option_picker([NO]), \
-                mock.patch('dirdelta.dryrun.DRYRUN', False):
-            interactive_dir_sync.InteractiveDirSync(src, dst).sync(REMOVE)
-
-        self.assertIsNone(picked_args[0])
-        self.assertEqual(picked_args[1], ['sub/b.txt'])
-        self.assertTrue(os.path.exists(os.path.join(self.src_root, 'sub/b.txt')))
-
-    def test_quitting_the_confirmation_is_no(self):
-        nr_picks = []
-
-        def choose(relpaths):
-            # The files, then quit
-            nr_picks.append(1)
-            return list(relpaths) if len(nr_picks) == 1 else None
-
-        with mock.patch('dirdelta.dryrun.DRYRUN', False):
-            self._sync(REMOVE, choose, confirmations=[None])
-
-        self.assertEqual(len(nr_picks), 2)
-        self.assertTrue(os.path.exists(os.path.join(self.src_root, 'sub/b.txt')))
-
-    def test_quitting_the_file_picker_ends_sync(self):
-        self._sync(COPY, choose=lambda relpaths: None)
-
-        self.assertFalse(os.path.exists(os.path.join(self.dst_root, 'sub/b.txt')))
-
-    def test_after_acting_sync_ends(self):
-        # Back to the main menu, rather than offering the files left again
-        helpers.make_files(self.src_root, ['sub/c.txt'])
-        offered = []
-
-        def choose(relpaths):
-            offered.append(list(relpaths))
-            return relpaths[:1]
-
-        with mock.patch('dirdelta.dryrun.DRYRUN', False):
-            self._sync(COPY, choose)
-
-        self.assertEqual(offered, [['sub/b.txt', 'sub/c.txt']])
-        self.assertTrue(os.path.exists(os.path.join(self.dst_root, 'sub/b.txt')))
-        self.assertFalse(os.path.exists(os.path.join(self.dst_root, 'sub/c.txt')))
-
-    def test_nothing_missing_says_so_without_a_picker(self):
-        helpers.make_files(self.dst_root, ['sub/b.txt'])
-        with mock.patch('dirdelta.messages.show') as show:
-            self._sync(COPY, choose=lambda relpaths: self.fail('no picker expected'))
-        title, lines, _ = show.call_args.args
-        self.assertEqual(title, 'Nothing to copy')
-        self.assertEqual(lines, ["%s has all of %s's files." % (os.path.realpath(self.dst_root),
-                                                              os.path.realpath(self.src_root))])
-
-    def test_picking_nothing_ends_sync(self):
-        self._sync(COPY, choose=lambda relpaths: [])
-        self.assertFalse(os.path.exists(os.path.join(self.dst_root, 'sub/b.txt')))
 
     def test_picked_files_are_copied_from_src(self):
         # Their entries are made from the picked relpaths only
         copied = []
-        with mock.patch('dirdelta.dryrun.DRYRUN', False), \
-                mock.patch('dirdelta.localdiskdirtree.LocalDiskDirTree.copy_inner_entries_from_dirtree',
-                           side_effect=lambda tree, source: copied.extend(tree.iter_files())):
-            self._sync(COPY)
+        with mock.patch('dirdelta.localdiskdirtree.LocalDiskDirTree.copy_inner_entries_from_dirtree',
+                        side_effect=lambda tree, source: copied.extend(tree.iter_files())):
+            self._browse([['sub/b.txt'], None], ['Copy', YES])
         self.assertEqual([(entry.relpath, entry.full_filesystem_path()) for entry in copied],
-                         [('sub/b.txt', os.path.join(os.path.realpath(self.src_root), 'sub/b.txt'))])
+                         [('sub/b.txt', os.path.join(self.src_root, 'sub/b.txt'))])
+
+    def test_remove_is_confirmed_twice_then_removes(self):
+        with mock.patch('dirdelta.dryrun.DRYRUN', False):
+            self._browse([['sub/b.txt'], None], ['Remove', YES, SURE])
+        self.assertFalse(self._exists(self.src_root, 'sub/b.txt'))
+        self.assertEqual(self._offered()[1], (['sub/c.txt'], []))
+        self.assertIn('Remove complete: removed 1 of 1 files from %s' % (self.src_root,), self.messages)
+        # The second time: are you sure, No first
+        options = self.pick_option.call_args_list[2].args[0]
+        self.assertEqual(options, [NO, SURE])
+        self.assertIn('Are you sure? 1 file will be removed from %s, for good.' % (self.src_root,),
+                      self.pick_option.call_args_list[2].kwargs['header'])
+
+    def test_no_to_are_you_sure_removes_nothing_and_keeps_the_picks(self):
+        with mock.patch('dirdelta.dryrun.DRYRUN', False):
+            self._browse([['sub/b.txt'], None], ['Remove', YES, NO])
+        self.assertTrue(self._exists(self.src_root, 'sub/b.txt'))
+        self.assertEqual(self._offered()[1], (['sub/b.txt', 'sub/c.txt'], ['sub/b.txt']))
+        self.assertFalse(self.sync.has_changed)
+
+    def test_dry_run_remove_leaves_disk_untouched(self):
+        with mock.patch('dirdelta.dryrun.DRYRUN', True):
+            self._browse([['sub/b.txt'], None], ['Remove', YES, SURE])
+        self.assertTrue(self._exists(self.src_root, 'sub/b.txt'))
+        self.assertIn('Dry run, not removing sub/b.txt (1 out of 1)', self.messages)
+
+    def test_the_action_menu_starts_with_nothing_which_goes_back_to_the_picks(self):
+        with mock.patch('dirdelta.dryrun.DRYRUN', False):
+            self._browse([picker.Picked('', 'sub/c.txt', ['sub/b.txt']), None], [NOTHING])
+        options = self.pick_option.call_args_list[0].args[0]
+        self.assertEqual(options[0], NOTHING)
+        self.assertEqual([option.split(' ')[0] for option in options[1:]],
+                         ['Copy', 'Remove', 'Rename', 'Rename'])
+        self.assertEqual(self._offered()[1], (['sub/b.txt', 'sub/c.txt'], ['sub/b.txt']))
+        self.assertEqual(self.pick_files.call_args.kwargs['selected'], 'sub/c.txt')
+
+    def test_quitting_the_menu_or_a_confirmation_is_nothing(self):
+        for answers in ([None], ['Copy', None], ['Copy', NO]):
+            with mock.patch('dirdelta.dryrun.DRYRUN', False):
+                self._browse([['sub/b.txt'], None], answers)
+            self.assertFalse(self._exists(self.dst_root, 'sub'))
+            self.assertEqual(self._offered()[1][1], ['sub/b.txt'])
+
+    def test_the_confirmation_starts_with_no_and_says_what_it_will_do(self):
+        self._browse([['sub/b.txt'], None], ['Copy', NO])
+        options = self.pick_option.call_args.args[0]
+        self.assertEqual(options[0], NO)
+        header = self.pick_option.call_args.kwargs['header'].splitlines()
+        self.assertEqual(header[0], 'Copy 1 file from %s to %s?' % (self.src_root, self.dst_root))
+        self.assertEqual(header[1], '  sub/b.txt')
+        self.assertIn('dry run', header[-1])
+        self.assertEqual(self.pick_option.call_args.kwargs['label'], ('COPY', 'blue'))
+
+    def disabled(self):
+        """The action menu's disabled options' texts"""
+        shown = self.pick_option.call_args_list[0].kwargs['shown_as']()
+        return [text.text for text in shown.values()]
+
+    def test_what_cant_be_done_is_greyed_out(self):
+        # A read-only dst, and nothing has a match in it to rename
+        real_access = os.access
+        with mock.patch('dirdelta.interactive_dir_sync.os.access',
+                        side_effect=lambda path, mode: path != self.dst_root and real_access(path, mode)):
+            self._browse([['sub/b.txt'], None], [NOTHING])
+        texts = sorted(self.disabled())
+        self.assertEqual(len(texts), 3)
+        self.assertEqual(texts[0], "Copy the 1 file to %s: can't: it's read-only" % (self.dst_root,))
+        self.assertEqual(texts[1], "Rename 0 files of these to their matches' paths, in %s: none of "
+                                   "these has a file of its name there that's surely it" % (self.src_root,))
+        self.assertEqual(texts[2], "Rename the 0 files matching these to these paths, in %s: can't: "
+                                   "it's read-only" % (self.dst_root,))
+
+    def test_two_cloud_replicas_cant_copy(self):
+        src = clouddirtree.CloudDirTree('cloud/a')
+        src.add_file_by_relpath('x')
+        self._browse([['x'], None], [NOTHING], src, clouddirtree.CloudDirTree('cloud/b'))
+        self.assertIn("Copy the 1 file to cloud/b: can't: both are Google Drive's", self.disabled())
+
+    def test_nothing_missing_says_so_without_a_picker(self):
+        helpers.make_files(self.dst_root, ['sub/b.txt', 'sub/c.txt'])
+        self._browse([], [])
+        title, lines, _ = interactive_dir_sync.messages.show.call_args.args
+        self.assertEqual(title, 'Nothing to do')
+        self.assertEqual(lines, ["%s has all of %s's files." % (self.dst_root, self.src_root)])
+
+    def test_after_the_last_ones_are_done_it_says_so_and_ends(self):
+        with mock.patch('dirdelta.dryrun.DRYRUN', False):
+            self._browse([['sub/b.txt', 'sub/c.txt']], ['Copy', YES])
+        self.assertEqual(interactive_dir_sync.messages.show.call_args.args[0], 'Nothing to do')
 
     def test_trees_other_than_two_local_dirs_are_diffed_as_they_are(self):
         # (A cloud tree, say.) Sorted by path components, so each dir's files stay together.
@@ -218,52 +209,97 @@ class InteractiveDirSyncTest(unittest.TestCase):
             src.add_file_by_relpath(relpath)
         dst = dirtree.DirTree('/dst')
         dst.add_file_by_relpath('c.txt')
-        offered = []
-        with helpers.scripted_files_picker(lambda relpaths: offered.append(relpaths)):
-            interactive_dir_sync.InteractiveDirSync(src, dst).sync(COPY)
-        self.assertEqual(offered, [['a/1.txt', 'a b/1.txt', 'b/2.txt']])
-
-    def test_the_picker_and_confirmation_are_labeled_with_the_action(self):
-        for action, label in ((COPY, ('COPY', 'blue')), (REMOVE, ('REMOVE', 'magenta'))):
-            src = dirtree.DirTree('/src')
-            src.add_file_by_relpath('a.txt')
-            dst = dirtree.DirTree('/dst')
-            # No, then quitting the picker it goes back to
-            picks = [['a.txt'], None]
-            with helpers.scripted_files_picker(lambda relpaths: picks.pop(0)) as pick_files, \
-                    mock.patch('dirdelta.picker.pick_option', return_value=NO) as pick_option:
-                interactive_dir_sync.InteractiveDirSync(src, dst).sync(action)
-            self.assertEqual(pick_files.call_args.kwargs['label'], label)
-            self.assertEqual(pick_option.call_args.kwargs['label'], label)
+        self._browse([None], [], src, dst)
+        self.assertEqual(self._offered()[0][0], ['a/1.txt', 'a b/1.txt', 'b/2.txt'])
 
     def test_the_picker_shows_where_dst_has_files_of_the_same_names(self):
         # sub/b.txt moved to elsewhere/b.txt in dst
         helpers.make_files(self.dst_root, ['elsewhere/b.txt'])
-        src = localdiskdirtree.LocalDiskDirTree(self.src_root, True)
-        dst = localdiskdirtree.LocalDiskDirTree(self.dst_root, True)
-        with helpers.scripted_files_picker(lambda relpaths: None) as pick_files:
-            interactive_dir_sync.InteractiveDirSync(src, dst).sync(COPY)
+        self._browse([None], [])
         # The picker calls it, with a send() for what's found
         sent = {}
-        pick_files.call_args.kwargs['previews'](lambda found=None, default=None: sent.update(found or {}))
-        self.assertEqual(list(sent), ['sub/b.txt'])
-        self.assertEqual(sent['sub/b.txt'][2:],
-                         ["  elsewhere/", "    b.txt  15 B"])
+        self.pick_files.call_args.kwargs['previews'](lambda found=None, default=None: sent.update(found or {}))
+        self.assertEqual(sorted(sent), ['sub/b.txt', 'sub/c.txt'])
+        self.assertEqual(sent['sub/b.txt'][2:4], ["  elsewhere/", "    b.txt  15 B"])
 
     def test_a_cloud_replica_is_named_as_a_cloud_path(self):
         # Not by its path in Drive (/mein), which reads like a local dir
         src = clouddirtree.CloudDirTree('cloud/mein')
         src.add_file_by_relpath('song.mp3')
-        dst = dirtree.DirTree('/local')
-        # No, then quitting the picker it goes back to
-        picks = [['song.mp3'], None]
-        with helpers.scripted_files_picker(lambda relpaths: picks.pop(0)) as pick_files, \
-                mock.patch('dirdelta.picker.pick_option', return_value=NO) as pick_option:
-            interactive_dir_sync.InteractiveDirSync(src, dst).sync(REMOVE)
-        self.assertEqual(pick_files.call_args.args[0], 'cloud/mein')
-        self.assertIn('from cloud/mein', pick_files.call_args.kwargs['header'])
-        header = pick_option.call_args.kwargs['header'].splitlines()
-        self.assertEqual(header[0], 'Remove 1 files from cloud/mein?')
+        self._browse([['song.mp3'], None], ['Remove', NO], src, dirtree.DirTree('/local'))
+        self.assertEqual(self.pick_files.call_args.args[0], 'cloud/mein')
+        self.assertIn('Files in cloud/mein', self.pick_files.call_args.kwargs['header'])
+        header = self.pick_option.call_args.kwargs['header'].splitlines()
+        self.assertEqual(header[0], 'Remove 1 file from cloud/mein?')
+
+
+class RenameTest(unittest.TestCase):
+    """src has photos/x.jpg, which dst has at old/x.jpg (the same size): moved there; and
+    photos/y.jpg, which dst lacks"""
+
+    def setUp(self):
+        self.src_root = os.path.realpath(tempfile.mkdtemp(prefix='dirstuff-rename-src-'))
+        self.dst_root = os.path.realpath(tempfile.mkdtemp(prefix='dirstuff-rename-dst-'))
+        for root, relpath in ((self.src_root, 'photos/x.jpg'), (self.dst_root, 'old/x.jpg'),
+                              (self.src_root, 'photos/y.jpg')):
+            os.makedirs(os.path.dirname(os.path.join(root, relpath)), exist_ok=True)
+            with open(os.path.join(root, relpath), 'w') as f:
+                f.write('the photo')
+        for patcher in (mock.patch('dirdelta.messages.print_line'), mock.patch('dirdelta.messages.show')):
+            patcher.start()
+            self.addCleanup(patcher.stop)
+        self.addCleanup(shutil.rmtree, self.src_root, ignore_errors=True)
+        self.addCleanup(shutil.rmtree, self.dst_root, ignore_errors=True)
+
+    def browse(self, answers, is_dry_run=False):
+        self.src = localdiskdirtree.LocalDiskDirTree(self.src_root, True)
+        self.dst = localdiskdirtree.LocalDiskDirTree(self.dst_root, True)
+        self.dst_index = elsewhere.Index(self.dst)
+        self.src_index = elsewhere.Index(self.src)
+        self.src_index.build()
+        picks = [['photos/x.jpg', 'photos/y.jpg'], None]
+        sync = Sync(self.src, self.dst, src_index=self.src_index, dst_index=self.dst_index)
+        with helpers.scripted_files_picker(lambda relpaths: picks.pop(0)) as self.pick_files, \
+                helpers.answering_option_picker(answers) as self.pick_option, \
+                mock.patch('dirdelta.dryrun.DRYRUN', is_dry_run):
+            sync.browse()
+        return sync
+
+    def test_rename_in_dst_moves_its_match_to_the_files_path(self):
+        sync = self.browse(['Rename the', YES])
+        self.assertTrue(os.path.isfile(os.path.join(self.dst_root, 'photos/x.jpg')))
+        # Its dir, left empty, is gone too
+        self.assertFalse(os.path.exists(os.path.join(self.dst_root, 'old')))
+        self.assertEqual(self.dst_index.files_named('x.jpg'), {'photos/x.jpg': 9})
+        self.assertTrue(sync.has_changed)
+        # Only y.jpg is left, still picked (x.jpg was done)
+        self.assertEqual(self.pick_files.call_args.args[1], ['photos/y.jpg'])
+        self.assertEqual(self.pick_files.call_args.kwargs['picked'], ['photos/y.jpg'])
+        header = self.pick_option.call_args.kwargs['header'].splitlines()
+        self.assertEqual(header[:2], ['Move 1 file in %s?' % (self.dst_root,), '  old/x.jpg -> photos/x.jpg'])
+        self.assertEqual(self.pick_option.call_args.kwargs['label'], ('RENAME', 'cyan'))
+
+    def test_rename_in_src_moves_the_file_to_its_matchs_path(self):
+        self.browse(['Rename 1 file of these', YES])
+        self.assertTrue(os.path.isfile(os.path.join(self.src_root, 'old/x.jpg')))
+        self.assertFalse(os.path.exists(os.path.join(self.src_root, 'photos/x.jpg')))
+        self.assertEqual(self.src_index.files_named('x.jpg'), {'old/x.jpg': 9})
+
+    def test_the_menu_counts_the_files_with_a_sure_match(self):
+        self.browse([NOTHING])
+        options = self.pick_option.call_args.args[0]
+        self.assertIn("Rename the 1 file matching these to these paths, in %s" % (self.dst_root,), options)
+        self.assertIn("Rename 1 file of these to their matches' paths, in %s" % (self.src_root,), options)
+
+    def test_a_dry_run_moves_nothing(self):
+        sync = self.browse(['Rename the', YES], is_dry_run=True)
+        self.assertTrue(os.path.isfile(os.path.join(self.dst_root, 'old/x.jpg')))
+        self.assertFalse(sync.has_changed)
+        self.assertEqual(self.pick_files.call_args.kwargs['picked'], ['photos/y.jpg'])
+
+    def test_no_moves_nothing(self):
+        self.browse(['Rename the', NO])
+        self.assertTrue(os.path.isfile(os.path.join(self.dst_root, 'old/x.jpg')))
 
 
 class RefreshKeyTest(unittest.TestCase):
@@ -274,31 +310,31 @@ class RefreshKeyTest(unittest.TestCase):
             self.cloud.add_file_by_relpath(relpath)
         self.local = dirtree.DirTree('/local')
         for patcher in (mock.patch('dirdelta.messages.show'),
-                        mock.patch('dirdelta.picker.pick_option', return_value=NO)):
+                        mock.patch('dirdelta.picker.pick_option', return_value=NOTHING)):
             self.addCleanup(patcher.stop)
-            self.show = patcher.start()
+            patcher.start()
         self.show = interactive_dir_sync.messages.show
 
-    def sync(self, src, dst, answers, refresh=None):
-        """Remove files from src, the file picker answering answers in turn; returns pick_files's
-        calls"""
+    def browse(self, src, dst, answers, refresh=None):
+        """Browse, the file picker answering answers in turn; returns pick_files's calls"""
         with mock.patch('dirdelta.picker.pick_files', side_effect=answers) as pick_files, \
                 mock.patch.object(clouddirtree.CloudDirTree, 'refresh_from_drive', autospec=True,
                                   side_effect=refresh) as self.refresh:
-            sync = interactive_dir_sync.InteractiveDirSync(src, dst)
-            sync.sync(REMOVE)
-        self.was_refreshed = sync.was_refreshed
+            self.sync = Sync(src, dst)
+            self.sync.src_index.build()
+            self.sync.browse()
         return pick_files.call_args_list
 
     def test_the_key_refreshes_the_selected_folder_and_picks_again_where_it_was(self):
         def refresh(tree, relpath):
             # Since the cache was made, a/2.mp3 went from Drive
             tree.remove_node('a/2.mp3')
-        calls = self.sync(self.cloud, self.local,
-                          [interactive_dir_sync.picker.KeyPressed('r', 'a', ['a/1.mp3', 'a/2.mp3']), None],
-                          refresh)
+        calls = self.browse(self.cloud, self.local,
+                            [picker.Picked('r', 'a', ['a/1.mp3', 'a/2.mp3']), None], refresh)
         self.refresh.assert_called_once_with(self.cloud, 'a')
-        self.assertTrue(self.was_refreshed)
+        self.assertTrue(self.sync.has_changed)
+        # Its files by name are listed again, when they're next needed
+        self.assertFalse(self.sync.src_index.is_built())
         self.assertEqual(calls[0].kwargs['keys'], 'r')
         self.assertIn('r: read the selected folder anew from Google Drive', calls[0].kwargs['header'])
         self.assertIsNone(calls[0].kwargs['selected'])
@@ -309,36 +345,42 @@ class RefreshKeyTest(unittest.TestCase):
 
     def test_the_other_replica_is_refreshed_when_its_drives(self):
         self.local.add_file_by_relpath('x/new.mp3')
-        self.sync(self.local, self.cloud,
-                  [interactive_dir_sync.picker.KeyPressed('r', 'x/new.mp3', []), None])
+        self.browse(self.local, self.cloud, [picker.Picked('r', 'x/new.mp3', []), None])
         self.refresh.assert_called_once_with(self.cloud, 'x/new.mp3')
 
     def test_without_a_drive_replica_theres_no_key(self):
         other = dirtree.DirTree('/other')
         other.add_file_by_relpath('a.mp3')
-        calls = self.sync(other, self.local, [None])
+        calls = self.browse(other, self.local, [None])
         self.assertEqual(calls[0].kwargs['keys'], '')
         self.assertNotIn('Google Drive', calls[0].kwargs['header'])
-        self.assertFalse(self.was_refreshed)
+        self.assertFalse(self.sync.has_changed)
 
     def test_a_refresh_with_nothing_left_missing_says_so(self):
         def refresh(tree, relpath):
             for relpath in ('a/1.mp3', 'a/2.mp3', 'b/3.mp3'):
                 tree.remove_node(relpath)
-        calls = self.sync(self.cloud, self.local,
-                          [interactive_dir_sync.picker.KeyPressed('r', '', [])], refresh)
+        calls = self.browse(self.cloud, self.local, [picker.Picked('r', '', [])], refresh)
         self.assertEqual(len(calls), 1)
-        self.assertEqual(self.show.call_args.args[0], 'Nothing to remove')
+        self.assertEqual(self.show.call_args.args[0], 'Nothing to do')
 
     def test_a_failed_refresh_says_why_and_picks_again(self):
-        calls = self.sync(self.cloud, self.local,
-                          [interactive_dir_sync.picker.KeyPressed('r', 'a', ['b/3.mp3']), None],
-                          OSError('no network'))
+        calls = self.browse(self.cloud, self.local,
+                            [picker.Picked('r', 'a', ['b/3.mp3']), None], OSError('no network'))
         title, lines = self.show.call_args.args[:2]
         self.assertEqual(title, 'Refresh cloud/mein/a from Google Drive')
         self.assertEqual(lines, ["Couldn't refresh it: no network"])
-        self.assertFalse(self.was_refreshed)
+        self.assertFalse(self.sync.has_changed)
         self.assertEqual(calls[1].kwargs['picked'], ['b/3.mp3'])
+
+
+class ShownTest(unittest.TestCase):
+    def test_the_selection_or_the_closest_dir_still_shown(self):
+        missing = ['a/b/1', 'a/c/2']
+        self.assertEqual(interactive_dir_sync._shown('a/b/1', missing), 'a/b/1')
+        self.assertEqual(interactive_dir_sync._shown('a/b', missing), 'a/b')
+        self.assertEqual(interactive_dir_sync._shown('a/d/3', missing), 'a')
+        self.assertEqual(interactive_dir_sync._shown('z', missing), '')
 
 
 if __name__ == '__main__':
