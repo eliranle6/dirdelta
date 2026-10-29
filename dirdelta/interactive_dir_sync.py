@@ -7,6 +7,7 @@ from dirdelta import clouddirtree
 from dirdelta import dirdiff
 from dirdelta import drivecache
 from dirdelta import dirtree
+from dirdelta import elsewhere
 from dirdelta import entries
 from dirdelta import dryrun
 from dirdelta import localdiskdirtree
@@ -136,7 +137,8 @@ class InteractiveDirSync(object):
     def _chooseFiles(self, missing, action, picked=None):
         """Let the user pick some of the missing files (picked start picked). Returns them (or None,
         if the user quit) and what's missing, which a refresh (the REFRESH_KEY) changes: the picker
-        comes back where it was, with what's still missing of the picks picked."""
+        comes back where it was, with what's still missing of the picks picked. Beside it, where dst
+        has files of the selected file's name (see elsewhere.py), in case it's moved, not missing."""
         purpose = ("copy to %s" % (self._dst.displayname(),) if action == self.COPY else
                    "remove from %s" % (self._src.displayname(),))
         clouds = self._cloud_replicas()
@@ -149,7 +151,8 @@ class InteractiveDirSync(object):
         while True:
             chosen = picker.pick_files(self._src.displayname(), missing, header=tree_header,
                                        picked=picked, label=self.LABELS[action],
-                                       keys=self.REFRESH_KEY if clouds else '', selected=selected)
+                                       keys=self.REFRESH_KEY if clouds else '', selected=selected,
+                                       previews=self._previews(missing))
             if not isinstance(chosen, picker.KeyPressed):
                 return chosen, missing
             selected = chosen.selected
@@ -163,6 +166,12 @@ class InteractiveDirSync(object):
                 return None, missing
             still_missing = set(missing)
             picked = [relpath for relpath in chosen.picked if relpath in still_missing]
+
+    def _previews(self, missing):
+        """The file picker's previews of the missing files: where dst has files of their names"""
+        messages.print_line("Looking for files of the same names elsewhere in %s..." %
+                            (self._dst.displayname(),))
+        return elsewhere.previews(missing, self._src, self._dst)
 
     def _cloud_replicas(self):
         """The replicas that are Drive's, so can be read anew from it"""

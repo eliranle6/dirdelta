@@ -31,6 +31,8 @@ MAX_GENERATED_IDS = 1000
 MAX_FOLDERS_PER_QUERY = 30
 # How many of the folders or files a confirmation's note lists
 MAX_LISTED = 5
+# What's added to a file's relpath (with its id after it) when the tree already has one there
+DUP_SUFFIX = '___DUP__'
 
 
 def factory(rootpath):
@@ -57,6 +59,8 @@ class CloudDirTree(dirtree.DirTree):
         self._cloud_ids = {}
         # The relpaths of the Google files
         self._google_files = set()
+        # Each file's size, by its relpath (none for a Google file)
+        self._sizes = {}
 
     def displayname(self):
         """The cloud path, as given (cloud/mein), rather than the path in Drive (/mein), which
@@ -68,19 +72,21 @@ class CloudDirTree(dirtree.DirTree):
         (or found: drivecache.entries() of it, already read)"""
         if found is None:
             found = drivecache.entries(self.fullpath())
-        for relpath, cloud_id, is_dir, is_google_file in found:
+        for relpath, cloud_id, is_dir, is_google_file, size in found:
             if relpath == '':
                 self._cloud_ids[relpath] = cloud_id
                 continue
             # Change node ID if it already exists (two files with the same path is possible in cloud)
             if relpath in self:
-                relpath += f'___DUP__{cloud_id}'
+                relpath += DUP_SUFFIX + cloud_id
             if is_dir:
                 self.create_dir_node_from_relpath_if_not_exists(relpath)
             else:
                 self.add_file_by_relpath(relpath)
                 if is_google_file:
                     self._google_files.add(relpath)
+                if size is not None:
+                    self._sizes[relpath] = size
             self._cloud_ids[relpath] = cloud_id
 
     def refresh_from_drive(self, relpath=''):
@@ -97,8 +103,19 @@ class CloudDirTree(dirtree.DirTree):
         super(CloudDirTree, self).__init__(rootpath=self.fullpath())
         self._cloud_ids = {}
         self._google_files = set()
+        self._sizes = {}
         self.update_from_cache(found)
         return relpath
+
+    def file_size(self, relpath):
+        return self._sizes.get(relpath)
+
+    def files_by_name(self):
+        # A same-named file's relpath has a DUP_SUFFIX, its name doesn't
+        found = collections.defaultdict(list)
+        for name, files in super(CloudDirTree, self).files_by_name().items():
+            found[name.split(DUP_SUFFIX)[0]] += files
+        return found
 
     def cant_fetch(self, relpath):
         if relpath in self._google_files:
@@ -202,6 +219,8 @@ class CloudDirTree(dirtree.DirTree):
         drivecache.add(md)
         self.add_file_by_relpath(file_entry.relpath)
         self._cloud_ids[file_entry.relpath] = md['id']
+        if 'size' in md:
+            self._sizes[file_entry.relpath] = int(md['size'])
         return True
 
     def _make_folders(self, dir_relpaths):

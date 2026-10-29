@@ -185,6 +185,28 @@ class PickerTest(unittest.TestCase):
         args, _ = self.call()
         self.assertEqual(args[args.index('--select') + 1], '.')
 
+    def test_pick_files_shows_previews(self):
+        self.answer('a/1.txt')
+
+        # The fake records the --preview file's contents, which is gone once the picker returns
+        def popen(command, **kwargs):
+            with open(command[command.index('--preview') + 1], 'rb') as f:
+                self.previews_file_contents = f.read()
+            return real_popen(command, **kwargs)
+        real_popen = picker.subprocess.Popen
+        with mock.patch('dirdelta.picker.subprocess.Popen', side_effect=popen):
+            picker.pick_files('/r', ['a/1.txt'], previews={'a/1.txt': ['In b:', '  x\ty'], '': ['root']})
+
+        # Each line after a tab, the root as '.', and a tab in a line shown as '?'
+        self.assertEqual(sorted(self.previews_file_contents.split(b'\0')),
+                         [b'', b'.\troot', b'a/1.txt\tIn b:\t  x?y'])
+
+    def test_pick_files_without_previews_passes_no_preview_file(self):
+        self.answer('a/1.txt')
+        picker.pick_files('/r', ['a/1.txt'], previews={})
+        args, _ = self.call()
+        self.assertNotIn('--preview', args)
+
     def test_nothing_picked_passes_no_picked_file(self):
         self.answer('a/1.txt')
         picker.pick_files('/some/root', ['a/1.txt'], picked=[])

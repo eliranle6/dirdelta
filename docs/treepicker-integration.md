@@ -39,6 +39,11 @@ Like fzf: dirdelta starts `treepicker`, which draws on the terminal itself
   output starts with the key pressed (or an empty item for Enter) and, after
   a key, the selected node's path, then the picks so far, so dirdelta runs it
   again with `--picked` and `--select`.
+- Text beside the file picker for the selected node (where the other replica
+  has files of its name): `--preview FILE`, FILE holding `PATH<tab>LINE<tab>LINE...\0`
+  per file (a tab or newline in a line is sent as '?'). treepicker shows it in
+  a column on the right (2/5 of the width, on a screen 60 columns wide or more),
+  which `p` hides or shows.
 - Menus: `treepicker -0 --list [--header TEXT] -`, with the labels on stdin
   (`--list` keeps them flat, since labels contain '/'). With `shown_as`,
   `pick_option` adds `--updates FD`, a pipe that a thread writes `LABEL<tab>TEXT\0`

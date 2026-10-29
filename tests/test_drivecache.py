@@ -21,7 +21,7 @@ class EntriesTest(unittest.TestCase):
         self.addCleanup(os.remove, self.cache)
 
     def test_the_folder_itself_comes_first(self):
-        self.assertEqual(next(drivecache.entries('/mein')), ('', 'mein', True, False))
+        self.assertEqual(next(drivecache.entries('/mein')), ('', 'mein', True, False, None))
 
     def test_entries_under_a_folder(self):
         entries = [entry[:3] for entry in drivecache.entries('/mein')][1:]
@@ -53,7 +53,7 @@ class EntriesTest(unittest.TestCase):
         # Without a mimeType (Drive didn't say), a file
         drivecache.add({'id': 'n1', 'name': '1.mp3', 'parents': ['new']})
         drivecache.trash('track')
-        found = {relpath: is_dir for relpath, _, is_dir, _ in drivecache.entries('/mein/album')}
+        found = {entry.relpath: entry.is_dir for entry in drivecache.entries('/mein/album')}
         self.assertEqual(found, {'': True, 'new': True, 'new/1.mp3': False})
 
     def test_whats_under_a_folder_can_be_replaced(self):
@@ -63,7 +63,7 @@ class EntriesTest(unittest.TestCase):
             {'id': 'new', 'name': 'new', 'parents': ['mein'], 'mimeType': drivecache.FOLDER_MIME_TYPE},
             {'id': 'n1', 'name': '1.mp3', 'parents': ['new']},
         ], 'ROOT')
-        found = {relpath: cloud_id for relpath, cloud_id, _, _ in drivecache.entries('/mein')}
+        found = {entry.relpath: entry.cloud_id for entry in drivecache.entries('/mein')}
         self.assertEqual(found, {'': 'mein', 'renamed.mp3': 'song', 'new': 'new', 'new/1.mp3': 'n1'})
         # The rest is as it was, lines it doesn't read too
         self.assertEqual([entry[0] for entry in drivecache.entries('/other')], ['', 'elsewhere.mp3'])
@@ -185,7 +185,7 @@ class CacheContentsTest(unittest.TestCase):
             _item('jam', 'Board', 'eliran', 'application/vnd.google-apps.jam'),
             _item('song', 'song.mp3', 'eliran'),
         ])
-        self.assertEqual(sorted(drivecache.entries('/eliran'))[1:], [
+        self.assertEqual(sorted(entry[:4] for entry in drivecache.entries('/eliran'))[1:], [
             ('Board.gjam', 'jam', False, True),
             ('Budget.gsheet', 'sheet', False, True),
             ('Link.glink', 'shortcut', False, True),

@@ -4,37 +4,31 @@ Not implemented: proposed changes, a backlog to pick from. The ones done so far 
 and 2026-10-24 reviews' #1-25; naming a cloud replica as given, the COPY/REMOVE label, greying
 out an option with nothing to do, faster uploads, and trashing whole Drive folders, 2026-10-27;
 refreshing a cloud folder at a time: at the start, from the main menu, or with `r` in the file
+picker, 2026-10-29; showing where the other replica has a file of the same name, beside the file
 picker, 2026-10-29) are in git history. treepicker's own are in `lib/treepicker/docs/improvement-ideas.md`.
 
-1. **Show where a file is in the other replica, beside the file picker.** The diff is by path
-   only, so a file moved (or renamed dir) in one replica shows up as missing from the other:
-   Copy would make a second copy of it, and Remove would remove the one that moved. While
-   picking files (Copy/Remove's picker, `picker.pick_files()`), a right-hand column would show,
-   for the selected file, a small tree of where the other replica has a file of the same name
-   (its paths there, as a tree from the replica's root), or that it has none. Then the user can
-   tell a moved file from a missing one before copying or removing it.
-   - Matching: by name, the cheapest, with all of a common name's matches listed (e.g.
-     `README.md`). Size, or a hash, would tell same-named files apart: the Drive cache has
-     `size` and `sha256Checksum`, a local dir would need a `stat` (size) or reading the file
-     (hash). Name and size may be enough to start with.
-   - The other replica's files by name: a `{name: [relpaths]}` map, built once per picker. For a
-     local dir that's one more `find` of it (dirdiff lists only the diff); a cloud tree has
-     them all.
-   - treepicker: it has no side column. Something like fzf's `--preview`, but rather than
-     running a command per selection (slow for Drive, and dirdelta has the map in memory), a
-     protocol like `--updates`: treepicker writes the selected node's path to an fd as the
-     selection moves, and dirdelta answers with the lines to show (a tree, drawn by treepicker
-     or sent drawn). The column would take part of the width, or be toggled with a key. A
-     treepicker change, made in its repo.
-   - Then suggest renaming rather than copying: for a file whose match is found, a "Rename"
-     action that moves the match in the other replica to this file's path (or this file to the
-     match's), so both have it at one path, rather than a Copy and a Remove. Cheap on both
-     sides: `os.rename` (a move within one disk) locally, and in Drive one `files().update`
-     with the new `name` and `addParents`/`removeParents` (making the folders on the way, like
-     `_folder_id()`), which keeps the file's id, history and sharing, unlike a new upload. The
-     cache gets the change as a line too (the file again, with its new name and parents). The
-     Copy/Remove pickers could say which of their files have a match ("moved?"), and the
+1. **Rename a moved file, rather than copying and removing it.** The diff is by path only, so a
+   file moved (or a dir renamed) in one replica shows up as missing from the other. The Copy and
+   Remove pickers now show, beside the selected file, where the other replica has files of its
+   name, with their sizes (`elsewhere.py`, treepicker's `--preview`, 2026-10-29), so the user can
+   tell a moved file from a missing one. What's left:
+   - A "Rename" action for a file whose match is found, that moves the match in the other
+     replica to this file's path (or this file to the match's), so both have it at one path,
+     rather than a Copy and a Remove. Cheap on both sides: `os.rename` (a move within one disk)
+     locally, and in Drive one `files().update` with the new `name` and
+     `addParents`/`removeParents` (making the folders on the way, like `_folder_id()`), which
+     keeps the file's id, history and sharing, unlike a new upload. The cache gets the change
+     as a line too (the file again, with its new name and parents). The Copy/Remove pickers
+     could say which of their files have a match ("moved?", e.g. by an `--updates` tag), and the
      confirmation offer Rename for those.
+   - Matching is by name, with the sizes shown (and "same size" said). A hash would tell
+     same-sized files apart (idea 7): the Drive cache has `sha256Checksum`, a local dir would
+     need to read the file.
+   - The previews are all made before the picker opens (for a local dst, one more `find` of
+     it, since dirdiff lists only the diff), not asked for as the selection moves: cheap for
+     the diffs seen so far. A huge diff with a common name everywhere could make the file
+     big; then an `--updates`-like protocol (treepicker writes the selected path to an fd,
+     dirdelta answers with its lines) would make them only as they're shown.
 
 2. **Sort an inbox folder: file each one away, or remove it.** A mode for a folder of files
    not yet sorted (e.g. `cloud/unsorted`), rather than a diff of two replicas: for each file
@@ -68,9 +62,9 @@ picker, 2026-10-29) are in git history. treepicker's own are in `lib/treepicker/
      window instead of a treepicker run, with the rest unchanged. A Python toolkit (Qt via
      PySide6 has tree views and image viewing built in; or a local web page served by dirdelta,
      opened in a browser, which also suits idea 4).
-   - A cheaper first step, in the terminal: treepicker's side column (idea 1's) showing the image
-     with a terminal graphics protocol (kitty's, sixel, or iTerm2's, via e.g. `chafa`), in
-     terminals that support one. Windows Terminal supports sixel (WSL included).
+   - A cheaper first step, in the terminal: treepicker's preview column (`--preview`) showing
+     the image with a terminal graphics protocol (kitty's, sixel, or iTerm2's, via e.g.
+     `chafa`), in terminals that support one. Windows Terminal supports sixel (WSL included).
 
 4. **A dirdelta server, used from a phone.** A daemon on an always-on machine that holds the
    replicas' state (the Drive cache, scans of local dirs it can reach) and runs the actions

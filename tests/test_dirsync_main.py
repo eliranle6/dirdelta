@@ -44,6 +44,9 @@ class MainMenuTest(unittest.TestCase):
         self.writable = {'/a', '/b'}
         for patcher in (mock.patch('dirdelta.dirsync_main.os.access',
                                    side_effect=lambda path, mode: path in self.writable),
+                        # The dirs aren't there to look in
+                        mock.patch('dirdelta.elsewhere.previews', return_value={}),
+                        mock.patch('dirdelta.messages.print_line'),
                         mock.patch('dirdelta.messages.show')):
             self.addCleanup(patcher.stop)
             self.show = patcher.start()

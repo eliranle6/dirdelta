@@ -51,7 +51,8 @@ def pick_from_tree(tree, header='', dirs_only=False, root_name=None):
     return [tree.get_node('' if path == '.' else path).data for path in picked_paths]
 
 
-def pick_files(rootpath, relpaths, header='', picked=None, label=None, keys='', selected=None):
+def pick_files(rootpath, relpaths, header='', picked=None, label=None, keys='', selected=None,
+               previews=None):
     """Let the user pick some of the files at relpaths (relative to rootpath, each dir's files and
     subdirs together, in the order to show them, as dirdiff lists them). Picking a dir picks the
     files under it. Returns the picked ones (of relpaths), in that order, or None if the user quit.
@@ -59,7 +60,8 @@ def pick_files(rootpath, relpaths, header='', picked=None, label=None, keys='', 
     color): a label shown after the mode's, e.g. what the picks are for. keys (e.g. 'r'): keys
     that end picking too, for the caller to act on the selected file or dir, and then it returns a
     KeyPressed. selected: the relpath of the file or dir to start with selected ('' the root),
-    e.g. the KeyPressed's, to go on where it was.
+    e.g. the KeyPressed's, to go on where it was. previews: {relpath: lines} to show beside the
+    tree, in a column on the right, while the file (or dir) at relpath is selected.
 
     Only the files are sent: treepicker adds their dirs, so no tree is built here."""
     args = ['--typed', '--root', rootpath, '-m'] + _header_args(header)
@@ -67,11 +69,18 @@ def pick_files(rootpath, relpaths, header='', picked=None, label=None, keys='', 
         args += ['--expect', keys]
     if selected is not None:
         args += ['--select', selected or '.']
-    with tempfile.NamedTemporaryFile('wb', prefix='dirdelta-picked-') as picked_file:
+    with tempfile.NamedTemporaryFile('wb', prefix='dirdelta-picked-') as picked_file, \
+            tempfile.NamedTemporaryFile('wb', prefix='dirdelta-previews-') as previews_file:
         if picked:
             picked_file.write(_null_terminated(picked))
             picked_file.flush()
             args += ['--picked', picked_file.name]
+        if previews:
+            previews_file.write(_null_terminated(
+                '\t'.join([relpath or '.'] + [_one_line(line) for line in lines])
+                for relpath, lines in previews.items()))
+            previews_file.flush()
+            args += ['--preview', previews_file.name]
         picked_paths = _run(args + ['-'], ('f ' + relpath for relpath in relpaths),
                             label=label)
     if picked_paths is None:
@@ -207,6 +216,12 @@ def _update(item, shown):
     if isinstance(shown, Disabled):
         return '%s\t%s\tdisabled' % (item, shown.text)
     return '%s\t%s' % (item, shown)
+
+
+def _one_line(text):
+    """text without what would end a line of a --preview file, or the line itself (e.g. a file
+    name's tab), shown as '?' like treepicker shows control characters"""
+    return text.replace('\t', '?').replace('\n', '?').replace('\0', '?')
 
 
 def _null_terminated(items):

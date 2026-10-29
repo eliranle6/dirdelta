@@ -236,6 +236,19 @@ class InteractiveDirSyncTest(unittest.TestCase):
             self.assertEqual(pick_files.call_args.kwargs['label'], label)
             self.assertEqual(pick_option.call_args.kwargs['label'], label)
 
+    def test_the_picker_shows_where_dst_has_files_of_the_same_names(self):
+        # sub/b.txt moved to elsewhere/b.txt in dst
+        helpers.make_files(self.dst_root, ['elsewhere/b.txt'])
+        src = localdiskdirtree.LocalDiskDirTree(self.src_root, True)
+        dst = localdiskdirtree.LocalDiskDirTree(self.dst_root, True)
+        with helpers.scripted_files_picker(lambda relpaths: None) as pick_files:
+            interactive_dir_sync.InteractiveDirSync(src, dst).sync(COPY)
+        previews = pick_files.call_args.kwargs['previews']
+        self.assertEqual(list(previews), ['sub/b.txt'])
+        self.assertEqual(previews['sub/b.txt'][:3],
+                         ["In %s:" % (dst.displayname(),), "  elsewhere/",
+                          "    b.txt  15 B"])
+
     def test_a_cloud_replica_is_named_as_a_cloud_path(self):
         # Not by its path in Drive (/mein), which reads like a local dir
         src = clouddirtree.CloudDirTree('cloud/mein')
@@ -259,7 +272,8 @@ class RefreshKeyTest(unittest.TestCase):
         for relpath in ('a/1.mp3', 'a/2.mp3', 'b/3.mp3'):
             self.cloud.add_file_by_relpath(relpath)
         self.local = dirtree.DirTree('/local')
-        for patcher in (mock.patch('dirdelta.messages.show'),
+        for patcher in (mock.patch('dirdelta.messages.print_line'),
+                        mock.patch('dirdelta.messages.show'),
                         mock.patch('dirdelta.picker.pick_option', return_value=NO)):
             self.addCleanup(patcher.stop)
             self.show = patcher.start()

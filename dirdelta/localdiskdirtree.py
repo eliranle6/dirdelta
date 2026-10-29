@@ -1,3 +1,4 @@
+import collections
 import os
 import shutil
 import subprocess
@@ -60,6 +61,27 @@ class LocalDiskDirTree(dirtree.DirTree):
                 self.add_file_by_fullpath(path)
             elif kind == b'd':
                 self.create_dir_node_from_fullpath_if_not_exists(path)
+
+    def file_size(self, relpath):
+        try:
+            return os.lstat(os.path.join(self._rootpath, relpath)).st_size
+        except OSError:
+            return None
+
+    def files_by_name(self):
+        """As DirTree's, but from a find of the dir (down to max_depth levels), with its files'
+        sizes: the tree may not be scanned (see dirdiff.py), or be from an older scan"""
+        command = ["find", self._rootpath, "-mindepth", "1"]
+        if self.max_depth is not None:
+            command += ["-maxdepth", str(self.max_depth)]
+        command += ["-type", "f", "-printf", "%s %P\\0"]
+        result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+        found = collections.defaultdict(list)
+        for entry in result.stdout.split(b'\0')[:-1]:
+            size, relpath = entry.split(b' ', 1)
+            relpath = os.fsdecode(relpath)
+            found[os.path.basename(relpath)].append((relpath, int(size)))
+        return found
 
     def _copy_file(self, file_entry, source):
         reason = source.cant_fetch(file_entry.relpath) if source is not None else None

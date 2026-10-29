@@ -103,6 +103,19 @@ class CloudDirTreeTest(unittest.TestCase):
         self.assertTrue(notes[2].startswith('Including 1 Google files'))
         self.assertEqual(notes[3], '  Budget.gsheet')
 
+    def test_file_sizes_are_the_caches(self):
+        with open(self.cache, 'a') as f:
+            f.write(json.dumps(dict(_item('sized', 'sized.mp3', 'mein'), size='1234')) + '\n')
+        tree = self.google_tree()
+        self.assertEqual(tree.file_size('sized.mp3'), 1234)
+        self.assertIsNone(tree.file_size('song.mp3'))
+        self.assertIsNone(tree.file_size('Budget.gsheet'))
+
+    def test_files_by_name_has_same_named_files_by_their_name(self):
+        found = clouddirtree.factory('cloud/mein').files_by_name()
+        self.assertEqual(len(found['dup.mp3']), 2)
+        self.assertEqual(found['track.mp3'], [('album/track.mp3', None)])
+
     def test_fullpath_is_the_path_inside_the_drive(self):
         tree = clouddirtree.factory('cloud/mein')
         self.assertEqual(tree.get_node('album/track.mp3').data.fullpath, '/mein/album/track.mp3')

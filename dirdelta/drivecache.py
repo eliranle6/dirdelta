@@ -155,8 +155,13 @@ def path_name(md):
     return md['name'] + GOOGLE_FILE_EXTENSIONS.get(kind, '.g' + kind)
 
 
+# What entries() yields: size is a file's size in bytes, or None for a folder or a Google file (which
+# Drive gives none)
+Entry = collections.namedtuple('Entry', ['relpath', 'cloud_id', 'is_dir', 'is_google_file', 'size'])
+
+
 def entries(inner_rootpath):
-    """Yield (relpath, cloud_id, is_dir, is_google_file) for inner_rootpath (a path in the cloud,
+    """Yield an Entry (relpath, cloud_id, is_dir, is_google_file, size) for inner_rootpath (a path in the cloud,
     like /eliran), whose relpath is '', and each file and folder under it, each folder before what's
     in it. relpath is relative to inner_rootpath, and ends with a Google file's extension (see
     path_name()); two entries can have the same one, since Drive allows same-named files. Raises
@@ -175,12 +180,13 @@ def entries(inner_rootpath):
         if _is_at_or_under(folder_path, inner_rootpath):
             if folder_path == inner_rootpath:
                 found = True
-                yield ('', folder_cloud_id, True, False)
+                yield Entry('', folder_cloud_id, True, False, None)
             problems += _name_problems(folder_path, children)
             for md in children:
                 path = posixpath.join(folder_path, path_name(md))
                 is_dir = md.get('mimeType') == FOLDER_MIME_TYPE
-                yield (posixpath.relpath(path, inner_rootpath), md['id'], is_dir, is_google_file(md))
+                yield Entry(posixpath.relpath(path, inner_rootpath), md['id'], is_dir, is_google_file(md),
+                            int(md['size']) if 'size' in md else None)
                 if is_dir:
                     dfs_stack.append((md['id'], path))
         else:

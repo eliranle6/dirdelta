@@ -267,7 +267,10 @@ took ~2.5s; the picker now opens 0.2s after the diff).
   again (the trees as they are, not the background future), and shows the
   picker again on the same node (`pick_files(selected=...)`) with what's
   still missing of the picks picked; with nothing missing any more, it says
-  so and ends. `FileEntry`s are made for the picked files only
+  so and ends. Beside the picker, a column shows where dst has files of the
+  selected file's name (`pick_files(previews=...)`, from `elsewhere.py`,
+  made anew each time the picker opens), in case it was moved rather than
+  being missing. `FileEntry`s are made for the picked files only
   (`_file_entry()`), and passed to `_copy(files)`/`_remove(files)`.
 - `_copy()` rebuilds a `DirTree` from just the selected `FileEntry`s via
   `dirtree.DirTree.from_file_entries` (previously
@@ -343,6 +346,19 @@ and `interactive_dir_sync.py` to the progress screen (its top line).
 Copy's and Remove's file picker and confirmation add their own label after
 it (`InteractiveDirSync.LABELS`: COPY in blue, REMOVE in magenta).
 
+### `elsewhere.py`
+`previews(relpaths, src, dst)`: for each missing file, the lines of the file
+picker's preview column: where dst has files of the same name, as a tree of
+their paths from dst's root, each with its size ("same size" when it's the
+src file's; the same-sized ones kept first when a common name has more than
+`MAX_MATCHES`), or that it has none, and the file's own size. dst's files by
+name come from `files_by_name()` (`{name: [(relpath, size)]}`): a
+`DirTree`'s from its nodes and `file_size()` (None), a `CloudDirTree`'s from
+its nodes with the cache's sizes (a same-named file's `___DUP__` relpath
+under its real name), and a `LocalDiskDirTree`'s from one `find -type f
+-printf '%s %P'` of the dir (its tree may not be scanned: see dirdiff);
+src's file's size from `file_size()` (`lstat` for a local dir).
+
 ### `picker.py`
 Runs `treepicker` (from github.com/eliranle6/treepicker; `$DIRDELTA_PICKER`, or
 `treepicker` on `PATH`) as a subprocess for each pick, fzf-style: treepicker
@@ -359,7 +375,8 @@ stdout, all `\0`-separated (`-0`). Exit code 1 means the user quit (→
   list of files (`-m`), sent as `f sub/x` lines only: treepicker adds their
   dirs. Returns the picked files' relpaths (treepicker also prints the dirs
   whose files are all picked; those are dropped). `picked` start picked
-  (`--picked FILE`).
+  (`--picked FILE`). `previews` (`{relpath: lines}`) are shown in a column
+  beside the tree for the selected node (`--preview FILE`).
 - `pick_under_dir(dirpath, max_depth, dirs_only, lazy, header)`:
   `treepicker [--max-depth N] [--dirs-only] [--lazy] DIR`.
 - `pick_option(options, header)`: `treepicker --list`, for menus.

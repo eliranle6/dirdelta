@@ -228,6 +228,23 @@ class LocalDiskDirTreeTest(unittest.TestCase):
         self.assertIsNotNone(tree.get_node('real.txt'))
         self.assertIsNone(tree.get_node('link.txt'))
 
+    def test_files_by_name_finds_them_all_with_sizes_unscanned(self):
+        self._scan(['a/x.txt', 'b/x.txt', 'y.txt'])
+        with open(os.path.join(self.src_root, 'y.txt'), 'w') as f:
+            f.write('12345')
+        tree = localdiskdirtree.LocalDiskDirTree(self.src_root, silent=True)
+        found = tree.files_by_name()
+        self.assertEqual(sorted(found['x.txt']), [('a/x.txt', 0), ('b/x.txt', 0)])
+        self.assertEqual(found['y.txt'], [('y.txt', 5)])
+        self.assertNotIn('a', found)
+        self.assertEqual(tree.file_size('y.txt'), 5)
+        self.assertIsNone(tree.file_size('nope.txt'))
+
+    def test_files_by_name_max_depth(self):
+        self._scan(['top.txt', 'a/b/deep.txt'])
+        tree = localdiskdirtree.LocalDiskDirTree(self.src_root, silent=True, max_depth=2)
+        self.assertEqual(sorted(tree.files_by_name()), ['top.txt'])
+
     def test_scan_names_that_arent_utf8(self):
         name = os.fsdecode(b'caf\xe9.txt')
         tree = self._scan([name])

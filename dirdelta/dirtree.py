@@ -1,3 +1,4 @@
+import collections
 import os
 
 import treelib
@@ -216,6 +217,19 @@ class DirTree(object):
         for node in self._tree.all_nodes_itr():
             if isinstance(node.data, entries.FileEntry):
                 yield node.data
+
+    def file_size(self, relpath):
+        """The size in bytes of the file at relpath, or None if it isn't known"""
+        return None
+
+    def files_by_name(self):
+        """{name: [(relpath, size)]} of all the tree's files (size: as file_size()), to find where
+        it has a file of a name"""
+        found = collections.defaultdict(list)
+        for file_entry in self.iter_files():
+            found[os.path.basename(file_entry.relpath)].append(
+                (file_entry.relpath, self.file_size(file_entry.relpath)))
+        return found
 
     def does_dir_contain_any_files(self):
         return next(self.iter_files(), None) is not None
