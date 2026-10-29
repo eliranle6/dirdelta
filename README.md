@@ -97,7 +97,8 @@ Drive folders; choosing it, the replicas you sync are offered too). The inbox's 
   size, and in Drive by hash), and the selected one's contents are compared with what's found (in
   the background; the picked ones' before Claude is asked where they go). A file with the same
   contents as one in the sorted tree says so, highlighted ("a copy: it may be removed"), Claude is
-  told, and may recommend removing it: "Remove the N files Claude says are copies" (asked twice).
+  told, and may recommend removing it: "Remove 3 of the 5 files that are copies of files in X" (by their contents, whatever
+  Claude says; asked twice).
   Local files' hashes are kept in `~/.cache/dirdelta/hashes.json`, so a file is read once.
 - "Move the N files to Claude's recommendation" (naming the dir, when they all go to one), "Move the N
   files to..." (pick a dir in the sorted tree), "Copy the N files to...", and "Remove the N files"

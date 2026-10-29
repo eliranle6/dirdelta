@@ -136,7 +136,7 @@ class InboxSortTest(unittest.TestCase):
         disabled = self.pick_option.call_args.kwargs['shown_as']()
         self.assertEqual([text.text.split(': ')[-1] for text in disabled.values()],
                          ['none of them has a recommendation to move it yet',
-                          "Claude says none of them is a copy (or wasn't asked)"])
+                          'none of them is a copy of a file there (by its contents)'])
 
     def ask_claude(self, answers):
         """Patch ai._run_query to answer with answers ({relpath: {field: value}}) for the files in its
@@ -155,7 +155,7 @@ class InboxSortTest(unittest.TestCase):
     def test_descriptions_are_shown_after_the_names(self):
         with self.ask_claude({'a.txt': {'description': 'a shopping list'}}):
             # Described in the background; quitting waits for it
-            self.sort([['a.txt'], None], ['Describe 1 file'])
+            self.sort([['a.txt'], None], ['Describe the 1 file'])
         labels = self.pick_files.call_args.kwargs['shown_as']()
         self.assertEqual(labels, {'a.txt': 'a.txt  | a shopping list', '': ''})
         self.assertEqual(self.queries[0][:2], (['description'], ai.DESCRIBE_MODEL))
@@ -255,6 +255,20 @@ class InboxSortTest(unittest.TestCase):
         # Its hash is kept, for next time
         self.assertIsNotNone(inbox.elsewhere.hashcache.get(os.path.join(self.inbox, 'old.txt'), 'sha1'))
 
+    def test_copies_found_by_contents_can_be_removed_without_claude(self):
+        self.copy_in_the_inbox()
+        with open(os.path.join(self.inbox, 'b.jpg'), 'w') as f:
+            f.write('photos/old.jpg')
+        os.rename(os.path.join(self.inbox, 'b.jpg'), os.path.join(self.inbox, 'old.jpg'))
+        sorter = Sort(self.inbox, self.root)
+        sorter._compare(['old.txt'])
+        with helpers.answering_option_picker([NOTHING]) as pick_option:
+            sorter._act(['old.txt', 'a.txt', 'old.jpg'])
+        option = [option for option in pick_option.call_args.args[0] if option.startswith('Remove 1')][0]
+        self.assertEqual(option, "Remove 1 of the 3 files that are copies of files in %s (1 not compared yet: "
+                                 "Ctrl-I compares them)" % (self.root,))
+        self.assertNotIn(option, pick_option.call_args.kwargs['shown_as']())
+
     def test_claude_is_told_of_copies_and_its_removals_are_offered(self):
         self.copy_in_the_inbox()
         with self.ask_claude({'old.txt': {'description': 'an old note', 'action': 'remove', 'path': '',
@@ -262,7 +276,7 @@ class InboxSortTest(unittest.TestCase):
                               'a.txt': {'description': 'a list', 'action': 'move', 'path': 'docs/a.txt',
                                         'reason': 'a list'}}):
             self.sort([['a.txt', 'old.txt'], ['a.txt', 'old.txt'], None],
-                      ['Ask Claude', 'Remove the 1 file Claude says are copies', YES, SURE])
+                      ['Ask Claude', 'Remove 1 of the 2 files that are copies', YES, SURE])
         self.assertIn("already in the sorted tree, with the same contents, at docs/old.txt", self.queries[1][2])
         self.assertIn("  old.txt: a copy of %s/docs/old.txt" % (self.root,),
                       self.pick_option.call_args_list[2].kwargs['header'])
@@ -277,7 +291,7 @@ class InboxSortTest(unittest.TestCase):
 
     def test_claudes_errors_are_said(self):
         with mock.patch('dirdelta.ai._run_query', side_effect=ai.AIError('not logged in')):
-            self.sort([['a.txt'], None], ['Describe 1 file'])
+            self.sort([['a.txt'], None], ['Describe the 1 file'])
             self.assertEqual(self.sorter._failed, {'a.txt': 'not logged in'})
             self.assertEqual(self.sorter._shown_as(['a.txt'])[''], "Claude: couldn't do 1 file")
             self.assertIn("  not logged in", self.sorter._previews(['a.txt'])['a.txt'])

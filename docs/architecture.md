@@ -106,8 +106,8 @@ without the inbox's files, if it's in it), and the picker runs
 Claude is asked where files go, `check_all()` compares the picked ones. A file
 with the same contents as one of the sorted tree's is a copy (`_copies()`,
 highlighted `SURELY_A_COPY`); Claude is told (`ai.recommend(copies=...)`) and
-may answer `action: 'remove'`, offered as "Remove the N files Claude says are
-copies". After a move or copy, the sorted tree's index has the file.
+may answer `action: 'remove'`, and the copies (by their contents, whatever Claude says) are offered as
+"Remove N of the M files that are copies of files in X". After a move or copy, the sorted tree's index has the file.
 
 ### `hashcache.py`
 Local files' contents' hashes, in `~/.cache/dirdelta/hashes.json`

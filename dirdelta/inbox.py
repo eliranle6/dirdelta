@@ -57,6 +57,14 @@ def _files(count):
     return "1 file" if count == 1 else "%d files" % (count,)
 
 
+def _of(count, total):
+    """How many of the picked files (total) count is: 'the 3 files' when it's all of them, else '3 of
+    the 5 files'"""
+    if count == total:
+        return "the " + _files(count)
+    return "%d of the %s" % (count, _files(total))
+
+
 def _join(*relpaths):
     return posixpath.join(*[relpath for relpath in relpaths if relpath]) if any(relpaths) else ''
 
@@ -296,8 +304,12 @@ class InboxSort(object):
                          if relpath not in self._recommendations and relpath not in self._placing]
         recommended = [relpath for relpath in relpaths
                        if relpath in self._recommendations and self._target(relpath) is not None]
-        removable = [relpath for relpath in relpaths
-                     if relpath in self._recommendations and self._target(relpath) is None]
+        # Copies of the sorted tree's files, by their contents (whatever Claude says of them), and the
+        # files with candidates there not compared yet
+        removable = [relpath for relpath in relpaths if self._copies(relpath)]
+        uncompared = [relpath for relpath in relpaths if relpath not in self._checked and self._root_index.is_built()
+                      and elsewhere._same_sized(relpath, self._size(relpath), self._root_index)]
+        not_yet = " (%d not compared yet: Ctrl-I compares them)" % (len(uncompared),) if uncompared else ""
         destinations = sorted({os.path.dirname(self._target(relpath)) for relpath in recommended})
         renamed = [relpath for relpath in recommended
                    if os.path.basename(self._target(relpath)) != os.path.basename(relpath)]
@@ -309,17 +321,16 @@ class InboxSort(object):
             to = "Claude's recommendations (%d dirs%s)" % (len(destinations), renamed_text)
         options = {
             self.DESCRIBE: ("Describe %s with Claude, while you go on (sends it their contents; or Ctrl-I)" %
-                            (_files(len(undescribed)),),
+                            (_of(len(undescribed), len(relpaths)),),
                             None if undescribed else "they all have a description, or are being described"),
             self.RECOMMEND: ("Ask Claude where %s go in %s, while you go on (or Ctrl-I)" %
-                             (_files(len(unrecommended)), self.root_path),
+                             (_of(len(unrecommended), len(relpaths)), self.root_path),
                              None if unrecommended else "they all have a recommendation, or are being placed"),
-            self.MOVE_RECOMMENDED: ("Move %s to %s" % ("the " + count if len(recommended) == len(relpaths) else
-                                                       "the %d of them with one" % (len(recommended),), to),
+            self.MOVE_RECOMMENDED: ("Move %s to %s" % (_of(len(recommended), len(relpaths)), to),
                                     None if recommended else "none of them has a recommendation to move it yet"),
-            self.REMOVE_COPIES: ("Remove the %s Claude says are copies of files in %s" %
-                                 (_files(len(removable)), self.root_path),
-                                 None if removable else "Claude says none of them is a copy (or wasn't asked)"),
+            self.REMOVE_COPIES: ("Remove %s that are copies of files in %s%s" %
+                                 (_of(len(removable), len(relpaths)), self.root_path, not_yet),
+                                 None if removable else "none of them is a copy of a file there (by its contents)"),
             self.MOVE_TO: ("Move the %s to... (pick a dir in %s)" % (count, self.root_path), None),
             self.COPY_TO: ("Copy the %s to... (pick a dir in %s)" % (count, self.root_path), None),
             self.REMOVE: ("Remove the %s from %s" % (count, self.inbox_path), None),
