@@ -34,6 +34,11 @@ Like fzf: dirdelta starts `treepicker`, which draws on the terminal itself
 - Showing a picker again with the user's picks: `--picked FILE`, FILE
   holding the paths treepicker printed, and `--select PATH` to start on the
   node it was on.
+- Where the selection is, as it moves: `--selection FD`, a pipe treepicker writes
+  each selected node's path to (`PATH\0`), read by a thread into a
+  `picker.Selection`, for `pick_files(on_selection=...)`: the contents check of
+  the selected file (`elsewhere.check_contents()`), which sends its preview
+  through the same `--preview` pipe as the previews' thread.
 - The file picker always prints the selected node first (`--print-selection`,
   after `--expect`'s key), so after an action dirdelta shows it again where it
   was (`--select`).

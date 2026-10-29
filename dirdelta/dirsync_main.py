@@ -91,6 +91,8 @@ def _sync(replica_a, replica_b, replica_a_path, replica_b_path, known_replicas=N
             if interactive_dir_sync.refresh_replica(refreshes[option]):
                 indexes[refreshes[option]].invalidate()
                 for way in ways:
+                    # Its files may have other contents now
+                    way.checked.clear()
                     way.find_missing()
             continue
         # Copying, removing and renaming change the files (unless it's a dry run), and so what each
@@ -110,11 +112,15 @@ DOTS_INTERVAL = 0.4
 
 class _Way(object):
     """One way of the sync: src's files that dst lacks (a future of Missing), found in the
-    background, and the replicas' indexes (elsewhere.Index, by replica)"""
+    background, the replicas' indexes (elsewhere.Index, by replica), and which of src's files
+    have the same contents as their matches"""
     def __init__(self, src, dst, indexes):
         self.src = src
         self.dst = dst
         self.indexes = indexes
+        # Which of src's files' matches in dst have the same contents (see
+        # elsewhere.check_contents()), kept so each is compared once
+        self.checked = {}
         self.missing = None
 
     def find_missing(self):
@@ -158,7 +164,8 @@ class _Action(object):
         """Returns whether the replicas' files changed meanwhile (see InteractiveDirSync)"""
         way = self.way
         sync = interactive_dir_sync.InteractiveDirSync(way.src, way.dst, way.missing,
-                                                       way.indexes[way.src], way.indexes[way.dst])
+                                                       way.indexes[way.src], way.indexes[way.dst],
+                                                       way.checked)
         sync.browse()
         return sync.has_changed
 

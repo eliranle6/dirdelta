@@ -5,6 +5,7 @@ a subprocess (see docs/treepicker-integration.md), found by programs.find() ($DI
 else where make install, make deploy or make build put it, or else on PATH).
 """
 import collections
+import functools
 import os
 import subprocess
 import tempfile
@@ -52,7 +53,7 @@ def pick_from_tree(tree, header='', dirs_only=False, root_name=None):
 
 
 def pick_files(rootpath, relpaths, header='', picked=None, label=None, keys='', selected=None,
-               previews=None):
+               previews=None, on_selection=None):
     """Let the user pick some of the files at relpaths (relative to rootpath, each dir's files and
     subdirs together, in the order to show them, as dirdiff lists them). Picking a dir picks the
     files under it. Returns a Picked: the picked ones (of relpaths), in that order, and where the
@@ -70,6 +71,11 @@ def pick_files(rootpath, relpaths, header='', picked=None, label=None, keys='', 
     picker is gone (and previews should then stop, letting it go up): pick_files() returns only
     once previews has returned.
 
+    on_selection, if given, is called on another thread of its own as soon as the picker is shown,
+    with a Selection (where the selection is, as it moves) and the same send(), e.g. to work out
+    more about the selected file than previews does for all of them. It too should stop on
+    PickerClosed, which the Selection raises too, once the picker is gone.
+
     Only the files are sent: treepicker adds their dirs, so no tree is built here."""
     args = ['--typed', '--root', rootpath, '-m', '--print-selection'] + _header_args(header)
     if keys:
@@ -82,7 +88,7 @@ def pick_files(rootpath, relpaths, header='', picked=None, label=None, keys='', 
             picked_file.flush()
             args += ['--picked', picked_file.name]
         picked_paths = _run(args + ['-'], ('f ' + relpath for relpath in relpaths),
-                            label=label, previews=previews)
+                            label=label, previews=previews, on_selection=on_selection)
     if picked_paths is None:
         return None
     key = ''
@@ -145,29 +151,41 @@ def _header_args(header):
     return ['--header', header] if header else []
 
 
-def _run(args, input_items, shown_as=None, label=None, previews=None):
+def _run(args, input_items, shown_as=None, label=None, previews=None, on_selection=None):
     """Run treepicker with args and the items (or None) on its stdin, and with shown_as (see
-    pick_option()) sending it what to show the items as, and previews (see pick_files()) what to
-    show beside them. Returns what was picked, or None if the user quit. Every picker shows whether
-    it's a dry run, and then label (text, color), if given."""
+    pick_option()) sending it what to show the items as, and previews and on_selection (see
+    pick_files()) what to show beside them. Returns what was picked, or None if the user quit.
+    Every picker shows whether it's a dry run, and then label (text, color), if given."""
     command = [_find_program(), '-0']
     for text, color in [dryrun.label()] + ([label] if label else []):
         command += ['--label', text, '--label-color', color]
     command += args
-    # Each sender writes to a pipe of its own, on a thread of its own, while treepicker runs
-    senders = []
-    if shown_as is not None:
-        senders.append(('--updates', lambda fd, is_done: _send_updates(fd, shown_as, is_done)))
-    if previews is not None:
-        senders.append(('--preview', lambda fd, is_done: _send_previews(fd, previews, is_done)))
-    read_fds, write_fds = [], []
-    for option, _ in senders:
-        read_fd, write_fd = os.pipe()
-        read_fds.append(read_fd)
-        write_fds.append(write_fd)
-        command += [option, str(read_fd)]
     is_done = threading.Event()
-    threads = []
+    # Pipes to treepicker (which reads --updates and --preview) and from it (it writes
+    # --selection), each served by a thread of its own while it runs: treepicker's ends, and ours
+    child_fds, our_fds = [], []
+
+    def pipe(option, is_read_by_child):
+        read_fd, write_fd = os.pipe()
+        child_fd, our_fd = (read_fd, write_fd) if is_read_by_child else (write_fd, read_fd)
+        child_fds.append(child_fd)
+        our_fds.append(our_fd)
+        command.extend([option, str(child_fd)])
+        return our_fd
+
+    jobs = []
+    if shown_as is not None:
+        jobs.append(functools.partial(_send_updates, pipe('--updates', True), shown_as, is_done))
+    if previews is not None or on_selection is not None:
+        preview_sender = _PreviewSender(pipe('--preview', True), is_done)
+        if previews is not None:
+            jobs.append(functools.partial(preview_sender.run, previews))
+        if on_selection is not None:
+            selection = Selection()
+            jobs.append(functools.partial(_read_selection, pipe('--selection', False), selection))
+            jobs.append(functools.partial(preview_sender.run,
+                                          lambda send: on_selection(selection, send)))
+    threads = [threading.Thread(target=job, daemon=True) for job in jobs]
     try:
         # From a file, rather than written to a pipe by communicate(): with a sender busy on its
         # thread (holding the GIL), writing a big input would be slow to get the GIL back each time
@@ -179,26 +197,25 @@ def _run(args, input_items, shown_as=None, label=None, previews=None):
                 process = subprocess.Popen(
                     command, stdout=subprocess.PIPE,
                     stdin=input_file if input_items is not None else subprocess.DEVNULL,
-                    pass_fds=read_fds)
+                    pass_fds=child_fds)
             except OSError as error:
                 raise PickerError('Cannot run %s: %s' % (command[0], error))
             finally:
                 # treepicker has its own copies
-                for read_fd in read_fds:
-                    os.close(read_fd)
-        for (_, send), write_fd in zip(senders, write_fds):
-            threads.append(threading.Thread(target=send, args=(write_fd, is_done), daemon=True))
-        write_fds = []  # The senders close them
+                for child_fd in child_fds:
+                    os.close(child_fd)
         for thread in threads:
             thread.start()
         stdout, _ = process.communicate()
     finally:
         is_done.set()
-        for write_fd in write_fds:
-            os.close(write_fd)
-        # So nothing a sender started (e.g. a find) outlives the picker
+        # So nothing a thread started (e.g. a find) outlives the picker. They end once treepicker
+        # has: what they send raises PickerClosed, and the selection's pipe ends.
         for thread in threads:
-            thread.join()
+            if thread.is_alive():
+                thread.join()
+        for our_fd in our_fds:
+            os.close(our_fd)
     if process.returncode == _EXIT_CODE_QUIT:
         return None
     if process.returncode != 0:
@@ -212,7 +229,7 @@ def _send_updates(fd, shown_as, is_done):
     """Send treepicker what shown_as() says to show the items as, as it changes, until is_done (or
     treepicker is gone)"""
     sent = {}
-    with open(fd, 'wb') as updates:
+    with open(fd, 'wb', closefd=False) as updates:
         while True:
             changed = {item: shown for item, shown in shown_as().items() if sent.get(item) != shown}
             if changed:
@@ -235,31 +252,100 @@ def _update(item, shown):
 
 
 class PickerClosed(Exception):
-    """Raised by pick_files()'s previews' send() once the picker is gone"""
+    """Raised by pick_files()'s previews' send(), and its on_selection's Selection, once the picker
+    is gone"""
 
 
-def _send_previews(fd, previews, is_done):
-    """Call previews(send), with send() writing what it's given to treepicker (see pick_files()),
-    until previews returns, or treepicker is gone (is_done, or the pipe is broken). Closes fd."""
-    def send(found=None, default=None):
-        if is_done.is_set():
+class Selection(object):
+    """Where a pick_files() picker's selection is (a relpath, '' for the root), as treepicker says
+    while it's shown, for its on_selection"""
+
+    def __init__(self):
+        self._condition = threading.Condition()
+        self._relpath = None
+        # How many times it moved, and how many of them wait_next() has returned
+        self._nr_moves = self._nr_seen = 0
+        self._is_closed = False
+
+    def wait_next(self, timeout=None):
+        """The selection, once it has moved since wait_next() last returned it (or at first), or
+        None if timeout (seconds) passes first. Raises PickerClosed once the picker is gone."""
+        with self._condition:
+            self._condition.wait_for(lambda: self._is_closed or self._nr_moves != self._nr_seen,
+                                     timeout)
+            if self._is_closed:
+                raise PickerClosed()
+            if self._nr_moves == self._nr_seen:
+                return None
+            self._nr_seen = self._nr_moves
+            return self._relpath
+
+    def is_at(self, relpath):
+        """Whether the selection is at relpath now. Raises PickerClosed once the picker is gone."""
+        with self._condition:
+            if self._is_closed:
+                raise PickerClosed()
+            return self._relpath == relpath
+
+    def _move(self, relpath):
+        with self._condition:
+            self._relpath = relpath
+            self._nr_moves += 1
+            self._condition.notify_all()
+
+    def _close(self):
+        with self._condition:
+            self._is_closed = True
+            self._condition.notify_all()
+
+
+def _read_selection(fd, selection):
+    """Move selection as treepicker says the selection moves (each path ending with '\0'), until it
+    stops saying (it's gone)"""
+    pending = b''
+    try:
+        for chunk in iter(lambda: os.read(fd, 4096), b''):
+            paths = (pending + chunk).split(b'\0')
+            pending = paths.pop()
+            for path in paths:
+                path = path.decode('utf-8', 'surrogateescape')
+                selection._move('' if path == '.' else path)
+    except OSError:
+        pass
+    finally:
+        selection._close()
+
+
+class _PreviewSender(object):
+    """Writes what's sent to treepicker's --preview pipe (see pick_files()), from any thread"""
+
+    def __init__(self, fd, is_done):
+        self._fd = fd
+        self._is_done = is_done
+        self._lock = threading.Lock()
+
+    def send(self, found=None, default=None):
+        if self._is_done.is_set():
             raise PickerClosed()
         items = [_preview(relpath or '.', lines) for relpath, lines in (found or {}).items()]
         if default is not None:
             # An empty path: the lines of the ones without any
             items.append(_preview('', default))
         data = _null_terminated(items)
+        # A preview's lines in one piece, whichever thread sends it
+        with self._lock:
+            try:
+                while data:
+                    data = data[os.write(self._fd, data):]
+            except BrokenPipeError:
+                raise PickerClosed()
+
+    def run(self, previews):
+        """Call previews(send), until it returns, or treepicker is gone"""
         try:
-            while data:
-                data = data[os.write(fd, data):]
-        except BrokenPipeError:
-            raise PickerClosed()
-    try:
-        previews(send)
-    except PickerClosed:
-        pass
-    finally:
-        os.close(fd)
+            previews(self.send)
+        except PickerClosed:
+            pass
 
 
 def _preview(path, lines):

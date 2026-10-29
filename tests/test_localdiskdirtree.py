@@ -1,9 +1,11 @@
+import hashlib
 import os
 import shutil
 import tempfile
 import unittest
 from unittest import mock
 
+from dirdelta import dirtree
 from dirdelta import entries
 from dirdelta import localdiskdirtree
 
@@ -262,6 +264,16 @@ class LocalDiskDirTreeTest(unittest.TestCase):
         with mock.patch('dirdelta.dryrun.DRYRUN', True), mock.patch('dirdelta.messages.print_line'):
             self.assertEqual(tree.move_files([('x.txt', 'y.txt')]), [])
         self.assertTrue(os.path.isfile(os.path.join(self.src_root, 'x.txt')))
+
+    def test_content_hash_reads_the_file_and_can_be_stopped(self):
+        tree = self._scan(['x.txt'])
+        with open(os.path.join(self.src_root, 'x.txt'), 'wb') as f:
+            f.write(b'abc')
+        self.assertEqual(tree.content_hash('x.txt', 'sha1'), hashlib.sha1(b'abc').hexdigest())
+        self.assertIsNone(tree.content_hash('nope.txt', 'sha1'))
+        with self.assertRaises(dirtree.HashStopped):
+            tree.content_hash('x.txt', 'sha1', should_stop=lambda: True)
+        self.assertEqual(tree.local_path('x.txt'), os.path.join(os.path.realpath(self.src_root), 'x.txt'))
 
     def test_files_by_name_max_depth(self):
         self._scan(['top.txt', 'a/b/deep.txt'])

@@ -21,7 +21,7 @@ class EntriesTest(unittest.TestCase):
         self.addCleanup(os.remove, self.cache)
 
     def test_the_folder_itself_comes_first(self):
-        self.assertEqual(next(drivecache.entries('/mein')), ('', 'mein', True, False, None, None))
+        self.assertEqual(next(drivecache.entries('/mein')), ('', 'mein', True, False, None, None, {}))
 
     def test_entries_under_a_folder(self):
         entries = [entry[:3] for entry in drivecache.entries('/mein')][1:]

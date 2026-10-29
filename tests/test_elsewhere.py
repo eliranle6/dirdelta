@@ -1,3 +1,4 @@
+import hashlib
 import os
 import shutil
 import tempfile
@@ -13,11 +14,13 @@ import helpers
 
 class _SizedTree(dirtree.DirTree):
     """A DirTree whose files have the given sizes (and dates taken)"""
-    def __init__(self, rootpath, sizes, dates=None):
+    def __init__(self, rootpath, sizes, dates=None, hashes=None):
         super(_SizedTree, self).__init__(rootpath)
         self._sizes = sizes
         self._dates = dates or {}
+        self._hashes = hashes or {}
         self.dates_read = []
+        self.hashed = []
         for relpath in sizes:
             self.add_file_by_relpath(relpath)
 
@@ -27,6 +30,16 @@ class _SizedTree(dirtree.DirTree):
     def date_taken(self, relpath):
         self.dates_read.append(relpath)
         return self._dates.get(relpath)
+
+    def content_hash(self, relpath, algorithm, should_stop=None):
+        # Like Drive's: SHA-256s known. As if working it out took a while: asked once whether to stop.
+        if should_stop is not None and should_stop():
+            raise dirtree.HashStopped()
+        self.hashed.append(relpath)
+        return self._hashes.get(relpath) if algorithm == 'sha256' else None
+
+    def known_hashes(self, relpath):
+        return ('sha256',) if self._hashes.get(relpath) else ()
 
 
 class _Sent(object):
@@ -192,6 +205,19 @@ class IndexTest(unittest.TestCase):
         index.build()
         self.assertEqual(sorted(index.files_named('x')), ['a/x', 'b/x'])
 
+    def test_a_hash_is_worked_out_once_and_moves_with_its_file(self):
+        dst = _SizedTree('/dst', {'a/x': 1}, hashes={'a/x': 'H'})
+        index = elsewhere.Index(dst)
+        index.build()
+        self.assertEqual(index.content_hash('a/x', 'sha256'), 'H')
+        self.assertEqual(index.content_hash('a/x', 'sha256'), 'H')
+        self.assertEqual(dst.hashed, ['a/x'])
+        index.move('a/x', 'b/x')
+        self.assertEqual(index.content_hash('b/x', 'sha256'), 'H')
+        self.assertEqual(dst.hashed, ['a/x'])
+        index.remove('b/x')
+        self.assertIsNone(index.content_hash('b/x', 'sha256'))
+
     def test_changes_before_its_built_are_in_once_it_is(self):
         dst = _SizedTree('/dst', {})
         index = elsewhere.Index(dst)
@@ -206,6 +232,147 @@ class IndexTest(unittest.TestCase):
         with mock.patch('dirdelta.localdiskdirtree.subprocess.Popen', side_effect=OSError("no find")):
             sent = _previews(['x'], src, dst)
         self.assertEqual(sent.defaults[-1][-1], "no find")
+
+
+class _Selection(object):
+    """A picker.Selection that moves to each of moves in turn (None: a wait that times out), then
+    the picker is gone; at, if given, says where it is when asked (else at the last move)"""
+    def __init__(self, moves, at=None):
+        self._moves = list(moves)
+        self._at = at
+        self._last = None
+
+    def wait_next(self, timeout=None):
+        if not self._moves:
+            raise picker.PickerClosed()
+        move = self._moves.pop(0)
+        if move is not None:
+            self._last = move
+        return move
+
+    def is_at(self, relpath):
+        return (self._at(relpath) if self._at is not None else self._last == relpath)
+
+
+class CheckContentsTest(unittest.TestCase):
+    """src's x has matches a/x and b/x of its size, and c/x of another"""
+    def setUp(self):
+        self.src = _SizedTree('/src', {'x': 5, 'y': 5, 'd/z': 1}, hashes={'x': 'H', 'y': 'H'})
+        self.dst = _SizedTree('/dst', {'a/x': 5, 'b/x': 5, 'c/x': 6, 'e/y': 5},
+                              hashes={'a/x': 'H', 'b/x': 'other', 'c/x': 'H', 'e/y': None})
+        self.index = elsewhere.Index(self.dst)
+        self.index.build()
+        self.checked = {}
+        self.sent = _Sent()
+
+    def check(self, moves, at=None):
+        with self.assertRaises(picker.PickerClosed):
+            elsewhere.check_contents(sorted(self.src._sizes), self.src, elsewhere.Index(self.src),
+                                     self.index, self.checked, _Selection(moves, at), self.sent)
+
+    def test_the_same_contents_are_it_and_the_others_are_dropped(self):
+        self.check(['x'])
+        # Only the ones of its size are compared
+        self.assertEqual(self.checked, {'x': {'a/x': True, 'b/x': False}})
+        self.assertNotIn('c/x', self.dst.hashed)
+        lines = self.sent.previews['x']
+        self.assertEqual(lines[2:], ["  a/", "    x  5 B, same size", "    with 0 of 1 of its dir's files",
+                                     "    the same contents", "    surely this file, moved"])
+
+    def test_it_says_its_comparing_meanwhile(self):
+        sends = []
+        self.sent = lambda found=None, default=None: sends.append(dict(found))
+        self.check(['x'])
+        self.assertEqual(sends[0]['x'][-2:], ["Comparing its contents with the", "2 files of its size..."])
+
+    def test_other_contents_are_said_and_arent_sure(self):
+        self.dst._hashes['a/x'] = 'other'
+        self.check(['x'])
+        lines = self.sent.previews['x']
+        self.assertEqual(lines.count("    other contents"), 2)
+        self.assertNotIn("    surely this file, moved", lines)
+        self.assertEqual(elsewhere.sure_matches(['x'], self.src, self.index, self.checked), {})
+
+    def test_unknown_hashes_arent_compared(self):
+        self.check(['y'])
+        self.assertEqual(self.checked, {'y': {}})
+        self.assertNotIn("    other contents", self.sent.previews['y'])
+
+    def test_each_file_once_and_only_files_with_matches_of_its_size(self):
+        self.check(['x', 'd', 'd/z', 'x'])
+        self.assertEqual(sorted(self.dst.hashed), ['a/x', 'b/x'])
+        self.assertEqual(sorted(self.sent.previews), ['x'])
+
+    def test_moving_on_stops_it_and_goes_on_where_the_selection_is(self):
+        # While x is hashed, the selection moves to y
+        self.check(['x', 'y'], at=lambda relpath: relpath == 'y')
+        self.assertNotIn('x', self.checked)
+        self.assertIn('y', self.checked)
+
+    def test_it_waits_for_the_index(self):
+        self.index.invalidate()
+        index = self.index
+
+        class Selection(_Selection):
+            def wait_next(self_, timeout=None):
+                if self_._last is not None:
+                    # Built meanwhile (by the previews' thread)
+                    index.build()
+                return _Selection.wait_next(self_, timeout)
+        with self.assertRaises(picker.PickerClosed):
+            elsewhere.check_contents(['x'], self.src, elsewhere.Index(self.src), self.index,
+                                     self.checked, Selection(['x', None]), self.sent)
+        self.assertIn('x', self.checked)
+
+    def test_hashes_are_kept_in_the_indexes(self):
+        src_index = elsewhere.Index(self.src)
+        with self.assertRaises(picker.PickerClosed):
+            elsewhere.check_contents(['x', 'y'], self.src, src_index, self.index, self.checked,
+                                     _Selection(['x']), self.sent)
+        self.assertEqual(self.index.content_hash('a/x', 'sha256'), 'H')
+        self.assertEqual(src_index.content_hash('x', 'sha256'), 'H')
+        self.assertEqual(self.src.hashed.count('x'), 1)
+
+    def test_two_local_files_are_compared_up_to_where_they_differ(self):
+        root = tempfile.mkdtemp(prefix='dirdelta-elsewhere-')
+        self.addCleanup(shutil.rmtree, root)
+        for relpath, contents in (('src/x', b'same'), ('dst/a/x', b'same'), ('dst/b/x', b'diff')):
+            os.makedirs(os.path.dirname(os.path.join(root, relpath)), exist_ok=True)
+            with open(os.path.join(root, relpath), 'wb') as f:
+                f.write(contents)
+        src = localdiskdirtree.LocalDiskDirTree(os.path.join(root, 'src'), True)
+        index = elsewhere.Index(localdiskdirtree.LocalDiskDirTree(os.path.join(root, 'dst'), True))
+        index.build()
+        with mock.patch.object(localdiskdirtree.LocalDiskDirTree, 'content_hash') as content_hash, \
+                self.assertRaises(picker.PickerClosed):
+            elsewhere.check_contents(['x'], src, elsewhere.Index(src), index, self.checked,
+                                     _Selection(['x']), self.sent)
+        self.assertEqual(self.checked, {'x': {'a/x': True, 'b/x': False}})
+        content_hash.assert_not_called()
+
+    def test_a_local_file_and_a_drive_one_by_drives_fastest_hash(self):
+        root = tempfile.mkdtemp(prefix='dirdelta-elsewhere-')
+        self.addCleanup(shutil.rmtree, root)
+        os.makedirs(os.path.join(root, 'src'))
+        with open(os.path.join(root, 'src', 'x'), 'wb') as f:
+            f.write(b'same')
+        src = localdiskdirtree.LocalDiskDirTree(os.path.join(root, 'src'), True)
+        dst = mock.Mock(spec=dirtree.DirTree)
+        dst.displayname.return_value = 'cloud/d'
+        dst.files_by_name.return_value = {'x': [('a/x', 4)]}
+        dst.date_taken.return_value = None
+        dst.local_path.return_value = None
+        # Drive has both: SHA-1 is the faster to work out
+        dst.known_hashes.return_value = ('sha1', 'sha256')
+        dst.content_hash.side_effect = lambda relpath, algorithm, should_stop=None: \
+            {'sha1': hashlib.sha1(b'same').hexdigest(), 'sha256': 'unused'}[algorithm]
+        index = elsewhere.Index(dst)
+        index.build()
+        with self.assertRaises(picker.PickerClosed):
+            elsewhere.check_contents(['x'], src, elsewhere.Index(src), index, self.checked,
+                                     _Selection(['x']), self.sent)
+        self.assertEqual(self.checked, {'x': {'a/x': True}})
+        self.assertEqual([call.args[1] for call in dst.content_hash.call_args_list], ['sha1'])
 
 
 class FormatSizeTest(unittest.TestCase):

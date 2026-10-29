@@ -14,7 +14,8 @@ from dirdelta import programs
 
 # Stands in for treepicker: records its arguments and stdin into $FAKE_PICKER_LOG, and with
 # --updates (--preview), what it read from that fd until it read $FAKE_PICKER_WAIT_FOR
-# ($FAKE_PICKER_PREVIEW_WAIT_FOR); then prints
+# ($FAKE_PICKER_PREVIEW_WAIT_FOR), after writing $FAKE_PICKER_SELECTIONS ('|'-separated) to
+# --selection's fd; then prints
 # $FAKE_PICKER_OUTPUT (items separated by '|', each printed '\0'-terminated, empty ones too) and exits with
 # $FAKE_PICKER_EXIT_CODE
 FAKE_PICKER = '''#!%s
@@ -31,6 +32,10 @@ def read_until(option, wait_for):
                 break
             read += chunk
     return read.decode()
+if '--selection' in sys.argv:
+    fd = int(sys.argv[sys.argv.index('--selection') + 1])
+    for path in os.environ.get('FAKE_PICKER_SELECTIONS', '').split('|'):
+        os.write(fd, path.encode() + b'\\0')
 updates = read_until('--updates', os.environ.get('FAKE_PICKER_WAIT_FOR', ''))
 preview = read_until('--preview', os.environ.get('FAKE_PICKER_PREVIEW_WAIT_FOR', ''))
 with open(os.environ['FAKE_PICKER_LOG'], 'w') as log:
@@ -226,6 +231,38 @@ class PickerTest(unittest.TestCase):
         picker.pick_files('/r', ['a/1.txt'], previews=previews)
         # pick_files() waited for it
         self.assertEqual(stopped, [True])
+
+    def test_on_selection_follows_the_selection_and_sends_previews(self):
+        os.environ['FAKE_PICKER_SELECTIONS'] = 'a/1.txt|.|a'
+        os.environ['FAKE_PICKER_PREVIEW_WAIT_FOR'] = 'done'
+        self.answer('a/1.txt')
+        seen = []
+
+        def on_selection(selection, send):
+            while len(seen) < 3:
+                relpath = selection.wait_next()
+                # Moves between waits may come as one
+                seen.append(relpath)
+                if relpath == 'a':
+                    break
+            self.assertTrue(selection.is_at('a'))
+            send({'a': ['done']})
+            selection.wait_next()
+        picker.pick_files('/r', ['a/1.txt'], on_selection=on_selection)
+        self.assertEqual(seen[-1], 'a')
+        self.assertEqual(self.log_entry('preview'), 'a\tdone\0')
+
+    def test_a_selection_says_the_picker_is_gone(self):
+        selection = picker.Selection()
+        self.assertIsNone(selection.wait_next(timeout=0.01))
+        selection._move('x')
+        self.assertEqual(selection.wait_next(), 'x')
+        self.assertIsNone(selection.wait_next(timeout=0.01))
+        selection._close()
+        with self.assertRaises(picker.PickerClosed):
+            selection.wait_next()
+        with self.assertRaises(picker.PickerClosed):
+            selection.is_at('x')
 
     def test_pick_files_without_previews_passes_no_preview_fd(self):
         self.answer('a/1.txt')

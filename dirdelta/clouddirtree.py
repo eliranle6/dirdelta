@@ -62,6 +62,8 @@ class CloudDirTree(dirtree.DirTree):
         # Each file's size, by its relpath (none for a Google file), and a photo's date taken
         self._sizes = {}
         self._dates_taken = {}
+        # Each file's contents' hashes, as Drive gives them (drivecache.hashes()), by its relpath
+        self._hashes = {}
 
     def displayname(self):
         """The cloud path, as given (cloud/mein), rather than the path in Drive (/mein), which
@@ -73,7 +75,7 @@ class CloudDirTree(dirtree.DirTree):
         (or found: drivecache.entries() of it, already read)"""
         if found is None:
             found = drivecache.entries(self.fullpath())
-        for relpath, cloud_id, is_dir, is_google_file, size, date_taken in found:
+        for relpath, cloud_id, is_dir, is_google_file, size, date_taken, hashes in found:
             if relpath == '':
                 self._cloud_ids[relpath] = cloud_id
                 continue
@@ -90,6 +92,8 @@ class CloudDirTree(dirtree.DirTree):
                     self._sizes[relpath] = size
                 if date_taken is not None:
                     self._dates_taken[relpath] = date_taken
+                if hashes:
+                    self._hashes[relpath] = hashes
             self._cloud_ids[relpath] = cloud_id
 
     def refresh_from_drive(self, relpath=''):
@@ -108,6 +112,7 @@ class CloudDirTree(dirtree.DirTree):
         self._google_files = set()
         self._sizes = {}
         self._dates_taken = {}
+        self._hashes = {}
         self.update_from_cache(found)
         return relpath
 
@@ -116,6 +121,13 @@ class CloudDirTree(dirtree.DirTree):
 
     def date_taken(self, relpath):
         return self._dates_taken.get(relpath)
+
+    def content_hash(self, relpath, algorithm, should_stop=None):
+        # Drive's, so nothing's read
+        return self._hashes.get(relpath, {}).get(algorithm)
+
+    def known_hashes(self, relpath):
+        return tuple(self._hashes.get(relpath, {}))
 
     def files_by_name(self, progress=None):
         # A same-named file's relpath has a DUP_SUFFIX, its name doesn't
@@ -230,6 +242,8 @@ class CloudDirTree(dirtree.DirTree):
             self._sizes[file_entry.relpath] = int(md['size'])
         if drivecache.date_taken(md) is not None:
             self._dates_taken[file_entry.relpath] = drivecache.date_taken(md)
+        if drivecache.hashes(md):
+            self._hashes[file_entry.relpath] = drivecache.hashes(md)
         return True
 
     def _make_folders(self, dir_relpaths):
@@ -343,7 +357,7 @@ class CloudDirTree(dirtree.DirTree):
         self.remove_node(relpath)
         self.add_file_by_relpath(new_relpath)
         self._cloud_ids[new_relpath] = self._cloud_ids.pop(relpath)
-        for by_relpath in (self._sizes, self._dates_taken):
+        for by_relpath in (self._sizes, self._dates_taken, self._hashes):
             if relpath in by_relpath:
                 by_relpath[new_relpath] = by_relpath.pop(relpath)
         return True

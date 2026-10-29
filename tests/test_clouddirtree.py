@@ -119,6 +119,19 @@ class CloudDirTreeTest(unittest.TestCase):
         self.assertEqual(tree.date_taken('x.jpg'), '2024-07-01 14:03:22')
         self.assertIsNone(tree.date_taken('song.mp3'))
 
+    def test_hashes_are_the_caches(self):
+        with open(self.cache, 'a') as f:
+            f.write(json.dumps(dict(_item('h', 'h.mp3', 'mein'), sha1Checksum='S1', sha256Checksum='S256')) + '\n')
+            f.write(json.dumps(dict(_item('old', 'old.mp3', 'mein'), sha256Checksum='O256')) + '\n')
+        tree = clouddirtree.factory('cloud/mein')
+        self.assertEqual(tree.known_hashes('h.mp3'), ('sha1', 'sha256'))
+        self.assertEqual(tree.content_hash('h.mp3', 'sha1'), 'S1')
+        # A line from before SHA-1 was asked for
+        self.assertEqual(tree.known_hashes('old.mp3'), ('sha256',))
+        self.assertIsNone(tree.content_hash('old.mp3', 'sha1'))
+        self.assertEqual(tree.known_hashes('song.mp3'), ())
+        self.assertIsNone(tree.local_path('song.mp3'))
+
     def test_files_by_name_has_same_named_files_by_their_name(self):
         found = clouddirtree.factory('cloud/mein').files_by_name()
         self.assertEqual(len(found['dup.mp3']), 2)

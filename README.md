@@ -87,8 +87,9 @@ pick files with `Space` (on a directory it picks everything under it), and press
 directory is marked picked (`X`, red) when everything under it is, and partly picked (`-`, magenta)
 when only some of it is. Beside the tree, a column shows, for the selected file, where B has files
 of the same name (found while you look, with how far it's got), the likeliest first: the same
-size, the same date taken (photos), the file's neighbours there too; one that's surely the file,
-moved, says so (`p` hides the column). `Enter` then asks what to do with the picked files, with
+size, the same date taken (photos), the file's neighbours there too; for the selected file, the
+same-sized ones' contents are compared too (in the background), and one with the same contents is
+then the only one shown. One that's surely the file, moved, says so (`p` hides the column). `Enter` then asks what to do with the picked files, with
 "Nothing" selected first: copy them to B, remove them from A, or, for the ones whose match in B is
 surely them, rename: move B's match to the file's path, or the file to the match's (greyed out
 when it can't be done). A confirmation follows, with No selected (a removal asks a second time,

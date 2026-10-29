@@ -1,4 +1,5 @@
 import collections
+import hashlib
 import os
 import shutil
 import subprocess
@@ -14,6 +15,8 @@ from dirdelta import messages
 MAX_SCAN_ERRORS_SHOWN = 3
 # How much of find's output files_by_name() reads at a time, at most
 FIND_READ_SIZE = 1 << 16
+# How much of a file content_hash() reads at a time (asking should_stop() after each)
+HASH_READ_SIZE = 1 << 20
 
 
 def factory(filesystem_dirpath, max_depth=None, silent=False):
@@ -74,6 +77,21 @@ class LocalDiskDirTree(dirtree.DirTree):
 
     def date_taken(self, relpath):
         return exif.date_taken(os.path.join(self._rootpath, relpath))
+
+    def local_path(self, relpath):
+        return os.path.join(self._rootpath, relpath)
+
+    def content_hash(self, relpath, algorithm, should_stop=None):
+        digest = hashlib.new(algorithm)
+        try:
+            with open(os.path.join(self._rootpath, relpath), 'rb') as f:
+                for chunk in iter(lambda: f.read(HASH_READ_SIZE), b''):
+                    if should_stop is not None and should_stop():
+                        raise dirtree.HashStopped()
+                    digest.update(chunk)
+        except OSError:
+            return None
+        return digest.hexdigest()
 
     def has_file(self, relpath):
         # On disk: the tree may not be scanned (see dirdiff.py)

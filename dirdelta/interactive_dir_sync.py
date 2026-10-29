@@ -101,15 +101,18 @@ class InteractiveDirSync(object):
     # The file picker's key that reads the selected folder anew from Drive, when a replica is Drive's
     REFRESH_KEY = 'r'
 
-    def __init__(self, src, dst, missing=None, src_index=None, dst_index=None):
+    def __init__(self, src, dst, missing=None, src_index=None, dst_index=None, checked=None):
         """missing: a future (concurrent.futures.Future) of find_missing(src, dst), e.g. found in
         the background, to use rather than finding it again. src_index, dst_index: the replicas'
-        elsewhere.Index, kept by the caller so they're built once, and kept up to date here."""
+        elsewhere.Index, kept by the caller so they're built once, and kept up to date here.
+        checked: which of src's files' matches have the same contents (see
+        elsewhere.check_contents()), kept by the caller too, so each is compared once."""
         self._src = src
         self._dst = dst
         self._missing_future = missing
         self.src_index = src_index or elsewhere.Index(src)
         self.dst_index = dst_index or elsewhere.Index(dst)
+        self.checked = checked if checked is not None else {}
         # Whether the replicas' files changed here (copied, removed, moved, or read anew from
         # Drive), so what each lacks may have
         self.has_changed = False
@@ -134,7 +137,10 @@ class InteractiveDirSync(object):
             chosen = picker.pick_files(
                 self._src.displayname(), missing, header=header, picked=picked,
                 keys=self.REFRESH_KEY if clouds else '', selected=selected,
-                previews=functools.partial(elsewhere.find_previews, missing, self._src, self.dst_index))
+                previews=functools.partial(elsewhere.find_previews, missing, self._src, self.dst_index,
+                                           checked=self.checked),
+                on_selection=functools.partial(elsewhere.check_contents, missing, self._src,
+                                               self.src_index, self.dst_index, self.checked))
             if chosen is None:
                 return
             selected = chosen.selected
@@ -144,6 +150,8 @@ class InteractiveDirSync(object):
                     if refresh_replica(replica, selected):
                         self.has_changed = True
                         self._index_of(replica).invalidate()
+                        # Its files may have other contents now
+                        self.checked.clear()
                 is_changed = self.has_changed
             else:
                 done = self._act(chosen.files)
@@ -190,7 +198,7 @@ class InteractiveDirSync(object):
         user chose nothing (or didn't confirm)."""
         if not self.dst_index.is_built():
             messages.print_line("Looking for files of the same names in %s..." % (self._dst.displayname(),))
-        renames = elsewhere.sure_matches(relpaths, self._src, self.dst_index)
+        renames = elsewhere.sure_matches(relpaths, self._src, self.dst_index, self.checked)
         # Moving dst's matches to the picked files' paths, or the picked files to the matches'
         moves = {
             self.RENAME_IN_DST: [(match, relpath) for relpath, match in renames.items()

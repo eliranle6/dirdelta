@@ -222,6 +222,13 @@ class InteractiveDirSyncTest(unittest.TestCase):
         self.assertEqual(sorted(sent), ['sub/b.txt', 'sub/c.txt'])
         self.assertEqual(sent['sub/b.txt'][2:4], ["  elsewhere/", "    b.txt  15 B"])
 
+    def test_the_selected_files_contents_are_compared_and_kept(self):
+        helpers.make_files(self.dst_root, ['elsewhere/b.txt'])
+        self._browse([None], [])
+        on_selection = self.pick_files.call_args.kwargs['on_selection']
+        self.assertIs(on_selection.args[4], self.sync.checked)
+        self.assertIs(on_selection.args[3], self.sync.dst_index)
+
     def test_a_cloud_replica_is_named_as_a_cloud_path(self):
         # Not by its path in Drive (/mein), which reads like a local dir
         src = clouddirtree.CloudDirTree('cloud/mein')
@@ -320,7 +327,7 @@ class RefreshKeyTest(unittest.TestCase):
         with mock.patch('dirdelta.picker.pick_files', side_effect=answers) as pick_files, \
                 mock.patch.object(clouddirtree.CloudDirTree, 'refresh_from_drive', autospec=True,
                                   side_effect=refresh) as self.refresh:
-            self.sync = Sync(src, dst)
+            self.sync = Sync(src, dst, checked={'a/1.mp3': {'x': True}})
             self.sync.src_index.build()
             self.sync.browse()
         return pick_files.call_args_list
@@ -333,6 +340,7 @@ class RefreshKeyTest(unittest.TestCase):
                             [picker.Picked('r', 'a', ['a/1.mp3', 'a/2.mp3']), None], refresh)
         self.refresh.assert_called_once_with(self.cloud, 'a')
         self.assertTrue(self.sync.has_changed)
+        self.assertEqual(self.sync.checked, {})
         # Its files by name are listed again, when they're next needed
         self.assertFalse(self.sync.src_index.is_built())
         self.assertEqual(calls[0].kwargs['keys'], 'r')

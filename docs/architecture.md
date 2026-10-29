@@ -388,7 +388,18 @@ both are known, or of several, the one with the most siblings). What's found
 is sent every `SEND_INTERVAL` (0.1s), with how far it's got as the text of
 the files not done yet ("Listed N of its files", then "Matched X of Y
 files"). `send()` raises `picker.PickerClosed` once the picker is gone, which
-stops it (and the `find`). `sure_matches()` is what Rename moves. Dates taken
+stops it (and the `find`). `check_contents()` runs too, on another thread
+(`pick_files(on_selection=...)`, fed by treepicker's `--selection`): for the
+selected file, once the index is built, it compares its contents with its
+same-sized matches' (`_same_contents()`: two local files read side by side up
+to where they differ, no hash; with a Drive file, the fastest hash Drive has
+for it, SHA-1 else SHA-256, worked out for the local one and kept in the
+`Index`), stopped when the selection moves on, and notes the results in the
+way's `checked` (`{relpath: {match: whether the same}}`, kept by
+`dirsync_main._Way`, cleared by a refresh): a match with the same contents
+then drops the others and is the sure one, and one with other contents is
+never sure. Each file is compared once. `sure_matches()` is what Rename
+moves. Dates taken
 are the replicas' `date_taken()`: Drive's `imageMediaMetadata.time` (in the
 cache's lines from 2026-10-29 on: older ones have none until a refresh), or a
 local JPEG's EXIF `DateTimeOriginal` (`exif.date_taken()`, which reads only up

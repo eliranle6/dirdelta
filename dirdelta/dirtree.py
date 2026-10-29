@@ -8,6 +8,10 @@ from dirdelta import entries
 from dirdelta import messages
 
 
+class HashStopped(Exception):
+    """Raised by content_hash() (and elsewhere's comparing) when its should_stop() says to"""
+
+
 class DirTree(object):
     """A tree of a dir's files and dirs: each node's data is its entry (DirEntry or FileEntry), and
     its id is the entry's relpath (the root's is '').
@@ -257,6 +261,21 @@ class DirTree(object):
     def date_taken(self, relpath):
         """When the photo at relpath was taken ('YYYY-MM-DD HH:MM:SS'), or None if it isn't one, or
         that isn't known"""
+        return None
+
+    def content_hash(self, relpath, algorithm, should_stop=None):
+        """The hash (hex) of the contents of the file at relpath by algorithm (a hashlib name, e.g.
+        'sha1'), or None if it isn't known (or it can't be read). One that has to read the file
+        calls should_stop() as it goes, and raises HashStopped once it says to."""
+        return None
+
+    def known_hashes(self, relpath):
+        """The algorithms whose hashes of the file at relpath are known without reading it (e.g.
+        Drive's), the best first"""
+        return ()
+
+    def local_path(self, relpath):
+        """The file's path on the local disk, if it's there (to read it), or None"""
         return None
 
     def has_file(self, relpath):
