@@ -38,12 +38,23 @@ class DirTree(object):
 
     def __init__(self, rootpath, silent=False):
         self._silent = silent
+        # The dirs (relpaths) never removed, nor moved whole, nor trashed whole (keep_dirs())
+        self._kept_dirs = set()
 
         rootpath = rootpath.rstrip('/') or '/'
         self._rootpath = rootpath
         self._tree = treelib.Tree()
         root = entries.DirEntry(name='/', relpath='', fullpath=self._rootpath)
         self._root = self._tree.create_node(identifier='', tag=root.name, data=root)
+
+    def keep_dirs(self, relpaths):
+        """Never remove the dirs at relpaths when a removal or a move leaves them empty, nor move
+        or remove one, or a dir it's in, as a whole (e.g. an inbox, whose files are moved out of it)"""
+        self._kept_dirs |= set(relpaths)
+
+    def _is_kept(self, dirpath):
+        """Whether the dir at dirpath is kept, or has a kept dir in it"""
+        return any(_is_at_or_under(kept, dirpath) for kept in self._kept_dirs)
 
     # The tree's nodes (treelib.Node: identifier, tag, data)
 
@@ -206,6 +217,34 @@ class DirTree(object):
                                                                        self.displayname()))
         return done
 
+    def copy_files_within(self, copies):
+        """Copy files within the tree: each of copies is (relpath, new_relpath). Returns the copies
+        done. A dry run changes nothing (and returns none)."""
+        verb = "Dry run, not copying" if dryrun.DRYRUN else "Copying"
+        done = []
+        is_stopped = False
+        try:
+            for number, (relpath, new_relpath) in enumerate(copies, 1):
+                messages.print_line("%s %s to %s (%d out of %d)" % (verb, relpath, new_relpath, number,
+                                                                    len(copies)))
+                if not dryrun.DRYRUN and self._copy_within(relpath, new_relpath):
+                    done.append((relpath, new_relpath))
+        except KeyboardInterrupt:
+            messages.note_stopped()
+            is_stopped = True
+        ended = "stopped" if is_stopped else "complete"
+        if dryrun.DRYRUN:
+            messages.print_line("Dry run %s: nothing was copied in %s (DRYRUN=0 copies)" % (ended, self.displayname()))
+        else:
+            messages.print_line("Copy %s: copied %d of %d files in %s" % (ended, len(done), len(copies),
+                                                                        self.displayname()))
+        return done
+
+    def _copy_within(self, relpath, new_relpath):
+        """Copy the file at relpath to new_relpath (where there's none), and add its node. Returns
+        whether it was copied (if not, says why)."""
+        raise NotImplementedError("Can't copy files within %s" % (self.displayname(),))
+
     def _copy_files(self, files, source, starting, copied):
         """Copy the files (see _copy_file()), calling starting(file_entry) as each one's copy
         starts, and copied(whether it was copied) as it ends. One at a time, unless a tree does it
@@ -265,7 +304,8 @@ class DirTree(object):
         found = []
         for dirpath, new_dirpath in sorted(pairs, key=lambda pair: (pair[0].count('/'), pair)):
             if (any(_is_at_or_under(dirpath, other) for other, _, _ in found) or
-                    _is_at_or_under(new_dirpath, dirpath) or _is_at_or_under(dirpath, new_dirpath)):
+                    _is_at_or_under(new_dirpath, dirpath) or _is_at_or_under(dirpath, new_dirpath) or
+                    self._is_kept(dirpath)):
                 continue
             files = self._files_under(dirpath)
             if (files and not self._exists(new_dirpath) and

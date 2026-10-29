@@ -586,6 +586,30 @@ class CloudDirTreeChangesTest(unittest.TestCase):
         # Nothing left empty to trash
         self.assertEqual(self.trashed(), [])
 
+    def test_copy_within_drive_is_one_request(self):
+        copy = self.service.files.return_value.copy
+        copy.return_value.execute.return_value = {'id': 'copied', 'mimeType': 'audio/mpeg', 'size': '5'}
+        self.assertEqual(self.tree.copy_files_within([('song.mp3', 'album/song.mp3')]),
+                         [('song.mp3', 'album/song.mp3')])
+        copy.assert_called_once_with(fileId='song', body={'name': 'song.mp3', 'parents': ['album']},
+                                     fields=clouddirtree.drivecache.FILE_FIELDS)
+        self.assertIn('song.mp3', self.tree)
+        self.assertEqual(self.tree._cloud_ids['album/song.mp3'], 'copied')
+        found = {entry.relpath: entry.cloud_id for entry in clouddirtree.drivecache.entries('/mein')}
+        self.assertEqual(found['album/song.mp3'], 'copied')
+
+    def test_a_kept_folder_isnt_trashed_by_a_move_or_a_removal(self):
+        self.tree.keep_dirs(['album'])
+        self.move('album/track.mp3', 'track.mp3')
+        self.assertEqual(self.trashed(), [])
+        self.assertIn('album', self.tree)
+
+    def test_a_kept_folder_isnt_trashed_whole_its_files_are(self):
+        self.tree.keep_dirs(['album'])
+        self.tree.remove_files([self.tree.get_node('album/track.mp3').data])
+        self.assertEqual(self.trashed(), ['track'])
+        self.assertIn('album', self.tree)
+
     def test_move_into_a_new_folder_makes_it(self):
         self.move('song.mp3', 'new/moved.mp3')
         self.assertEqual([body['name'] for body in self.creates()], ['new'])

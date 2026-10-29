@@ -8,6 +8,7 @@ from dirdelta import replicas
 import helpers
 
 NONE = choose_replicas.NOT_CHOSEN
+SORT = choose_replicas.SORT
 
 
 class ChooseReplicasTest(unittest.TestCase):
@@ -34,14 +35,14 @@ class ChooseReplicasTest(unittest.TestCase):
 
     def test_the_slots_start_not_chosen(self):
         self.assertIsNone(self.run_menu(['Quit']))
-        self.assertEqual(self.menus, [['Replica A: ' + NONE, 'Replica B: ' + NONE, 'Quit']])
+        self.assertEqual(self.menus, [['Replica A: ' + NONE, 'Replica B: ' + NONE, SORT, 'Quit']])
 
     def test_two_local_dirs(self):
         chosen = self.run_menu(['Replica A: ' + NONE, 'Local disk',
                                 'Replica B: ' + NONE, 'Local disk'],
                                dir_picks=['/mnt/win', '/home/me'])
         self.assertEqual(chosen, ('/mnt/win', '/home/me'))
-        self.assertEqual(self.menus[2], ['Replica A: /mnt/win', 'Replica B: ' + NONE, 'Quit'])
+        self.assertEqual(self.menus[2], ['Replica A: /mnt/win', 'Replica B: ' + NONE, SORT, 'Quit'])
         # Only dirs, under /, read as they're shown
         args, kwargs = self.pick_under_dir.call_args
         self.assertEqual(args, ('/',))
@@ -106,8 +107,23 @@ class ChooseReplicasTest(unittest.TestCase):
             # Not the favorite again
             'Recent: /c <-> /d',
             'Recent: /a <-> /b',
+            SORT,
             'Quit',
         ])
+
+    def test_an_inbox_to_sort_and_its_sorted_tree(self):
+        chosen = self.run_menu([SORT, 'Local disk', 'Local disk'], dir_picks=['/in', '/sorted'])
+        self.assertEqual(chosen, choose_replicas.Sort('/in', '/sorted'))
+
+    def test_quitting_a_sorts_pick_goes_back_to_the_menu(self):
+        self.assertIsNone(self.run_menu([SORT, 'Local disk', 'Quit'], dir_picks=[None]))
+        self.assertEqual(len(self.menus), 3)
+
+    def test_recent_sorts_are_offered(self):
+        self.known.record_sort('cloud/unsorted', 'cloud/me')
+        chosen = self.run_menu(['Recent sort: cloud/unsorted -> cloud/me'])
+        self.assertEqual(self.menus[0][-2:], ['Recent sort: cloud/unsorted -> cloud/me', 'Quit'])
+        self.assertEqual(chosen, choose_replicas.Sort('cloud/unsorted', 'cloud/me'))
 
     def test_a_favorite_is_chosen_at_once(self):
         self.known.toggle_favorite('/mnt/win', 'cloud/me')

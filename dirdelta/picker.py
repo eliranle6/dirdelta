@@ -63,7 +63,7 @@ def pick_from_tree(tree, header='', dirs_only=False, root_name=None):
 
 
 def pick_files(rootpath, relpaths, header='', picked=None, label=None, keys='', selected=None,
-               previews=None, on_selection=None):
+               previews=None, on_selection=None, shown_as=None):
     """Let the user pick some of the files at relpaths (relative to rootpath, each dir's files and
     subdirs together, in the order to show them, as dirdiff lists them). Picking a dir picks the
     files under it. Returns a Picked: the picked ones (of relpaths), in that order, and where the
@@ -80,6 +80,9 @@ def pick_files(rootpath, relpaths, header='', picked=None, label=None, keys='', 
     may send as it goes, for the picker shows each at once. send raises PickerClosed once the
     picker is gone (and previews should then stop, letting it go up): pick_files() returns only
     once previews has returned.
+
+    shown_as, if given: as pick_option()'s, for files (by relpath) to show otherwise than by their
+    names, e.g. with a description after the name.
 
     on_selection, if given, is called on another thread of its own as soon as the picker is shown,
     with a Selection (where the selection is, as it moves) and the same send(), e.g. to work out
@@ -98,7 +101,8 @@ def pick_files(rootpath, relpaths, header='', picked=None, label=None, keys='', 
             picked_file.flush()
             args += ['--picked', picked_file.name]
         picked_paths = _run(args + ['-'], ('f ' + relpath for relpath in relpaths),
-                            label=label, previews=previews, on_selection=on_selection)
+                            shown_as=shown_as, label=label, previews=previews,
+                            on_selection=on_selection)
     if picked_paths is None:
         return None
     key = ''
@@ -111,6 +115,18 @@ def pick_files(rootpath, relpaths, header='', picked=None, label=None, keys='', 
     files = set(relpaths)
     return Picked(key, '' if selected == '.' else selected,
                   [path for path in picked_paths if path in files])
+
+
+def view_files(rootpath, relpaths, header='', previews=None, label=None):
+    """Show the files at relpaths (relative to rootpath, as pick_files() takes them), e.g. what an
+    action will make, with previews ({relpath: lines}) beside them, to look through. Returns
+    whether the user pressed Enter (rather than quit)."""
+    args = ['--typed', '--root', rootpath] + _header_args(header)
+    send_previews = None
+    if previews:
+        send_previews = lambda send: send(previews, default=[])
+    return _run(args + ['-'], ('f ' + relpath for relpath in relpaths), label=label,
+                previews=send_previews) is not None
 
 
 def pick_under_dir(dirpath, max_depth=None, dirs_only=False, lazy=False, header=''):

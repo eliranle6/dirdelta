@@ -408,6 +408,37 @@ class CloudDirTree(dirtree.DirTree):
                 self._google_files.add(new_relpath)
         return True
 
+    def _copy_within(self, relpath, new_relpath):
+        """Copy the file in Drive (one request: Drive copies it), into new_relpath's folder (made if
+        needed), with its name; and note it in the cache"""
+        reason = self.cant_move(relpath)
+        if reason is not None:
+            messages.print_line("Skipped %s: %s" % (relpath, reason), "yellow")
+            return False
+        if new_relpath in self:
+            messages.print_line("Skipped %s: %s is there already" % (relpath, new_relpath), "yellow")
+            return False
+        is_newly_stale = drivecache.mark_stale(self.fullpath())
+        try:
+            parent_id = self._folder_id(os.path.dirname(new_relpath))
+            body = {'name': os.path.basename(new_relpath), 'parents': [parent_id]}
+            md = driveapi.service().files().copy(
+                fileId=self._cloud_ids[relpath], body=body,
+                fields=drivecache.FILE_FIELDS).execute(num_retries=NUM_RETRIES)
+        except HttpError as error:
+            messages.print_line("Copy failed: %s" % (error,), "red")
+            return False
+        md = dict(body, **md)
+        drivecache.add(md)
+        if is_newly_stale:
+            drivecache.unmark_stale(self.fullpath())
+        self.add_file_by_relpath(new_relpath)
+        self._cloud_ids[new_relpath] = md['id']
+        for by_relpath in (self._sizes, self._dates_taken, self._hashes, self._modified):
+            if relpath in by_relpath:
+                by_relpath[new_relpath] = by_relpath[relpath]
+        return True
+
     def _moved(self, moves):
         """Trash the folders the moves left empty: the topmost of them, each as one, once Drive says
         it has nothing in them that the tree doesn't (see _folders_holding_more())"""
@@ -418,12 +449,14 @@ class CloudDirTree(dirtree.DirTree):
             while folder and folder not in self:
                 folder = os.path.dirname(folder)
             emptied.add(folder)
-        emptied = {folder for folder in emptied if folder and folder in self and not self.children(folder)}
+        emptied = {folder for folder in emptied
+                   if folder and folder in self and not self.children(folder) and not self._is_kept(folder)}
         # And the folders that only those are in, up to the root
         while True:
             parents = {os.path.dirname(folder) for folder in emptied} - emptied - {''}
             more = {parent for parent in parents
-                    if all(node.identifier in emptied for node in self.children(parent))}
+                    if not self._is_kept(parent) and
+                    all(node.identifier in emptied for node in self.children(parent))}
             if not more:
                 break
             emptied |= more
@@ -458,7 +491,9 @@ class CloudDirTree(dirtree.DirTree):
         does (it may, if the cache is out of date), and the other files one by one. Trashed as one,
         a folder is restored as one, and leaves no empty folders behind."""
         picked = {file_entry.relpath for file_entry in file_entries}
-        folders = self._whole_folders(picked)
+        # A kept folder, or one it's in, is never trashed whole (see keep_dirs())
+        kept = {folder for folder in self._cloud_ids if folder and self._is_kept(folder)}
+        folders = self._whole_folders(picked, kept)
         if folders and not dryrun.DRYRUN:
             holding_more = self._folders_holding_more(folders)
             if holding_more is None:
@@ -468,7 +503,7 @@ class CloudDirTree(dirtree.DirTree):
                     "Drive has files in %d folders that the cache doesn't (it's out of date), so "
                     "they're kept, and their picked files are removed one by one: %s" %
                     (len(holding_more), ', '.join(sorted(holding_more)[:MAX_LISTED])), "yellow")
-                folders = self._whole_folders(picked, holding_more)
+                folders = self._whole_folders(picked, holding_more | kept)
         in_trashed_folders = set()
         for folder in folders:
             folder_files = [relpath for relpath in picked if _is_under(relpath, folder)]

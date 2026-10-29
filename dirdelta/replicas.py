@@ -1,5 +1,6 @@
 """The pairs of replicas the user synced (history, the latest first) and the ones they made favorites,
-kept in REPLICAS_FILE (JSON) for the menu that chooses what to sync (see choose_replicas.py).
+and the inboxes they sorted (each with its sorted tree, see inbox.py), kept in REPLICAS_FILE (JSON)
+for the menu that chooses what to sync or sort (see choose_replicas.py).
 
 A pair is the same pair either way around (A and B, or B and A), and is kept the way around it was
 last used. Local paths are kept absolute and cloud ones cleaned (see normalized()), so the same dir
@@ -11,8 +12,9 @@ from dirdelta import paths
 
 REPLICAS_FILE = os.path.expanduser('~/.config/dirdelta/replicas.json')
 
-# How many pairs the history keeps
+# How many pairs the history keeps, and how many inbox sorts
 MAX_HISTORY = 20
+MAX_SORTS = 10
 
 
 class ReplicasError(Exception):
@@ -28,11 +30,20 @@ def normalized(path):
 
 
 class Replicas(object):
-    def __init__(self, history=None, favorites=None):
+    def __init__(self, history=None, favorites=None, sorts=None):
         # Pairs (tuples of 2 normalized paths), the latest first
         self.history = list(history or [])
         # Pairs, in the order they were added
         self.favorites = list(favorites or [])
+        # (inbox, sorted tree) pairs (normalized), the latest first
+        self.sorts = list(sorts or [])
+
+    def record_sort(self, inbox_path, root_path):
+        """Note that the inbox was just sorted into root_path: it goes to the top of the sorts (once;
+        the other way around is another sort)"""
+        sort = _pair(inbox_path, root_path)
+        self.sorts = [sort] + [old for old in self.sorts if old != sort]
+        del self.sorts[MAX_SORTS:]
 
     def record(self, path_a, path_b):
         """Note that the pair was just synced: it goes to the top of the history (once)"""
@@ -62,7 +73,8 @@ def load():
     try:
         with open(REPLICAS_FILE) as replicas_file:
             content = json.load(replicas_file)
-        return Replicas(_pairs(content.get('history', [])), _pairs(content.get('favorites', [])))
+        return Replicas(_pairs(content.get('history', [])), _pairs(content.get('favorites', [])),
+                        _pairs(content.get('sorts', [])))
     except FileNotFoundError:
         return Replicas()
     except (OSError, ValueError, AttributeError, TypeError) as error:
@@ -73,7 +85,8 @@ def load():
 def save(replicas):
     """Write replicas to REPLICAS_FILE, replacing it at once (so it's never half-written)"""
     content = {'favorites': [list(pair) for pair in replicas.favorites],
-               'history': [list(pair) for pair in replicas.history]}
+               'history': [list(pair) for pair in replicas.history],
+               'sorts': [list(pair) for pair in replicas.sorts]}
     try:
         os.makedirs(os.path.dirname(REPLICAS_FILE), exist_ok=True)
         temp_path = REPLICAS_FILE + '.tmp'

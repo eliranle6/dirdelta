@@ -84,14 +84,34 @@ class ReplicasFileTest(unittest.TestCase):
         known = replicas.Replicas()
         known.record('/a', 'cloud/b')
         known.toggle_favorite('/mnt/win', 'cloud/me')
+        known.record_sort('cloud/unsorted', 'cloud/me')
         # Its dir is made
         replicas.save(known)
         loaded = replicas.load()
         self.assertEqual(loaded.history, [('/a', 'cloud/b')])
         self.assertEqual(loaded.favorites, [('/mnt/win', 'cloud/me')])
+        self.assertEqual(loaded.sorts, [('cloud/unsorted', 'cloud/me')])
         with open(self.path) as f:
             self.assertEqual(json.load(f), {'favorites': [['/mnt/win', 'cloud/me']],
-                                            'history': [['/a', 'cloud/b']]})
+                                            'history': [['/a', 'cloud/b']],
+                                            'sorts': [['cloud/unsorted', 'cloud/me']]})
+
+    def test_sorts_are_kept_the_latest_first_and_by_their_way_around(self):
+        known = replicas.Replicas()
+        known.record_sort('/in', '/sorted')
+        known.record_sort('/other', '/sorted')
+        known.record_sort('/in', '/sorted')
+        known.record_sort('/sorted', '/in')
+        self.assertEqual(known.sorts, [('/sorted', '/in'), ('/in', '/sorted'), ('/other', '/sorted')])
+        for i in range(replicas.MAX_SORTS + 2):
+            known.record_sort('/in%d' % (i,), '/sorted')
+        self.assertEqual(len(known.sorts), replicas.MAX_SORTS)
+
+    def test_a_file_from_before_sorts_has_none(self):
+        os.makedirs(os.path.dirname(self.path), exist_ok=True)
+        with open(self.path, 'w') as f:
+            json.dump({'history': [], 'favorites': []}, f)
+        self.assertEqual(replicas.load().sorts, [])
         self.assertEqual(os.listdir(os.path.dirname(self.path)), ['replicas.json'])
 
     def test_hand_edited_paths_are_normalized(self):

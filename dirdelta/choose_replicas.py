@@ -1,5 +1,7 @@
 """The menu that chooses what to sync, when dirdelta is run without paths: a replica for each of its
-two slots (a local dir under /, or a Drive one), or a favorite or recent pair at once."""
+two slots (a local dir under /, or a Drive one), or a favorite or recent pair at once; or an inbox
+to sort into a sorted tree (inbox.py), a new one or a recent one."""
+import collections
 import os
 
 from dirdelta import drivecache
@@ -13,6 +15,10 @@ NOT_CHOSEN = '<none: press Enter to choose one>'
 LOCAL = 'Local disk'
 CLOUD = 'Google Drive'
 QUIT = 'Quit'
+SORT = 'Sort an inbox: file its files away into a sorted tree, with Claude\'s help'
+
+# What run() returns for an inbox to sort (rather than a pair to sync)
+Sort = collections.namedtuple('Sort', ['inbox', 'root'])
 
 # Where a local replica is browsed from, and a cloud one (all of Drive)
 LOCAL_ROOT = '/'
@@ -21,7 +27,8 @@ CLOUD_ROOT = 'cloud'
 
 def run(replicas):
     """Let the user choose two replicas, from replicas' (a Replicas) favorites and history or each
-    on its own. Returns their paths (a, b), or None if the user quit."""
+    on its own. Returns their paths (a, b); or a Sort, if they chose an inbox to sort (a new one, or
+    one of replicas' sorts); or None if the user quit."""
     chosen = [None, None]
     while True:
         slots = {'Replica %s: %s' % (name, path or NOT_CHOSEN): index
@@ -30,10 +37,25 @@ def run(replicas):
         for prefix, section in (('Favorite', replicas.favorites), ('Recent', replicas.recent())):
             for pair in section:
                 pairs['%s: %s' % (prefix, pair_label(*pair))] = pair
-        option = picker.pick_option(list(slots) + list(pairs) + [QUIT],
-                                    header='Choose the two replicas to sync')
+        sorts = {'Recent sort: %s -> %s' % sort: Sort(*sort) for sort in replicas.sorts}
+        option = picker.pick_option(list(slots) + list(pairs) + [SORT] + list(sorts) + [QUIT],
+                                    header='Choose the two replicas to sync, or an inbox to sort')
         if option in (None, QUIT):
             return None
+        if option == SORT:
+            sort = _choose_sort()
+            if sort is not None:
+                return sort
+            continue
+        if option in sorts:
+            missing = [path for path in sorts[option]
+                       if not paths.is_cloud_path(path) and not os.path.isdir(path)]
+            if missing:
+                messages.show("No such directory",
+                              ["%s is not a directory (anymore?)." % (path,) for path in missing],
+                              dryrun.label(), 'red')
+                continue
+            return sorts[option]
         if option in pairs:
             # A favorite or recent pair's local dir may be gone since (a cloud one is checked when
             # the sync reads Drive's file list)
@@ -57,6 +79,17 @@ def run(replicas):
                 chosen[index] = None
                 continue
             return tuple(chosen)
+
+
+def _choose_sort():
+    """Let the user choose an inbox and the sorted tree to sort it into. Returns a Sort, or None."""
+    inbox = _choose_replica('the inbox (the dir of files to sort)')
+    if inbox is None:
+        return None
+    root = _choose_replica('the sorted tree (where its files go)')
+    if root is None:
+        return None
+    return Sort(inbox, root)
 
 
 def pair_label(path_a, path_b):

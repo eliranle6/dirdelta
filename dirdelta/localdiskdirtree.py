@@ -1,4 +1,5 @@
 import collections
+import errno
 import hashlib
 import os
 import shutil
@@ -194,7 +195,8 @@ class LocalDiskDirTree(dirtree.DirTree):
         dirpaths = {os.path.dirname(file_entry.full_filesystem_path()) for file_entry in file_entries}
         # The deepest first, so a dir's emptied subdirs are gone when it's tried
         for dirpath in sorted(dirpaths, key=lambda dirpath: dirpath.count(os.sep), reverse=True):
-            while dirpath.startswith(self._rootpath.rstrip(os.sep) + os.sep):
+            while (dirpath.startswith(self._rootpath.rstrip(os.sep) + os.sep) and
+                   os.path.relpath(dirpath, self._rootpath) not in self._kept_dirs):
                 try:
                     os.rmdir(dirpath)
                 except OSError:
@@ -235,7 +237,7 @@ class LocalDiskDirTree(dirtree.DirTree):
             return False
         try:
             os.makedirs(os.path.dirname(new_path), exist_ok=True)
-            os.rename(path, new_path)
+            _rename(path, new_path)
         except OSError as error:
             messages.print_line("Move failed: %s" % (error,), "red")
             return False
@@ -252,7 +254,7 @@ class LocalDiskDirTree(dirtree.DirTree):
             return False
         try:
             os.makedirs(os.path.dirname(new_path), exist_ok=True)
-            os.rename(path, new_path)
+            _rename(path, new_path)
         except OSError as error:
             messages.print_line("Move failed: %s" % (error,), "red")
             return False
@@ -271,9 +273,36 @@ class LocalDiskDirTree(dirtree.DirTree):
             self.remove_node(file_entry.relpath)
         return True
 
+    def _copy_within(self, relpath, new_relpath):
+        new_path = os.path.join(self._rootpath, new_relpath)
+        if os.path.lexists(new_path):
+            messages.print_line("Skipped %s: %s is there already" % (relpath, new_relpath), "yellow")
+            return False
+        try:
+            os.makedirs(os.path.dirname(new_path), exist_ok=True)
+            self._copy_local_file_to_tree_with_path(os.path.join(self._rootpath, relpath), new_path)
+        except OSError as error:
+            messages.print_line("Copy failed: %s" % (error,), "red")
+            return False
+        # The tree may not have them, if it wasn't scanned (see dirdiff.py)
+        if relpath in self:
+            self.add_file_by_relpath(new_relpath)
+        return True
+
     def fetch_file(self, relpath, local_path):
         self._copy_local_file_to_tree_with_path(os.path.join(self._rootpath, relpath), local_path)
 
     def _copy_local_file_to_tree_with_path(self, src, dst):
         # copy2: with its modification time, rather than the copy's
         shutil.copy2(src, dst)
+
+
+def _rename(path, new_path):
+    """Move path to new_path: a rename, or between filesystems (which a rename can't), a copy and a
+    removal"""
+    try:
+        os.rename(path, new_path)
+    except OSError as error:
+        if error.errno != errno.EXDEV:
+            raise
+        shutil.move(path, new_path)

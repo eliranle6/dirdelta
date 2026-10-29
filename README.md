@@ -10,6 +10,12 @@ dirdelta directory_a_path directory_b_path
 dirdelta directory_path
 ```
 
+## Sorting an inbox
+```
+dirdelta --sort inbox_path sorted_tree_path
+```
+(or "Sort an inbox" in the menu of a run without paths; it remembers the recent ones)
+
 # Development
 
 ## Setup
@@ -60,6 +66,37 @@ dir, browsed from `/`, or a Google Drive folder), then your favorite pairs and t
 Choosing a pair, or both replicas, goes on to the sync menu below, which also has "Add to favorites"
 (or "Remove from favorites"). Every sync's pair is kept in `~/.config/dirdelta/replicas.json` (the
 latest first, each pair once, either way around), which you can also edit by hand.
+
+The menu also has "Sort an inbox" (choose the inbox, then the sorted tree), and the recent sorts.
+
+### Sorting an inbox
+
+```bash
+.venv/bin/python3 -m dirdelta --sort cloud/unsorted cloud/eliran
+```
+
+An inbox is a dir of files not sorted yet; the sorted tree is where they go (both local dirs, or
+both in Google Drive). The inbox's picker works like a sync's: pick files with `Space`, press
+`Enter`, and choose what to do with them, with "Nothing" selected first:
+
+- "Describe N files with Claude": a short description of each (at most 10 words), shown after its
+  name in the picker (`a.txt  | a shopping list`), and searchable.
+- "Ask Claude where N files go": Claude is given the sorted tree's dirs, and recommends a dir for
+  each file (an existing one, or a new one), with a reason, shown beside the file.
+- "Move the N files to Claude's recommendation" (naming the dir, when they all go to one), "Move the N
+  files to..." (pick a dir in the sorted tree), "Copy the N files to...", and "Remove the N files"
+  (asked twice).
+
+A move or a copy first shows the tree it makes (each file where it goes, and where it's from beside
+it), to look through (`Enter` goes on, `q` back); then No/Yes. Moving is a rename (in Drive, one
+request that keeps the file's id), and the inbox is kept, even when it's left empty.
+
+Claude is asked through the Claude Agent SDK (`pip install claude-agent-sdk`, in `requirements.txt`),
+which runs Claude Code: the laptop's logged-in Claude, or `ANTHROPIC_API_KEY` if it's set. Claude reads
+the picked files itself (text, images, PDFs; a Drive file is downloaded first), with no tool but
+`Read`, so their contents are sent to Anthropic: only when you choose to. What it says is kept in
+`~/.cache/dirdelta/ai.json`, so a file is asked about once. The model is `claude-opus-5-5`
+(`DIRDELTA_AI_MODEL` changes it).
 
 ### Picker mode (one path)
 

@@ -46,7 +46,11 @@ replicas (`choose_replicas.py`: each slot browsed from `/` or Drive, or a
 favorite or recent pair from `~/.config/dirdelta/replicas.json`, kept by
 `replicas.py`), then sync mode; one path → picker mode (`dirpick_main.py`,
 which prints the picked path, or `execvp`s the `-x` program on it), two
-paths → sync mode (`dirsync_main.py`), which records the pair in that file.
+paths → sync mode (`dirsync_main.py`), which records the pair in that file;
+`--sort INBOX ROOT` (or "Sort an inbox" in the no-path menu) → sorting an
+inbox into a sorted tree (`inbox.py`, with Claude's descriptions and
+recommendations from `ai.py`, through the Claude Agent SDK), kept in that
+file's `sorts`.
 dirdelta doesn't use curses itself: each pick is a `treepicker` run, which
 has the terminal while it's open, and
 what's to be read in between (warnings, "Nothing to copy", an action's
@@ -61,6 +65,7 @@ Env vars that change execution mode:
 - `DIRDELTA_PICKER`, `DIRDELTA_DIRDIFF` — the treepicker and dirdiff programs
   to run (default, `programs.find()`: the first of the program next to the
   running python, in `lib/treepicker/build/`, on `PATH`)
+- `DIRDELTA_AI_MODEL` — the model `ai.py` asks (default `claude-opus-5-5`)
 - `DRYRUN=0` — actually change files: Copy, Remove and Rename (`dryrun.py`, used by
   `localdiskdirtree.py`). Every screen shows the mode: "DRY RUN" in green, or
   "LIVE" in red.
@@ -77,7 +82,8 @@ touch `~/.cache/dirman/files.txt` (the real Drive cache, refreshed a folder at a
 time: a replica's, at the start or from the main menu, or one in it, with the file
 picker's `r`; with a `files.txt.stale` next to it, listing the folders where a
 change dirdelta made to Drive was cut off before it was added to the cache),
-`~/.config/dirdelta/replicas.json` (the history and favorites) or `secrets/`.
+`~/.config/dirdelta/replicas.json` (the history, favorites and sorts),
+`~/.cache/dirdelta/ai.json` (what Claude said of files) or `secrets/`.
 
 ## Structure
 
@@ -131,7 +137,7 @@ module:
 PYTHONPATH=.:tests .venv/bin/python3 -m unittest test_interactive_dir_sync -v
 ```
 
-Every module has a test file (345 tests, all passing as of 2026-10-29) except
+Every module has a test file (377 tests, all passing as of 2026-10-29) except
 the thin wiring in `main.py`/`dirsync_main.py`, covered only by running the
 app. Shared fakes:
 - `tests/helpers.py`: `scripted_option_picker` / `scripted_tree_picker` /
@@ -141,6 +147,11 @@ app. Shared fakes:
   a fake treepicker script. App tests build their own `tempfile.mkdtemp()` trees
   rather than using `tests/fixtures/`, so they never depend on (or modify)
   the repo.
+- Claude is never asked in the tests: `test_ai` patches `ai._run_query` or the
+  SDK's `query`, and `test_inbox` patches `ai._run_query`; `ai.CACHE_FILE` goes
+  to a temp file. A manual run with a scratch `HOME` can't reach Claude Code's
+  login (it's under the real `HOME`); `CLAUDE_CONFIG_DIR=~/.claude` gets it,
+  but then Claude Code writes a `.claude.json` into `~/.claude` (2026-10-29).
 - The real `~/.config/dirdelta/replicas.json` is never written: tests patch
   `dirdelta.replicas.REPLICAS_FILE` to a temp file (`test_replicas`), or
   `replicas.load`/`replicas.save`. A manual run that shouldn't touch it can set

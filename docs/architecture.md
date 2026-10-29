@@ -28,9 +28,10 @@ dirdelta command (or python -m dirdelta)
 ### `main.py`
 Argparse: `dir_a_path`, `dir_b_path` (both optional), `-x/--execute`,
 `-m/--max-depth` (default 20, passed down to `localdiskdirtree.factory` as
-`find -maxdepth`). No positional path → `choose_replicas.run`, then
-`dirsync_main.run` on what it chose; one → `dirpick_main.run`; two →
-`dirsync_main.run`. No curses setup: a `picker.PickerError` (treepicker
+`find -maxdepth`), `-s/--sort`. No positional path → `choose_replicas.run`, then
+`dirsync_main.run` on what it chose (or `inbox.run`, for a `Sort`); one →
+`dirpick_main.run`; two → `dirsync_main.run`, or with `--sort`, `inbox.run`
+(the first path the inbox, the second the sorted tree). No curses setup: a `picker.PickerError` (treepicker
 missing or failing), `DriveCacheError` or `replicas.ReplicasError` exits
 with its message.
 
@@ -52,7 +53,43 @@ asks Local disk / Google Drive, then picks a dir: under `/` with
 `picker.pick_under_dir(dirs_only=True, lazy=True)` (treepicker reads a dir
 only when it's shown), or in the whole Drive tree (`cloud`) with
 `pick_from_tree(dirs_only=True)`. Once both slots are chosen (and differ),
-it returns them.
+it returns them. After the pairs: "Sort an inbox" (the inbox, then the
+sorted tree, each chosen as a slot is) and the recent sorts (`sorts`, at
+most `MAX_SORTS`, by their way around: `record_sort()`), which return a
+`choose_replicas.Sort(inbox, root)`.
+
+### `inbox.py`, `ai.py` — sorting an inbox
+`InboxSort(inbox_path, root_path)`: both local, or both cloud paths
+(`InboxError` otherwise, or if the sorted tree is in the inbox). Its files
+move within one tree that has both: their common dir
+(`LocalDiskDirTree`, unscanned) or Drive's (`CloudDirTree` of their common
+cloud path), with the inbox and the root `keep_dirs()` (never removed when
+left empty, never moved or trashed whole). `run()` is a loop like
+`InteractiveDirSync.browse()`: `pick_files` of the inbox's files, with
+Claude's descriptions as their tags (`shown_as`, through `--updates`: "name
+| description") and its recommendations in the preview column, both kept in
+`ai.CACHE_FILE` and loaded at each pick; Enter → `_act()`, the action menu
+(`NOTHING` first): describe, ask where they go, move to the recommendations
+(naming the dir when there's one), move to / copy to a picked dir
+(`pick_under_dir(dirs_only, lazy)`, or `pick_from_tree` of the sorted tree
+from the cache), remove (confirmed twice). A move or copy (`_approve()`)
+first shows the tree it makes (`picker.view_files()`, with where each file
+is from beside it; files of one name to one dir are refused), then No/Yes,
+then `move_files()` / `copy_files_within()` (local `shutil.copy2`, Drive's
+`files().copy`) on a progress screen. `r` refreshes the selected Drive
+folder, as a sync's does.
+`ai.describe()` / `ai.recommend()` ask Claude about `ai.File`s (relpath, a
+local path to read, size), `BATCH_SIZE` a request, through the Claude Agent
+SDK (`_run_query()`: `query()` with tools and allowed tools only `Read`,
+`permission_mode='dontAsk'`, no settings sources, the files' dirs as `cwd` and
+`add_dirs`, and `output_format` a JSON schema of the answers by file number).
+A Drive file is downloaded to a temp dir first (one at a time); one over
+`MAX_READ_SIZE`, or a Google file, isn't read (Claude goes by its name).
+Recommendations are given the sorted tree's dirs (at most `MAX_DIRS_GIVEN`,
+the shallowest; not the inbox's, if it's in it), and their destinations are
+cleaned (`..` refused). Answers are cached by the file's path and size
+(recommendations also by the sorted tree), `AIError` if Claude can't be
+asked.
 
 ### `utils.py`
 `create_dirtree_from_arg(rootpath)` is the single dispatch point deciding

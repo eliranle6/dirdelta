@@ -5,7 +5,8 @@ and 2026-10-24 reviews' #1-25; naming a cloud replica as given, the COPY/REMOVE 
 out an option with nothing to do, faster uploads, and trashing whole Drive folders, 2026-10-27;
 refreshing a cloud folder at a time: at the start, from the main menu, or with `r` in the file
 picker, 2026-10-29; showing where the other replica has a file of the same name, beside the file
-picker, one picker per direction with Copy, Remove and Rename in it, 2026-10-29) are in git history. treepicker's own are in `lib/treepicker/docs/improvement-ideas.md`.
+picker, one picker per direction with Copy, Remove and Rename in it, sorting an inbox with
+Claude's help, 2026-10-29) are in git history. treepicker's own are in `lib/treepicker/docs/improvement-ideas.md`.
 
 1. **Find moved files better.** What's there (2026-10-29, `elsewhere.py`): each direction's
    picker shows, beside the selected file, where the other replica may have it: its files of the
@@ -31,26 +32,21 @@ picker, one picker per direction with Copy, Remove and Rename in it, 2026-10-29)
    Idea: a local hash cache (see idea 7, which needs it too) would let a local replica be looked
    up by hash as Drive is, finding renamed files of any size there.
 
-2. **Sort an inbox folder: file each one away, or remove it.** A mode for a folder of files
-   not yet sorted (e.g. `cloud/unsorted`), rather than a diff of two replicas: for each file
-   (or dir), decide to move it into the sorted tree (`cloud/eliran/...`, at a path picked in its
-   tree, and into the other replicas too, if any, e.g. a copy into
-   `/mnt/win/Users/.../eliran/...`), or remove it (Drive's trash), or leave it for later.
-   - The flow: pick files in the inbox (`pick_files`), choose an action, and for "move", pick the
-     destination dir with the dir picker (`pick_from_tree(dirs_only=True)` for Drive). Moving
-     within Drive is one `files().update` with `addParents`/`removeParents` (no upload, keeps
-     the id), like idea 1's Rename; the other replicas get a download (`fetch_file()`) or a
-     local copy. A batch of decisions is confirmed together, like Copy/Remove now.
-   - A recommendation from Claude: for each file, an agent (the Claude API, with the file's name,
-     path, size, type, and its contents for text/PDF/images within limits) suggests where in
-     the sorted tree it belongs (given that tree's dirs, maybe a summary of each) or that it's
-     junk, with a reason. Shown beside the file, as the default answer, which the user accepts
-     or changes: never acted on without the user. It sends the files' contents to an outside
-     service, so off unless turned on (and maybe only for some folders), with an API key kept
-     like `secrets/`. Costly for many files: suggest per dir where a dir holds one thing, cache
-     the suggestions.
-   - Entry: e.g. `dirdelta --sort cloud/unsorted`, or an option in the menu of a run without
-     paths.
+2. **Sort an inbox: what's left.** Sorting an inbox into a sorted tree, with Claude's descriptions
+   and recommendations, is there (2026-10-29: `inbox.py`, `ai.py`). What's left:
+   - The other replicas: a file moved into the sorted tree (`cloud/eliran/...`) could be copied into
+     its other replicas too (e.g. `/mnt/win/Users/.../eliran/...`), in the same plan.
+   - A local inbox with a Drive sorted tree (or the other way around): now refused; a move between
+     them is an upload (or download) and a removal.
+   - "Move to..." picks an existing dir; a new one can only come from Claude's recommendation. The
+     dir picker could take a new dir's name (a key that asks for it).
+   - Claude could say a file is junk (a duplicate, a screenshot of nothing), as a recommendation to
+     remove it, never acted on without the user.
+   - Recommendations per dir: a dir of one trip's photos is one decision, so Claude could be asked
+     about the dir (its names and a few of its files) rather than each file.
+   - Claude is asked between pickers, on a progress screen; it could be asked in the background
+     while the picker is shown, its answers coming into the labels and the preview column as the
+     contents check's do.
 
 3. **A GUI, with the image beside the tree.** The same flows and keys as the TUI (the menus,
    the file pickers, `j`/`k`/Space/Enter, search), in a window, with a pane on the right that
