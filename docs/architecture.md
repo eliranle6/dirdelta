@@ -292,7 +292,10 @@ took ~2.5s; the picker now opens 0.2s after the diff).
   (`os.rename` locally, removing the dirs left empty; in Drive, one
   `files().update` with the new name and `addParents`/`removeParents`, which
   keeps the file's id, then the folders left empty trashed, `_moved()`, once
-  Drive says they hold nothing more).
+  Drive says they hold nothing more). A dir all of whose files move into
+  one other dir at the same relative paths, where nothing is yet, moves as
+  one (`dir_moves()`, `_move_dir()`: one `os.rename`, or one
+  `files().update` of the folder), as the confirmation says.
 - `_copy()` rebuilds a `DirTree` from just the selected `FileEntry`s via
   `dirtree.DirTree.from_file_entries` (previously
   miscalled as a `DirTree` classmethod — fixed, known-issues.md #3), then
@@ -367,7 +370,8 @@ it (`InteractiveDirSync.LABELS`: COPY in blue, REMOVE in magenta).
 
 ### `elsewhere.py`, `exif.py`
 `Index(replica)`: a replica's files by name (`{name: {relpath: size}}`, the
-names in each dir, and the big ones by size, `RENAMED_MIN_SIZE`), built once
+names in each dir, the big ones by size, `RENAMED_MIN_SIZE`, and those whose
+hashes are known without reading them, Drive's, by hash), built once
 from its `files_by_name(progress)` and then kept up to date by `add()`,
 `remove()` and `move()` as files are copied, removed and moved (or dropped
 with `invalidate()` after a refresh); it also keeps the dates taken and the
@@ -378,8 +382,9 @@ nodes, a `CloudDirTree`'s nodes with the cache's sizes (a same-named file's
 dirdiff), read as it goes; each calls `progress(count)` now and then.
 
 A missing file's candidates (`_Matcher.matches()`) are the index's files of
-its name and, for a big file, up to `MAX_RENAMED` of its size with other
-names; ranked (`_unlikeliness()`) by: the same contents, the same name, the
+its name, for a big file, all of its size with other names, and once its
+contents are compared, the ones the index has by its hash (any name and
+size); ranked (`_unlikeliness()`) by: the same contents, the same name, the
 same size, the same date taken, the most of its siblings in the candidate's
 dir (a few of its dir's missing files, `SIBLINGS_TRIED`, looked up once per
 pair of dirs), the same modification time (within `SAME_TIME`), then the
@@ -402,7 +407,8 @@ of its files", then "Matched X of Y files"). `send()` raises
 `check_contents()` runs too, on another thread (`pick_files(on_selection=...)`,
 fed by treepicker's `--selection`): for the selected file, once the index is
 built, it sends its preview at once, then compares its contents with its
-same-sized candidates' (`_check()`, `_same_contents()`: two local files read
+same-sized candidates' and looks its hash up in the index if it has hashes
+(`_check()`, `_same_contents()`: two local files read
 side by side up to where they differ, no hash; with a Drive file, the fastest
 hash Drive has for it, SHA-1 else SHA-256, worked out for the local one),
 stopped when the selection moves on, notes the results in the way's `checked`
@@ -414,8 +420,9 @@ the picked files not compared yet, then `sure_matches()`.
 
 Dates taken are the replicas' `date_taken()`: Drive's
 `imageMediaMetadata.time`, or a local photo's EXIF `DateTimeOriginal`
-(`exif.date_taken()`: a JPEG's header up to its EXIF segment, or a HEIF
-file's EXIF item, found through its `meta` box's `iinf` and `iloc`), read
+(`exif.date_taken()`: a JPEG's header up to its EXIF segment, a HEIF
+file's EXIF item, found through its `meta` box's `iinf` and `iloc`, or a
+TIFF-based raw's start), read
 only for files with candidates. Modification times are `modified_time()`:
 `lstat` locally, Drive's `modifiedTime`; copies keep them (`shutil.copy2`,
 `os.utime` after a download, `modifiedTime` in an upload's body).

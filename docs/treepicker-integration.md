@@ -103,7 +103,8 @@ dirdelta, each a commit:
 
 - Keys: h/j/k/l or arrows, / to search (Enter keeps the filter, Esc drops
   it), Space picks (with -m), Enter picks/finishes, q or Ctrl-C quits.
-  g/G go to the first/last sibling, Ctrl-/ searches only when Enter is
+  g/G go to the first/last line on the screen, Home/End to the first/last
+  sibling, Ctrl-/ searches only when Enter is
   pressed, and f switches between the matches-only tree and the whole tree
   with matches highlighted. ? shows the keys (the stats line says so).
   Not there: the leaf jumps (Ctrl-J/K) and u/d (use Ctrl-U/Ctrl-D or

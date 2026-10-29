@@ -4,7 +4,9 @@ moved (or a dir renamed) in one replica is missing from the other, and the user 
 from one that's really missing before acting on it.
 
 The candidates are the other replica's files of the same name, and, for a big file, those of its
-size with another name (renamed). A candidate is likelier the more of these it has: the same
+size with another name (renamed); and when the other replica is Drive's, which knows its files'
+hashes, the files of the same contents whatever their name and size (looked up by the file's hash,
+when its contents are compared). A candidate is likelier the more of these it has: the same
 contents (compared for the selected file, with the same-sized candidates only: check_contents(), or
 for all the picked ones before a Rename: check_all()), the same name, the same size, the same date
 taken (photos), the file's siblings (the other missing files of its dir, a few of them tried) in its
@@ -28,13 +30,14 @@ SIBLINGS_TRIED = 10
 # The smallest file whose files of its size (with other names) are candidates too: smaller sizes
 # are too common to say much
 RENAMED_MIN_SIZE = 64 * 1024
-# How many of them, at most (the first by path)
-MAX_RENAMED = 5
 # Modification times this close are the same (FAT keeps them to 2 seconds), in seconds
 SAME_TIME = 2
 # What says a candidate is surely the file, in its preview: highlighted, so it's seen when it comes
 SURELY_MOVED = picker.highlighted("→ surely this file, moved")
 SURELY_RENAMED = picker.highlighted("→ surely this file, renamed")
+
+# The hashes that Drive gives (drivecache.HASH_FIELDS), the fastest to work out first
+_HASH_PREFERENCE = ('sha1', 'sha256')
 
 # A candidate in the other replica: its relpath, size, date taken and modification time (or None),
 # how many of the file's siblings (of how many tried) are in its dir too, whether its contents are
@@ -51,11 +54,13 @@ class Index(object):
 
     def __init__(self, replica):
         self.replica = replica
-        # {name: {relpath: size}}, the names in each dir, and {size: relpaths} of the big ones
-        # (RENAMED_MIN_SIZE), once built
+        # {name: {relpath: size}}, the names in each dir, {size: relpaths} of the big ones
+        # (RENAMED_MIN_SIZE), and {(algorithm, hash): relpaths} of the files whose hashes are known
+        # without reading them (Drive's), once built
         self._by_name = None
         self._names_by_dir = None
         self._by_size = None
+        self._by_hash = None
         # Dates taken read so far, and contents' hashes ({algorithm: hex}), by relpath
         self._dates_taken = {}
         self._hashes = {}
@@ -71,17 +76,22 @@ class Index(object):
         by_name = {name: dict(files) for name, files in self.replica.files_by_name(progress).items()}
         names_by_dir = collections.defaultdict(set)
         by_size = collections.defaultdict(set)
+        by_hash = collections.defaultdict(set)
         for name, files in by_name.items():
             for relpath, size in files.items():
                 names_by_dir[os.path.dirname(relpath)].add(name)
                 if size is not None and size >= RENAMED_MIN_SIZE:
                     by_size[size].add(relpath)
-        self._names_by_dir, self._by_size = names_by_dir, by_size
+                for algorithm in self.replica.known_hashes(relpath):
+                    value = self.replica.content_hash(relpath, algorithm)
+                    by_hash[algorithm, value].add(relpath)
+                    self._hashes.setdefault(relpath, {})[algorithm] = value
+        self._names_by_dir, self._by_size, self._by_hash = names_by_dir, by_size, by_hash
         # Last: is_built() says it is once all is
         self._by_name = by_name
 
     def invalidate(self):
-        self._by_name = self._names_by_dir = self._by_size = None
+        self._by_name = self._names_by_dir = self._by_size = self._by_hash = None
         self._dates_taken = {}
         self._hashes = {}
 
@@ -92,6 +102,16 @@ class Index(object):
     def files_sized(self, size):
         """The relpaths of the files of the size, if it's big enough to be in (RENAMED_MIN_SIZE)"""
         return self._by_size.get(size, set())
+
+    def hash_algorithms(self):
+        """The algorithms of the hashes known of its files without reading them (Drive's), the
+        fastest to work out first"""
+        known = {algorithm for algorithm, _ in self._by_hash}
+        return [algorithm for algorithm in _HASH_PREFERENCE if algorithm in known]
+
+    def files_hashed(self, algorithm, value):
+        """The relpaths of the files whose contents' hash by algorithm is value (of the ones known)"""
+        return self._by_hash.get((algorithm, value), set())
 
     def names_in(self, dirpath):
         return self._names_by_dir.get(dirpath, set())
@@ -106,10 +126,15 @@ class Index(object):
 
     def content_hash(self, relpath, algorithm, should_stop=None):
         """The file's contents' hash, as the replica's content_hash() gives it (worked out once)"""
+        return self.content_hashes(relpath, [algorithm], should_stop)[algorithm]
+
+    def content_hashes(self, relpath, algorithms, should_stop=None):
+        """{algorithm: hash} of the file's contents, the ones not worked out yet in one read"""
         hashes = self._hashes.setdefault(relpath, {})
-        if algorithm not in hashes:
-            hashes[algorithm] = self.replica.content_hash(relpath, algorithm, should_stop)
-        return hashes[algorithm]
+        needed = [algorithm for algorithm in algorithms if algorithm not in hashes]
+        if needed:
+            hashes.update(self.replica.content_hashes(relpath, needed, should_stop))
+        return {algorithm: hashes[algorithm] for algorithm in algorithms}
 
     def add(self, relpath, size):
         """A file is at relpath now (unless it isn't built yet, when there's nothing to change)"""
@@ -119,6 +144,8 @@ class Index(object):
             self._names_by_dir[os.path.dirname(relpath)].add(name)
             if size is not None and size >= RENAMED_MIN_SIZE:
                 self._by_size[size].add(relpath)
+            for algorithm in self.replica.known_hashes(relpath):
+                self._by_hash[algorithm, self.replica.content_hash(relpath, algorithm)].add(relpath)
 
     def remove(self, relpath):
         if self.is_built():
@@ -129,12 +156,18 @@ class Index(object):
                 self._by_name.pop(name, None)
             self._names_by_dir.get(os.path.dirname(relpath), set()).discard(name)
             self._by_size.get(size, set()).discard(relpath)
+            for algorithm, value in self._hashes.get(relpath, {}).items():
+                self._by_hash.get((algorithm, value), set()).discard(relpath)
+            for relpaths in self._by_hash.values():
+                relpaths.discard(relpath)
         self._dates_taken.pop(relpath, None)
         self._hashes.pop(relpath, None)
 
     def move(self, relpath, new_relpath):
         # The same file, with the same contents
         hashes = self._hashes.get(relpath)
+        known = ({key for key, relpaths in self._by_hash.items() if relpath in relpaths}
+                 if self.is_built() else set())
         if self.is_built():
             size = self.files_named(os.path.basename(relpath)).get(relpath)
             self.remove(relpath)
@@ -143,6 +176,8 @@ class Index(object):
             self.remove(relpath)
         if hashes:
             self._hashes[new_relpath] = hashes
+        for key in known:
+            self._by_hash[key].add(new_relpath)
 
 
 def _same_sized(relpath, size, index):
@@ -154,9 +189,8 @@ def _same_sized(relpath, size, index):
     found = {match_relpath: False for match_relpath, match_size in index.files_named(name).items()
              if match_size == size}
     if size >= RENAMED_MIN_SIZE:
-        renamed = sorted(match_relpath for match_relpath in index.files_sized(size)
-                         if os.path.basename(match_relpath) != name)
-        found.update((match_relpath, True) for match_relpath in renamed[:MAX_RENAMED])
+        found.update((match_relpath, True) for match_relpath in index.files_sized(size)
+                     if os.path.basename(match_relpath) != name)
     return found
 
 
@@ -195,8 +229,12 @@ class _Matcher(object):
         candidates = dict(self._index.files_named(name))
         renamed = {match_relpath for match_relpath, is_other_name
                    in _same_sized(relpath, size, self._index).items() if is_other_name}
-        candidates.update((match_relpath, size) for match_relpath in renamed)
         checked = self._checked.get(relpath, {})
+        # And the ones of other names (any size) found by the file's hash
+        renamed |= {match_relpath for match_relpath, is_same in checked.items()
+                    if is_same and os.path.basename(match_relpath) != name}
+        candidates.update((match_relpath, self._index.files_named(os.path.basename(match_relpath)).get(match_relpath))
+                          for match_relpath in renamed)
         if any(checked.get(match_relpath) for match_relpath in candidates):
             # The ones with the same contents are it: the others aren't
             candidates = {match_relpath: match_size for match_relpath, match_size in candidates.items()
@@ -276,14 +314,12 @@ def sure_matches(relpaths, src, index, checked=None):
 
 def may_be_elsewhere(relpaths, src, index, checked=None):
     """Of src's missing files at relpaths, the ones that may be in index (built if it isn't), moved
-    or renamed: with a sure match by what's known now, or with candidates of their size whose
-    contents weren't compared yet (check_all() then says)"""
-    index.build()
+    or renamed: with a sure match by what's known now, or whose contents weren't compared yet with
+    their candidates of their size, or with what index knows by hash (check_all() then says)"""
     checked = checked if checked is not None else {}
     sure = sure_matches(relpaths, src, index, checked)
     return [relpath for relpath in relpaths
-            if relpath in sure or (relpath not in checked and
-                                   _same_sized(relpath, src.file_size(relpath), index))]
+            if relpath in sure or relpath in to_check([relpath], src, index, checked)]
 
 
 def find_previews(relpaths, src, index, send, checked=None):
@@ -338,11 +374,12 @@ def check_contents(relpaths, src, src_index, index, checked, selection, send):
             continue
         matcher = matcher or _Matcher(relpaths, src, index, checked)
         candidates = _same_sized(relpath, src.file_size(relpath), index)
-        if relpath in checked or not candidates:
+        if relpath in checked or not (candidates or index.hash_algorithms()):
             send({relpath: _preview(relpath, src, dst_name, matcher)})
             continue
         send({relpath: _preview(relpath, src, dst_name, matcher) +
-              ["", "Comparing its contents with the", "%s of its size..." % (_files(len(candidates)),)]})
+              ["", "Comparing its contents with the", "%s of its size%s..." %
+               (_files(len(candidates)), " and %s's by hash" % (dst_name,) if index.hash_algorithms() else "")]})
         try:
             _check(relpath, candidates, src, src_index, index, checked,
                    lambda: not selection.is_at(relpath))
@@ -359,7 +396,8 @@ def to_check(relpaths, src, index, checked):
     candidates of their size in index (built if it isn't), which they have"""
     index.build()
     return [relpath for relpath in relpaths
-            if relpath not in checked and _same_sized(relpath, src.file_size(relpath), index)]
+            if relpath not in checked and (index.hash_algorithms() or
+                                           _same_sized(relpath, src.file_size(relpath), index))]
 
 
 def check_all(relpaths, src, src_index, index, checked, progress=None):
@@ -377,17 +415,23 @@ def check_all(relpaths, src, src_index, index, checked, progress=None):
 
 def _check(relpath, candidates, src, src_index, index, checked, should_stop):
     """Compare the contents of src's file at relpath with those of candidates (relpaths in index;
-    see _same_contents()), and note which are the same in checked[relpath] (not those where it
+    see _same_contents()), and if index knows its files' hashes (Drive's), look its own up there
+    (any name and size), and note which are the same in checked[relpath] (not those where it
     couldn't be told, e.g. a Google file's, which has no hash). Raises dirtree.HashStopped once
     should_stop() says to, noting nothing."""
-    found = {match_relpath: _same_contents(src, src_index, relpath, index, match_relpath, should_stop)
-             for match_relpath in candidates}
+    found = {}
+    algorithms = index.hash_algorithms()
+    if algorithms:
+        # All in one read of a local file
+        for algorithm, value in src_index.content_hashes(relpath, algorithms, should_stop).items():
+            if value is not None:
+                found.update((match_relpath, True) for match_relpath in index.files_hashed(algorithm, value))
+    found.update((match_relpath, _same_contents(src, src_index, relpath, index, match_relpath, should_stop))
+                 for match_relpath in candidates if match_relpath not in found)
     checked[relpath] = {match_relpath: is_same for match_relpath, is_same in found.items()
                         if is_same is not None}
 
 
-# The hashes that Drive gives (drivecache.HASH_FIELDS), the fastest to work out first
-_HASH_PREFERENCE = ('sha1', 'sha256')
 # How much of each file _same_bytes() reads at a time
 COMPARE_READ_SIZE = 1 << 20
 

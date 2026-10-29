@@ -311,9 +311,14 @@ class InteractiveDirSync(object):
         # The picked file of each move
         picked_of = {move: move[1] if action == self.RENAME_IN_DST else move[0] for move in moves}
         lines = ["Move %s in %s?" % (_files(len(moves)), replica.displayname())]
-        lines += ["  %s -> %s" % move for move in moves[:self.MAX_FILES_LISTED]]
-        if len(moves) > self.MAX_FILES_LISTED:
-            lines.append("  (and %d more)" % (len(moves) - self.MAX_FILES_LISTED,))
+        # A whole dir's as one, then the rest one by one
+        dir_moves, file_moves = replica.dir_moves(moves)
+        listed = (["  %s/ -> %s/ (a dir, with its %s, moved as one)" % (dirpath, new_dirpath, _files(len(its_moves)))
+                   for dirpath, new_dirpath, its_moves in dir_moves] +
+                  ["  %s -> %s" % move for move in file_moves])
+        lines += listed[:self.MAX_FILES_LISTED]
+        if len(listed) > self.MAX_FILES_LISTED:
+            lines.append("  (and %d more)" % (len(listed) - self.MAX_FILES_LISTED,))
         if dryrun.DRYRUN:
             lines.append("(A dry run: nothing on disk will change. DRYRUN=0 changes files.)")
         answer = picker.pick_option([self.CONFIRM_NO, self.CONFIRM_YES], header='\n'.join(lines),

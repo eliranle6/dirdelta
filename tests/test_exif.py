@@ -107,6 +107,11 @@ class DateTakenTest(unittest.TestCase):
         self.assertIsNone(self.date(_box(b'ftyp', b'heic\0\0\0\0') + _box(b'mdat', b'x'), name='x.heic'))
         self.assertIsNone(self.date(_heif(_tiff())[:60], name='x.heic'))
 
+    def test_a_raw_photo_is_a_tiff(self):
+        self.assertEqual(self.date(_tiff(), name='IMG_1.CR2'), '2024-07-01 14:03:22')
+        self.assertEqual(self.date(_tiff(order='>'), name='DSC_1.nef'), '2024-07-01 14:03:22')
+        self.assertIsNone(self.date(b'not a tiff at all', name='x.dng'))
+
     def test_upper_case_extension(self):
         self.assertEqual(self.date(_jpeg(), name='IMG.JPG'), '2024-07-01 14:03:22')
 

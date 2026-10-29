@@ -210,14 +210,27 @@ class RenamedTest(unittest.TestCase):
         self.assertNotIn("Of its size, another name:", self.lines('big.mov'))
 
     def test_what_may_be_elsewhere_and_whats_left_to_compare(self):
-        self.assertEqual(elsewhere.may_be_elsewhere(['big.mov', 'small.txt'], self.src, self.index), ['big.mov'])
-        self.assertEqual(elsewhere.to_check(['big.mov', 'small.txt'], self.src, self.index, self.checked),
-                         ['big.mov'])
+        # dst knows its hashes (as Drive does), so small.txt may be there too, renamed
+        self.assertEqual(elsewhere.may_be_elsewhere(['big.mov', 'small.txt'], self.src, self.index),
+                         ['big.mov', 'small.txt'])
         progress = []
         elsewhere.check_all(['big.mov', 'small.txt'], self.src, elsewhere.Index(self.src), self.index,
                             self.checked, lambda *args: progress.append(args))
-        self.assertEqual(progress, [(1, 1, 'big.mov')])
-        self.assertEqual(elsewhere.to_check(['big.mov'], self.src, self.index, self.checked), [])
+        self.assertEqual(progress, [(1, 2, 'big.mov'), (2, 2, 'small.txt')])
+        self.assertEqual(elsewhere.to_check(['big.mov', 'small.txt'], self.src, self.index, self.checked), [])
+        self.assertEqual(elsewhere.may_be_elsewhere(['big.mov', 'small.txt'], self.src, self.index, self.checked),
+                         ['big.mov'])
+
+    def test_a_file_of_another_name_and_size_is_found_by_its_hash(self):
+        self.src._hashes['small.txt'] = 'S'
+        self.dst._sizes['w/renamed.txt'] = 10
+        self.dst._hashes['w/renamed.txt'] = 'S'
+        self.dst.add_file_by_relpath('w/renamed.txt')
+        elsewhere.check_all(['small.txt'], self.src, elsewhere.Index(self.src), self.index, self.checked)
+        self.assertEqual(self.checked['small.txt'], {'w/renamed.txt': True})
+        lines = self.lines('small.txt')
+        self.assertIn("    renamed.txt  10 B, same size", lines)
+        self.assertEqual(lines[-1], elsewhere.SURELY_RENAMED)
 
     def test_the_index_by_size_is_kept_up_to_date(self):
         self.index.build()
@@ -336,9 +349,9 @@ class _Selection(object):
 class CheckContentsTest(unittest.TestCase):
     """src's x has matches a/x and b/x of its size, and c/x of another"""
     def setUp(self):
-        self.src = _SizedTree('/src', {'x': 5, 'y': 5, 'd/z': 1}, hashes={'x': 'H', 'y': 'H'})
+        self.src = _SizedTree('/src', {'x': 5, 'y': 5, 'd/z': 1}, hashes={'x': 'H', 'y': 'Y'})
         self.dst = _SizedTree('/dst', {'a/x': 5, 'b/x': 5, 'c/x': 6, 'e/y': 5},
-                              hashes={'a/x': 'H', 'b/x': 'other', 'c/x': 'H', 'e/y': None})
+                              hashes={'a/x': 'H', 'b/x': 'other', 'c/x': 'C', 'e/y': None})
         self.index = elsewhere.Index(self.dst)
         self.index.build()
         self.checked = {}
@@ -355,9 +368,8 @@ class CheckContentsTest(unittest.TestCase):
 
     def test_the_same_contents_are_it_and_the_others_are_dropped(self):
         self.check(['x'])
-        # Only the ones of its size are compared
+        # The ones of its size are compared, and its hash looked up in dst's
         self.assertEqual(self.checked, {'x': {'a/x': True, 'b/x': False}})
-        self.assertNotIn('c/x', self.dst.hashed)
         lines = self.sent.previews['x']
         self.assertEqual(lines[2:], ["  a/", "    x  5 B, same size", "    with 0 of 1 of its dir's files",
                                      "    the same contents", elsewhere.SURELY_MOVED])
@@ -366,10 +378,13 @@ class CheckContentsTest(unittest.TestCase):
         sends = []
         self.sent = lambda found=None, default=None: sends.append(dict(found))
         self.check(['x'])
-        self.assertEqual(sends[0]['x'][-2:], ["Comparing its contents with the", "2 files of its size..."])
+        self.assertEqual(sends[0]['x'][-2:], ["Comparing its contents with the",
+                                              "2 files of its size and /dst's by hash..."])
 
     def test_other_contents_are_said_and_arent_sure(self):
         self.dst._hashes['a/x'] = 'other'
+        self.index.invalidate()
+        self.index.build()
         self.check(['x'])
         lines = self.sent.previews['x']
         self.assertEqual(lines.count("    other contents"), 2)
@@ -383,7 +398,9 @@ class CheckContentsTest(unittest.TestCase):
 
     def test_each_file_once_and_only_files_with_matches_of_its_size(self):
         self.check(['x', 'd', 'd/z', 'x'])
-        self.assertEqual(sorted(self.dst.hashed), ['a/x', 'b/x'])
+        # Once each (dst's, Drive-like, when its index was built)
+        self.assertEqual(self.src.hashed.count('x'), 1)
+        self.assertEqual(sorted(self.dst.hashed), ['a/x', 'b/x', 'c/x'])
         # Each selected file's preview is sent at once, compared or not
         self.assertEqual(sorted(self.sent.previews), ['d/z', 'x'])
 
@@ -457,7 +474,8 @@ class CheckContentsTest(unittest.TestCase):
             elsewhere.check_contents(['x'], src, elsewhere.Index(src), index, self.checked,
                                      _Selection(['x']), self.sent)
         self.assertEqual(self.checked, {'x': {'a/x': True}})
-        self.assertEqual([call.args[1] for call in dst.content_hash.call_args_list], ['sha1'])
+        # Drive's hashes, read when its index was built: none asked for again
+        self.assertEqual(sorted(call.args[1] for call in dst.content_hash.call_args_list), ['sha1', 'sha256'])
 
 
 class FormatSizeTest(unittest.TestCase):

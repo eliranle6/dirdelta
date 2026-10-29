@@ -378,10 +378,46 @@ class CloudDirTree(dirtree.DirTree):
                 by_relpath[new_relpath] = by_relpath.pop(relpath)
         return True
 
+    def _move_dir(self, dirpath, new_dirpath):
+        """Move the folder in Drive, as one (keeping its id, and what's in it): rename it, and put it
+        in new_dirpath's parent folder (made if needed) instead of its own; and note it in the
+        cache"""
+        if dirpath not in self._cloud_ids:
+            messages.print_line("Skipped %s/: Drive's id of it isn't known" % (dirpath,), "yellow")
+            return False
+        # Stale until the change is in the cache, in case it's cut off in the middle
+        is_newly_stale = drivecache.mark_stale(self.fullpath())
+        try:
+            parent_id = self._folder_id(os.path.dirname(new_dirpath))
+            md = driveapi.service().files().update(
+                fileId=self._cloud_ids[dirpath], body={'name': os.path.basename(new_dirpath)},
+                addParents=parent_id, removeParents=self._cloud_ids[os.path.dirname(dirpath)],
+                fields=drivecache.FILE_FIELDS).execute(num_retries=NUM_RETRIES)
+        except HttpError as error:
+            messages.print_line("Move failed: %s" % (error,), "red")
+            return False
+        drivecache.add(dict(md, parents=[parent_id], mimeType=drivecache.FOLDER_MIME_TYPE))
+        if is_newly_stale:
+            drivecache.unmark_stale(self.fullpath())
+        for relpath, new_relpath in self._move_subtree(dirpath, new_dirpath):
+            for by_relpath in (self._cloud_ids, self._sizes, self._dates_taken, self._hashes, self._modified):
+                if relpath in by_relpath:
+                    by_relpath[new_relpath] = by_relpath.pop(relpath)
+            if relpath in self._google_files:
+                self._google_files.discard(relpath)
+                self._google_files.add(new_relpath)
+        return True
+
     def _moved(self, moves):
         """Trash the folders the moves left empty: the topmost of them, each as one, once Drive says
         it has nothing in them that the tree doesn't (see _folders_holding_more())"""
-        emptied = {os.path.dirname(relpath) for relpath, _ in moves}
+        emptied = set()
+        for relpath, _ in moves:
+            # The closest folder it was in that's still there (one moved whole isn't)
+            folder = os.path.dirname(relpath)
+            while folder and folder not in self:
+                folder = os.path.dirname(folder)
+            emptied.add(folder)
         emptied = {folder for folder in emptied if folder and folder in self and not self.children(folder)}
         # And the folders that only those are in, up to the root
         while True:

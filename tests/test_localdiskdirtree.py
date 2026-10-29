@@ -253,6 +253,28 @@ class LocalDiskDirTreeTest(unittest.TestCase):
         self.assertTrue(tree.has_file('new/sub/x.txt'))
         self.assertFalse(tree.has_file('old/x.txt'))
 
+    def test_a_whole_dir_is_moved_as_one(self):
+        tree = self._scan(['old/a.txt', 'old/sub/b.txt', 'keep/c.txt', 'keep/d.txt'])
+        moves = [('old/a.txt', 'new/dir/a.txt'), ('old/sub/b.txt', 'new/dir/sub/b.txt'), ('keep/c.txt', 'k/c.txt')]
+        self.assertEqual(tree.dir_moves(moves),
+                         ([('old', 'new/dir', [('old/a.txt', 'new/dir/a.txt'), ('old/sub/b.txt', 'new/dir/sub/b.txt')])],
+                          [('keep/c.txt', 'k/c.txt')]))
+        with mock.patch('dirdelta.dryrun.DRYRUN', False), mock.patch('dirdelta.messages.print_line'), \
+                mock.patch('dirdelta.localdiskdirtree.os.rename', wraps=os.rename) as rename:
+            self.assertEqual(sorted(tree.move_files(moves)), sorted(moves))
+        # One rename for the dir, one for the other file
+        self.assertEqual(len(rename.call_args_list), 2)
+        self.assertTrue(os.path.isfile(os.path.join(self.src_root, 'new/dir/sub/b.txt')))
+        self.assertFalse(os.path.exists(os.path.join(self.src_root, 'old')))
+        self.assertIsNotNone(tree.get_node('new/dir/sub/b.txt'))
+
+    def test_a_dir_with_more_in_it_or_a_new_place_thats_taken_isnt_moved_as_one(self):
+        tree = self._scan(['old/a.txt', 'old/other.txt', 'two/a.txt', 'there/x'])
+        self.assertEqual(tree.dir_moves([('old/a.txt', 'new/a.txt')])[0], [])
+        self.assertEqual(tree.dir_moves([('two/a.txt', 'there/a.txt')])[0], [])
+        # A renamed file isn't a dir's move
+        self.assertEqual(tree.dir_moves([('two/a.txt', 'new/b.txt')])[0], [])
+
     def test_move_never_overwrites(self):
         tree = self._scan(['x.txt', 'y.txt'])
         with mock.patch('dirdelta.dryrun.DRYRUN', False), mock.patch('dirdelta.messages.print_line'):

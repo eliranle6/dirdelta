@@ -88,16 +88,21 @@ class LocalDiskDirTree(dirtree.DirTree):
         return os.path.join(self._rootpath, relpath)
 
     def content_hash(self, relpath, algorithm, should_stop=None):
-        digest = hashlib.new(algorithm)
+        return self.content_hashes(relpath, [algorithm], should_stop)[algorithm]
+
+    def content_hashes(self, relpath, algorithms, should_stop=None):
+        # All in one read of the file
+        digests = {algorithm: hashlib.new(algorithm) for algorithm in algorithms}
         try:
             with open(os.path.join(self._rootpath, relpath), 'rb') as f:
                 for chunk in iter(lambda: f.read(HASH_READ_SIZE), b''):
                     if should_stop is not None and should_stop():
                         raise dirtree.HashStopped()
-                    digest.update(chunk)
+                    for digest in digests.values():
+                        digest.update(chunk)
         except OSError:
-            return None
-        return digest.hexdigest()
+            return {algorithm: None for algorithm in algorithms}
+        return {algorithm: digest.hexdigest() for algorithm, digest in digests.items()}
 
     def has_file(self, relpath):
         # On disk: the tree may not be scanned (see dirdiff.py)
@@ -204,6 +209,40 @@ class LocalDiskDirTree(dirtree.DirTree):
 
     def removal_notes(self, relpaths):
         return ["Dirs left empty are removed too."]
+
+    def _files_under(self, dirpath):
+        # On disk: the tree may not be scanned (see dirdiff.py). A symlink to a dir is one too, so a
+        # dir with one isn't moved whole (it isn't one of the moves).
+        path = os.path.join(self._rootpath, dirpath)
+        if not dirpath or os.path.islink(path) or not os.path.isdir(path):
+            return []
+        found = []
+        for walked, dirnames, filenames in os.walk(path):
+            relative = os.path.relpath(walked, self._rootpath)
+            found += [os.path.join(relative, name) for name in filenames]
+            found += [os.path.join(relative, name) for name in dirnames
+                      if os.path.islink(os.path.join(walked, name))]
+        return found
+
+    def _exists(self, relpath):
+        return os.path.lexists(os.path.join(self._rootpath, relpath))
+
+    def _move_dir(self, dirpath, new_dirpath):
+        path = os.path.join(self._rootpath, dirpath)
+        new_path = os.path.join(self._rootpath, new_dirpath)
+        if os.path.lexists(new_path):
+            messages.print_line("Skipped %s/: %s is there already" % (dirpath, new_dirpath), "yellow")
+            return False
+        try:
+            os.makedirs(os.path.dirname(new_path), exist_ok=True)
+            os.rename(path, new_path)
+        except OSError as error:
+            messages.print_line("Move failed: %s" % (error,), "red")
+            return False
+        self._move_subtree(dirpath, new_dirpath)
+        # The dirs it was in, if it leaves them empty, as a removal does
+        self._remove_emptied_dirs([entries.FileEntry(os.path.basename(dirpath), dirpath, path)])
+        return True
 
     def _move_file(self, relpath, new_relpath):
         path = os.path.join(self._rootpath, relpath)

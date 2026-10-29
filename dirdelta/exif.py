@@ -1,12 +1,18 @@
-"""When a photo was taken, from its EXIF data (DateTimeOriginal), read from a JPEG's header or a HEIF
-(HEIC) file's EXIF item: enough to tell two photos of the same name apart, without a library for it.
-Other formats (raw) aren't read: their date is unknown."""
+"""When a photo was taken, from its EXIF data (DateTimeOriginal), read from a JPEG's header, a HEIF
+(HEIC) file's EXIF item, or a TIFF-based raw photo's (CR2, NEF, ARW, DNG, ...) IFDs: enough to tell
+two photos of the same name apart, without a library for it. Other formats (CR3, RAF) aren't read:
+their date is unknown."""
 import os
 import struct
 
 # The extensions of the files read (others aren't, to save reading them)
 JPEG_EXTENSIONS = ('.jpg', '.jpeg', '.jpe')
 HEIF_EXTENSIONS = ('.heic', '.heif')
+# Raw photos that are TIFF files (with their own magic numbers, some: ORF's, RW2's), and TIFFs
+TIFF_EXTENSIONS = ('.cr2', '.nef', '.nrw', '.arw', '.srf', '.sr2', '.dng', '.orf', '.rw2', '.pef',
+                   '.srw', '.3fr', '.erf', '.kdc', '.mef', '.mos', '.iiq', '.tif', '.tiff')
+# How much of a TIFF file's start is read: its IFD0 and EXIF IFD are near it
+MAX_TIFF_HEADER = 1 << 20
 # The most of a HEIF file's EXIF item read
 MAX_EXIF_SIZE = 1 << 20
 # EXIF tags: the IFD of the EXIF ones, and the dates in it (and IFD0's, a fallback)
@@ -21,18 +27,23 @@ def date_taken(path):
     """When the JPEG or HEIF photo at path was taken, 'YYYY-MM-DD HH:MM:SS', or None if it isn't one,
     has no date, or can't be read"""
     lower = path.lower()
-    if not lower.endswith(JPEG_EXTENSIONS + HEIF_EXTENSIONS):
+    if not lower.endswith(JPEG_EXTENSIONS + HEIF_EXTENSIONS + TIFF_EXTENSIONS):
         return None
     try:
         with open(path, 'rb') as f:
-            exif = _exif_segment(f) if lower.endswith(JPEG_EXTENSIONS) else _heif_exif(f)
+            if lower.endswith(JPEG_EXTENSIONS):
+                exif = _exif_segment(f)
+            elif lower.endswith(HEIF_EXTENSIONS):
+                exif = _heif_exif(f)
+            else:
+                exif = f.read(MAX_TIFF_HEADER)
     except (OSError, struct.error, IndexError, ValueError):
         return None
     if exif is None:
         return None
     try:
         return _tiff_date(exif)
-    except (struct.error, IndexError, ValueError):
+    except (struct.error, IndexError, KeyError, ValueError):
         return None
 
 

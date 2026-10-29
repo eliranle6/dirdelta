@@ -571,6 +571,21 @@ class CloudDirTreeChangesTest(unittest.TestCase):
         self.move('song.mp3', 'album/song.mp3')
         self.assertEqual(self.trashed(), [])
 
+    def test_a_whole_folder_is_moved_as_one(self):
+        update = self.service.files.return_value.update
+        update.return_value.execute.return_value = {'id': 'album', 'name': 'records',
+                                                    'mimeType': clouddirtree.drivecache.FOLDER_MIME_TYPE}
+        self.assertEqual(self.tree.move_files([('album/track.mp3', 'records/track.mp3')]),
+                         [('album/track.mp3', 'records/track.mp3')])
+        update.assert_called_once_with(fileId='album', body={'name': 'records'}, addParents='mein',
+                                       removeParents='mein', fields=clouddirtree.drivecache.FILE_FIELDS)
+        self.assertNotIn('album', self.tree)
+        self.assertEqual(self.tree._cloud_ids['records/track.mp3'], 'track')
+        found = {entry.relpath: entry.cloud_id for entry in clouddirtree.drivecache.entries('/mein')}
+        self.assertEqual(found['records/track.mp3'], 'track')
+        # Nothing left empty to trash
+        self.assertEqual(self.trashed(), [])
+
     def test_move_into_a_new_folder_makes_it(self):
         self.move('song.mp3', 'new/moved.mp3')
         self.assertEqual([body['name'] for body in self.creates()], ['new'])

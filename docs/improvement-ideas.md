@@ -9,32 +9,27 @@ picker, one picker per direction with Copy, Remove and Rename in it, 2026-10-29)
 
 1. **Find moved files better.** What's there (2026-10-29, `elsewhere.py`): each direction's
    picker shows, beside the selected file, where the other replica may have it: its files of the
-   same name, and, for a big file, of its size with another name (renamed), likeliest first (the
-   same contents, size, date taken, siblings there too, modification time). The selected file's
-   contents are compared with its same-sized candidates in the background (two local files read
-   side by side; with Drive, its SHA-1 or SHA-256), and a Rename compares all the picked files'
-   first, so it moves only what's surely the file. Copies keep their modification times.
+   same name, for a big file, of its size with another name, and in Drive, of its contents whatever
+   their name and size (by Drive's hashes); likeliest first (the same contents, size, date taken,
+   siblings there too, modification time). The selected file's contents are compared with all its
+   same-sized candidates in the background (two local files read side by side; with Drive, its
+   SHA-1 or SHA-256), and a Rename compares all the picked files' first, so it moves only what's
+   surely the file, and a whole dir as one where it can. Copies keep their modification times.
 
    Current limits:
-   - A renamed file is found only if it's 64 KB or more (`RENAMED_MIN_SIZE`: smaller sizes are
-     too common), and among at most 5 files of its size (`MAX_RENAMED`).
+   - In a local replica, a renamed file is found only if it's 64 KB or more (`RENAMED_MIN_SIZE`:
+     smaller sizes are too common); in Drive, any size, by hash, but only for the files whose
+     contents are compared (the selected one, or the picked ones before a Rename).
    - Drive's SHA-1, modification times and photo dates are in the cache only for what was read
      from Drive since 2026-10-29: older lines have only SHA-256 (slower to work out locally), and
      no times or dates, until their folder is refreshed.
    - Files copied before 2026-10-29 have the time of their copy as their modification time, so
      theirs say little.
-   - Raw photos (CR2, NEF, DNG...) have no date taken: only JPEG's and HEIF's EXIF is read. HEIF's
-     reading was tested only on files built by the tests, not on a phone's.
-   - A moved dir is matched file by file: a Rename moves each of its files, not the dir.
+   - Some photos have no date taken: CR3 and RAF raws (not TIFF files). HEIF's and the TIFF raws'
+     reading was tested only on files built by the tests, not on a camera's or phone's.
 
-   Ideas:
-   - Find renamed files of any size in Drive for free: Drive gives every file's hash, so an index
-     of the Drive replica's files by hash finds a file of another name with the same contents
-     whatever its size (the local side's hash read only for the selected or picked files).
-   - Read raw photos' dates: most raw formats (CR2, NEF, ARW, DNG) are TIFF files, whose IFDs
-     `exif._tiff_date()` already reads.
-   - Rename a moved dir as one: when all of a dir's files have their sure matches in one dir of the
-     other replica, offer to move (or rename) that dir, one `os.rename` or `files().update`.
+   Idea: a local hash cache (idea 7's) would let a local replica be looked up by hash too, as
+   Drive is, finding renamed files of any size there.
 
 2. **Sort an inbox folder: file each one away, or remove it.** A mode for a folder of files
    not yet sorted (e.g. `cloud/unsorted`), rather than a diff of two replicas: for each file

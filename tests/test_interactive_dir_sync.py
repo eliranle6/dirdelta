@@ -284,7 +284,9 @@ class RenameTest(unittest.TestCase):
         self.assertEqual(self.pick_files.call_args.args[1], ['photos/y.jpg'])
         self.assertEqual(self.pick_files.call_args.kwargs['picked'], ['photos/y.jpg'])
         header = self.pick_option.call_args.kwargs['header'].splitlines()
-        self.assertEqual(header[:2], ['Move 1 file in %s?' % (self.dst_root,), '  old/x.jpg -> photos/x.jpg'])
+        # old/ has only it: moved as one
+        self.assertEqual(header[:2], ['Move 1 file in %s?' % (self.dst_root,),
+                                      '  old/ -> photos/ (a dir, with its 1 file, moved as one)'])
         self.assertEqual(self.pick_option.call_args.kwargs['label'], ('RENAME', 'cyan'))
 
     def test_rename_in_src_moves_the_file_to_its_matchs_path(self):
