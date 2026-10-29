@@ -28,8 +28,8 @@ picker, one picker per direction with Copy, Remove and Rename in it, 2026-10-29)
    - Some photos have no date taken: CR3 and RAF raws (not TIFF files). HEIF's and the TIFF raws'
      reading was tested only on files built by the tests, not on a camera's or phone's.
 
-   Idea: a local hash cache (idea 7's) would let a local replica be looked up by hash too, as
-   Drive is, finding renamed files of any size there.
+   Idea: a local hash cache (see idea 7, which needs it too) would let a local replica be looked
+   up by hash as Drive is, finding renamed files of any size there.
 
 2. **Sort an inbox folder: file each one away, or remove it.** A mode for a folder of files
    not yet sorted (e.g. `cloud/unsorted`), rather than a diff of two replicas: for each file
@@ -147,26 +147,29 @@ picker, one picker per direction with Copy, Remove and Rename in it, 2026-10-29)
      user writes it this way: a fixed format is cheaper, offline, and predictable. A model
      could still summarize a long log, if ever wanted.
 
-7. **Compare sizes or contents, not only paths.** The diff is by path only, so a file at the
-   same path on both sides counts as the same, even if one was edited or is a half-copied
-   file. Two more modes, for the files at the same path:
+7. **Compare sizes or contents of the files at the same path.** The diff is by path only, so a
+   file at the same path on both sides counts as the same, even if one was edited or is a
+   half-copied file, and it's in neither direction's list. (Idea 1 is the other case: a file at
+   different paths, moved or renamed. Its machinery is there now, and this would reuse it: comparing
+   contents, `elsewhere._same_contents()`, two local files side by side or by Drive's hash; Drive's
+   SHA-1, SHA-256 and `modifiedTime` in the cache; copies that keep their modification times.) Two
+   more modes, for the files at the same path:
    - By size (a "medium" diff): a local file's size is a `stat` (find's `-printf '%s'`, in the
      same scan, so nearly free), and a Drive file's is in the cache (`size`: all 20,806 cached
      files have one, as of 2026-10-27). Catches truncated or different files, cheaply.
    - By contents (a "hard" diff): Drive does have hashes, returned as metadata, with no
      download: `md5Checksum`, `sha1Checksum`, `sha256Checksum` (all but Google's own types,
-     whose content isn't a file). The scan already asks for `sha256Checksum`, and 20,804 of the
-     20,806 cached files have one. So the Drive side is free; the cost is the local side,
+     whose content isn't a file). The cache has `sha256Checksum` (20,804 of the 20,806 cached
+     files, as of 2026-10-27) and, since 2026-10-29, `sha1Checksum`. So the Drive side is free;
+     the cost is the local side,
      which must read every file to hash it (slow for a big replica, on `/mnt/win` more so).
      A local hash cache, keyed by path, size and mtime, makes the next run hash only what
      changed; and hashing only the files whose sizes match (a different size is already a
      different file). Between two local dirs, both sides are hashed, the same way.
    - The result: a third kind of entry besides "only in A" and "only in B": "in both, but
      different" (by size, or by contents), with its own actions: copy A's over B's, or B's
-     over A's, comparing their mtimes (Drive's `modifiedTime`, which the scan could ask for)
-     to suggest which is newer. This fits idea 5's combined tree.
-   - Hashes also find moved files for idea 1 better than names: the same sha256 at another
-     path is surely the same file, whatever it's named.
+     over A's, comparing their modification times (Drive's `modifiedTime`, in the cache since
+     2026-10-29) to suggest which is newer. This fits idea 5's combined tree.
 
 8. **Bring the phone's new photos in, periodically.** The user connects the phone to the laptop
    now and then, to copy its new pictures into the laptop's replica (photos are kept in Drive,
