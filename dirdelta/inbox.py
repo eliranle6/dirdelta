@@ -3,9 +3,10 @@ into a sorted tree (e.g. cloud/eliran), copies there, or removes, with Claude's 
 for it (ai.py): a short description of each file, shown after its name, and where in the sorted
 tree it belongs, shown beside it, to move it there.
 
-The inbox and the sorted tree are both local dirs, or both in Drive: the files are moved within one
-tree that has both (their common dir, or Drive's), so a move is a rename (in Drive, one request that
-keeps the file's id), never a copy."""
+When the inbox and the sorted tree are both local dirs, or both in Drive, the files are moved within
+one tree that has both (their common dir, or Drive's), so a move is a rename (in Drive, one request
+that keeps the file's id). When one is local and the other in Drive, a move is a copy (an upload or
+a download, as a sync's), then the file's removal from the inbox, once it's there."""
 import os
 import posixpath
 import subprocess
@@ -14,6 +15,7 @@ import textwrap
 
 from dirdelta import ai
 from dirdelta import clouddirtree
+from dirdelta import dirtree
 from dirdelta import drivecache
 from dirdelta import dryrun
 from dirdelta import elsewhere
@@ -44,8 +46,7 @@ def _join(*relpaths):
 
 
 class InboxSort(object):
-    """The inbox at inbox_path and the sorted tree at root_path (both local dirs, or both cloud
-    paths)"""
+    """The inbox at inbox_path and the sorted tree at root_path (local dirs, or cloud paths)"""
     NOTHING = "Nothing: back to the files"
     DESCRIBE = 'describe'
     RECOMMEND = 'recommend'
@@ -59,40 +60,46 @@ class InboxSort(object):
     REFRESH_KEY = 'r'
 
     def __init__(self, inbox_path, root_path):
-        if paths.is_cloud_path(inbox_path) != paths.is_cloud_path(root_path):
-            raise InboxError("The inbox and the sorted tree must both be local dirs, or both in Google "
-                             "Drive (%s, %s)" % (inbox_path, root_path))
-        self.is_cloud = paths.is_cloud_path(inbox_path)
-        if self.is_cloud:
-            self.inbox_path = paths.join_cloud('/'.join(paths.components(inbox_path)[1:]))
-            self.root_path = paths.join_cloud('/'.join(paths.components(root_path)[1:]))
-            inbox, root = paths.components(inbox_path)[1:], paths.components(root_path)[1:]
-            common = os.path.commonprefix([inbox, root])
-            tree_path = paths.join_cloud('/'.join(common))
-            if not os.path.exists(drivecache.FILE_LIST_CACHE):
-                for path in (self.inbox_path, self.root_path):
-                    clouddirtree.refresh_cache(paths.path_in_cloud(path))
-            self._tree = clouddirtree.factory(tree_path)
-            self._inbox_rel = '/'.join(inbox[len(common):])
-            self._root_rel = '/'.join(root[len(common):])
-        else:
-            self.inbox_path, self.root_path = os.path.realpath(inbox_path), os.path.realpath(root_path)
+        self.inbox_is_cloud = paths.is_cloud_path(inbox_path)
+        self.root_is_cloud = paths.is_cloud_path(root_path)
+        self.inbox_path = _normalized(inbox_path)
+        self.root_path = _normalized(root_path)
+        for path in (self.inbox_path, self.root_path):
+            if not paths.is_cloud_path(path) and not os.path.isdir(path):
+                raise InboxError("%s is not a directory" % (path,))
+        if any(paths.is_cloud_path(path) for path in (self.inbox_path, self.root_path)) and \
+                not os.path.exists(drivecache.FILE_LIST_CACHE):
             for path in (self.inbox_path, self.root_path):
-                if not os.path.isdir(path):
-                    raise InboxError("%s is not a directory" % (path,))
-            common = os.path.commonpath([self.inbox_path, self.root_path])
-            self._tree = localdiskdirtree.LocalDiskDirTree(common, silent=True)
-            self._inbox_rel = _relpath(self.inbox_path, common)
-            self._root_rel = _relpath(self.root_path, common)
-        if _is_at_or_under(self._root_rel, self._inbox_rel):
-            raise InboxError("The sorted tree %s can't be in the inbox %s" % (self.root_path, self.inbox_path))
-        if self.is_cloud:
-            for relpath, path in ((self._inbox_rel, self.inbox_path), (self._root_rel, self.root_path)):
-                node = self._tree.get_node(relpath)
+                if paths.is_cloud_path(path):
+                    clouddirtree.refresh_cache(paths.path_in_cloud(path))
+        # Both of a kind: one tree with both, so a move is a rename. Else a tree each: a move is a
+        # copy (an upload or a download), then a removal from the inbox.
+        self.is_one_tree = self.inbox_is_cloud == self.root_is_cloud
+        if self.is_one_tree:
+            if self.inbox_is_cloud:
+                inbox, root = paths.components(self.inbox_path)[1:], paths.components(self.root_path)[1:]
+                common = os.path.commonprefix([inbox, root])
+                tree = clouddirtree.factory(paths.join_cloud('/'.join(common)))
+                self._inbox_rel, self._root_rel = '/'.join(inbox[len(common):]), '/'.join(root[len(common):])
+            else:
+                common = os.path.commonpath([self.inbox_path, self.root_path])
+                tree = localdiskdirtree.LocalDiskDirTree(common, silent=True)
+                self._inbox_rel, self._root_rel = _relpath(self.inbox_path, common), _relpath(self.root_path, common)
+            if _is_at_or_under(self._root_rel, self._inbox_rel):
+                raise InboxError("The sorted tree %s can't be in the inbox %s" % (self.root_path, self.inbox_path))
+            self._inbox_tree = self._root_tree = tree
+        else:
+            self._inbox_tree, self._root_tree = _tree(self.inbox_path), _tree(self.root_path)
+            self._inbox_rel = self._root_rel = ''
+        for tree, relpath, path in ((self._inbox_tree, self._inbox_rel, self.inbox_path),
+                                    (self._root_tree, self._root_rel, self.root_path)):
+            if paths.is_cloud_path(path):
+                node = tree.get_node(relpath)
                 if node is None or not isinstance(node.data, entries.DirEntry):
                     raise InboxError("Google Drive has no folder %s (as of the cloud files list cache)" % (path,))
         # Neither is removed when it's left empty, nor moved whole
-        self._tree.keep_dirs([self._inbox_rel, self._root_rel])
+        self._inbox_tree.keep_dirs([self._inbox_rel])
+        self._root_tree.keep_dirs([self._root_rel])
         # What Claude said of the inbox's files, by relpath (in the inbox)
         self._descriptions = {}
         self._recommendations = {}
@@ -101,8 +108,8 @@ class InboxSort(object):
 
     def _inbox_files(self):
         """The inbox's files' relpaths (in it), each dir's together, sorted"""
-        if self.is_cloud:
-            full = self._tree._files_under(self._inbox_rel)
+        if self.inbox_is_cloud:
+            full = self._inbox_tree._files_under(self._inbox_rel)
             relpaths = [_relpath_in(relpath, self._inbox_rel) for relpath in full]
         else:
             found = localdiskdirtree.LocalDiskDirTree(self.inbox_path, silent=True).files_by_name()
@@ -110,11 +117,11 @@ class InboxSort(object):
         return sorted(relpaths, key=lambda relpath: relpath.split('/'))
 
     def _full(self, relpath):
-        """An inbox file's relpath in the tree"""
+        """An inbox file's relpath in the inbox's tree"""
         return _join(self._inbox_rel, relpath)
 
     def _size(self, relpath):
-        return self._tree.file_size(self._full(relpath))
+        return self._inbox_tree.file_size(self._full(relpath))
 
     def _cache_key(self, file):
         return '%s\t%s' % (posixpath.join(self.inbox_path, file.relpath), file.size)
@@ -135,7 +142,7 @@ class InboxSort(object):
                   "Claude says it is.)" %
                   (self.inbox_path, self.root_path,
                    " %s: read the selected folder anew from Google Drive." % (self.REFRESH_KEY,)
-                   if self.is_cloud else ""))
+                   if self.inbox_is_cloud else ""))
         picked, selected = [], None
         while True:
             files = self._inbox_files()
@@ -148,14 +155,14 @@ class InboxSort(object):
             previews = self._previews(files)
             chosen = picker.pick_files(
                 self.inbox_path, files, header=header, picked=picked, label=LABEL,
-                keys=self.REFRESH_KEY if self.is_cloud else '', selected=selected,
+                keys=self.REFRESH_KEY if self.inbox_is_cloud else '', selected=selected,
                 previews=lambda send, previews=previews: send(previews, default=[]),
                 shown_as=lambda labels=labels: labels)
             if chosen is None:
                 return
             selected = chosen.selected
             if chosen.key == self.REFRESH_KEY:
-                interactive_dir_sync.refresh_replica(self._tree, self._full(selected))
+                interactive_dir_sync.refresh_replica(self._inbox_tree, self._full(selected))
                 picked = chosen.files
                 continue
             done = self._act(chosen.files)
@@ -275,14 +282,14 @@ class InboxSort(object):
         for number, relpath in enumerate(relpaths, 1):
             size = self._size(relpath)
             local_path = None
-            if not self.is_cloud:
+            if not self.inbox_is_cloud:
                 local_path = os.path.join(self.inbox_path, relpath)
-            elif (size or 0) <= ai.MAX_READ_SIZE and self._tree.cant_fetch(self._full(relpath)) is None:
+            elif (size or 0) <= ai.MAX_READ_SIZE and self._inbox_tree.cant_fetch(self._full(relpath)) is None:
                 local_path = os.path.join(temp_dir, relpath)
                 os.makedirs(os.path.dirname(local_path), exist_ok=True)
                 messages.print_progress("Downloading %d of %d files for Claude: %s" % (number, len(relpaths), relpath))
                 try:
-                    self._tree.fetch_file(self._full(relpath), local_path)
+                    self._inbox_tree.fetch_file(self._full(relpath), local_path)
                 except OSError as error:
                     messages.print_line("Couldn't download %s (%s): Claude goes by its name" % (relpath, error),
                                         "yellow")
@@ -292,16 +299,16 @@ class InboxSort(object):
 
     def _root_dirs(self):
         """The sorted tree's dirs' relpaths (in it), not the inbox's (if it's in it)"""
-        if self.is_cloud:
-            node = self._tree.get_node(self._root_rel)
+        if self.root_is_cloud:
+            node = self._root_tree.get_node(self._root_rel)
             dirs = [_relpath_in(dir_node.identifier, self._root_rel)
-                    for dir_node in self._tree._tree.subtree(node.identifier).all_nodes_itr()
+                    for dir_node in self._root_tree._tree.subtree(node.identifier).all_nodes_itr()
                     if isinstance(dir_node.data, entries.DirEntry) and dir_node.identifier != self._root_rel]
         else:
             result = subprocess.run(['find', self.root_path, '-mindepth', '1', '-type', 'd', '-printf', '%P\\0'],
                                     stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
             dirs = [os.fsdecode(path) for path in result.stdout.split(b'\0') if path]
-        inbox_in_root = _relpath_in(self._inbox_rel, self._root_rel) if _is_at_or_under(
+        inbox_in_root = _relpath_in(self._inbox_rel, self._root_rel) if self.is_one_tree and _is_at_or_under(
             self._inbox_rel, self._root_rel) else None
         return [dirpath for dirpath in dirs
                 if inbox_in_root is None or not _is_at_or_under(dirpath, inbox_in_root)]
@@ -310,14 +317,15 @@ class InboxSort(object):
 
     def _pick_dir(self, header):
         """Let the user pick a dir in the sorted tree. Returns its relpath ('' the root), or None."""
-        if self.is_cloud:
+        if self.root_is_cloud:
             root = clouddirtree.factory(self.root_path)
             picked = picker.pick_from_tree(root, header=header, dirs_only=True, root_name=self.root_path)
             relpath = picked[0].relpath if picked else None
         else:
             path = picker.pick_under_dir(self.root_path, dirs_only=True, lazy=True, header=header)
             relpath = None if path is None else _relpath(path, self.root_path)
-        if relpath is not None and _is_at_or_under(_join(self._root_rel, relpath), self._inbox_rel):
+        if relpath is not None and self.is_one_tree and _is_at_or_under(_join(self._root_rel, relpath),
+                                                                        self._inbox_rel):
             messages.show("That's the inbox", ["Pick a dir of %s that isn't in the inbox." % (self.root_path,)],
                           dryrun.label())
             return None
@@ -342,11 +350,11 @@ class InboxSort(object):
             return None
         destinations = sorted({destination for _, destination in plan})
         new_dirs = [destination for destination in destinations
-                    if not self._tree._exists(_join(self._root_rel, destination))]
+                    if not self._root_tree._exists(_join(self._root_rel, destination))]
         previews = {}
         for target, (relpath,) in targets.items():
             lines = ["From: %s" % (posixpath.join(self.inbox_path, relpath),)]
-            if self._tree._exists(_join(self._root_rel, target)):
+            if self._root_tree._exists(_join(self._root_rel, target)):
                 lines += ["", "There's a file there already:", "it's skipped."]
             if os.path.dirname(target) in new_dirs:
                 lines += ["", "In a new dir."]
@@ -363,6 +371,11 @@ class InboxSort(object):
                                  header=header, previews=previews, label=LABEL):
             return None
         lines = [summary + "?"]
+        if not self.is_one_tree:
+            lines.append("(%s %s, then %s from the inbox%s, once each is there.)" % (
+                "Uploaded to Google Drive" if self.root_is_cloud else "Downloaded from Google Drive",
+                "and removed" if action == self.MOVE_TO else "", "" if action == self.MOVE_TO else "kept in",
+                " (to Drive's trash)" if self.inbox_is_cloud and action == self.MOVE_TO else ""))
         if dryrun.DRYRUN:
             lines.append("(A dry run: nothing on disk will change. DRYRUN=0 changes files.)")
         if picker.pick_option([self.CONFIRM_NO, self.CONFIRM_YES], header='\n'.join(lines),
@@ -371,12 +384,47 @@ class InboxSort(object):
         moves = [(self._full(relpath), _join(self._root_rel, destination, os.path.basename(relpath)))
                  for relpath, destination in plan]
         with messages.progress_screen(summary + (" (a dry run)" if dryrun.DRYRUN else ""), dryrun.label()):
-            done = (self._tree.move_files(moves) if action == self.MOVE_TO else
-                    self._tree.copy_files_within(moves))
+            if self.is_one_tree:
+                done = (self._inbox_tree.move_files(moves) if action == self.MOVE_TO else
+                        self._inbox_tree.copy_files_within(moves))
+            else:
+                done = self._transfer(moves, action == self.MOVE_TO)
         if dryrun.DRYRUN:
             return [relpath for relpath, _ in plan]
         done_sources = {relpath for relpath, _ in done}
         return [relpath for relpath, _ in plan if self._full(relpath) in done_sources]
+
+    def _transfer(self, moves, is_move):
+        """Copy the inbox's files to the sorted tree, of another kind, each of moves (relpath in the
+        inbox's tree, relpath in the sorted tree's): an upload to Drive, or a download from it, as a
+        sync's copy does; then if is_move, remove from the inbox the ones copied. Returns the moves
+        done (none in a dry run)."""
+        source_of = {new_relpath: relpath for relpath, new_relpath in moves}
+        files = [entries.FileEntry(os.path.basename(new_relpath), new_relpath,
+                                   os.path.join(self.inbox_path, relpath))
+                 for relpath, new_relpath in moves]
+        source = None if self.root_is_cloud else _Renamed(self._inbox_tree, source_of)
+        self._root_tree.copy_inner_entries_from_dirtree(
+            dirtree.DirTree.from_file_entries(files, self.inbox_path), source)
+        if dryrun.DRYRUN:
+            if is_move:
+                self._inbox_tree.remove_files(self._entries(relpath for relpath, _ in moves))
+            return []
+        done = [(relpath, new_relpath) for relpath, new_relpath in moves if self._root_tree.has_file(new_relpath)]
+        if is_move and done:
+            self._inbox_tree.remove_files(self._entries(relpath for relpath, _ in done))
+            done = [(relpath, new_relpath) for relpath, new_relpath in done
+                    if not self._inbox_tree.has_file(relpath)]
+        return done
+
+    def _entries(self, relpaths):
+        """The entries of the inbox's files at relpaths (in its tree), to remove them"""
+        found = []
+        for relpath in relpaths:
+            node = self._inbox_tree.get_node(relpath)
+            found.append(node.data if node is not None else entries.FileEntry(
+                os.path.basename(relpath), relpath, os.path.join(self._inbox_tree.fullpath(), relpath)))
+        return found
 
     def _remove(self, relpaths):
         """Remove the inbox's files at relpaths, once the user confirms twice"""
@@ -390,22 +438,47 @@ class InboxSort(object):
                               label=LABEL) != self.CONFIRM_YES:
             return None
         sure = "Are you sure? %s will be removed from %s%s." % (
-            _files(len(relpaths)), self.inbox_path, " (to Drive's trash)" if self.is_cloud else ", for good")
+            _files(len(relpaths)), self.inbox_path, " (to Drive's trash)" if self.inbox_is_cloud else ", for good")
         if picker.pick_option([self.CONFIRM_NO, self.CONFIRM_SURE], header=sure, label=LABEL) != self.CONFIRM_SURE:
             return None
-        file_entries = []
-        for relpath in relpaths:
-            node = self._tree.get_node(self._full(relpath))
-            file_entries.append(node.data if node is not None else entries.FileEntry(
-                os.path.basename(relpath), self._full(relpath), os.path.join(self._tree.fullpath(), self._full(relpath))))
+        file_entries = self._entries(self._full(relpath) for relpath in relpaths)
         with messages.progress_screen("Removing %s from %s%s" % (_files(len(relpaths)), self.inbox_path,
                                                                 " (a dry run)" if dryrun.DRYRUN else ""),
                                       dryrun.label()):
-            self._tree.remove_files(file_entries)
+            self._inbox_tree.remove_files(file_entries)
         if dryrun.DRYRUN:
             return relpaths
         left = set(self._inbox_files())
         return [relpath for relpath in relpaths if relpath not in left]
+
+
+class _Renamed(object):
+    """A tree to copy from (a copy_inner_entries_from_dirtree() source) whose files are asked for by
+    where they go (relpaths in the tree copied into), each where source_of says it is in tree"""
+    def __init__(self, tree, source_of):
+        self._tree = tree
+        self._source_of = source_of
+
+    def cant_fetch(self, relpath):
+        return self._tree.cant_fetch(self._source_of[relpath])
+
+    def fetch_file(self, relpath, local_path):
+        self._tree.fetch_file(self._source_of[relpath], local_path)
+
+
+def _tree(path):
+    """The tree of a replica path on its own: a Drive folder's (from the cache), or a local dir's
+    (not scanned)"""
+    if paths.is_cloud_path(path):
+        return clouddirtree.factory(path)
+    return localdiskdirtree.LocalDiskDirTree(path, silent=True)
+
+
+def _normalized(path):
+    """A replica path as it's shown and kept: a cloud one cleaned, a local one absolute and real"""
+    if paths.is_cloud_path(path):
+        return paths.join_cloud('/'.join(paths.components(path)[1:]))
+    return os.path.realpath(path)
 
 
 def run(inbox_path, root_path, known_replicas=None):

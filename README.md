@@ -75,8 +75,8 @@ The menu also has "Sort an inbox" (choose the inbox, then the sorted tree), and 
 .venv/bin/python3 -m dirdelta --sort cloud/unsorted cloud/eliran
 ```
 
-An inbox is a dir of files not sorted yet; the sorted tree is where they go (both local dirs, or
-both in Google Drive). The inbox's picker works like a sync's: pick files with `Space`, press
+An inbox is a dir of files not sorted yet; the sorted tree is where they go (local dirs or Google
+Drive folders; choosing it, the replicas you sync are offered too). The inbox's picker works like a sync's: pick files with `Space`, press
 `Enter`, and choose what to do with them, with "Nothing" selected first:
 
 - "Describe N files with Claude": a short description of each (at most 10 words), shown after its
@@ -88,8 +88,10 @@ both in Google Drive). The inbox's picker works like a sync's: pick files with `
   (asked twice).
 
 A move or a copy first shows the tree it makes (each file where it goes, and where it's from beside
-it), to look through (`Enter` goes on, `q` back); then No/Yes. Moving is a rename (in Drive, one
-request that keeps the file's id), and the inbox is kept, even when it's left empty.
+it), to look through (`Enter` goes on, `q` back); then No/Yes. When both are local, or both in
+Drive, moving is a rename (in Drive, one request that keeps the file's id); when one is local and
+the other in Drive, it's an upload (or a download), then the file's removal from the inbox, once
+it's there. The inbox is kept, even when it's left empty.
 
 Claude is asked through the Claude Agent SDK (`pip install claude-agent-sdk`, in `requirements.txt`),
 which runs Claude Code: the laptop's logged-in Claude, or `ANTHROPIC_API_KEY` if it's set. Claude reads

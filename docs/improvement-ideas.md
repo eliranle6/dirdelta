@@ -36,8 +36,6 @@ Claude's help, 2026-10-29) are in git history. treepicker's own are in `lib/tree
    and recommendations, is there (2026-10-29: `inbox.py`, `ai.py`). What's left:
    - The other replicas: a file moved into the sorted tree (`cloud/eliran/...`) could be copied into
      its other replicas too (e.g. `/mnt/win/Users/.../eliran/...`), in the same plan.
-   - A local inbox with a Drive sorted tree (or the other way around): now refused; a move between
-     them is an upload (or download) and a removal.
    - "Move to..." picks an existing dir; a new one can only come from Claude's recommendation. The
      dir picker could take a new dir's name (a key that asks for it).
    - Claude could say a file is junk (a duplicate, a screenshot of nothing), as a recommendation to

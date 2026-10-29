@@ -16,6 +16,8 @@ LOCAL = 'Local disk'
 CLOUD = 'Google Drive'
 QUIT = 'Quit'
 SORT = 'Sort an inbox: file its files away into a sorted tree, with Claude\'s help'
+# What a replica the user knows is offered as, when choosing a sorted tree
+KNOWN = 'Known replica: '
 
 # What run() returns for an inbox to sort (rather than a pair to sync)
 Sort = collections.namedtuple('Sort', ['inbox', 'root'])
@@ -43,7 +45,7 @@ def run(replicas):
         if option in (None, QUIT):
             return None
         if option == SORT:
-            sort = _choose_sort()
+            sort = _choose_sort(replicas)
             if sort is not None:
                 return sort
             continue
@@ -81,24 +83,39 @@ def run(replicas):
             return tuple(chosen)
 
 
-def _choose_sort():
-    """Let the user choose an inbox and the sorted tree to sort it into. Returns a Sort, or None."""
+def _choose_sort(replicas):
+    """Let the user choose an inbox and the sorted tree to sort it into: one of the replicas they
+    know (replicas', a Replicas), or any dir. Returns a Sort, or None."""
     inbox = _choose_replica('the inbox (the dir of files to sort)')
     if inbox is None:
         return None
-    root = _choose_replica('the sorted tree (where its files go)')
+    root = _choose_replica('the sorted tree (where its files go)',
+                           [path for path in known_replicas(replicas) if path != inbox])
     if root is None:
         return None
     return Sort(inbox, root)
+
+
+def known_replicas(replicas):
+    """The replicas' paths the user knows, once each: the favorites', the recent pairs', then the
+    sorted trees of the recent sorts"""
+    found = [path for pair in replicas.favorites + replicas.history for path in pair]
+    found += [root for _, root in replicas.sorts]
+    return list(dict.fromkeys(found))
+
 
 
 def pair_label(path_a, path_b):
     return '%s <-> %s' % (path_a, path_b)
 
 
-def _choose_replica(name):
-    """Let the user choose a local dir or a Drive one. Returns its path, or None if they quit."""
-    where = picker.pick_option([LOCAL, CLOUD], header='Where is %s?' % (name,))
+def _choose_replica(name, known=()):
+    """Let the user choose a local dir or a Drive one, or one of known (paths) at once. Returns its
+    path, or None if they quit."""
+    options = {KNOWN + path: path for path in known}
+    where = picker.pick_option(list(options) + [LOCAL, CLOUD], header='Where is %s?' % (name,))
+    if where in options:
+        return options[where]
     header = 'Choose %s (Enter picks the selected dir)' % (name,)
     if where == LOCAL:
         return picker.pick_under_dir(LOCAL_ROOT, dirs_only=True, lazy=True, header=header)

@@ -115,6 +115,18 @@ class ChooseReplicasTest(unittest.TestCase):
         chosen = self.run_menu([SORT, 'Local disk', 'Local disk'], dir_picks=['/in', '/sorted'])
         self.assertEqual(chosen, choose_replicas.Sort('/in', '/sorted'))
 
+    def test_the_sorted_tree_can_be_a_known_replica(self):
+        self.known.toggle_favorite('/mnt/win', 'cloud/me')
+        self.known.record('/home/me', 'cloud/me')
+        self.known.record_sort('/in', 'cloud/sorted')
+        chosen = self.run_menu([SORT, 'Local disk', 'Known replica: cloud/me'], dir_picks=['/home/me'])
+        self.assertEqual(chosen, choose_replicas.Sort('/home/me', 'cloud/me'))
+        # Each once, not the inbox just chosen; the dirs can still be picked anew
+        self.assertEqual(self.menus[2], ['Known replica: /mnt/win', 'Known replica: cloud/me',
+                                         'Known replica: cloud/sorted', 'Local disk', 'Google Drive'])
+        # The inbox's own choice has no known ones
+        self.assertEqual(self.menus[1], ['Local disk', 'Google Drive'])
+
     def test_quitting_a_sorts_pick_goes_back_to_the_menu(self):
         self.assertIsNone(self.run_menu([SORT, 'Local disk', 'Quit'], dir_picks=[None]))
         self.assertEqual(len(self.menus), 3)

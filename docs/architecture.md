@@ -56,15 +56,21 @@ only when it's shown), or in the whole Drive tree (`cloud`) with
 it returns them. After the pairs: "Sort an inbox" (the inbox, then the
 sorted tree, each chosen as a slot is) and the recent sorts (`sorts`, at
 most `MAX_SORTS`, by their way around: `record_sort()`), which return a
-`choose_replicas.Sort(inbox, root)`.
+`choose_replicas.Sort(inbox, root)`. Choosing the sorted tree offers the
+replicas the user knows first (`known_replicas()`: the favorites', the
+recent pairs', the recent sorts' trees).
 
 ### `inbox.py`, `ai.py` — sorting an inbox
-`InboxSort(inbox_path, root_path)`: both local, or both cloud paths
-(`InboxError` otherwise, or if the sorted tree is in the inbox). Its files
-move within one tree that has both: their common dir
-(`LocalDiskDirTree`, unscanned) or Drive's (`CloudDirTree` of their common
-cloud path), with the inbox and the root `keep_dirs()` (never removed when
-left empty, never moved or trashed whole). `run()` is a loop like
+`InboxSort(inbox_path, root_path)`: local dirs or cloud paths. Both of a
+kind (`is_one_tree`): its files move within one tree that has both, their
+common dir (`LocalDiskDirTree`, unscanned) or Drive's (`CloudDirTree` of
+their common cloud path), so a move is a rename (`InboxError` if the sorted
+tree is in the inbox). One of each: a tree each, and a move is
+`_transfer()`: the sorted tree's `copy_inner_entries_from_dirtree()` (an
+upload; or a download, from a `_Renamed` source that maps each file's new
+relpath to the inbox's), then the inbox's `remove_files()` of the files
+copied. Either way the inbox and the root are `keep_dirs()` (never removed
+when left empty, never moved or trashed whole). `run()` is a loop like
 `InteractiveDirSync.browse()`: `pick_files` of the inbox's files, with
 Claude's descriptions as their tags (`shown_as`, through `--updates`: "name
 | description") and its recommendations in the preview column, both kept in

@@ -1,3 +1,4 @@
+import json
 import os
 import shutil
 import tempfile
@@ -6,7 +7,9 @@ from unittest import mock
 
 import helpers
 from dirdelta import ai
+from dirdelta import clouddirtree
 from dirdelta import inbox
+from dirdelta import localdiskdirtree
 from dirdelta import picker
 from dirdelta import replicas
 
@@ -174,8 +177,6 @@ class InboxSortTest(unittest.TestCase):
         with self.assertRaises(inbox.InboxError):
             Sort(self.inbox, os.path.join(self.inbox, 'trip'))
         with self.assertRaises(inbox.InboxError):
-            Sort(self.inbox, 'cloud/me')
-        with self.assertRaises(inbox.InboxError):
             Sort(os.path.join(self.tmpdir, 'nope'), self.root)
 
     def test_a_dir_in_the_inbox_cant_be_the_destination(self):
@@ -184,6 +185,71 @@ class InboxSortTest(unittest.TestCase):
         with mock.patch('dirdelta.picker.pick_under_dir', return_value=os.path.join(self.inbox, 'trip')):
             self.assertIsNone(sorter._pick_dir('Pick'))
         self.assertEqual(self.show.call_args.args[0], "That's the inbox")
+
+    def two_trees(self):
+        """The sort with a tree each (as a local inbox and a Drive sorted tree have), both local
+        here, so the copy-then-remove path is run without Drive"""
+        sorter = Sort(self.inbox, self.root)
+        sorter.is_one_tree = False
+        sorter._inbox_tree = localdiskdirtree.LocalDiskDirTree(self.inbox, silent=True)
+        sorter._root_tree = localdiskdirtree.LocalDiskDirTree(self.root, silent=True)
+        sorter._inbox_rel = sorter._root_rel = ''
+        sorter._inbox_tree.keep_dirs([''])
+        return sorter
+
+    def test_a_move_between_two_trees_is_a_copy_then_a_removal(self):
+        sorter = self.two_trees()
+        with mock.patch('dirdelta.dryrun.DRYRUN', False):
+            done = sorter._transfer([('trip/c.jpg', 'photos/trip/c.jpg'), ('a.txt', 'docs/a.txt')], True)
+        self.assertEqual(sorted(done), [('a.txt', 'docs/a.txt'), ('trip/c.jpg', 'photos/trip/c.jpg')])
+        with open(os.path.join(self.root, 'photos', 'trip', 'c.jpg')) as f:
+            self.assertEqual(f.read(), 'trip/c.jpg')
+        self.assertFalse(self.exists('inbox', 'trip'))
+        self.assertTrue(os.path.isdir(self.inbox))
+
+    def test_a_failed_copy_between_two_trees_keeps_the_inbox_file(self):
+        sorter = self.two_trees()
+        real_copy = shutil.copy2
+
+        def copy(src, dst):
+            if src.endswith('a.txt'):
+                raise OSError('disk full')
+            real_copy(src, dst)
+        with mock.patch('dirdelta.dryrun.DRYRUN', False), \
+                mock.patch('dirdelta.localdiskdirtree.shutil.copy2', side_effect=copy):
+            done = sorter._transfer([('a.txt', 'docs/a.txt'), ('b.jpg', 'photos/b.jpg')], True)
+        self.assertEqual(done, [('b.jpg', 'photos/b.jpg')])
+        self.assertTrue(self.exists('inbox', 'a.txt'))
+        self.assertFalse(self.exists('inbox', 'b.jpg'))
+
+    def test_a_copy_between_two_trees_keeps_the_inbox_files(self):
+        sorter = self.two_trees()
+        with mock.patch('dirdelta.dryrun.DRYRUN', False):
+            sorter._transfer([('a.txt', 'docs/a.txt')], False)
+        self.assertTrue(self.exists('inbox', 'a.txt'))
+        self.assertTrue(self.exists('sorted', 'docs', 'a.txt'))
+
+    def test_a_dry_run_between_two_trees_changes_nothing(self):
+        sorter = self.two_trees()
+        with mock.patch('dirdelta.dryrun.DRYRUN', True):
+            self.assertEqual(sorter._transfer([('a.txt', 'docs/a.txt')], True), [])
+        self.assertTrue(self.exists('inbox', 'a.txt'))
+        self.assertFalse(self.exists('sorted', 'docs', 'a.txt'))
+
+    def test_a_local_inbox_and_a_drive_sorted_tree_get_a_tree_each(self):
+        cache = os.path.join(self.tmpdir, 'files.txt')
+        with open(cache, 'w') as f:
+            f.write(json.dumps({'myDriveRootId': 'ROOT'}) + '\n')
+            f.write(json.dumps({'id': 'me', 'name': 'me', 'parents': ['ROOT'],
+                                'mimeType': 'application/vnd.google-apps.folder'}) + '\n')
+        with mock.patch('dirdelta.drivecache.FILE_LIST_CACHE', cache):
+            sorter = Sort(self.inbox, 'cloud/me')
+            with self.assertRaises(inbox.drivecache.DriveCacheError):
+                Sort(self.inbox, 'cloud/nope')
+        self.assertFalse(sorter.is_one_tree)
+        self.assertIsInstance(sorter._root_tree, clouddirtree.CloudDirTree)
+        self.assertEqual(sorter._inbox_tree.fullpath(), self.inbox)
+        self.assertEqual(sorter.root_path, 'cloud/me')
 
     def test_run_records_the_sort(self):
         known = replicas.Replicas()
