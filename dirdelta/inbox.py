@@ -651,8 +651,9 @@ class InboxSort(object):
         keys = {relpath: (self._cache_key(ai.File(relpath, None, sizes[relpath])),
                           self._target_cache_key(target, sizes[relpath]))
                 for relpath, target in plan}
-        with messages.progress_screen(summary + (" (a dry run)" if dryrun.DRYRUN else ""), dryrun.label()), \
-                self._drive_lock:
+        # Back to the picker once it's done, unless it's stopped (Ctrl-C), or some weren't done
+        with messages.progress_screen(summary + (" (a dry run)" if dryrun.DRYRUN else ""), dryrun.label(),
+                                      wait=False), self._drive_lock:
             if self.is_one_tree:
                 done = (self._inbox_tree.move_files(moves) if action == self.MOVE_TO else
                         self._inbox_tree.copy_files_within(moves))
@@ -668,7 +669,20 @@ class InboxSort(object):
         targets = dict(plan)
         for relpath in done:
             self._root_index.add(targets[relpath], sizes[relpath])
+        not_done = [relpath for relpath, _ in plan if relpath not in set(done)]
+        if not_done:
+            self._say_not_done("moved" if action == self.MOVE_TO else "copied", not_done, len(plan))
         return done
+
+    def _say_not_done(self, what, relpaths, count):
+        """Show that the inbox's files at relpaths (of count) weren't moved, copied or removed (what)"""
+        messages.show("Not all were %s" % (what,),
+                      ["%d of the %s couldn't be %s (they're still in %s):" % (
+                          len(relpaths), _files(count), what, self.inbox_path)] +
+                      ["  " + relpath for relpath in relpaths[:interactive_dir_sync.InteractiveDirSync.MAX_FILES_LISTED]] +
+                      (["  (and %d more)" % (len(relpaths) - interactive_dir_sync.InteractiveDirSync.MAX_FILES_LISTED,)]
+                       if len(relpaths) > interactive_dir_sync.InteractiveDirSync.MAX_FILES_LISTED else []),
+                      dryrun.label(), 'red')
 
     def _target_cache_key(self, target, size):
         """The cache's key of a file at target in the sorted tree"""
@@ -738,11 +752,7 @@ class InboxSort(object):
         left = set(self._inbox_files())
         kept = [relpath for relpath in relpaths if relpath in left]
         if kept:
-            messages.show("Not all were removed",
-                          ["%d of the %s couldn't be removed (they're still in %s):" % (
-                              len(kept), _files(len(relpaths)), self.inbox_path)] +
-                          ["  " + relpath for relpath in kept[:interactive_dir_sync.InteractiveDirSync.MAX_FILES_LISTED]],
-                          dryrun.label(), 'red')
+            self._say_not_done("removed", kept, len(relpaths))
         return [relpath for relpath in relpaths if relpath not in left]
 
 

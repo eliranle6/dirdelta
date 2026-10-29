@@ -74,6 +74,19 @@ class InboxSortTest(unittest.TestCase):
         # Back to the files left
         self.assertEqual(self.pick_files.call_args.args[1], ['b.jpg', 'trip/c.jpg'])
 
+    def test_a_move_goes_back_to_the_picker_unless_some_werent_moved(self):
+        with mock.patch('dirdelta.messages.progress_screen', wraps=inbox.messages.progress_screen) as screen:
+            self.sort([['a.txt'], None], ['Move the 1 file to...', YES], dirs=[os.path.join(self.root, 'docs')])
+        self.assertFalse(screen.call_args.kwargs['wait'])
+        self.show.assert_not_called()
+        # One that's there already is skipped: not moved
+        helpers.make_files(self.root, ['docs/b.jpg'])
+        self.sort([['b.jpg', 'trip/c.jpg'], None], ['Move the 2 files to...', YES], dirs=[os.path.join(self.root, 'docs')])
+        title, lines = self.show.call_args.args[:2]
+        self.assertEqual(title, 'Not all were moved')
+        self.assertEqual(lines[1:], ['  b.jpg'])
+        self.assertTrue(self.exists('sorted', 'docs', 'c.jpg'))
+
     def test_the_approval_shows_the_tree_it_makes(self):
         self.sort([['a.txt', 'trip/c.jpg'], None], ['Move the 2 files to...', YES],
                   dirs=[os.path.join(self.root, 'new')])
