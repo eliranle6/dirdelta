@@ -67,7 +67,9 @@ Choosing a pair, or both replicas, goes on to the sync menu below, which also ha
 (or "Remove from favorites"). Every sync's pair is kept in `~/.config/dirdelta/replicas.json` (the
 latest first, each pair once, either way around), which you can also edit by hand.
 
-The menu also has "Sort an inbox" (choose the inbox, then the sorted tree), and the recent sorts.
+Its sections, each under a grey heading: "Sync two replicas" (the two slots and the favorites),
+"Recent syncs", "Sort an inbox into a sorted tree" (a new sort: choose the inbox, then the sorted
+tree), and "Recent inbox sorts".
 
 ### Sorting an inbox
 
@@ -85,8 +87,10 @@ Drive folders; choosing it, the replicas you sync are offered too). The inbox's 
   done in the background: you go on picking, the files say "(Claude is looking at it...)" until
   their descriptions come, and the bottom line says what Claude is doing.
 - "Ask Claude where N files go": their descriptions first (the missing ones), then Claude Sonnet is
-  given them and the sorted tree's dirs, and recommends a dir for each file (an existing one, or a
-  new one), with a reason, shown beside the file. It reads nothing itself.
+  given them and the sorted tree's dirs (with a few of the names of the files in each), and
+  recommends a path for each file: a dir (an existing one, or a new one) and a name, the file's own
+  unless it says little (`IMG_2041.jpg`, `scan001.pdf`) or doesn't fit how that dir's files are
+  named; with a reason, shown beside the file. It reads nothing itself.
 - "Move the N files to Claude's recommendation" (naming the dir, when they all go to one), "Move the N
   files to..." (pick a dir in the sorted tree), "Copy the N files to...", and "Remove the N files"
   (asked twice).
@@ -101,7 +105,8 @@ Claude is asked through the Claude Agent SDK (`pip install claude-agent-sdk`, in
 which runs Claude Code: the laptop's logged-in Claude, or `ANTHROPIC_API_KEY` if it's set. Claude reads
 the picked files itself (text, images, PDFs; a Drive file is downloaded first), with no tool but
 `Read`, so their contents are sent to Anthropic: only when you choose to. What it says is kept in
-`~/.cache/dirdelta/ai.json`, so a file is asked about once. Descriptions are asked of
+`~/.cache/dirdelta/ai.json`, by the file's path and size, so a file is asked about once, and it goes
+with the file when it's moved or copied. Descriptions are asked of
 `claude-haiku-5-5` and recommendations of `claude-sonnet-5-5` (`DIRDELTA_AI_DESCRIBE_MODEL` and
 `DIRDELTA_AI_RECOMMEND_MODEL` change them, `DIRDELTA_AI_MODEL` both).
 

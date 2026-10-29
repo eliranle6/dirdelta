@@ -71,23 +71,25 @@ class AITest(unittest.TestCase):
 
     def test_recommendations_per_sorted_tree_and_cleaned(self):
         answering = _Answering(lambda prompt: [
-            {'number': 1, 'destination': '/lists/shopping/', 'reason': 'a list'},
-            {'number': 2, 'destination': '../outside', 'reason': 'no'},
-            {'number': 3, 'destination': '', 'reason': 'top level'}])
+            {'number': 1, 'path': '/lists/shopping/2026-10 groceries.txt', 'reason': 'a list'},
+            {'number': 2, 'path': '../outside/f1.txt', 'reason': 'no'},
+            {'number': 3, 'path': 'top', 'reason': 'top level'}])
+        dirs = {'': ['notes.txt'], 'lists': ['2026-09 groceries.txt'], 'photos/2024': []}
         with mock.patch('dirdelta.ai._run_query', side_effect=answering):
-            found = ai.recommend(self.files(3), self.key, ['lists', 'photos/2024'], 'cloud/me',
-                                 {'f0.txt': 'a shopping list'})
-        self.assertEqual(found['f0.txt'], {'destination': 'lists/shopping', 'reason': 'a list'})
+            found = ai.recommend(self.files(3), self.key, dirs, 'cloud/me', {'f0.txt': 'a shopping list'})
+        self.assertEqual(found['f0.txt'], {'path': 'lists/shopping/2026-10 groceries.txt', 'reason': 'a list'})
         self.assertNotIn('f1.txt', found)
-        self.assertEqual(found['f2.txt']['destination'], '')
+        # A new name without the file's extension gets it
+        self.assertEqual(found['f2.txt']['path'], 'top.txt')
         prompt, readable_dirs, schema = answering.prompts[0]
-        self.assertIn("The sorted tree's dirs:\nlists\nphotos/2024", prompt)
+        self.assertIn("The sorted tree's dirs:\n. (the root) (e.g. notes.txt)\nlists (e.g. 2026-09 groceries.txt)\n"
+                      "photos/2024", prompt)
         # By the descriptions: nothing's read
         self.assertIn("1. f0.txt (size 10 bytes): a shopping list", prompt)
         self.assertEqual(readable_dirs, [])
-        self.assertEqual(schema['properties']['files']['items']['required'], ['number', 'destination', 'reason'])
-        self.assertEqual(ai.cached(self.files(1), self.key, 'cloud/me')[1]['f0.txt']['destination'],
-                         'lists/shopping')
+        self.assertEqual(schema['properties']['files']['items']['required'], ['number', 'path', 'reason'])
+        self.assertEqual(ai.cached(self.files(1), self.key, 'cloud/me')[1]['f0.txt']['path'],
+                         'lists/shopping/2026-10 groceries.txt')
         # Another sorted tree isn't the same recommendation
         self.assertEqual(ai.cached(self.files(1), self.key, 'cloud/other')[1], {})
 
@@ -101,6 +103,20 @@ class AITest(unittest.TestCase):
         env = {ai.MODEL_ENV_VAR: 'both', ai.RECOMMEND_MODEL_ENV_VAR: 'recommending'}
         with mock.patch.dict(os.environ, env, clear=True):
             self.assertEqual((ai._model(False), ai._model(True)), ('both', 'recommending'))
+
+    def test_a_recommendation_cached_with_a_dir_only_is_the_files_name_there(self):
+        self.assertEqual(ai.recommended_path('in/a.txt', {'destination': 'docs'}), 'docs/a.txt')
+        self.assertEqual(ai.recommended_path('a.txt', {'destination': ''}), 'a.txt')
+        self.assertEqual(ai.recommended_path('a.txt', {'path': 'docs/b.txt'}), 'docs/b.txt')
+
+    def test_what_the_cache_has_goes_with_the_files(self):
+        with mock.patch('dirdelta.ai._run_query', side_effect=_Answering(
+                lambda prompt: [{'number': 1, 'description': 'a list'}])):
+            ai.describe(self.files(1), self.key)
+        ai.carry({self.key(self.files(1)[0]): 'sorted/f0.txt\t10', 'nothing\t1': 'else\t1'})
+        moved = ai.File('f0.txt', None, 10)
+        self.assertEqual(ai.cached([moved], lambda file: 'sorted/f0.txt\t10', 'root')[0], {'f0.txt': 'a list'})
+        self.assertEqual(ai.cached([moved], lambda file: 'else\t1', 'root')[0], {})
 
     def test_progress(self):
         progress = []

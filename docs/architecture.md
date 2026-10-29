@@ -56,7 +56,11 @@ only when it's shown), or in the whole Drive tree (`cloud`) with
 it returns them. After the pairs: "Sort an inbox" (the inbox, then the
 sorted tree, each chosen as a slot is) and the recent sorts (`sorts`, at
 most `MAX_SORTS`, by their way around: `record_sort()`), which return a
-`choose_replicas.Sort(inbox, root)`. Choosing the sorted tree offers the
+`choose_replicas.Sort(inbox, root)`. Each kind is a section under a heading
+(a `picker.Disabled` option, so it can't be picked; the menu starts on the
+first slot, `pick_option(selected=...)`): Sync two replicas (the slots and the
+favorites), Recent syncs, Sort an inbox, Recent inbox sorts; a section with
+nothing in it has no heading. Choosing the sorted tree offers the
 replicas the user knows first (`known_replicas()`: the favorites', the
 recent pairs', the recent sorts' trees).
 
@@ -105,8 +109,12 @@ SDK, descriptions of `DESCRIBE_MODEL` (Haiku) and recommendations of
 A Drive file is downloaded to a temp dir first (one at a time); one over
 `MAX_READ_SIZE`, or a Google file, isn't read (Claude goes by its name).
 Recommendations are given the sorted tree's dirs (at most `MAX_DIRS_GIVEN`,
-the shallowest; not the inbox's, if it's in it), and their destinations are
-cleaned (`..` refused). Answers are cached by the file's path and size
+the shallowest; not the inbox's, if it's in it), each with a few of its
+files' names (`NAMES_PER_DIR`), and recommend a path (a dir and a name, the
+file's own or a better one in that dir's style), cleaned (`..` refused, the
+file's extension kept): `ai.recommended_path()` (a recommendation cached
+before, with only a dir, is the file's name there). After a move or copy, the
+files' cache entries are copied to their new paths' keys (`ai.carry()`). Answers are cached by the file's path and size
 (recommendations also by the sorted tree), `AIError` if Claude can't be
 asked.
 

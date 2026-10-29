@@ -175,20 +175,27 @@ class InboxSortTest(unittest.TestCase):
         self.assertEqual(sorted(self.sorter._descriptions), ['a.txt', 'trip/c.jpg'])
 
     def test_recommendations_are_shown_and_moved_to(self):
-        with self.ask_claude({'b.jpg': {'description': 'a cat', 'destination': 'photos/cats', 'reason': 'a cat photo'},
-                              'trip/c.jpg': {'description': 'a beach', 'destination': 'photos/trips/2024',
+        with self.ask_claude({'b.jpg': {'description': 'a cat', 'path': 'photos/cats/b.jpg', 'reason': 'a cat photo'},
+                              'trip/c.jpg': {'description': 'a beach', 'path': 'photos/trips/2024/beach.jpg',
                                              'reason': 'a trip photo'}}):
             self.sort([['b.jpg', 'trip/c.jpg'], ['b.jpg'], ['b.jpg', 'trip/c.jpg'], None],
-                      ['Ask Claude', NOTHING, "Move the 2 files to Claude's recommendations (2 dirs)", YES])
+                      ['Ask Claude', NOTHING, "Move the 2 files to Claude's recommendations (2 dirs, 1 renamed)", YES])
         # Described first (Haiku, reading them), then placed by the descriptions (Sonnet)
         self.assertEqual([query[:2] for query in self.queries],
-                         [(['description'], ai.DESCRIBE_MODEL), (['destination', 'reason'], ai.RECOMMEND_MODEL)])
+                         [(['description'], ai.DESCRIBE_MODEL), (['path', 'reason'], ai.RECOMMEND_MODEL)])
         self.assertIn("b.jpg (size 5 bytes): a cat", self.queries[1][2])
         menus = [call.args[0] for call in self.pick_option.call_args_list]
         # One destination: the menu names it
         self.assertIn("Move the 1 file to Claude's recommendation: %s/photos/cats/" % (self.root,), menus[1])
         self.assertTrue(self.exists('sorted', 'photos', 'cats', 'b.jpg'))
-        self.assertTrue(self.exists('sorted', 'photos', 'trips', '2024', 'c.jpg'))
+        # Renamed, as Claude recommended
+        self.assertTrue(self.exists('sorted', 'photos', 'trips', '2024', 'beach.jpg'))
+        view = self.view_files.call_args.kwargs['previews']['photos/trips/2024/beach.jpg']
+        self.assertIn("Renamed, from:", view)
+        # What Claude said of it went with it
+        moved = ai.File('beach.jpg', None, 10)
+        self.assertEqual(ai.cached([moved], lambda file: '%s/photos/trips/2024/beach.jpg\t10' % (self.root,),
+                                   self.root)[0], {'beach.jpg': 'a beach'})
         self.assertIn("  photos/cats/", self.sent_previews(self.pick_files.call_args_list[1])['b.jpg'])
 
     def sent_previews(self, pick_files_call):
@@ -234,7 +241,7 @@ class InboxSortTest(unittest.TestCase):
     def test_the_sorted_trees_dirs_for_claude_leave_the_inbox_out(self):
         os.makedirs(os.path.join(self.root, 'unsorted', 'deep'))
         sorter = Sort(os.path.join(self.root, 'unsorted'), self.root)
-        self.assertEqual(sorted(sorter._root_dirs()), ['docs', 'photos'])
+        self.assertEqual(sorter._root_dirs(), {'': [], 'docs': ['old.txt'], 'photos': ['old.jpg']})
 
     def test_bad_pairs_are_refused(self):
         with self.assertRaises(inbox.InboxError):

@@ -40,6 +40,8 @@ PREVIEWS_INTERVAL = 0.3
 DESCRIBED_WAIT_INTERVAL = 0.2
 # The key that describes the picked files (or the selected one) with Claude, in the background
 DESCRIBE_KEY = '\t'
+# How many of a dir's file names Claude is given, so it sees how they're named
+NAMES_PER_DIR = 3
 # What a file being described is shown as, after its name
 LOOKING = "(Claude is looking at it...)"
 
@@ -240,9 +242,11 @@ class InboxSort(object):
             recommendation = self._recommendations.get(relpath)
             if recommendation:
                 # Relative to the sorted tree, so a long root doesn't hide where in it
-                lines += ["", "Claude recommends it go to:",
-                          "  %s/" % (recommendation['destination'] or '.',),
-                          "  (in %s)" % (self.root_path,)]
+                target = self._target(relpath)
+                lines += ["", "Claude recommends it go to:", "  %s/" % (os.path.dirname(target) or '.',)]
+                if os.path.basename(target) != os.path.basename(relpath):
+                    lines += ["  renamed:"] + _wrapped(os.path.basename(target), "    ")
+                lines += ["  (in %s)" % (self.root_path,)]
                 lines += _wrapped(recommendation.get('reason', ''), "  ")
             else:
                 lines += ["", "Where it goes: pick it, press", "Enter, and ask Claude."]
@@ -258,11 +262,15 @@ class InboxSort(object):
                        if relpath not in self._descriptions and relpath not in self._describing]
         unrecommended = [relpath for relpath in relpaths if relpath not in self._recommendations]
         recommended = [relpath for relpath in relpaths if relpath in self._recommendations]
-        destinations = sorted({self._recommendations[relpath]['destination'] for relpath in recommended})
+        destinations = sorted({os.path.dirname(self._target(relpath)) for relpath in recommended})
+        renamed = [relpath for relpath in recommended
+                   if os.path.basename(self._target(relpath)) != os.path.basename(relpath)]
+        renamed_text = ", %d renamed" % (len(renamed),) if renamed else ""
         if len(destinations) == 1:
-            to = "Claude's recommendation: %s/" % (_join(self.root_path, destinations[0]),)
+            to = "Claude's recommendation: %s/%s" % (_join(self.root_path, destinations[0]),
+                                                    " (%s)" % (renamed_text[2:],) if renamed else "")
         else:
-            to = "Claude's recommendations (%d dirs)" % (len(destinations),)
+            to = "Claude's recommendations (%d dirs%s)" % (len(destinations), renamed_text)
         options = {
             self.DESCRIBE: ("Describe %s with Claude, while you go on (sends it their contents; or Ctrl-I)" %
                             (_files(len(undescribed)),),
@@ -290,14 +298,14 @@ class InboxSort(object):
             self._recommend(unrecommended)
             return None
         if action == self.MOVE_RECOMMENDED:
-            return self._approve(self.MOVE_TO, [(relpath, self._recommendations[relpath]['destination'])
-                                                for relpath in recommended])
+            return self._approve(self.MOVE_TO, [(relpath, self._target(relpath)) for relpath in recommended])
         if action in (self.MOVE_TO, self.COPY_TO):
             destination = self._pick_dir("Pick the dir in %s to %s the %s to (Enter picks the selected dir)" %
                                          (self.root_path, 'move' if action == self.MOVE_TO else 'copy', count))
             if destination is None:
                 return None
-            return self._approve(action, [(relpath, destination) for relpath in relpaths])
+            return self._approve(action, [(relpath, _join(destination, os.path.basename(relpath)))
+                                          for relpath in relpaths])
         if action == self.REMOVE:
             return self._remove(relpaths)
         return None
@@ -414,20 +422,31 @@ class InboxSort(object):
         return files
 
     def _root_dirs(self):
-        """The sorted tree's dirs' relpaths (in it), not the inbox's (if it's in it)"""
+        """{dir relpath: the names of a few of its files (NAMES_PER_DIR)} of the sorted tree's dirs
+        ('' its root), so Claude sees how they're named; not the inbox's (if it's in it)"""
+        dirs = {'': []}
         if self.root_is_cloud:
             node = self._root_tree.get_node(self._root_rel)
-            dirs = [_relpath_in(dir_node.identifier, self._root_rel)
-                    for dir_node in self._root_tree._tree.subtree(node.identifier).all_nodes_itr()
-                    if isinstance(dir_node.data, entries.DirEntry) and dir_node.identifier != self._root_rel]
+            found = [(_relpath_in(child.identifier, self._root_rel), isinstance(child.data, entries.DirEntry))
+                     for child in self._root_tree._tree.subtree(node.identifier).all_nodes_itr()
+                     if child.identifier != self._root_rel]
         else:
-            result = subprocess.run(['find', self.root_path, '-mindepth', '1', '-type', 'd', '-printf', '%P\\0'],
+            result = subprocess.run(['find', self.root_path, '-mindepth', '1', '(', '-type', 'd', '-o', '-type', 'f',
+                                     ')', '-printf', '%y %P\\0'],
                                     stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
-            dirs = [os.fsdecode(path) for path in result.stdout.split(b'\0') if path]
+            found = [(os.fsdecode(entry[2:]), entry[:1] == b'd') for entry in result.stdout.split(b'\0') if entry]
         inbox_in_root = _relpath_in(self._inbox_rel, self._root_rel) if self.is_one_tree and _is_at_or_under(
             self._inbox_rel, self._root_rel) else None
-        return [dirpath for dirpath in dirs
-                if inbox_in_root is None or not _is_at_or_under(dirpath, inbox_in_root)]
+        found = [(relpath, is_dir) for relpath, is_dir in found
+                 if inbox_in_root is None or not _is_at_or_under(relpath, inbox_in_root)]
+        for relpath, is_dir in sorted(found):
+            if is_dir:
+                dirs.setdefault(relpath, [])
+        for relpath, is_dir in sorted(found):
+            names = dirs.get(os.path.dirname(relpath))
+            if not is_dir and names is not None and len(names) < NAMES_PER_DIR:
+                names.append(os.path.basename(relpath))
+        return dirs
 
     # Moving, copying, removing
 
@@ -448,13 +467,13 @@ class InboxSort(object):
         return relpath
 
     def _approve(self, action, plan):
-        """Show where each file of plan (relpath, destination dir in the sorted tree) goes, as the tree
-        it makes, then, once the user confirms, move (MOVE_TO) or copy them there. Returns the picked
-        files done (or that would have been, in a dry run), or None if the user didn't confirm."""
+        """Show where each file of plan (relpath, its path in the sorted tree: a dir and a name, maybe
+        another) goes, as the tree it makes, then, once the user confirms, move (MOVE_TO) or copy them
+        there. Returns the picked files done (or that would have been, in a dry run), or None if the
+        user didn't confirm."""
         verb = "Move" if action == self.MOVE_TO else "Copy"
         targets = {}
-        for relpath, destination in plan:
-            target = _join(destination, os.path.basename(relpath))
+        for relpath, target in plan:
             targets.setdefault(target, []).append(relpath)
         clashes = {target: sources for target, sources in targets.items() if len(sources) > 1}
         if clashes:
@@ -464,7 +483,7 @@ class InboxSort(object):
                            (len(clashes[target]), _join(self.root_path, target), ', '.join(clashes[target]))],
                           dryrun.label(), 'red')
             return None
-        destinations = sorted({destination for _, destination in plan})
+        destinations = sorted({os.path.dirname(target) for _, target in plan})
         new_dirs = [destination for destination in destinations
                     if not self._root_tree._exists(_join(self._root_rel, destination))]
         previews = {}
@@ -474,8 +493,10 @@ class InboxSort(object):
                 lines += ["", "There's a file there already:", "it's skipped."]
             if os.path.dirname(target) in new_dirs:
                 lines += ["", "In a new dir."]
+            if os.path.basename(target) != os.path.basename(relpath):
+                lines += ["", "Renamed, from:"] + _wrapped(os.path.basename(relpath), "  ")
             recommendation = self._recommendations.get(relpath)
-            if recommendation and recommendation['destination'] == os.path.dirname(target):
+            if recommendation and self._target(relpath) == target:
                 lines += ["", "Why (Claude):"] + _wrapped(recommendation.get('reason', ''), "  ")
             previews[target] = lines
         summary = ("%s %s from %s into %d dirs of %s%s" %
@@ -497,8 +518,11 @@ class InboxSort(object):
         if picker.pick_option([self.CONFIRM_NO, self.CONFIRM_YES], header='\n'.join(lines),
                               label=LABEL) != self.CONFIRM_YES:
             return None
-        moves = [(self._full(relpath), _join(self._root_rel, destination, os.path.basename(relpath)))
-                 for relpath, destination in plan]
+        moves = [(self._full(relpath), _join(self._root_rel, target)) for relpath, target in plan]
+        # The cache's keys of each file, here and where it goes (the same size), while it's here
+        keys = {relpath: (self._cache_key(ai.File(relpath, None, self._size(relpath))),
+                          self._target_cache_key(target, self._size(relpath)))
+                for relpath, target in plan}
         with messages.progress_screen(summary + (" (a dry run)" if dryrun.DRYRUN else ""), dryrun.label()), \
                 self._drive_lock:
             if self.is_one_tree:
@@ -509,7 +533,18 @@ class InboxSort(object):
         if dryrun.DRYRUN:
             return [relpath for relpath, _ in plan]
         done_sources = {relpath for relpath, _ in done}
-        return [relpath for relpath, _ in plan if self._full(relpath) in done_sources]
+        done = [relpath for relpath, _ in plan if self._full(relpath) in done_sources]
+        # What Claude said of each goes with it, to its new path
+        ai.carry(dict(keys[relpath] for relpath in done))
+        return done
+
+    def _target_cache_key(self, target, size):
+        """The cache's key of a file at target in the sorted tree"""
+        return '%s\t%s' % (posixpath.join(self.root_path, target), size)
+
+    def _target(self, relpath):
+        """Where Claude recommends the inbox's file at relpath go, in the sorted tree"""
+        return ai.recommended_path(relpath, self._recommendations[relpath])
 
     def _transfer(self, moves, is_move):
         """Copy the inbox's files to the sorted tree, of another kind, each of moves (relpath in the

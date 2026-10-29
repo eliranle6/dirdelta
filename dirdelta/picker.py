@@ -154,15 +154,18 @@ def pick_under_dir(dirpath, max_depth=None, dirs_only=False, lazy=False, header=
     return dirpath if picked[0] == '.' else os.path.join(dirpath, picked[0])
 
 
-def pick_option(options, header='', shown_as=None, label=None):
+def pick_option(options, header='', shown_as=None, label=None, selected=None):
     """Let the user pick one of the options (strings). Returns it, or None if the user quit.
 
     shown_as, if given, is called again and again while the menu is shown (every
     SHOWN_AS_INTERVAL seconds, on another thread), and returns {option: what to show it as} for
     the options to show otherwise than as themselves, e.g. with a count that's coming in: a
     string, or a Disabled for one that can't be picked (until shown_as says otherwise). What's
-    returned is still the option itself. label: as pick_files()'s."""
+    returned is still the option itself. label: as pick_files()'s. selected: the option to start
+    with selected (else the first)."""
     args = ['--list', '--root', 'Options'] + _header_args(header)
+    if selected is not None:
+        args += ['--select', selected]
     picked = _run(args, options, shown_as, label)
     return None if picked is None else picked[0]
 

@@ -1,6 +1,7 @@
 """The menu that chooses what to sync, when dirdelta is run without paths: a replica for each of its
 two slots (a local dir under /, or a Drive one), or a favorite or recent pair at once; or an inbox
-to sort into a sorted tree (inbox.py), a new one or a recent one."""
+to sort into a sorted tree (inbox.py), a new one or a recent one. Each kind is a section of its own,
+under a heading."""
 import collections
 import os
 
@@ -15,7 +16,12 @@ NOT_CHOSEN = '<none: press Enter to choose one>'
 LOCAL = 'Local disk'
 CLOUD = 'Google Drive'
 QUIT = 'Quit'
-SORT = 'Sort an inbox: file its files away into a sorted tree, with Claude\'s help'
+SORT = '  New sort: choose an inbox, and the sorted tree its files go to (with Claude\'s help)'
+# The menu's sections' headings (shown in grey: they can't be picked)
+SYNC_SECTION = '\u2500\u2500 Sync two replicas \u2500\u2500'
+RECENT_SYNCS_SECTION = '\u2500\u2500 Recent syncs \u2500\u2500'
+SORT_SECTION = '\u2500\u2500 Sort an inbox into a sorted tree \u2500\u2500'
+RECENT_SORTS_SECTION = '\u2500\u2500 Recent inbox sorts \u2500\u2500'
 # What a replica the user knows is offered as, when choosing a sorted tree
 KNOWN = 'Known replica: '
 
@@ -33,15 +39,17 @@ def run(replicas):
     one of replicas' sorts); or None if the user quit."""
     chosen = [None, None]
     while True:
-        slots = {'Replica %s: %s' % (name, path or NOT_CHOSEN): index
-                 for index, (name, path) in enumerate(zip('AB', chosen))}
-        pairs = {}
-        for prefix, section in (('Favorite', replicas.favorites), ('Recent', replicas.recent())):
-            for pair in section:
-                pairs['%s: %s' % (prefix, pair_label(*pair))] = pair
-        sorts = {'Recent sort: %s -> %s' % sort: Sort(*sort) for sort in replicas.sorts}
-        option = picker.pick_option(list(slots) + list(pairs) + [SORT] + list(sorts) + [QUIT],
-                                    header='Choose the two replicas to sync, or an inbox to sort')
+        slots = {slot_label(name, path): index for index, (name, path) in enumerate(zip('AB', chosen))}
+        favorites = {favorite_label(*pair): pair for pair in replicas.favorites}
+        recent = {recent_label(*pair): pair for pair in replicas.recent()}
+        pairs = dict(favorites, **recent)
+        sorts = {sort_label(*sort): Sort(*sort) for sort in replicas.sorts}
+        sections = [(SYNC_SECTION, list(slots) + list(favorites)), (RECENT_SYNCS_SECTION, list(recent)),
+                    (SORT_SECTION, [SORT]), (RECENT_SORTS_SECTION, list(sorts))]
+        options = [option for heading, section in sections if section for option in [heading] + section]
+        headings = {heading: picker.Disabled(heading) for heading, _ in sections}
+        option = picker.pick_option(options + [QUIT], header='Choose the two replicas to sync, or an inbox to sort',
+                                    shown_as=lambda: headings, selected=options[1])
         if option in (None, QUIT):
             return None
         if option == SORT:
@@ -103,6 +111,22 @@ def known_replicas(replicas):
     found += [root for _, root in replicas.sorts]
     return list(dict.fromkeys(found))
 
+
+
+def slot_label(name, path):
+    return '  Replica %s: %s' % (name, path or NOT_CHOSEN)
+
+
+def favorite_label(path_a, path_b):
+    return '  Favorite: %s' % (pair_label(path_a, path_b),)
+
+
+def recent_label(path_a, path_b):
+    return '  %s' % (pair_label(path_a, path_b),)
+
+
+def sort_label(inbox, root):
+    return '  %s -> %s' % (inbox, root)
 
 
 def pair_label(path_a, path_b):

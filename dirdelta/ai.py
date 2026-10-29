@@ -74,10 +74,12 @@ def describe(files, cache_key, progress=None):
 
 
 def recommend(files, cache_key, dirs, root_name, descriptions, progress=None):
-    """{relpath: {'destination', 'reason'}} of files (File): where in the sorted tree (root_name,
-    whose dirs are dirs: relpaths) each belongs, as a dir relative to its root (an existing one, or
-    a new one where none fits), from the cache or Claude (RECOMMEND_MODEL). It goes by the files'
-    names, sizes and descriptions ({relpath: description}, e.g. describe()'s), so it reads nothing."""
+    """{relpath: {'path', 'reason'}} of files (File): where in the sorted tree (root_name, whose dirs
+    are dirs: {relpath: a few of its files' names}) each belongs, as a path relative to its root:
+    a dir (an existing one, or a new one where none fits) and a name (its own, or a better one if
+    it says little, or doesn't fit the names in that dir), from the cache or Claude
+    (RECOMMEND_MODEL). It goes by the files' names, sizes and descriptions ({relpath: description},
+    e.g. describe()'s), so it reads nothing."""
     def is_cached(entry):
         return entry.get('recommendations', {}).get(root_name)
 
@@ -155,26 +157,39 @@ def _ask_for_descriptions(files):
 
 
 def _ask_for_recommendations(files, dirs, root_name, descriptions):
-    """{relpath: {'destination', 'reason'}} of where Claude says files go, by what's known of them"""
+    """{relpath: {'path', 'reason'}} of where Claude says files go, by what's known of them"""
     lines = ["%d. %s (%s)%s" % (number, file.relpath, _size_text(file),
                                 ": " + descriptions[file.relpath] if file.relpath in descriptions else "")
              for number, file in enumerate(files, 1)]
-    listed = sorted(dirs, key=lambda relpath: (relpath.count('/'), relpath))[:MAX_DIRS_GIVEN]
+    listed = ["%s%s" % (dirpath or '. (the root)', " (e.g. %s)" % (', '.join(dirs[dirpath]),) if dirs[dirpath] else "")
+              for dirpath in sorted(dirs, key=lambda relpath: (relpath.count('/'), relpath))[:MAX_DIRS_GIVEN]]
     prompt = ("Where each of these files belongs in the sorted tree %s, whose dirs are listed below "
-              "(relative to its root): its destination, an existing dir from the list where one fits, "
-              "else a new dir to make (a path relative to the root, in the tree's style), and the "
-              "reason, in a few words. Files that go together (e.g. one trip's photos) should go to "
-              "one dir.\n\nThe files (name, size, and what each is):\n%s\n\nThe sorted tree's dirs:\n%s" %
+              "(relative to its root, with a few of the names of the files in each): its new path, "
+              "relative to the root, a dir and a file name. The dir: an existing one from the list "
+              "where one fits, else a new one to make, in the tree's style. The name: the file's own, "
+              "unless it says little of what the file is (e.g. IMG_2041.jpg, scan001.pdf, "
+              "document(3).pdf) or doesn't fit how the files in that dir are named: then a name like "
+              "theirs, with the file's extension. And the reason, in a few words. Files that go "
+              "together (e.g. one trip's photos) should go to one dir.\n\n"
+              "The files (name, size, and what each is):\n%s\n\nThe sorted tree's dirs:\n%s" %
               (root_name, '\n'.join(lines), '\n'.join(listed) or "(none yet)"))
-    result = _run_query(prompt, [], _schema(['destination', 'reason']), max_turns=5, model=_model(True),
+    result = _run_query(prompt, [], _schema(['path', 'reason']), max_turns=5, model=_model(True),
                         system_prompt=RECOMMEND_SYSTEM_PROMPT)
     answers = {}
     for number, item in _numbered(result, files):
-        destination = _clean_destination(item.get('destination', ''))
-        if destination is not None:
-            answers[files[number - 1].relpath] = {'destination': destination,
-                                                  'reason': item.get('reason', '').strip()}
+        relpath = files[number - 1].relpath
+        path = _clean_path(item.get('path', ''), os.path.basename(relpath))
+        if path is not None:
+            answers[relpath] = {'path': path, 'reason': item.get('reason', '').strip()}
     return answers
+
+
+def recommended_path(relpath, recommendation):
+    """The path in the sorted tree that a recommendation (of the file at relpath) says it goes to:
+    its path, or (cached before it had one) its dir and the file's name"""
+    if recommendation.get('path'):
+        return recommendation['path']
+    return '/'.join(part for part in (recommendation.get('destination', ''), os.path.basename(relpath)) if part)
 
 
 def _numbered(result, files):
@@ -191,12 +206,16 @@ def _short(description):
     return ' '.join(words[:MAX_DESCRIPTION_WORDS]).rstrip('.')
 
 
-def _clean_destination(destination):
-    """A recommended dir as a relpath in the sorted tree ('' its root; a leading '/' is its root
-    too), or None if it goes up out of it"""
-    parts = [part for part in destination.strip().split('/') if part not in ('', '.')]
-    if '..' in parts:
+def _clean_path(path, name):
+    """A recommended path (of a file named name) as a relpath in the sorted tree (a leading '/' is
+    its root too), with name's extension if it has none, or None if it isn't one: empty, or going up
+    out of the tree"""
+    parts = [part for part in path.strip().split('/') if part not in ('', '.')]
+    if not parts or '..' in parts:
         return None
+    extension = os.path.splitext(name)[1]
+    if extension and not os.path.splitext(parts[-1])[1]:
+        parts[-1] += extension
     return '/'.join(parts)
 
 
@@ -244,6 +263,18 @@ def _run_query(prompt, readable_dirs, schema, max_turns, model, system_prompt=SY
     if result is None or result.subtype != 'success' or not result.structured_output:
         raise AIError("Claude gave no answer (%s)" % (getattr(result, 'subtype', 'no result'),))
     return result.structured_output
+
+
+def carry(keys):
+    """What the cache has of files, under their new keys too ({old key: new key}), e.g. after they
+    were moved or copied, so it goes with them"""
+    if not keys:
+        return
+    cache = _load_cache()
+    for old_key, new_key in keys.items():
+        if old_key in cache and new_key not in cache:
+            cache[new_key] = dict(cache[old_key])
+    _save_cache(cache)
 
 
 def _load_cache():
