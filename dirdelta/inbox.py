@@ -728,13 +728,21 @@ class InboxSort(object):
         if picker.pick_option([self.CONFIRM_NO, self.CONFIRM_SURE], header=sure, label=LABEL) != self.CONFIRM_SURE:
             return None
         file_entries = self._entries(self._full(relpath) for relpath in relpaths)
+        # Back to the picker once it's done, unless it's stopped (Ctrl-C), or some weren't removed
         with messages.progress_screen("Removing %s from %s%s" % (_files(len(relpaths)), self.inbox_path,
                                                                 " (a dry run)" if dryrun.DRYRUN else ""),
-                                      dryrun.label()), self._drive_lock:
+                                      dryrun.label(), wait=False), self._drive_lock:
             self._inbox_tree.remove_files(file_entries)
         if dryrun.DRYRUN:
             return relpaths
         left = set(self._inbox_files())
+        kept = [relpath for relpath in relpaths if relpath in left]
+        if kept:
+            messages.show("Not all were removed",
+                          ["%d of the %s couldn't be removed (they're still in %s):" % (
+                              len(kept), _files(len(relpaths)), self.inbox_path)] +
+                          ["  " + relpath for relpath in kept[:interactive_dir_sync.InteractiveDirSync.MAX_FILES_LISTED]],
+                          dryrun.label(), 'red')
         return [relpath for relpath in relpaths if relpath not in left]
 
 

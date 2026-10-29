@@ -276,7 +276,12 @@ class LocalDiskDirTree(dirtree.DirTree):
         return True
 
     def _remove_file(self, file_entry):
-        os.unlink(file_entry.full_filesystem_path())
+        try:
+            os.unlink(file_entry.full_filesystem_path())
+        except OSError as error:
+            # Said, and the others go on (it's kept, in the tree too)
+            messages.print_line("Remove failed: %s" % (error,), "red")
+            return False
         # The tree may not have it, if it wasn't scanned (see dirdiff.py)
         if file_entry.relpath in self:
             self.remove_node(file_entry.relpath)

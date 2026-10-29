@@ -169,6 +169,20 @@ class LocalDiskDirTreeTest(unittest.TestCase):
                 found.append(os.path.relpath(os.path.join(dirpath, name), self.src_root))
         return sorted(found)
 
+    def test_a_file_that_cant_be_removed_is_said_and_the_rest_go_on(self):
+        tree = self._scan(['a.txt', 'b.txt'])
+        real_unlink = os.unlink
+        with mock.patch('dirdelta.dryrun.DRYRUN', False), \
+                mock.patch('dirdelta.messages.print_line') as print_line, \
+                mock.patch('dirdelta.localdiskdirtree.os.unlink',
+                           side_effect=lambda path: (_ for _ in ()).throw(PermissionError('denied'))
+                           if path.endswith('a.txt') else real_unlink(path)):
+            tree.remove_files([tree.get_node('a.txt').data, tree.get_node('b.txt').data])
+        self.assertTrue(os.path.exists(os.path.join(self.src_root, 'a.txt')))
+        self.assertFalse(os.path.exists(os.path.join(self.src_root, 'b.txt')))
+        self.assertIsNotNone(tree.get_node('a.txt'))
+        print_line.assert_any_call('Remove failed: denied', 'red')
+
     def test_removing_files_removes_the_dirs_left_empty(self):
         with mock.patch('dirdelta.dryrun.DRYRUN', False):
             tree = self._remove(['a/b/1.txt', 'a/b/c/2.txt', 'a/d/3.txt', 'e/4.txt'],

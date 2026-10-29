@@ -121,6 +121,23 @@ class InboxSortTest(unittest.TestCase):
         self.sort([['b.jpg'], None], ['Remove the 1 file', YES, NO])
         self.assertTrue(self.exists('inbox', 'b.jpg'))
 
+    def test_a_removal_goes_back_to_the_picker_unless_some_werent_removed(self):
+        with mock.patch('dirdelta.messages.progress_screen', wraps=inbox.messages.progress_screen) as screen:
+            self.sort([['a.txt'], None], ['Remove the 1 file', YES, SURE])
+        self.assertFalse(screen.call_args.kwargs['wait'])
+        self.show.assert_not_called()
+        real_unlink = os.unlink
+
+        def unlink(path):
+            if path.endswith('b.jpg'):
+                raise PermissionError('read-only')
+            real_unlink(path)
+        with mock.patch('dirdelta.localdiskdirtree.os.unlink', side_effect=unlink):
+            self.sort([['b.jpg', 'trip/c.jpg'], None], ['Remove the 2 files', YES, SURE])
+        title, lines = self.show.call_args.args[:2]
+        self.assertEqual(title, 'Not all were removed')
+        self.assertEqual(lines[1:], ['  b.jpg'])
+
     def test_a_dry_run_changes_nothing(self):
         self.sort([['a.txt'], None], ['Move the 1 file to...', YES], dirs=[self.root], is_dry_run=True)
         self.assertTrue(self.exists('inbox', 'a.txt'))
