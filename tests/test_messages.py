@@ -87,7 +87,8 @@ class ProgressScreenTest(unittest.TestCase):
         self.assertIn('Ctrl-C to stop: Copying 2 files', escapes)
         self.assertIn('\033[2;10r', escapes)
         self.assertIn('Done. Press Enter to continue: Copying 2 files', escapes)
-        self.assertTrue(escapes.endswith('\033[r'))
+        # Scrolling the whole screen again, the cursor below it
+        self.assertTrue(escapes.endswith('\033[r\033[10;1H\n'))
         self.assertEqual(lines, b'one\n')
         input_mock.assert_called_once_with()
 

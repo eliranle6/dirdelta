@@ -118,7 +118,7 @@ keeps both hashes when they're the same). Written at most every
 to read, size), `BATCH_SIZE` a request, reading them; `ai.recommend()` asks
 Claude (Sonnet) where they go by their names, sizes and descriptions
 (`_recommend()` gets the missing descriptions first, and its progress screen
-goes by itself when it's done), reading nothing (no tools); both through the
+goes by itself when it's done), reading nothing (no tools); a batch that fails is asked again a file at a time. Both through the
 Claude Agent
 SDK, descriptions of `DESCRIBE_MODEL` (Haiku) and recommendations of
 `RECOMMEND_MODEL` (Sonnet), each overridable by an env var (`_model()`)

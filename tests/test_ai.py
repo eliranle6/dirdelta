@@ -140,6 +140,20 @@ class AITest(unittest.TestCase):
         self.assertEqual(ai.cached([moved], lambda file: 'sorted/f0.txt\t10', 'root')[0], {'f0.txt': 'a list'})
         self.assertEqual(ai.cached([moved], lambda file: 'else\t1', 'root')[0], {})
 
+    def test_a_failed_batch_is_asked_again_a_file_at_a_time(self):
+        def run_query(prompt, readable_dirs, schema, max_turns, model, system_prompt=None):
+            if 'f1.txt' in prompt:
+                raise ai.AIError('too big')
+            return {'files': [{'number': 1, 'description': 'fine'}]}
+        with mock.patch('dirdelta.ai._run_query', side_effect=run_query) as query:
+            found = ai.describe(self.files(3), self.key)
+        self.assertEqual(found, {'f0.txt': 'fine', 'f2.txt': 'fine'})
+        self.assertEqual(query.call_count, 4)
+        # All of them failing is an error
+        with mock.patch('dirdelta.ai._run_query', side_effect=ai.AIError('not logged in')), \
+                self.assertRaises(ai.AIError):
+            ai.describe(self.files(2)[1:], self.key)
+
     def test_progress(self):
         progress = []
         with mock.patch('dirdelta.ai._run_query', side_effect=_Answering(lambda prompt: [])):
@@ -188,6 +202,26 @@ class RunQueryTest(unittest.TestCase):
         self.assertEqual(options.max_turns, 7)
         self.assertEqual(options.model, 'the-model')
         self.assertEqual(options.output_format, {'type': 'json_schema', 'schema': {'type': 'object'}})
+        # A read file's message may be big; Claude Code's stderr isn't printed
+        self.assertEqual(options.max_buffer_size, ai.MAX_MESSAGE_SIZE)
+        self.assertTrue(callable(options.stderr))
+
+    def test_the_sdks_errors_arent_printed_but_said(self):
+        import logging
+
+        async def query(prompt, options):
+            logging.getLogger('claude_agent_sdk._internal.query').error('Fatal error in message reader: too big')
+            options.stderr('the last line')
+            raise RuntimeError('Command failed')
+            yield
+        with mock.patch.object(claude_agent_sdk, 'query', query), \
+                mock.patch.object(claude_agent_sdk, 'ResultMessage', _Result), \
+                mock.patch('sys.stderr') as stderr:
+            with self.assertRaises(ai.AIError) as raised:
+                ai._run_query('the prompt', [], {'type': 'object'}, 5, 'the-model')
+        self.assertEqual(str(raised.exception), 'Claude failed: Command failed (Fatal error in message reader: too big)')
+        stderr.write.assert_not_called()
+        self.assertFalse(logging.getLogger('claude_agent_sdk').propagate)
 
 
     def test_no_answer_is_an_error(self):

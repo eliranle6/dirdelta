@@ -9,10 +9,11 @@ the file's path and size, so it's asked once per file. It sends the files' conte
 so it's only asked when the user chooses to."""
 import asyncio
 import collections
+import gc
 import json
+import logging
 import os
 
-from dirdelta import messages
 
 # The models: a description is a short sentence, so the fastest and cheapest does; a recommendation
 # is a choice among the sorted tree's dirs, which takes more judgment. Each is set by its env var, or
@@ -27,6 +28,10 @@ CACHE_FILE = os.path.expanduser('~/.cache/dirdelta/ai.json')
 BATCH_SIZE = 10
 # Bigger files aren't read (Claude says what it can from their names)
 MAX_READ_SIZE = 20 * 1024 * 1024
+# The biggest message from Claude Code the SDK takes (a file read is in one), and how many of Claude
+# Code's last stderr lines are kept, for an error
+MAX_MESSAGE_SIZE = 64 * 1024 * 1024
+STDERR_LINES_KEPT = 20
 # The most words of a description, and of the sorted tree's dirs a recommendation is given
 MAX_DESCRIPTION_WORDS = 10
 MAX_DIRS_GIVEN = 3000
@@ -131,7 +136,7 @@ def _ask(files, cache_key, is_cached, keep, ask, progress):
         if progress is not None:
             progress(start, len(needed))
         batch = needed[start:start + BATCH_SIZE]
-        answers = ask(batch)
+        answers = _ask_each_if_failed(ask, batch)
         # Kept at once, so what was asked isn't asked again if it's stopped
         cache = _load_cache()
         for file in batch:
@@ -143,6 +148,25 @@ def _ask(files, cache_key, is_cached, keep, ask, progress):
     if progress is not None and needed:
         progress(len(needed), len(needed))
     return found
+
+
+def _ask_each_if_failed(ask, batch):
+    """ask(batch), or if it fails, ask() of each file on its own, so one that Claude can't take
+    doesn't fail the others; raises AIError only if all fail"""
+    try:
+        return ask(batch)
+    except AIError:
+        if len(batch) == 1:
+            raise
+    answers, last_error = {}, None
+    for file in batch:
+        try:
+            answers.update(ask([file]))
+        except AIError as error:
+            last_error = error
+    if not answers and last_error is not None:
+        raise last_error
+    return answers
 
 
 def _size_text(file):
@@ -259,6 +283,7 @@ def _run_query(prompt, readable_dirs, schema, max_turns, model, system_prompt=SY
         from claude_agent_sdk import ClaudeAgentOptions, ClaudeSDKError, ResultMessage, query
     except ImportError:
         raise AIError("The Claude Agent SDK isn't installed (pip install claude-agent-sdk)")
+    stderr_lines = collections.deque(maxlen=STDERR_LINES_KEPT)
     options = ClaudeAgentOptions(
         model=model,
         system_prompt=system_prompt,
@@ -269,25 +294,69 @@ def _run_query(prompt, readable_dirs, schema, max_turns, model, system_prompt=SY
         setting_sources=[],
         cwd=readable_dirs[0] if readable_dirs else None, add_dirs=readable_dirs[1:],
         max_turns=max_turns,
-        output_format={"type": "json_schema", "schema": schema})
+        output_format={"type": "json_schema", "schema": schema},
+        # A file Claude reads (an image, a PDF) comes back in a message bigger than the SDK's
+        # default limit (1 MB), which fails the request
+        max_buffer_size=MAX_MESSAGE_SIZE,
+        # Claude Code's own messages: kept for the error, never on the screen (a picker may have it)
+        stderr=stderr_lines.append)
 
     async def ask():
         result = None
-        async for message in query(prompt=prompt, options=options):
-            if isinstance(message, ResultMessage):
-                result = message
+        messages_ = query(prompt=prompt, options=options)
+        try:
+            async for message in messages_:
+                if isinstance(message, ResultMessage):
+                    result = message
+        finally:
+            # Claude Code's process closed while the event loop is still there (else its
+            # transport's finalizer, later, finds it closed and says so on stderr)
+            await messages_.aclose()
+            gc.collect()
         return result
 
+    _quiet_sdk_logging()
     try:
         result = asyncio.run(ask())
     except ClaudeSDKError as error:
-        raise AIError("Couldn't ask Claude: %s" % (error,))
+        raise AIError("Couldn't ask Claude: %s" % (_why(error, stderr_lines),))
     except Exception as error:
         # The SDK raises after an error result too
-        raise AIError("Claude failed: %s" % (error,))
+        raise AIError("Claude failed: %s" % (_why(error, stderr_lines),))
     if result is None or result.subtype != 'success' or not result.structured_output:
         raise AIError("Claude gave no answer (%s)" % (getattr(result, 'subtype', 'no result'),))
     return result.structured_output
+
+
+class _LastError(logging.Handler):
+    """Keeps the SDK's last logged error (rather than letting Python print it on stderr)"""
+    def __init__(self):
+        super(_LastError, self).__init__(logging.ERROR)
+        self.message = None
+
+    def emit(self, record):
+        self.message = record.getMessage()
+
+
+_sdk_errors = _LastError()
+
+
+def _quiet_sdk_logging():
+    """The SDK's log, kept off the screen: it would be printed over a picker"""
+    logger = logging.getLogger('claude_agent_sdk')
+    if _sdk_errors not in logger.handlers:
+        logger.addHandler(_sdk_errors)
+        logger.propagate = False
+
+
+def _why(error, stderr_lines):
+    """What to say of error: it, and the SDK's last logged error, or Claude Code's last line"""
+    said = str(error)
+    extra = _sdk_errors.message or (stderr_lines[-1] if stderr_lines else None)
+    _sdk_errors.message = None
+    if extra and extra not in said:
+        said += " (%s)" % (extra.strip()[:300],)
+    return said
 
 
 def carry(keys):
@@ -318,5 +387,6 @@ def _save_cache(cache):
         with open(temp_path, 'w') as f:
             json.dump(cache, f, indent=1)
         os.replace(temp_path, CACHE_FILE)
-    except OSError as error:
-        messages.print_line("Couldn't keep what Claude said in %s: %s" % (CACHE_FILE, error), "yellow")
+    except OSError:
+        # Only a cache (and nothing's printed: a picker may have the screen): it's asked again
+        pass

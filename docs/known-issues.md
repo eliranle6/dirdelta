@@ -185,6 +185,18 @@ history).
   (they now prefer the venv's), and `bin/example-sync-local.sh` synced the repo's
   own fixtures, where a Remove would delete them (it now syncs a temp copy).
 
+22a. **Describing an inbox's files failed, and wrecked the screen** (2026-10-29,
+  found by running it on a real inbox): a file Claude read (a PDF, an image)
+  came back in a message bigger than the Claude Agent SDK's default limit (1
+  MB), so every batch of 10 failed; and the SDK's log line, and Python's
+  "Event loop is closed" tracebacks (Claude Code's process cleaned up after
+  `asyncio.run()` had closed its loop), went to stderr, over the waiting
+  screen (and, while a picker was open, over treepicker's). Fixed in `ai.py`:
+  `max_buffer_size` of 64 MB, the SDK's logger and Claude Code's stderr kept
+  for the error message rather than printed, the query closed (and
+  collected) inside its event loop, and a failed batch asked again a file at
+  a time.
+
 ## Still open
 
 23. ~~**Menus are shown in alphabetical order**, not the order the code lists

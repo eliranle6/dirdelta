@@ -100,8 +100,9 @@ def progress_screen(title, label=None, is_stoppable=True, wait=True):
                 input()
             except (EOFError, KeyboardInterrupt):
                 pass
-        # Back to scrolling the whole screen
-        _write("\033[r")
+        # Back to scrolling the whole screen, and the cursor below what was shown (where the next
+        # line goes, if what's next isn't a picker)
+        _write("\033[r\033[%d;1H\n" % (height,))
 
 
 def _top_line(text, label=None):

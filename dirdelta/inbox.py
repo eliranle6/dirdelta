@@ -434,14 +434,20 @@ class InboxSort(object):
         what Claude said so far is kept)"""
         if not self._describing:
             return
-        with messages.progress_screen("Claude is still describing %s" % (_files(len(self._describing)),),
-                                      dryrun.label(), wait=False):
+        title = ("Waiting for Claude to finish describing %s (what it said so far is kept)" %
+                 (_files(len(self._describing)),))
+        with messages.progress_screen(title, dryrun.label(), wait=False):
+            failed_before = len(self._failed)
             try:
                 while self._describing:
-                    messages.print_progress("Waiting for Claude: %s left" % (_files(len(self._describing)),))
+                    messages.print_progress("%s left, %d described, %d couldn't be" % (
+                        _files(len(self._describing)), len(self._descriptions), len(self._failed) - failed_before))
                     time.sleep(DESCRIBED_WAIT_INTERVAL)
             except KeyboardInterrupt:
                 messages.note_stopped()
+        if len(self._failed) > failed_before:
+            messages.show("Claude couldn't describe %s" % (_files(len(self._failed) - failed_before),),
+                          [list(self._failed.values())[-1]], dryrun.label(), 'red')
 
     def _recommend(self, relpaths):
         """Ask Claude where the files at relpaths go, on a progress screen (Ctrl-C stops it: what it
