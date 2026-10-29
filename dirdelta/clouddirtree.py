@@ -1,6 +1,7 @@
 import collections
 import concurrent.futures
 import os
+import posixpath
 
 from googleapiclient.errors import HttpError
 from googleapiclient.http import MediaFileUpload, MediaIoBaseDownload
@@ -62,9 +63,12 @@ class CloudDirTree(dirtree.DirTree):
         reads like a local dir"""
         return paths.join_cloud(self.fullpath())
 
-    def update_from_cache(self):
-        """Add the files and folders in the Drive file list cache (drivecache) under the tree's root"""
-        for relpath, cloud_id, is_dir, is_google_file in drivecache.entries(self.fullpath()):
+    def update_from_cache(self, found=None):
+        """Add the files and folders in the Drive file list cache (drivecache) under the tree's root
+        (or found: drivecache.entries() of it, already read)"""
+        if found is None:
+            found = drivecache.entries(self.fullpath())
+        for relpath, cloud_id, is_dir, is_google_file in found:
             if relpath == '':
                 self._cloud_ids[relpath] = cloud_id
                 continue
@@ -78,6 +82,23 @@ class CloudDirTree(dirtree.DirTree):
                 if is_google_file:
                     self._google_files.add(relpath)
             self._cloud_ids[relpath] = cloud_id
+
+    def refresh_from_drive(self, relpath=''):
+        """Read the folder at relpath (default: the tree's root) anew from Drive, into the cache
+        (refresh_cache()), and rebuild the tree from it. A relpath the tree has no folder at (e.g.
+        a dir only the other replica has) refreshes the closest folder above it that it has.
+        Returns the relpath refreshed. Raises as refresh_cache() does, or DriveCacheError if what's
+        there can't be a tree; either way (and on Ctrl-C), the tree is as it was."""
+        while relpath and not isinstance(getattr(self.get_node(relpath), 'data', None), entries.DirEntry):
+            relpath = os.path.dirname(relpath)
+        refresh_cache(posixpath.join(self.fullpath(), relpath))
+        # Read before the tree is emptied, so it's kept if they can't be a tree
+        found = list(drivecache.entries(self.fullpath()))
+        super(CloudDirTree, self).__init__(rootpath=self.fullpath())
+        self._cloud_ids = {}
+        self._google_files = set()
+        self.update_from_cache(found)
+        return relpath
 
     def cant_fetch(self, relpath):
         if relpath in self._google_files:
@@ -113,8 +134,7 @@ class CloudDirTree(dirtree.DirTree):
         cache here, on this thread, as it ends. Ctrl-C starts no more, and waits for the ones under
         way, so the cache has them (and Ctrl-C again doesn't wait: they end on their own)."""
         # Stale until the changes are in the cache, in case it's cut off in the middle
-        was_stale = drivecache.is_stale()
-        drivecache.mark_stale()
+        is_newly_stale = drivecache.mark_stale(self.fullpath())
         self._make_folders(os.path.dirname(file_entry.relpath) for file_entry in files)
         not_started = iter(files)
         under_way = {}
@@ -146,13 +166,13 @@ class CloudDirTree(dirtree.DirTree):
                     messages.print_line("Waiting for the %d uploads under way..." % (len(under_way),))
                     for future in concurrent.futures.as_completed(under_way):
                         copied(self._uploaded(under_way[future], future))
-                if not was_stale:
-                    drivecache.mark_fresh()
+                if is_newly_stale:
+                    drivecache.unmark_stale(self.fullpath())
                 raise
         finally:
             executor.shutdown(wait=False)
-        if not was_stale:
-            drivecache.mark_fresh()
+        if is_newly_stale:
+            drivecache.unmark_stale(self.fullpath())
 
     def _copy_file(self, file_entry, source):
         """Upload file_entry, as _copy_files() does"""
@@ -364,7 +384,7 @@ class CloudDirTree(dirtree.DirTree):
             for start in range(0, len(ids), MAX_FOLDERS_PER_QUERY):
                 query = "(%s) and trashed = false" % (' or '.join(
                     "'%s' in parents" % (cloud_id,) for cloud_id in ids[start:start + MAX_FOLDERS_PER_QUERY]))
-                for md in self._list(query):
+                for md in _list(query):
                     if md['id'] not in known_ids:
                         holding_more.update(folder_ids[parent] for parent in md.get('parents', [])
                                             if parent in folder_ids)
@@ -373,18 +393,6 @@ class CloudDirTree(dirtree.DirTree):
                                 "one by one" % (error,), "yellow")
             return None
         return holding_more
-
-    def _list(self, query):
-        """The files and folders (id and parents) that Drive lists for query, page by page"""
-        page_token = None
-        while True:
-            response = driveapi.service().files().list(
-                q=query, fields='nextPageToken, files(id, parents)', pageSize=1000,
-                pageToken=page_token).execute(num_retries=NUM_RETRIES)
-            yield from response.get('files', [])
-            page_token = response.get('nextPageToken')
-            if not page_token:
-                return
 
     def _trash_folder(self, relpath):
         """Move the folder at relpath, and all that's in it, to Drive's trash, and drop it from the
@@ -410,8 +418,7 @@ class CloudDirTree(dirtree.DirTree):
         """Move the file or folder with cloud_id to Drive's trash (where it can be restored from, for
         30 days), and note it in the cache. Returns whether it was moved (if not, says why)."""
         # Stale until the change is in the cache, in case it's cut off in the middle
-        was_stale = drivecache.is_stale()
-        drivecache.mark_stale()
+        is_newly_stale = drivecache.mark_stale(self.fullpath())
         try:
             driveapi.service().files().update(fileId=cloud_id, body={'trashed': True}).execute(
                 num_retries=NUM_RETRIES)
@@ -419,9 +426,88 @@ class CloudDirTree(dirtree.DirTree):
             messages.print_line("Remove failed: %s" % (error,), "red")
             return False
         drivecache.trash(cloud_id)
-        if not was_stale:
-            drivecache.mark_fresh()
+        if is_newly_stale:
+            drivecache.unmark_stale(self.fullpath())
         return True
+
+
+def refresh_cache(folder_path):
+    """Read the folder at folder_path (a path in Drive, like /eliran; / is all of My Drive) anew from
+    Drive, and put it in the cache, in place of what the cache had under it (making the cache, if
+    there's none). The folder is found by its path's names, a request a level, then what's in it is
+    read, a level of folders at a time (MAX_FOLDERS_PER_QUERY folders a request, one request at a
+    time). The rest of the cache isn't read again. Raises HttpError if Drive can't be asked, and
+    drivecache.DriveCacheError if it has no such folder (or two); either way (and on Ctrl-C), the
+    cache is as it was."""
+    folder_path = '/' + '/'.join(paths.components(folder_path))
+    root_id = driveapi.service().files().get(fileId='root', fields='id').execute(
+        num_retries=NUM_RETRIES)['id']
+    # The folders on the way, so the cache has them (as they're named now)
+    on_the_way = []
+    folder_id = root_id
+    messages.print_line("Reading %s from Google Drive..." % (paths.join_cloud(folder_path),))
+    path = ''
+    for name in paths.components(folder_path):
+        path += '/' + name
+        found = list(_list("name = '%s' and '%s' in parents and mimeType = '%s' and trashed = false" %
+                           (_quoted(name), folder_id, drivecache.FOLDER_MIME_TYPE),
+                           drivecache.FILE_FIELDS))
+        if not found:
+            raise drivecache.DriveCacheError("Google Drive has no folder %s" % (path,))
+        if len(found) > 1:
+            raise drivecache.DriveCacheError("Google Drive has %d folders named %s: rename them in "
+                                             "Drive (a folder's name must be its own)" % (len(found), path))
+        on_the_way.append(found[0])
+        folder_id = found[0]['id']
+
+    expected_count = drivecache.count_under(folder_path)
+    items = []
+    folder_ids = [folder_id]
+    messages.print_progress(_read_progress(0, expected_count))
+    while folder_ids:
+        next_folder_ids = []
+        for start in range(0, len(folder_ids), MAX_FOLDERS_PER_QUERY):
+            query = "(%s) and trashed = false" % (' or '.join(
+                "'%s' in parents" % (cloud_id,)
+                for cloud_id in folder_ids[start:start + MAX_FOLDERS_PER_QUERY]),)
+            for md in _list(query, drivecache.FILE_FIELDS):
+                items.append(md)
+                if md.get('mimeType') == drivecache.FOLDER_MIME_TYPE:
+                    next_folder_ids.append(md['id'])
+            messages.print_progress(_read_progress(len(items), expected_count))
+        folder_ids = next_folder_ids
+    # Done: the count, without the last refresh's
+    messages.print_progress(_read_progress(len(items), None))
+
+    drivecache.replace_under(folder_id, on_the_way + items, root_id)
+    drivecache.mark_fresh(folder_path)
+
+
+def _read_progress(count, expected_count):
+    """How far reading got, after count files (and folders), expecting about expected_count (or
+    None, if not known)"""
+    if expected_count and count < expected_count:
+        return "Read %s of about %s files and folders (%d%%)" % (
+            format(count, ','), format(expected_count, ','), 100 * count // expected_count)
+    return "Read %s files and folders" % (format(count, ','),)
+
+
+def _quoted(name):
+    """name, to put between quotes in a Drive query"""
+    return name.replace('\\', '\\\\').replace("'", "\\'")
+
+
+def _list(query, fields='id, parents'):
+    """The files and folders (their fields) that Drive lists for query, page by page"""
+    page_token = None
+    while True:
+        response = driveapi.service().files().list(
+            q=query, fields='nextPageToken, files(%s)' % (fields,), pageSize=1000,
+            pageToken=page_token).execute(num_retries=NUM_RETRIES)
+        yield from response.get('files', [])
+        page_token = response.get('nextPageToken')
+        if not page_token:
+            return
 
 
 def _is_under(relpath, folder):

@@ -3,6 +3,7 @@ import os
 import threading
 import time
 
+from dirdelta import clouddirtree
 from dirdelta import dryrun
 from dirdelta import interactive_dir_sync
 from dirdelta import localdiskdirtree
@@ -73,6 +74,10 @@ def _sync(replica_a, replica_b, replica_a_path, replica_b_path, known_replicas=N
             views.append(_Action("View files in %s, not %s" % (src_path, dst_path), way,
                                  _files, "nothing to view, %s has them all" % (dst_path,)))
     actions = {action.label: action for action in copies + removes + views}
+    # A cloud replica's folder can be read anew from Drive, if Drive changed since the cache was made
+    refreshes = {"Refresh %s from Google Drive" % (path,): replica
+                 for replica, path in ((replica_a, replica_a_path), (replica_b, replica_b_path))
+                 if isinstance(replica, clouddirtree.CloudDirTree)}
     for way in ways:
         way.find_missing()
 
@@ -82,7 +87,7 @@ def _sync(replica_a, replica_b, replica_a_path, replica_b_path, known_replicas=N
         if known_replicas is not None:
             is_favorite = known_replicas.is_favorite(replica_a_path, replica_b_path)
             favorite_options = [REMOVE_FAVORITE if is_favorite else ADD_FAVORITE]
-        option = picker.pick_option(list(actions) + favorite_options + [QUIT],
+        option = picker.pick_option(list(actions) + list(refreshes) + favorite_options + [QUIT],
                                     shown_as=lambda: {label: action.shown_as()
                                                       for label, action in actions.items()})
         if option in (None, QUIT):
@@ -96,9 +101,15 @@ def _sync(replica_a, replica_b, replica_a_path, replica_b_path, known_replicas=N
         if not all(way.missing.done() for way in ways):
             messages.print_line("Finding the files that each lacks...")
         concurrent.futures.wait([way.missing for way in ways])
-        actions[option].run()
-        # Copying and removing change the files (unless it's a dry run), and so what each lacks
-        if actions[option].action is not None and not dryrun.DRYRUN:
+        if option in refreshes:
+            if interactive_dir_sync.refresh_replica(refreshes[option]):
+                for way in ways:
+                    way.find_missing()
+            continue
+        was_refreshed = actions[option].run()
+        # Copying and removing change the files (unless it's a dry run), and so what each lacks, and
+        # so does reading a replica anew from Drive (in the file picker)
+        if was_refreshed or (actions[option].action is not None and not dryrun.DRYRUN):
             for way in ways:
                 way.find_missing()
 
@@ -160,11 +171,13 @@ class _Action(object):
         return "%s (%s)" % (self.label, self.describe_count(count))
 
     def run(self):
+        """Returns whether a replica was read anew from Drive meanwhile"""
         sync = interactive_dir_sync.InteractiveDirSync(self.way.src, self.way.dst, self.way.missing)
         if self.action is None:
             sync.view_diff()
         else:
             sync.sync(self.action)
+        return sync.was_refreshed
 
 
 def _is_local(replica):

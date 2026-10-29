@@ -56,10 +56,96 @@ class EntriesTest(unittest.TestCase):
         found = {relpath: is_dir for relpath, _, is_dir, _ in drivecache.entries('/mein/album')}
         self.assertEqual(found, {'': True, 'new': True, 'new/1.mp3': False})
 
-    def test_count_leaves_out_the_trashed_lines(self):
-        before = drivecache.count_entries()
+    def test_whats_under_a_folder_can_be_replaced(self):
+        # In Drive now: song.mp3 renamed, album and the dups gone, a new folder with a file
+        drivecache.replace_under('mein', [
+            {'id': 'song', 'name': 'renamed.mp3', 'parents': ['mein']},
+            {'id': 'new', 'name': 'new', 'parents': ['mein'], 'mimeType': drivecache.FOLDER_MIME_TYPE},
+            {'id': 'n1', 'name': '1.mp3', 'parents': ['new']},
+        ], 'ROOT')
+        found = {relpath: cloud_id for relpath, cloud_id, _, _ in drivecache.entries('/mein')}
+        self.assertEqual(found, {'': 'mein', 'renamed.mp3': 'song', 'new': 'new', 'new/1.mp3': 'n1'})
+        # The rest is as it was, lines it doesn't read too
+        self.assertEqual([entry[0] for entry in drivecache.entries('/other')], ['', 'elsewhere.mp3'])
+        with open(self.cache) as f:
+            self.assertEqual(f.readline(), 'not a JSON line, skipped\n')
+        self.assertFalse(os.path.exists(self.cache + '.tmp'))
+
+    def test_a_file_trashed_and_restored_since_is_back_after_a_replace(self):
         drivecache.trash('song')
-        self.assertEqual(drivecache.count_entries(), before)
+        drivecache.replace_under('mein', [{'id': 'song', 'name': 'song.mp3', 'parents': ['mein']}], 'ROOT')
+        self.assertEqual([entry[0] for entry in drivecache.entries('/mein')], ['', 'song.mp3'])
+
+    def test_count_under_a_folder(self):
+        self.assertEqual(drivecache.count_under('/mein'), 5)
+        drivecache.trash('album')
+        self.assertEqual(drivecache.count_under('/mein'), 3)
+        self.assertIsNone(drivecache.count_under('/nowhere'))
+        with mock.patch('dirdelta.drivecache.FILE_LIST_CACHE', self.cache + '.missing'):
+            self.assertIsNone(drivecache.count_under('/mein'))
+
+    def test_with_no_cache_a_replace_makes_one_with_the_root(self):
+        os.remove(self.cache)
+        drivecache.replace_under('mein', [{'id': 'mein', 'name': 'mein', 'parents': ['ROOT'],
+                                           'mimeType': drivecache.FOLDER_MIME_TYPE},
+                                          {'id': 'song', 'name': 'song.mp3', 'parents': ['mein']}],
+                                 'ROOT')
+        with open(self.cache) as f:
+            self.assertEqual(f.readline(), '{"%s": "ROOT"}\n' % (drivecache.ROOT_ID_KEY,))
+        self.assertEqual([entry[0] for entry in drivecache.entries('/mein')], ['', 'song.mp3'])
+        self.assertFalse(os.path.exists(self.cache + '.tmp'))
+
+    def test_with_no_cache_a_replace_cut_off_makes_none(self):
+        os.remove(self.cache)
+        with mock.patch('dirdelta.drivecache.os.replace', side_effect=KeyboardInterrupt):
+            with self.assertRaises(KeyboardInterrupt):
+                drivecache.replace_under('mein', [], 'ROOT')
+        self.assertFalse(os.path.exists(self.cache))
+        # For the cleanup
+        os.remove(self.cache + '.tmp')
+        open(self.cache, 'w').close()
+
+
+class StaleTest(unittest.TestCase):
+    def setUp(self):
+        self.cache = os.path.join(tempfile.mkdtemp(prefix='dirstuff-drive-cache-'), 'files.txt')
+        patcher = mock.patch('dirdelta.drivecache.FILE_LIST_CACHE', self.cache)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        self.addCleanup(drivecache.mark_fresh)
+
+    def test_fresh_at_first(self):
+        self.assertFalse(drivecache.is_stale())
+        self.assertEqual(drivecache.stale_paths(), [])
+
+    def test_marked_folders_are_stale_until_unmarked(self):
+        self.assertTrue(drivecache.mark_stale('/a'))
+        self.assertTrue(drivecache.mark_stale('/b'))
+        # Already marked: so it's for whoever marked it first to unmark
+        self.assertFalse(drivecache.mark_stale('/a'))
+        self.assertEqual(drivecache.stale_paths(), ['/a', '/b'])
+        drivecache.unmark_stale('/a')
+        self.assertEqual(drivecache.stale_paths(), ['/b'])
+        drivecache.unmark_stale('/b')
+        self.assertFalse(drivecache.is_stale())
+        self.assertFalse(os.path.exists(self.cache + '.stale'))
+
+    def test_a_refresh_makes_what_it_read_fresh(self):
+        for path in ('/a', '/a/b', '/ab', '/c'):
+            drivecache.mark_stale(path)
+        drivecache.mark_fresh('/a')
+        self.assertEqual(drivecache.stale_paths(), ['/ab', '/c'])
+        drivecache.mark_fresh()
+        self.assertFalse(drivecache.is_stale())
+
+    def test_a_marker_from_before_the_paths_is_all_of_drive(self):
+        with open(self.cache + '.stale', 'w') as marker:
+            marker.write("dirdelta changed Google Drive after this cache was made\n")
+        self.assertEqual(drivecache.stale_paths(), ['/'])
+        drivecache.mark_fresh('/a')
+        self.assertTrue(drivecache.is_stale())
+        drivecache.mark_fresh('/')
+        self.assertFalse(drivecache.is_stale())
 
 
 FOLDER = drivecache.FOLDER_MIME_TYPE

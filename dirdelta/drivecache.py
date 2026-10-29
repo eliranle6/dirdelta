@@ -4,7 +4,8 @@ folder's id (clouddirtreefactory writes it). entries() reads it into the paths o
 folder.
 
 What dirdelta changes in Drive is added to it as it goes (add(), trash()), so it stays up to date:
-a line per file or folder made, and a line with the id of each file moved to the trash."""
+a line per file or folder made, and a line with the id of each file moved to the trash. What's under
+a folder is replaced with what Drive lists there now (replace_under()) when it's refreshed."""
 import collections
 import json
 import os
@@ -42,10 +43,49 @@ def _stale_marker_path():
     return FILE_LIST_CACHE + '.stale'
 
 
-def mark_stale():
-    """Note that Drive was changed since the cache was made (by dirdelta), so it's out of date"""
-    with open(_stale_marker_path(), 'w') as marker:
-        marker.write("dirdelta changed Google Drive after this cache was made\n")
+def mark_stale(folder_path):
+    """Note that dirdelta is changing what's under folder_path (a path in Drive, like /eliran) in
+    Drive, so the cache may not have it, until unmark_stale() (once the changes are in the cache) or
+    a refresh of it. Returns whether it wasn't marked already."""
+    if folder_path in stale_paths():
+        return False
+    with open(_stale_marker_path(), 'a') as marker:
+        marker.write(folder_path + '\n')
+    return True
+
+
+def unmark_stale(folder_path):
+    """Undo mark_stale(folder_path)"""
+    _keep_stale_paths(lambda path: path != folder_path)
+
+
+def mark_fresh(folder_path='/'):
+    """Note that what's under folder_path (default: all of My Drive) was just read from Drive, so
+    the cache has it as it is"""
+    _keep_stale_paths(lambda path: not _is_at_or_under(path, folder_path))
+
+
+def stale_paths():
+    """The folders (paths in Drive) the cache may be out of date in: what's under them was being
+    changed by dirdelta when it was cut off"""
+    if not os.path.exists(_stale_marker_path()):
+        return []
+    with open(_stale_marker_path()) as marker:
+        # A marker from before the paths were written down: all of it
+        return [line if line.startswith('/') else '/' for line in marker.read().splitlines()]
+
+
+def is_stale():
+    return bool(stale_paths())
+
+
+def _keep_stale_paths(keep):
+    paths = [path for path in stale_paths() if keep(path)]
+    if paths:
+        with open(_stale_marker_path(), 'w') as marker:
+            marker.write(''.join(path + '\n' for path in dict.fromkeys(paths)))
+    elif os.path.exists(_stale_marker_path()):
+        os.remove(_stale_marker_path())
 
 
 def add(md):
@@ -58,19 +98,42 @@ def trash(cloud_id):
     _append({TRASHED_ID_KEY: cloud_id})
 
 
+def replace_under(folder_id, items, root_id):
+    """Replace what the cache has under the folder with folder_id (the files and folders in it, and
+    in those, ...) with items (their metadata, as the Drive API lists them, FILE_FIELDS), e.g. what
+    Drive lists under it now. The folder's own line stays. With no cache, make one, with My Drive's
+    root folder's id (root_id) and items. Rewrites the whole cache, into a temporary file first,
+    which then takes its place, so it's never left half written (nor made half written)."""
+    tmp_path = FILE_LIST_CACHE + '.tmp'
+    if not os.path.exists(FILE_LIST_CACHE):
+        os.makedirs(os.path.dirname(FILE_LIST_CACHE), exist_ok=True)
+        with open(tmp_path, 'w') as new:
+            new.write(json.dumps({ROOT_ID_KEY: root_id}) + '\n')
+            for md in items:
+                new.write(json.dumps(md) + '\n')
+        os.replace(tmp_path, FILE_LIST_CACHE)
+        return
+    id_child_map, _, _ = _parsefile(FILE_LIST_CACHE)
+    under = set()
+    stack = [folder_id]
+    while stack:
+        for child_id in id_child_map.get(stack.pop(), []):
+            under.add(child_id)
+            stack.append(child_id)
+    with open(FILE_LIST_CACHE) as old, open(tmp_path, 'w') as new:
+        for line in old:
+            # A trashed line stays: what's under the folder now comes after it, so it's in
+            if line.startswith('{') and json.loads(line).get('id') in under:
+                continue
+            new.write(line)
+        for md in items:
+            new.write(json.dumps(md) + '\n')
+    os.replace(tmp_path, FILE_LIST_CACHE)
+
+
 def _append(line):
     with open(FILE_LIST_CACHE, 'a') as f:
         f.write(json.dumps(line) + '\n')
-
-
-def is_stale():
-    return os.path.exists(_stale_marker_path())
-
-
-def mark_fresh():
-    """Note that the cache was just made, so it's up to date"""
-    if is_stale():
-        os.remove(_stale_marker_path())
 
 
 class DriveCacheError(Exception):
@@ -143,12 +206,13 @@ def entries(inner_rootpath):
                               "the path, or if the folder is new, refresh the cache." % (inner_rootpath,))
 
 
-def count_entries():
-    """How many files and folders the cache lists (Google's own types and what's outside My Drive
-    too, as the Drive API lists them)"""
-    with open(FILE_LIST_CACHE) as f:
-        return sum(1 for line in f if line.startswith('{') and ROOT_ID_KEY not in line
-                   and TRASHED_ID_KEY not in line)
+def count_under(folder_path):
+    """How many files and folders the cache has under folder_path (a path in Drive), or None if it
+    can't say (there's no cache, or no such folder in it)"""
+    try:
+        return sum(1 for _ in entries(folder_path)) - 1
+    except (OSError, DriveCacheError):
+        return None
 
 
 def _is_at_or_under(path, folder_path):

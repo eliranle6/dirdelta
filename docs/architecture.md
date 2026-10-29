@@ -123,17 +123,34 @@ Cloud state is never queried live per-scan. Instead:
 1. `utils.create_dirtree_from_arg` calls `factory_interactive(rootpath)`
    for any path whose first component is `cloud`. It ensures a cache file exists at
    `drivecache.FILE_LIST_CACHE` (`~/.cache/dirman/files.txt`), prompting
-   the user (`picker.pick_option`) to refresh it if it already exists.
-2. `_refresh_cache()` → `_scan_drive_files_list()` calls the Drive v3 API
-   and writes My Drive's root folder's id (`files().get('root')`) as the
-   cache's first JSON line (`{"myDriveRootId": ...}`), then one JSON line per
-   file not in the trash (`files().list`, paged, `q='trashed = false'`,
-   `fields=... files(id,name,parents,kind,size,mimeType,sha256Checksum)`).
-   It prints "Scanning Google Drive...", like a local scan, and then how far
-   it got on a line that changes in place (`messages.print_progress()`):
-   "Read N of about M files and folders (P%)", where M is how many the last
-   scan's cache lists (`drivecache.count_entries()`), since the Drive API
-   can't count them; without a cache, just N.
+   the user (`picker.pick_option`) to refresh the replica's folder in it if it
+   already exists ("Refresh cloud/X from Google Drive"; the prompt says if the
+   cache may be out of date there, see the stale marker below).
+2. `clouddirtree.refresh_cache(folder_path)` (a path in Drive, `/` for all
+   of My Drive) reads the folder anew, one request at a time (never in
+   parallel, so Drive sees nothing unusual): My Drive's root folder's id
+   (`files().get('root')`), then the folders on the way, by name, a request
+   a level (`name = 'X' and 'PARENT' in parents and mimeType = folder`; none
+   or two is a `DriveCacheError`), then what's in the folder, a level of
+   folders at a time, 30 folders a query (`files().list` with "'A' in parents
+   or ..." and `trashed = false`, paged, with `drivecache.FILE_FIELDS`). It
+   prints "Reading cloud/X from Google Drive...", and then how far it got on
+   a line that changes in place (`messages.print_progress()`): "Read N of
+   about M files and folders (P%)", where M is how many the cache had there
+   (`drivecache.count_under()`), since the Drive API can't count them;
+   without one, just N. What it read replaces what the cache had under the
+   folder (`drivecache.replace_under()`: the cache rewritten through a `.tmp`
+   file, the folder's own line and `trashedId` lines kept, the new lines
+   after them, so a file restored from the trash is back), with the folders
+   on the way; with no cache, it makes one the same way: the root line
+   (`{"myDriveRootId": ...}`) and what it read, into the `.tmp` file that
+   then takes the cache's place, so a refresh cut off at any point leaves
+   the old cache, or none. The rest of the cache
+   isn't read again, so a file moved from the folder to elsewhere in Drive is
+   gone from the cache until that place is refreshed. This replaced a scan of
+   all of Drive (`files().list` of everything, 2026-10-29): a folder walk
+   reads only the folder, and timed on all of My Drive it was about as fast
+   (both ~40s for ~17k files: Drive returns at most 460 per page either way).
 3. `drivecache.entries(inner_rootpath)` reads that cache with `_parsefile`,
    which `json.loads`es each `{...}` line into a dict (id→children map +
    id→metadata map), and takes the
@@ -190,6 +207,12 @@ files are removed (`removal_notes()`), or which Google files a copy skips
 loops around these (progress lines, dry run, Ctrl-C, the report) are
 `DirTree`'s `copy_inner_entries_from_dirtree()` and `remove_files()`, shared
 with `LocalDiskDirTree`. A file that fails is said in red, and the rest go on.
+The same refresh is the main menu's "Refresh cloud/X from Google Drive"
+(all of the replica) and the file picker's `r` key (the selected folder, or
+the folder of the selected file: `CloudDirTree.refresh_from_drive(relpath)`,
+which goes up to the closest folder the tree has, e.g. for a dir only the
+other replica has), which then rebuilds the tree from the cache.
+
 Each change is added to the cache on disk as it's made (not in a dry run):
 a JSON line per file or folder made (`drivecache.add()`, with the fields
 Drive returns, `FILE_FIELDS`, as a scan lists them), and a
@@ -197,12 +220,16 @@ Drive returns, `FILE_FIELDS`, as a scan lists them), and a
 which `_parsefile()` drops it for (and with a folder, all that's in it, which
 the walk from the root no longer reaches). So the cache stays up to date, and the
 next run needn't refresh it. Around each change (an upload's: around all of
-them) the cache is marked stale
-(`drivecache.mark_stale()`, a `files.txt.stale` file next to it), and the
-mark is taken away once the change is in the cache, unless it was there
-before: a change cut off in the middle (e.g. Ctrl-C during an upload, when
-Drive may or may not have the file) leaves it, so the next run's refresh
-prompt says the cache may be out of date, and a refresh clears the mark.
+them) the replica's folder is marked stale
+(`drivecache.mark_stale(path)`, a line with its path in Drive in a
+`files.txt.stale` file next to the cache), and the mark is taken away once
+the change is in the cache (`unmark_stale()`), unless it was there before: a
+change cut off in the middle (e.g. Ctrl-C during an upload, when Drive may
+or may not have the file) leaves it, so the next run's refresh prompt for a
+replica at, above or under that folder says the cache may be out of date
+there, and a refresh of that folder (or above it) clears the mark
+(`mark_fresh(path)`). A marker from before the paths were written is all of
+Drive (`/`).
 
 Logging in to Drive (`token.json`/`credentials.json`, `SCOPES=[drive]`: all of
 Drive, to change files too) is `driveapi.service()`, which also makes the
@@ -233,7 +260,14 @@ took ~2.5s; the picker now opens 0.2s after the diff).
   select files → confirm (`picker.pick_option(['No', 'Yes'])`, No first so
   it's selected; No, or quitting it, picks again, starting from the same
   picks via `pick_files(picked=...)`) → act (on the progress screen) → back
-  to the main menu. `FileEntry`s are made for the picked files only
+  to the main menu. With a replica that's Drive's, the file picker's `r`
+  (`REFRESH_KEY`, `pick_files(keys='r')`, which returns a
+  `picker.KeyPressed`) reads the selected folder anew from Drive, in each of
+  the two that's Drive's (`refresh_replica(replica, relpath)`), diffs them
+  again (the trees as they are, not the background future), and shows the
+  picker again on the same node (`pick_files(selected=...)`) with what's
+  still missing of the picks picked; with nothing missing any more, it says
+  so and ends. `FileEntry`s are made for the picked files only
   (`_file_entry()`), and passed to `_copy(files)`/`_remove(files)`.
 - `_copy()` rebuilds a `DirTree` from just the selected `FileEntry`s via
   `dirtree.DirTree.from_file_entries` (previously
@@ -271,7 +305,14 @@ which sends treepicker the changes through `--updates`); with none, it can't be
 picked, and is shown greyed out saying why ("nothing to copy, it has them
 all", a `picker.Disabled`). Choosing an option
 waits for both ways (an action may change what the other is diffing), and
-after a live (not dry run) action both are found again. Given a `Replicas`
+after a live (not dry run) action both are found again. Each cloud replica
+also gets "Refresh cloud/X from Google Drive", for when Drive changed since
+the cache was made: `interactive_dir_sync.refresh_replica()`, which runs
+`CloudDirTree.refresh_from_drive()` (see `clouddirtree.py` above), and says on
+a screen if it fails (an `HttpError`, an `OSError` such as no network, a
+`DriveCacheError`, or Ctrl-C), else both ways are found again. So are they
+after an action whose file picker refreshed a folder (its `r` key, above):
+`_Action.run()` returns `InteractiveDirSync.was_refreshed`. Given a `Replicas`
 (as `run` does), the menu also has "Add to favorites" (or "Remove from
 favorites") before Quit, which saves the change.
 `dirpick_main.run` returns the picked path: for a local dir it lets

@@ -3,6 +3,7 @@ import time
 import unittest
 from unittest import mock
 
+from dirdelta import clouddirtree
 from dirdelta import dirsync_main
 from dirdelta import dirtree
 from dirdelta import interactive_dir_sync
@@ -102,6 +103,46 @@ class MainMenuTest(unittest.TestCase):
             'Remove files from /b',
             'Quit',
         ])
+
+    def test_a_cloud_replica_can_be_refreshed_from_drive(self):
+        a = localdiskdirtree.LocalDiskDirTree('/a', silent=True)
+        b = clouddirtree.CloudDirTree('cloud/b')
+        self.assertEqual(self.options(a, b)[-2:], ['Refresh /b from Google Drive', 'Quit'])
+
+    def test_a_refresh_finds_each_ways_files_again(self):
+        a = localdiskdirtree.LocalDiskDirTree('/a', silent=True)
+        b = clouddirtree.CloudDirTree('cloud/b')
+        answers = ['Refresh /b from Google Drive', 'Quit']
+        with mock.patch('dirdelta.picker.pick_option', side_effect=lambda *_, **__: answers.pop(0)), \
+                mock.patch.object(b, 'refresh_from_drive') as refresh:
+            dirsync_main._sync(a, b, '/a', '/b')
+        refresh.assert_called_once_with('')
+        self.assertEqual(sorted(self.find_missing_calls), ['/a', '/a', '/b', '/b'])
+
+    def test_a_failed_refresh_says_why_and_finds_nothing_again(self):
+        a = localdiskdirtree.LocalDiskDirTree('/a', silent=True)
+        b = clouddirtree.CloudDirTree('cloud/b')
+        answers = ['Refresh /b from Google Drive', 'Quit']
+        with mock.patch('dirdelta.picker.pick_option', side_effect=lambda *_, **__: answers.pop(0)), \
+                mock.patch.object(b, 'refresh_from_drive', side_effect=OSError('no network')):
+            dirsync_main._sync(a, b, '/a', '/b')
+        title, lines, _, _ = self.show.call_args.args
+        self.assertEqual(title, 'Refresh cloud/b from Google Drive')
+        self.assertEqual(lines, ["Couldn't refresh it: no network"])
+        self.assertEqual(sorted(self.find_missing_calls), ['/a', '/b'])
+
+    def test_a_refresh_in_the_file_picker_finds_each_ways_files_again(self):
+        a = localdiskdirtree.LocalDiskDirTree('/a', silent=True)
+        b = clouddirtree.CloudDirTree('cloud/b')
+        answers = ['Remove files from /b', 'Quit']
+        def sync(self_, action):
+            self_.was_refreshed = True
+        with mock.patch('dirdelta.picker.pick_option', side_effect=lambda *_, **__: answers.pop(0)), \
+                mock.patch('dirdelta.interactive_dir_sync.InteractiveDirSync.sync', autospec=True,
+                           side_effect=sync):
+            dirsync_main._sync(a, b, '/a', '/b')
+        # A dry run, but the trees changed
+        self.assertEqual(sorted(self.find_missing_calls), ['/a', '/a', '/b', '/b'])
 
     def test_a_read_only_dir_gets_nothing_copied_into_or_removed_from_it(self):
         self.writable = {'/b'}

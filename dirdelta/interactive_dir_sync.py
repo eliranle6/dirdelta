@@ -1,7 +1,11 @@
 import collections
 import os
 
+from googleapiclient.errors import HttpError
+
+from dirdelta import clouddirtree
 from dirdelta import dirdiff
+from dirdelta import drivecache
 from dirdelta import dirtree
 from dirdelta import entries
 from dirdelta import dryrun
@@ -31,6 +35,23 @@ def find_missing(src, dst):
         "%s or %s" % (src.fullpath(), dst.fullpath()), errors))
 
 
+def refresh_replica(replica, relpath=''):
+    """Read the cloud replica's folder at relpath (default: all of it) anew from Drive
+    (CloudDirTree.refresh_from_drive()). Returns whether it was; if not, it's said why (on a screen),
+    and the replica and the cache are as they were."""
+    title = "Refresh %s from Google Drive" % (os.path.join(replica.displayname(), relpath).rstrip('/'),)
+    try:
+        replica.refresh_from_drive(relpath)
+    except KeyboardInterrupt:
+        messages.show(title, ["Stopped (Ctrl-C): the cloud files list cache is as it was."],
+                      dryrun.label(), 'red')
+    except (HttpError, OSError, drivecache.DriveCacheError) as error:
+        messages.show(title, ["Couldn't refresh it: %s" % (error,)], dryrun.label(), 'red')
+    else:
+        return True
+    return False
+
+
 class InteractiveDirSync(object):
     """Copying or removing the files in src that aren't in dst, picked by the user."""
     COPY = 'copy'
@@ -44,6 +65,8 @@ class InteractiveDirSync(object):
     CONFIRM_YES = 'Yes'
     # How many of the picked files the confirmation lists
     MAX_FILES_LISTED = 5
+    # The file picker's key that reads the selected folder anew from Drive, when a replica is Drive's
+    REFRESH_KEY = 'r'
 
     def __init__(self, src, dst, missing=None):
         """missing: a future (concurrent.futures.Future) of find_missing(src, dst), e.g. found in
@@ -51,6 +74,8 @@ class InteractiveDirSync(object):
         self._src = src
         self._dst = dst
         self._missing_future = missing
+        # Whether a replica was read anew from Drive (so what each lacks may have changed)
+        self.was_refreshed = False
 
     def view_diff(self):
         """Show the files in src that aren't in dst"""
@@ -67,14 +92,11 @@ class InteractiveDirSync(object):
         again, starting from what they picked."""
         missing = self._missing()
         if not missing:
-            messages.show("Nothing to %s" % (action,),
-                          ["%s has all of %s's files." % (self._dst.displayname(),
-                                                          self._src.displayname())],
-                          dryrun.label())
+            self._say_nothing_to(action)
             return
         picked = None
         while True:
-            picked = self._chooseFiles(missing, action, picked)
+            picked, missing = self._chooseFiles(missing, action, picked)
             if not picked:
                 return
             if self._confirm(action, picked):
@@ -94,6 +116,11 @@ class InteractiveDirSync(object):
             else:
                 self._remove(files)
 
+    def _say_nothing_to(self, action):
+        messages.show("Nothing to %s" % (action,),
+                      ["%s has all of %s's files." % (self._dst.displayname(), self._src.displayname())],
+                      dryrun.label())
+
     def _missing(self):
         """The relpaths of src's files that dst lacks (see find_missing()), warning if scanning
         couldn't read everything"""
@@ -107,13 +134,40 @@ class InteractiveDirSync(object):
         return missing.relpaths
 
     def _chooseFiles(self, missing, action, picked=None):
+        """Let the user pick some of the missing files (picked start picked). Returns them (or None,
+        if the user quit) and what's missing, which a refresh (the REFRESH_KEY) changes: the picker
+        comes back where it was, with what's still missing of the picks picked."""
         purpose = ("copy to %s" % (self._dst.displayname(),) if action == self.COPY else
                    "remove from %s" % (self._src.displayname(),))
+        clouds = self._cloud_replicas()
         tree_header = ("Files in %s, which are not in %s. Pick the ones to %s:\n"
-                       "(To select a file, press Space. When finished, press Enter.)" %
-                       (self._src.displayname(), self._dst.displayname(), purpose))
-        return picker.pick_files(self._src.displayname(), missing, header=tree_header,
-                                 picked=picked, label=self.LABELS[action])
+                       "(To select a file, press Space. When finished, press Enter.%s)" %
+                       (self._src.displayname(), self._dst.displayname(), purpose,
+                        " %s: read the selected folder anew from Google Drive." % (self.REFRESH_KEY,)
+                        if clouds else ""))
+        selected = None
+        while True:
+            chosen = picker.pick_files(self._src.displayname(), missing, header=tree_header,
+                                       picked=picked, label=self.LABELS[action],
+                                       keys=self.REFRESH_KEY if clouds else '', selected=selected)
+            if not isinstance(chosen, picker.KeyPressed):
+                return chosen, missing
+            selected = chosen.selected
+            for replica in clouds:
+                self.was_refreshed = refresh_replica(replica, selected) or self.was_refreshed
+            # Diffed anew (the trees as they are now: no background finding)
+            self._missing_future = None
+            missing = self._missing()
+            if not missing:
+                self._say_nothing_to(action)
+                return None, missing
+            still_missing = set(missing)
+            picked = [relpath for relpath in chosen.picked if relpath in still_missing]
+
+    def _cloud_replicas(self):
+        """The replicas that are Drive's, so can be read anew from it"""
+        return [replica for replica in (self._src, self._dst)
+                if isinstance(replica, clouddirtree.CloudDirTree)]
 
     def _file_entry(self, relpath):
         """The entry of src's file at relpath, for copying or removing it"""

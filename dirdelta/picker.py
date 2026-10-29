@@ -32,6 +32,10 @@ class PickerError(programs.ProgramError):
 # doing nothing on it
 Disabled = collections.namedtuple('Disabled', ['text'])
 
+# What pick_files() returns when one of its keys ended picking: the key, the selected node's relpath
+# ('' for the root) and the files picked so far
+KeyPressed = collections.namedtuple('KeyPressed', ['key', 'selected', 'picked'])
+
 
 def pick_from_tree(tree, header='', dirs_only=False, root_name=None):
     """Let the user pick a node of a DirTree (with dirs_only, only of its dirs), its root shown as
@@ -47,15 +51,22 @@ def pick_from_tree(tree, header='', dirs_only=False, root_name=None):
     return [tree.get_node('' if path == '.' else path).data for path in picked_paths]
 
 
-def pick_files(rootpath, relpaths, header='', picked=None, label=None):
+def pick_files(rootpath, relpaths, header='', picked=None, label=None, keys='', selected=None):
     """Let the user pick some of the files at relpaths (relative to rootpath, each dir's files and
     subdirs together, in the order to show them, as dirdiff lists them). Picking a dir picks the
     files under it. Returns the picked ones (of relpaths), in that order, or None if the user quit.
     picked (relpaths, e.g. what an earlier call returned) start picked. label, if given, is (text,
-    color): a label shown after the mode's, e.g. what the picks are for.
+    color): a label shown after the mode's, e.g. what the picks are for. keys (e.g. 'r'): keys
+    that end picking too, for the caller to act on the selected file or dir, and then it returns a
+    KeyPressed. selected: the relpath of the file or dir to start with selected ('' the root),
+    e.g. the KeyPressed's, to go on where it was.
 
     Only the files are sent: treepicker adds their dirs, so no tree is built here."""
     args = ['--typed', '--root', rootpath, '-m'] + _header_args(header)
+    if keys:
+        args += ['--expect', keys]
+    if selected is not None:
+        args += ['--select', selected or '.']
     with tempfile.NamedTemporaryFile('wb', prefix='dirdelta-picked-') as picked_file:
         if picked:
             picked_file.write(_null_terminated(picked))
@@ -65,9 +76,18 @@ def pick_files(rootpath, relpaths, header='', picked=None, label=None):
                             label=label)
     if picked_paths is None:
         return None
+    key = None
+    if keys:
+        # The key that ended it first (none for Enter), and then the selected node
+        key, picked_paths = picked_paths[0], picked_paths[1:]
+        if key:
+            selected, picked_paths = picked_paths[0], picked_paths[1:]
     # What's picked includes the dirs whose files all are
     files = set(relpaths)
-    return [path for path in picked_paths if path in files]
+    picked_files = [path for path in picked_paths if path in files]
+    if key:
+        return KeyPressed(key, '' if selected == '.' else selected, picked_files)
+    return picked_files
 
 
 def pick_under_dir(dirpath, max_depth=None, dirs_only=False, lazy=False, header=''):
@@ -159,7 +179,8 @@ def _run(args, input_items, shown_as=None, label=None):
     if process.returncode != 0:
         raise PickerError('%s failed (exit code %d)' % (command[0], process.returncode))
     output = stdout.decode('utf-8', 'surrogateescape')
-    return [item for item in output.split('\0') if item]
+    # Each ends with '\0'; with --expect the first may be empty
+    return output.split('\0')[:-1]
 
 
 def _send_updates(fd, shown_as, is_done):

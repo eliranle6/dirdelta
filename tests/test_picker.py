@@ -14,7 +14,7 @@ from dirdelta import programs
 
 # Stands in for treepicker: records its arguments and stdin into $FAKE_PICKER_LOG, and with
 # --updates, what it read from that fd until it read $FAKE_PICKER_WAIT_FOR; then prints
-# $FAKE_PICKER_OUTPUT (items separated by '|', printed '\0'-terminated) and exits with
+# $FAKE_PICKER_OUTPUT (items separated by '|', each printed '\0'-terminated, empty ones too) and exits with
 # $FAKE_PICKER_EXIT_CODE
 FAKE_PICKER = '''#!%s
 import json, os, sys
@@ -31,7 +31,7 @@ with open(os.environ['FAKE_PICKER_LOG'], 'w') as log:
     json.dump({'args': sys.argv[1:], 'stdin': stdin, 'updates': updates.decode()}, log)
 output = os.environ.get('FAKE_PICKER_OUTPUT', '')
 sys.stdout.buffer.write(b''.join(item.encode('utf-8', 'surrogateescape') + b'\\0'
-                                 for item in output.split('|') if item))
+                                 for item in (output.split('|') if output else [])))
 sys.exit(int(os.environ.get('FAKE_PICKER_EXIT_CODE', '0')))
 ''' % (sys.executable,)
 
@@ -154,6 +154,36 @@ class PickerTest(unittest.TestCase):
             picker.pick_files('/some/root', ['a/1.txt', 'b/2.txt'], picked=['b/2.txt'])
 
         self.assertEqual(self.picked_file_contents, b'b/2.txt\0')
+
+    def test_pick_files_with_keys_says_which_ended_it(self):
+        self.answer('r|b/sub|b/2.txt')
+        self.assertEqual(picker.pick_files('/r', ['a/1.txt', 'b/2.txt'], keys='r'),
+                         picker.KeyPressed('r', 'b/sub', ['b/2.txt']))
+        args, _ = self.call()
+        self.assertEqual(args[args.index('--expect') + 1], 'r')
+        # The root is ''
+        self.answer('r|.')
+        self.assertEqual(picker.pick_files('/r', ['a/1.txt'], keys='r'), picker.KeyPressed('r', '', []))
+
+    def test_pick_files_with_keys_ended_by_enter_returns_the_picks(self):
+        self.answer('|a/1.txt')
+        self.assertEqual(picker.pick_files('/r', ['a/1.txt', 'b/2.txt'], keys='r'), ['a/1.txt'])
+
+    def test_pick_files_without_keys_has_no_expect(self):
+        self.answer('a/1.txt')
+        picker.pick_files('/r', ['a/1.txt'])
+        args, _ = self.call()
+        self.assertNotIn('--expect', args)
+        self.assertNotIn('--select', args)
+
+    def test_pick_files_starts_on_the_selected(self):
+        self.answer('a/1.txt')
+        picker.pick_files('/r', ['a/1.txt'], selected='a')
+        args, _ = self.call()
+        self.assertEqual(args[args.index('--select') + 1], 'a')
+        picker.pick_files('/r', ['a/1.txt'], selected='')
+        args, _ = self.call()
+        self.assertEqual(args[args.index('--select') + 1], '.')
 
     def test_nothing_picked_passes_no_picked_file(self):
         self.answer('a/1.txt')

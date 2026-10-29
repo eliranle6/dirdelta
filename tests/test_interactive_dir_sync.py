@@ -251,5 +251,81 @@ class InteractiveDirSyncTest(unittest.TestCase):
         header = pick_option.call_args.kwargs['header'].splitlines()
         self.assertEqual(header[0], 'Remove 1 files from cloud/mein?')
 
+
+class RefreshKeyTest(unittest.TestCase):
+    """The file picker's key that reads the selected folder anew from Drive"""
+    def setUp(self):
+        self.cloud = clouddirtree.CloudDirTree('cloud/mein')
+        for relpath in ('a/1.mp3', 'a/2.mp3', 'b/3.mp3'):
+            self.cloud.add_file_by_relpath(relpath)
+        self.local = dirtree.DirTree('/local')
+        for patcher in (mock.patch('dirdelta.messages.show'),
+                        mock.patch('dirdelta.picker.pick_option', return_value=NO)):
+            self.addCleanup(patcher.stop)
+            self.show = patcher.start()
+        self.show = interactive_dir_sync.messages.show
+
+    def sync(self, src, dst, answers, refresh=None):
+        """Remove files from src, the file picker answering answers in turn; returns pick_files's
+        calls"""
+        with mock.patch('dirdelta.picker.pick_files', side_effect=answers) as pick_files, \
+                mock.patch.object(clouddirtree.CloudDirTree, 'refresh_from_drive', autospec=True,
+                                  side_effect=refresh) as self.refresh:
+            sync = interactive_dir_sync.InteractiveDirSync(src, dst)
+            sync.sync(REMOVE)
+        self.was_refreshed = sync.was_refreshed
+        return pick_files.call_args_list
+
+    def test_the_key_refreshes_the_selected_folder_and_picks_again_where_it_was(self):
+        def refresh(tree, relpath):
+            # Since the cache was made, a/2.mp3 went from Drive
+            tree.remove_node('a/2.mp3')
+        calls = self.sync(self.cloud, self.local,
+                          [interactive_dir_sync.picker.KeyPressed('r', 'a', ['a/1.mp3', 'a/2.mp3']), None],
+                          refresh)
+        self.refresh.assert_called_once_with(self.cloud, 'a')
+        self.assertTrue(self.was_refreshed)
+        self.assertEqual(calls[0].kwargs['keys'], 'r')
+        self.assertIn('r: read the selected folder anew from Google Drive', calls[0].kwargs['header'])
+        self.assertIsNone(calls[0].kwargs['selected'])
+        # What's still missing, what's still picked of it, where it was
+        self.assertEqual(calls[1].args[1], ['a/1.mp3', 'b/3.mp3'])
+        self.assertEqual(calls[1].kwargs['picked'], ['a/1.mp3'])
+        self.assertEqual(calls[1].kwargs['selected'], 'a')
+
+    def test_the_other_replica_is_refreshed_when_its_drives(self):
+        self.local.add_file_by_relpath('x/new.mp3')
+        self.sync(self.local, self.cloud,
+                  [interactive_dir_sync.picker.KeyPressed('r', 'x/new.mp3', []), None])
+        self.refresh.assert_called_once_with(self.cloud, 'x/new.mp3')
+
+    def test_without_a_drive_replica_theres_no_key(self):
+        other = dirtree.DirTree('/other')
+        other.add_file_by_relpath('a.mp3')
+        calls = self.sync(other, self.local, [None])
+        self.assertEqual(calls[0].kwargs['keys'], '')
+        self.assertNotIn('Google Drive', calls[0].kwargs['header'])
+        self.assertFalse(self.was_refreshed)
+
+    def test_a_refresh_with_nothing_left_missing_says_so(self):
+        def refresh(tree, relpath):
+            for relpath in ('a/1.mp3', 'a/2.mp3', 'b/3.mp3'):
+                tree.remove_node(relpath)
+        calls = self.sync(self.cloud, self.local,
+                          [interactive_dir_sync.picker.KeyPressed('r', '', [])], refresh)
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(self.show.call_args.args[0], 'Nothing to remove')
+
+    def test_a_failed_refresh_says_why_and_picks_again(self):
+        calls = self.sync(self.cloud, self.local,
+                          [interactive_dir_sync.picker.KeyPressed('r', 'a', ['b/3.mp3']), None],
+                          OSError('no network'))
+        title, lines = self.show.call_args.args[:2]
+        self.assertEqual(title, 'Refresh cloud/mein/a from Google Drive')
+        self.assertEqual(lines, ["Couldn't refresh it: no network"])
+        self.assertFalse(self.was_refreshed)
+        self.assertEqual(calls[1].kwargs['picked'], ['b/3.mp3'])
+
+
 if __name__ == '__main__':
     unittest.main()

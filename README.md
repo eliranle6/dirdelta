@@ -90,7 +90,10 @@ some of it is. A confirmation
 follows, with No selected: No takes you back to the picker, with the same files picked; Yes goes
 ahead. Its progress fills the screen under a top line saying what's being done; `Ctrl-C` stops it
 (a file cut off in the middle of its copy is deleted), and when it's done or stopped, `Enter` goes
-on, back to the main menu. Unless `DRYRUN=0` is set, both are dry
+on, back to the main menu. With a cloud replica, the menu also has "Refresh cloud/X from Google
+Drive", which reads that folder anew from Drive (as the refresh offered at the start does), for when
+it changed outside dirdelta, and in the file picker `r` reads just the selected folder anew. Unless
+`DRYRUN=0` is set, both are dry
 runs: they change nothing on disk (not even the dirs copied files would go into), and say what they
 would have done. Every screen says which it is, at the start of its bottom line (the progress
 screen: its top line): "DRY RUN" in green, or "LIVE" in red.

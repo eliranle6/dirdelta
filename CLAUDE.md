@@ -72,9 +72,10 @@ Developer tasks all live in the Makefile (`make` lists them): `test`,
 than adding shell scripts. `make clean`
 removes `__pycache__`/`*.pyc`/`*.egg-info`/`build/`/pbr's `AUTHORS` and
 `ChangeLog` in this repo and the submodule, skipping `.venv`. It does not
-touch `~/.cache/dirman/files.txt` (the real Drive-scan cache, with a
-`files.txt.stale` next to it if a change dirdelta made to Drive was cut off before
-it was added to the cache),
+touch `~/.cache/dirman/files.txt` (the real Drive cache, refreshed a folder at a
+time: a replica's, at the start or from the main menu, or one in it, with the file
+picker's `r`; with a `files.txt.stale` next to it, listing the folders where a
+change dirdelta made to Drive was cut off before it was added to the cache),
 `~/.config/dirdelta/replicas.json` (the history and favorites) or `secrets/`.
 
 ## Structure
@@ -83,7 +84,7 @@ it was added to the cache),
 dirstuff/                    the original dev machine's local folder, not a git repo
 ├── dirstuff-venv/            that machine's older venv (activate it, or make .venv)
 ├── unused/                   dead/unimported scripts kept for reference only
-│   ├── scandrive.py           (near-dup of clouddirtreefactory.py's scan logic)
+│   ├── scandrive.py           (an old scan of all of Drive, like the one dirdelta had until 2026-10-29)
 │   └── parse-drive-files.py
 └── dirdelta/                 THIS repo
     ├── bin/                   sync.sh, pick.sh: sync and picker mode from source
@@ -129,7 +130,7 @@ module:
 PYTHONPATH=.:tests .venv/bin/python3 -m unittest test_interactive_dir_sync -v
 ```
 
-Every module has a test file (233 tests, all passing as of 2026-10-27) except
+Every module has a test file (260 tests, all passing as of 2026-10-29) except
 the thin wiring in `main.py`/`dirsync_main.py`, covered only by running the
 app. Shared fakes:
 - `tests/helpers.py`: `scripted_option_picker` / `scripted_tree_picker` /
@@ -179,4 +180,6 @@ Notes for whoever changes things next:
 - The local-disk scanner shells out to the real `find` binary (one run per
   scan, in `localdiskdirtree.py`) rather than using `os.walk`.
 - Cloud state is cached to disk (`~/.cache/dirman/files.txt`) rather than
-  queried live on every scan; refreshing it re-hits the Drive API.
+  queried live on every scan; refreshing a folder re-reads it from the Drive
+  API, one request at a time: never in parallel (the user doesn't want
+  Google to see unusual use of the account).

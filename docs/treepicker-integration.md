@@ -32,7 +32,13 @@ Like fzf: dirdelta starts `treepicker`, which draws on the terminal itself
   when it's shown (so `/` opens at once; a search finds only what was read).
   A Drive one is the cloud tree's picker with `--dirs-only`.
 - Showing a picker again with the user's picks: `--picked FILE`, FILE
-  holding the paths treepicker printed.
+  holding the paths treepicker printed, and `--select PATH` to start on the
+  node it was on.
+- A key that ends the file picker for dirdelta to act on the selected node
+  (`r`: read the selected folder anew from Drive): `--expect r`. Then the
+  output starts with the key pressed (or an empty item for Enter) and, after
+  a key, the selected node's path, then the picks so far, so dirdelta runs it
+  again with `--picked` and `--select`.
 - Menus: `treepicker -0 --list [--header TEXT] -`, with the labels on stdin
   (`--list` keeps them flat, since labels contain '/'). With `shown_as`,
   `pick_option` adds `--updates FD`, a pipe that a thread writes `LABEL<tab>TEXT\0`

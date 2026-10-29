@@ -31,7 +31,8 @@ design.
 **Cloud files list cache** — `~/.cache/dirman/files.txt`
 (`drivecache.FILE_LIST_CACHE`). One JSON line per Drive API
 file object (`id`, `name`, `parents`, `mimeType`, etc.), refreshed on
-demand rather than queried live per scan. `CloudDirTree` parses this
+demand a folder at a time (a replica's, or a folder in it) rather than
+queried live per scan. `CloudDirTree` parses this
 file line-by-line to rebuild id→children / id→metadata maps before walking
 them into a `DirTree`.
 
