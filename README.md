@@ -81,12 +81,14 @@ An inbox is a dir of files not sorted yet; the sorted tree is where they go (loc
 Drive folders; choosing it, the replicas you sync are offered too). The inbox's picker works like a sync's: pick files with `Space`, press
 `Enter`, and choose what to do with them, with "Nothing" selected first:
 
-- "Describe N files with Claude" (or `Ctrl-I` in the picker, on the picked files, or else the
-  selected file or dir): a short description of each (at most 10 words, by Claude Haiku, which reads
+- `Ctrl-I` in the picker, on the picked files (or else the selected file or dir): all of what's
+  below, describing them and saying where they go, in the background.
+- "Describe N files with Claude": a short description of each (at most 10 words, by Claude Haiku, which reads
   the files), shown after its name in the picker (`a.txt  | a shopping list`), and searchable. It's
   done in the background: you go on picking, the files say "(Claude is looking at it...)" until
   their descriptions come, and the bottom line says what Claude is doing.
-- "Ask Claude where N files go": their descriptions first (the missing ones), then Claude Sonnet is
+- "Ask Claude where N files go" (as `Ctrl-I` does, in the background too): their descriptions
+  first (the missing ones), and which are copies (below), then Claude Sonnet is
   given them and the sorted tree's dirs (with a few of the names of the files in each), and
   recommends a path for each file: a dir (an existing one, or a new one) and a name, the file's own
   unless it says little (`IMG_2041.jpg`, `scan001.pdf`) or doesn't fit how that dir's files are

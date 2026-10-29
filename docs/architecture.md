@@ -80,12 +80,15 @@ Claude's descriptions as their tags (`shown_as`, through `--updates`: "name
 | description", or "(Claude is looking at it...)", and the status, Claude's
 work, on the bottom line) and its recommendations in the preview column (sent
 again as they change, `_send_previews()`), both kept in `ai.CACHE_FILE` and
-loaded at each pick. Describing is in the background
-(`describe_in_background()`: a queue and one worker thread, a batch at a
-time, its Drive downloads and the screen's Drive changes one at a time,
-`_drive_lock`), from `Ctrl-I` (`pick_files(notify_keys='\t')`, treepicker's
-`--notify`: the picked files, or else the selected file or dir's) or the
-menu; quitting waits for it (`_finish_describing()`); Enter → `_act()`, the action menu
+loaded at each pick. Asking Claude is in the background
+(`ask_in_background(relpaths, place)`: a queue and one worker thread, a batch
+at a time: `_describe()` the ones without a description, then with place,
+`_place()` them: their contents compared with the sorted tree's (`_compare()`),
+then `ai.recommend()`; its Drive downloads and the screen's Drive changes one
+at a time, `_drive_lock`), from `Ctrl-I` (`pick_files(notify_keys='\t')`,
+treepicker's `--notify`: the picked files, or else the selected file or dir's;
+describing and placing) or the menu (Describe: describing only; Ask where:
+both); quitting waits for it (`_finish_describing()`); Enter → `_act()`, the action menu
 (`NOTHING` first): describe, ask where they go, move to the recommendations
 (naming the dir when there's one), move to / copy to a picked dir
 (`pick_under_dir(dirs_only, lazy)`, or `pick_from_tree` of the sorted tree
@@ -117,8 +120,7 @@ keeps both hashes when they're the same). Written at most every
 `ai.describe()` asks Claude (Haiku) about `ai.File`s (relpath, a local path
 to read, size), `BATCH_SIZE` a request, reading them; `ai.recommend()` asks
 Claude (Sonnet) where they go by their names, sizes and descriptions
-(`_recommend()` gets the missing descriptions first, and its progress screen
-goes by itself when it's done), reading nothing (no tools); a batch that fails is asked again a file at a time. Both through the
+(`_place()` gets the missing descriptions first), reading nothing (no tools); a batch that fails is asked again a file at a time. Both through the
 Claude Agent
 SDK, descriptions of `DESCRIBE_MODEL` (Haiku) and recommendations of
 `RECOMMEND_MODEL` (Sonnet), each overridable by an env var (`_model()`)

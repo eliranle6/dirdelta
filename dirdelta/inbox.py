@@ -123,6 +123,9 @@ class InboxSort(object):
         # The files being described (in the background), the queue of them, and the worker; and why
         # the ones that couldn't be weren't
         self._describing = set()
+        # The files to say where they go of; and all the queued ones (for either)
+        self._placing = set()
+        self._queued = set()
         self._queue = collections.deque()
         self._worker = None
         self._state_lock = threading.Lock()
@@ -177,8 +180,8 @@ class InboxSort(object):
         and back to the picker, where they were, until they quit, or the inbox is empty"""
         header = ("Files in %s, to sort into %s. Pick some, then choose what to do with them:\n"
                   "(To pick a file, press Space. When finished, press Enter. Ctrl-I: Claude describes "
-                  "the picked files, or the selected one, while you go on.%s After a '|': what Claude "
-                  "says it is.)" %
+                  "the picked files (or the selected one), and says where they go, while you go on.%s "
+                  "After a '|': what Claude says it is.)" %
                   (self.inbox_path, self.root_path,
                    " %s: read the selected folder anew from Google Drive." % (self.REFRESH_KEY,)
                    if self.inbox_is_cloud else ""))
@@ -197,7 +200,7 @@ class InboxSort(object):
                 previews=lambda send, files=files: self._send_previews(files, send),
                 shown_as=lambda files=files: self._shown_as(files),
                 notify_keys=DESCRIBE_KEY,
-                on_notify=lambda key, selected, picked, files=files: self.describe_in_background(
+                on_notify=lambda key, selected, picked, files=files: self.ask_in_background(
                     picked or [relpath for relpath in files if _is_at_or_under(relpath, selected)]),
                 on_selection=functools.partial(elsewhere.check_contents, files, self._inbox_view,
                                                self._inbox_index, self._root_index, self._checked,
@@ -229,10 +232,12 @@ class InboxSort(object):
                 shown[relpath] = "%s  | %s" % (os.path.basename(relpath), self._descriptions[relpath])
             elif relpath in self._describing:
                 shown[relpath] = "%s  | %s" % (os.path.basename(relpath), LOOKING)
-        describing = len(self._describing)
+        describing, placing = len(self._describing), len(self._placing)
         failed = len([relpath for relpath in relpaths if relpath in self._failed])
-        shown[''] = ("Claude: describing %s" % (_files(describing),) if describing else
-                     "Claude: couldn't describe %s" % (_files(failed),) if failed else '')
+        busy = ["%s %s" % (what, _files(count))
+                for what, count in (("describing", describing), ("placing", placing)) if count]
+        shown[''] = ("Claude: " + ', '.join(busy) if busy else
+                     "Claude: couldn't do %s" % (_files(failed),) if failed else '')
         return shown
 
     def _send_previews(self, relpaths, send):
@@ -257,7 +262,7 @@ class InboxSort(object):
                 lines += ["", "Claude says it's:"] + _wrapped(self._descriptions[relpath], "  ")
             elif relpath in self._describing:
                 lines += ["", "Claude is looking at it..."]
-            elif relpath in self._failed:
+            elif relpath in self._failed and relpath not in self._descriptions:
                 lines += ["", "Claude couldn't describe it:"] + _wrapped(self._failed[relpath], "  ")
             lines += self._copies_lines(relpath)
             recommendation = self._recommendations.get(relpath)
@@ -271,8 +276,12 @@ class InboxSort(object):
                     lines += ["  renamed:"] + _wrapped(os.path.basename(target), "    ")
                 lines += ["  (in %s)" % (self.root_path,)]
                 lines += _wrapped(recommendation.get('reason', ''), "  ")
+            elif relpath in self._placing:
+                lines += ["", "Claude is working out where", "it goes..."]
+            elif relpath in self._failed and relpath in self._descriptions:
+                lines += ["", "Claude couldn't say where it goes:"] + _wrapped(self._failed[relpath], "  ")
             else:
-                lines += ["", "Where it goes: pick it, press", "Enter, and ask Claude."]
+                lines += ["", "Where it goes: Ctrl-I (or pick", "it, press Enter, and ask Claude)."]
             previews[relpath] = lines
         return previews
 
@@ -283,7 +292,8 @@ class InboxSort(object):
         count = _files(len(relpaths))
         undescribed = [relpath for relpath in relpaths
                        if relpath not in self._descriptions and relpath not in self._describing]
-        unrecommended = [relpath for relpath in relpaths if relpath not in self._recommendations]
+        unrecommended = [relpath for relpath in relpaths
+                         if relpath not in self._recommendations and relpath not in self._placing]
         recommended = [relpath for relpath in relpaths
                        if relpath in self._recommendations and self._target(relpath) is not None]
         removable = [relpath for relpath in relpaths
@@ -301,9 +311,9 @@ class InboxSort(object):
             self.DESCRIBE: ("Describe %s with Claude, while you go on (sends it their contents; or Ctrl-I)" %
                             (_files(len(undescribed)),),
                             None if undescribed else "they all have a description, or are being described"),
-            self.RECOMMEND: ("Ask Claude where %s go in %s (describing them first)" %
+            self.RECOMMEND: ("Ask Claude where %s go in %s, while you go on (or Ctrl-I)" %
                              (_files(len(unrecommended)), self.root_path),
-                             None if unrecommended else "they all have a recommendation"),
+                             None if unrecommended else "they all have a recommendation, or are being placed"),
             self.MOVE_RECOMMENDED: ("Move %s to %s" % ("the " + count if len(recommended) == len(relpaths) else
                                                        "the %d of them with one" % (len(recommended),), to),
                                     None if recommended else "none of them has a recommendation to move it yet"),
@@ -324,7 +334,7 @@ class InboxSort(object):
             self.describe_in_background(undescribed)
             return None
         if action == self.RECOMMEND:
-            self._recommend(unrecommended)
+            self.ask_in_background(unrecommended)
             return None
         if action == self.MOVE_RECOMMENDED:
             return self._approve(self.MOVE_TO, [(relpath, self._target(relpath)) for relpath in recommended])
@@ -378,35 +388,39 @@ class InboxSort(object):
             # Only for finding copies: without it, there are none to say
             pass
 
-    def _compare_with_the_sorted_tree(self, relpaths):
-        """Compare the contents of the inbox's files at relpaths with their candidates in the sorted
-        tree, the ones not compared yet (on a progress screen's lines)"""
-        self._start_indexing()
-        self._indexing.join()
-        elsewhere.check_all(relpaths, self._inbox_view, self._inbox_index, self._root_index, self._checked,
-                            lambda number, count, relpath: messages.print_progress(
-                                "Comparing with %s's files: %d of %d" % (self.root_path, number, count)))
-
     # Claude
 
     def describe_in_background(self, relpaths):
-        """Have Claude describe the files at relpaths that have no description (and aren't being
-        described), on a thread of its own, a batch at a time, while the user goes on: each picker
-        shows them as they come"""
+        """Have Claude describe the files at relpaths (see ask_in_background())"""
+        self.ask_in_background(relpaths, False)
+
+    def ask_in_background(self, relpaths, place=True):
+        """Have Claude describe the files at relpaths that have no description, and with place, say
+        where they go (what Enter's "Ask Claude where" did, and Ctrl-I does): their contents are
+        compared with the sorted tree's files first, so Claude knows which are copies. On a thread
+        of its own, a batch at a time, while the user goes on: each picker shows them as they come."""
         with self._state_lock:
-            new = [relpath for relpath in relpaths
-                   if relpath not in self._descriptions and relpath not in self._describing]
-            for relpath in new:
+            for relpath in relpaths:
+                needs_description = relpath not in self._descriptions
+                needs_place = place and relpath not in self._recommendations
+                if not (needs_description or needs_place):
+                    continue
                 self._failed.pop(relpath, None)
-            self._describing.update(new)
-            self._queue.extend(new)
-            if new and self._worker is None:
-                self._worker = threading.Thread(target=self._describe_queued, daemon=True)
+                if needs_place:
+                    self._placing.add(relpath)
+                if relpath in self._queued:
+                    continue
+                self._queued.add(relpath)
+                self._queue.append(relpath)
+                if needs_description:
+                    self._describing.add(relpath)
+            if self._queue and self._worker is None:
+                self._worker = threading.Thread(target=self._ask_queued, daemon=True)
                 self._worker.start()
 
-    def _describe_queued(self):
-        """Describe the queued files, a batch at a time, until there are none (on the describer's
-        thread: nothing is printed, as a picker may have the screen)"""
+    def _ask_queued(self):
+        """Ask Claude about the queued files, a batch at a time, until there are none (on the
+        worker's thread: nothing is printed, as a picker may have the screen)"""
         while True:
             with self._state_lock:
                 if not self._queue:
@@ -414,73 +428,88 @@ class InboxSort(object):
                     return
                 batch = [self._queue.popleft() for _ in range(min(ai.BATCH_SIZE, len(self._queue)))]
             try:
-                with tempfile.TemporaryDirectory(prefix='dirdelta-ai-') as temp_dir:
-                    with self._drive_lock:
-                        files = self._ai_files(batch, temp_dir, is_quiet=True)
-                    found = ai.describe(files, self._cache_key)
-                self._descriptions.update(found)
-                for relpath in batch:
-                    if relpath not in found:
-                        self._failed[relpath] = "Claude gave no description of it."
-            except Exception as error:
-                for relpath in batch:
-                    self._failed[relpath] = str(error)
+                self._describe(batch)
+                self._place([relpath for relpath in batch if relpath in self._placing])
             finally:
                 with self._state_lock:
                     self._describing.difference_update(batch)
+                    self._placing.difference_update(batch)
+                    self._queued.difference_update(batch)
+
+    def _describe(self, batch):
+        """Have Claude describe the files of batch that have no description (on the worker's thread)"""
+        relpaths = [relpath for relpath in batch if relpath not in self._descriptions]
+        try:
+            if relpaths:
+                with tempfile.TemporaryDirectory(prefix='dirdelta-ai-') as temp_dir:
+                    with self._drive_lock:
+                        files = self._ai_files(relpaths, temp_dir, is_quiet=True)
+                    found = ai.describe(files, self._cache_key)
+                self._descriptions.update(found)
+                for relpath in relpaths:
+                    if relpath not in found:
+                        self._failed[relpath] = "Claude gave no description of it."
+        except Exception as error:
+            for relpath in relpaths:
+                self._failed[relpath] = str(error)
+        finally:
+            with self._state_lock:
+                self._describing.difference_update(batch)
+
+    def _place(self, relpaths):
+        """Have Claude say where the files at relpaths go, by their descriptions and which are copies
+        of the sorted tree's files (their contents compared first), on the worker's thread"""
+        relpaths = [relpath for relpath in relpaths if relpath not in self._recommendations]
+        if not relpaths:
+            return
+        try:
+            self._compare(relpaths)
+            files = [ai.File(relpath, None, self._size(relpath)) for relpath in relpaths]
+            found = ai.recommend(files, self._cache_key, self._root_dirs(), self.root_path, self._descriptions,
+                                 {relpath: self._copies(relpath) for relpath in relpaths})
+            self._recommendations.update(found)
+            for relpath in relpaths:
+                if relpath not in found:
+                    self._failed[relpath] = "Claude didn't say where it goes."
+        except Exception as error:
+            for relpath in relpaths:
+                self._failed[relpath] = str(error)
+
+    def _compare(self, relpaths):
+        """Compare the contents of the inbox's files at relpaths with their candidates in the sorted
+        tree, the ones not compared yet (once the sorted tree is listed)"""
+        self._start_indexing()
+        self._indexing.join()
+        elsewhere.check_all(relpaths, self._inbox_view, self._inbox_index, self._root_index, self._checked)
+
+    def wait_for_claude(self):
+        """Wait for what Claude is asked of files, without a screen (e.g. for a test)"""
+        while True:
+            worker = self._worker
+            if worker is None:
+                return
+            worker.join()
 
     def _finish_describing(self):
-        """Wait for the files being described, if any, on a progress screen (Ctrl-C stops waiting:
-        what Claude said so far is kept)"""
-        if not self._describing:
+        """Wait for what Claude is asked of files, if anything, on a progress screen (Ctrl-C stops
+        waiting: what it said so far is kept)"""
+        if not self._queued:
             return
-        title = ("Waiting for Claude to finish describing %s (what it said so far is kept)" %
-                 (_files(len(self._describing)),))
+        title = ("Waiting for Claude to finish with %s (what it said so far is kept)" %
+                 (_files(len(self._queued)),))
+        failed_before = len(self._failed)
         with messages.progress_screen(title, dryrun.label(), wait=False):
-            failed_before = len(self._failed)
             try:
-                while self._describing:
-                    messages.print_progress("%s left, %d described, %d couldn't be" % (
-                        _files(len(self._describing)), len(self._descriptions), len(self._failed) - failed_before))
+                while self._queued:
+                    messages.print_progress("%s left (%d being described, %d placed), %d failed" % (
+                        _files(len(self._queued)), len(self._describing),
+                        len(self._queued) - len(self._describing), len(self._failed) - failed_before))
                     time.sleep(DESCRIBED_WAIT_INTERVAL)
             except KeyboardInterrupt:
                 messages.note_stopped()
         if len(self._failed) > failed_before:
-            messages.show("Claude couldn't describe %s" % (_files(len(self._failed) - failed_before),),
+            messages.show("Claude couldn't finish with %s" % (_files(len(self._failed) - failed_before),),
                           [list(self._failed.values())[-1]], dryrun.label(), 'red')
-
-    def _recommend(self, relpaths):
-        """Ask Claude where the files at relpaths go, on a progress screen (Ctrl-C stops it: what it
-        said so far is kept): their descriptions first (the ones being described in the background
-        waited for, the others described too), then where they go, by them. The screen goes once
-        it's done, unless something went wrong, which is shown."""
-        error = None
-        with messages.progress_screen("Asking Claude where %s go in %s" % (_files(len(relpaths)), self.root_path),
-                                      dryrun.label(), wait=False):
-            try:
-                # Which are copies of files in the sorted tree already, for Claude to know
-                self._compare_with_the_sorted_tree(relpaths)
-                messages.print_line("")
-                self.describe_in_background(relpaths)
-                while True:
-                    waiting = [relpath for relpath in relpaths if relpath in self._describing]
-                    if not waiting:
-                        break
-                    messages.print_progress("Claude is describing them first: %d of %d done" %
-                                            (len(relpaths) - len(waiting), len(relpaths)))
-                    time.sleep(DESCRIBED_WAIT_INTERVAL)
-                messages.print_line("")
-                files = [ai.File(relpath, None, self._size(relpath)) for relpath in relpaths]
-                self._recommendations.update(ai.recommend(
-                    files, self._cache_key, self._root_dirs(), self.root_path, self._descriptions,
-                    {relpath: self._copies(relpath) for relpath in relpaths},
-                    lambda done, total: messages.print_progress("Claude has placed %d of %d files" % (done, total))))
-            except ai.AIError as error_:
-                error = str(error_)
-            except KeyboardInterrupt:
-                messages.note_stopped()
-        if error is not None:
-            messages.show("Claude couldn't say where they go", [error], dryrun.label(), 'red')
 
     def _ai_files(self, relpaths, temp_dir, is_quiet=False):
         """ai.File of each of the inbox's files at relpaths: a Drive one downloaded into temp_dir

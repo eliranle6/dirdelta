@@ -38,6 +38,15 @@ class InboxSortTest(unittest.TestCase):
             self.addCleanup(patcher.stop)
         self.show = inbox.messages.show
 
+    def synchronously(self):
+        """Patch InboxSort.ask_in_background to wait for what it asks Claude, so a test sees it done"""
+        ask = Sort.ask_in_background
+
+        def ask_and_wait(sorter, relpaths, place=True):
+            ask(sorter, relpaths, place)
+            sorter.wait_for_claude()
+        return mock.patch.object(Sort, 'ask_in_background', ask_and_wait)
+
     def sort(self, picks, answers, dirs=(), view=True, is_dry_run=False):
         """Sort, the inbox's picker answering picks in turn, the menus answers, the dir picker
         dirs (paths), and the approval's view returning view"""
@@ -47,7 +56,7 @@ class InboxSortTest(unittest.TestCase):
                 mock.patch('dirdelta.picker.pick_under_dir',
                            side_effect=lambda *_, **__: dirs.pop(0)) as self.pick_under_dir, \
                 mock.patch('dirdelta.picker.view_files', return_value=view) as self.view_files, \
-                mock.patch('dirdelta.dryrun.DRYRUN', is_dry_run):
+                mock.patch('dirdelta.dryrun.DRYRUN', is_dry_run), self.synchronously():
             self.sorter = Sort(self.inbox, self.root)
             self.sorter.run()
 
@@ -169,10 +178,10 @@ class InboxSortTest(unittest.TestCase):
             kwargs = self.pick_files.call_args.kwargs
             self.assertEqual(kwargs['notify_keys'], '\t')
             kwargs['on_notify']('\t', 'trip', [])
-            self.sorter._finish_describing()
+            self.sorter.wait_for_claude()
             self.assertEqual(self.sorter._descriptions, {'trip/c.jpg': 'a beach'})
             kwargs['on_notify']('\t', 'trip/c.jpg', ['a.txt'])
-            self.sorter._finish_describing()
+            self.sorter.wait_for_claude()
         self.assertEqual(sorted(self.sorter._descriptions), ['a.txt', 'trip/c.jpg'])
 
     def test_recommendations_are_shown_and_moved_to(self):
@@ -238,7 +247,7 @@ class InboxSortTest(unittest.TestCase):
     def test_a_copy_of_a_sorted_file_is_found_and_said(self):
         self.copy_in_the_inbox()
         sorter = Sort(self.inbox, self.root)
-        sorter._compare_with_the_sorted_tree(['old.txt', 'a.txt'])
+        sorter._compare(['old.txt', 'a.txt'])
         self.assertEqual(sorter._copies('old.txt'), ['docs/old.txt'])
         lines = sorter._previews(['old.txt'])['old.txt']
         self.assertIn("  docs/old.txt", lines)
@@ -270,11 +279,24 @@ class InboxSortTest(unittest.TestCase):
         with mock.patch('dirdelta.ai._run_query', side_effect=ai.AIError('not logged in')):
             self.sort([['a.txt'], None], ['Describe 1 file'])
             self.assertEqual(self.sorter._failed, {'a.txt': 'not logged in'})
-            self.assertEqual(self.sorter._shown_as(['a.txt'])[''], "Claude: couldn't describe 1 file")
+            self.assertEqual(self.sorter._shown_as(['a.txt'])[''], "Claude: couldn't do 1 file")
             self.assertIn("  not logged in", self.sorter._previews(['a.txt'])['a.txt'])
-            # Asking where they go says so on a screen of its own
-            self.sort([['a.txt'], None], ['Ask Claude'])
-        self.assertEqual(self.show.call_args.args[:2], ("Claude couldn't say where they go", ['not logged in']))
+
+    def test_ctrl_i_also_says_where_they_go(self):
+        with self.ask_claude({'b.jpg': {'description': 'a cat', 'action': 'move', 'path': 'photos/cats/b.jpg',
+                                        'reason': 'a cat photo'}}):
+            self.sort([None], [])
+            self.pick_files.call_args.kwargs['on_notify']('\t', 'b.jpg', [])
+            self.sorter.wait_for_claude()
+        self.assertEqual(self.sorter._target('b.jpg'), 'photos/cats/b.jpg')
+        self.assertEqual([query[0] for query in self.queries], [['description'], ['action', 'path', 'reason']])
+
+    def test_files_being_placed_say_so(self):
+        sorter = Sort(self.inbox, self.root)
+        sorter._placing = {'b.jpg'}
+        sorter._descriptions = {'b.jpg': 'a cat'}
+        self.assertEqual(sorter._shown_as(['b.jpg'])[''], 'Claude: placing 1 file')
+        self.assertIn("Claude is working out where", sorter._previews(['b.jpg'])['b.jpg'])
 
     def test_the_sorted_trees_dirs_for_claude_leave_the_inbox_out(self):
         os.makedirs(os.path.join(self.root, 'unsorted', 'deep'))
