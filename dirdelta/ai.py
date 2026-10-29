@@ -1,5 +1,6 @@
-"""What Claude says of files: a short description of each, and where in a sorted tree it belongs (for
-sorting an inbox, see inbox.py). Through the Claude Agent SDK, which runs Claude Code, and so the
+"""What Claude says of files: a short description of each (DESCRIBE_MODEL, which reads them), and
+where in a sorted tree it belongs (RECOMMEND_MODEL, by their names, sizes and descriptions: it reads
+nothing), for sorting an inbox (see inbox.py). Through the Claude Agent SDK, which runs Claude Code, and so the
 laptop's logged-in Claude (or ANTHROPIC_API_KEY, if set).
 
 Claude reads the files itself, with its Read tool (text, images, PDFs), and with no other tool: it
@@ -35,6 +36,10 @@ SYSTEM_PROMPT = (
     "'read it' with the Read tool (it shows text, images and PDFs); for the others, go by the name, "
     "type and size. Don't read any other file. Then answer about every file in the list, by its "
     "number.")
+RECOMMEND_SYSTEM_PROMPT = (
+    "You help sort a person's files into their sorted tree of dirs. You get a numbered list of files, "
+    "each with its name, size and what it is, and the tree's dirs. Answer about every file in the "
+    "list, by its number.")
 
 
 class AIError(Exception):
@@ -46,36 +51,40 @@ class AIError(Exception):
 File = collections.namedtuple('File', ['relpath', 'local_path', 'size'])
 
 
-def _description_schema(with_destination):
-    item = {
-        "type": "object",
-        "properties": {
-            "number": {"type": "integer"},
-            "description": {"type": "string"},
-        },
-        "required": ["number", "description"],
-    }
-    if with_destination:
-        item["properties"]["destination"] = {"type": "string"}
-        item["properties"]["reason"] = {"type": "string"}
-        item["required"] += ["destination", "reason"]
-    return {"type": "object", "properties": {"files": {"type": "array", "items": item}},
-            "required": ["files"]}
+def _schema(fields):
+    """The answers' schema: a list of {number, the fields (strings)}"""
+    item = {"type": "object",
+            "properties": dict({"number": {"type": "integer"}}, **{field: {"type": "string"} for field in fields}),
+            "required": ["number"] + list(fields)}
+    return {"type": "object", "properties": {"files": {"type": "array", "items": item}}, "required": ["files"]}
 
 
 def describe(files, cache_key, progress=None):
     """{relpath: description} of files (File), a sentence of at most MAX_DESCRIPTION_WORDS words
-    each, from the cache or Claude, in batches of BATCH_SIZE, calling progress(done, count) after
-    each. cache_key(file) is the file's key in the cache. Raises AIError if Claude can't be asked."""
-    return {relpath: answer['description']
-            for relpath, answer in _ask(files, cache_key, None, progress).items()}
+    each, from the cache or Claude (DESCRIBE_MODEL, which reads them), in batches of BATCH_SIZE,
+    calling progress(done, count) after each. cache_key(file) is the file's key in the cache.
+    Raises AIError if Claude can't be asked."""
+    def is_cached(entry):
+        return entry.get('description') and {'description': entry['description']}
+
+    def keep(entry, answer):
+        entry['description'] = answer['description']
+    found = _ask(files, cache_key, is_cached, keep, _ask_for_descriptions, progress)
+    return {relpath: answer['description'] for relpath, answer in found.items()}
 
 
-def recommend(files, cache_key, dirs, root_name, progress=None):
-    """{relpath: {'description', 'destination', 'reason'}} of files (File): where in the sorted
-    tree (root_name, whose dirs are dirs: relpaths) each belongs, as a dir relative to its root
-    (an existing one, or a new one where none fits), from the cache or Claude, as describe() does"""
-    return _ask(files, cache_key, (tuple(dirs), root_name), progress)
+def recommend(files, cache_key, dirs, root_name, descriptions, progress=None):
+    """{relpath: {'destination', 'reason'}} of files (File): where in the sorted tree (root_name,
+    whose dirs are dirs: relpaths) each belongs, as a dir relative to its root (an existing one, or
+    a new one where none fits), from the cache or Claude (RECOMMEND_MODEL). It goes by the files'
+    names, sizes and descriptions ({relpath: description}, e.g. describe()'s), so it reads nothing."""
+    def is_cached(entry):
+        return entry.get('recommendations', {}).get(root_name)
+
+    def keep(entry, answer):
+        entry.setdefault('recommendations', {})[root_name] = answer
+    return _ask(files, cache_key, is_cached, keep,
+                lambda batch: _ask_for_recommendations(batch, dirs, root_name, descriptions), progress)
 
 
 def cached(files, cache_key, root_name):
@@ -93,14 +102,14 @@ def cached(files, cache_key, root_name):
     return descriptions, recommendations
 
 
-def _ask(files, cache_key, sorted_tree, progress):
+def _ask(files, cache_key, is_cached, keep, ask, progress):
+    """{relpath: answer} of files: is_cached(entry) of each one's cache entry, or else ask(batch)
+    of the others (BATCH_SIZE at a time) for {relpath: answer}, each kept by keep(entry, answer)"""
     cache = _load_cache()
     found = {}
     needed = []
     for file in files:
-        cached = cache.get(cache_key(file), {})
-        answer = (cached.get('recommendations', {}).get(sorted_tree[1]) if sorted_tree else
-                  cached.get('description') and {'description': cached['description']})
+        answer = is_cached(cache.get(cache_key(file), {}))
         if answer:
             found[file.relpath] = answer
         else:
@@ -109,59 +118,71 @@ def _ask(files, cache_key, sorted_tree, progress):
         if progress is not None:
             progress(start, len(needed))
         batch = needed[start:start + BATCH_SIZE]
-        answers = _ask_claude(batch, sorted_tree)
+        answers = ask(batch)
         # Kept at once, so what was asked isn't asked again if it's stopped
         cache = _load_cache()
         for file in batch:
             answer = answers.get(file.relpath)
-            if answer is None:
-                continue
-            found[file.relpath] = answer
-            entry = cache.setdefault(cache_key(file), {})
-            entry['description'] = answer['description']
-            if sorted_tree:
-                entry.setdefault('recommendations', {})[sorted_tree[1]] = answer
+            if answer is not None:
+                found[file.relpath] = answer
+                keep(cache.setdefault(cache_key(file), {}), answer)
         _save_cache(cache)
     if progress is not None and needed:
         progress(len(needed), len(needed))
     return found
 
 
-def _ask_claude(files, sorted_tree):
-    """{relpath: answer} of what Claude says of files (see _ask())"""
+def _size_text(file):
+    return "size %d bytes" % (file.size,) if file.size is not None else "size unknown"
+
+
+def _ask_for_descriptions(files):
+    """{relpath: {'description'}} of what Claude says of files, reading the ones it may"""
     lines = []
     for number, file in enumerate(files, 1):
         is_read = file.local_path is not None and (file.size or 0) <= MAX_READ_SIZE
         lines.append("%d. %s (%s%s)%s" % (
-            number, file.relpath, "size %d bytes" % (file.size,) if file.size is not None else "size unknown",
-            "" if is_read else ", don't read it", (": read it at %s" % (file.local_path,)) if is_read else ""))
-    task = ("For each file, a description: one short sentence, at most %d words, saying what it is "
-            "(e.g. 'a cat asleep on a red sofa', 'a 2023 tax form for Eliran')." % (MAX_DESCRIPTION_WORDS,))
-    if sorted_tree:
-        dirs, root_name = sorted_tree
-        listed = sorted(dirs, key=lambda relpath: (relpath.count('/'), relpath))[:MAX_DIRS_GIVEN]
-        task += ("\n\nAnd where each belongs in the sorted tree %s, whose dirs are listed below (relative "
-                 "to its root): its destination, an existing dir from the list where one fits, else a "
-                 "new dir to make (a path relative to the root, in the tree's style), and the reason, "
-                 "in a few words. Files that go together (e.g. one trip's photos) should go to one "
-                 "dir.\n\nThe sorted tree's dirs:\n%s" % (root_name, '\n'.join(listed) or "(none yet)"))
-    prompt = "%s\n\nThe files:\n%s" % (task, '\n'.join(lines))
+            number, file.relpath, _size_text(file), "" if is_read else ", don't read it",
+            (": read it at %s" % (file.local_path,)) if is_read else ""))
+    prompt = ("For each file, a description: one short sentence, at most %d words, saying what it is "
+              "(e.g. 'a cat asleep on a red sofa', 'a 2023 tax form for Eliran').\n\nThe files:\n%s" %
+              (MAX_DESCRIPTION_WORDS, '\n'.join(lines)))
     readable = [os.path.dirname(file.local_path) for file in files if file.local_path is not None]
-    result = _run_query(prompt, sorted(set(readable)), _description_schema(sorted_tree is not None),
-                        max_turns=2 * len(files) + 5, model=_model(sorted_tree is not None))
+    result = _run_query(prompt, sorted(set(readable)), _schema(['description']),
+                        max_turns=2 * len(files) + 5, model=_model(False))
+    return {files[number - 1].relpath: {'description': _short(item.get('description', ''))}
+            for number, item in _numbered(result, files)}
+
+
+def _ask_for_recommendations(files, dirs, root_name, descriptions):
+    """{relpath: {'destination', 'reason'}} of where Claude says files go, by what's known of them"""
+    lines = ["%d. %s (%s)%s" % (number, file.relpath, _size_text(file),
+                                ": " + descriptions[file.relpath] if file.relpath in descriptions else "")
+             for number, file in enumerate(files, 1)]
+    listed = sorted(dirs, key=lambda relpath: (relpath.count('/'), relpath))[:MAX_DIRS_GIVEN]
+    prompt = ("Where each of these files belongs in the sorted tree %s, whose dirs are listed below "
+              "(relative to its root): its destination, an existing dir from the list where one fits, "
+              "else a new dir to make (a path relative to the root, in the tree's style), and the "
+              "reason, in a few words. Files that go together (e.g. one trip's photos) should go to "
+              "one dir.\n\nThe files (name, size, and what each is):\n%s\n\nThe sorted tree's dirs:\n%s" %
+              (root_name, '\n'.join(lines), '\n'.join(listed) or "(none yet)"))
+    result = _run_query(prompt, [], _schema(['destination', 'reason']), max_turns=5, model=_model(True),
+                        system_prompt=RECOMMEND_SYSTEM_PROMPT)
     answers = {}
+    for number, item in _numbered(result, files):
+        destination = _clean_destination(item.get('destination', ''))
+        if destination is not None:
+            answers[files[number - 1].relpath] = {'destination': destination,
+                                                  'reason': item.get('reason', '').strip()}
+    return answers
+
+
+def _numbered(result, files):
+    """(number, item) of each of result's answers whose number is one of files'"""
     for item in result.get('files', []):
         number = item.get('number')
         if isinstance(number, int) and 1 <= number <= len(files):
-            answer = {'description': _short(item.get('description', ''))}
-            if sorted_tree:
-                destination = _clean_destination(item.get('destination', ''))
-                if destination is None:
-                    continue
-                answer['destination'] = destination
-                answer['reason'] = item.get('reason', '').strip()
-            answers[files[number - 1].relpath] = answer
-    return answers
+            yield number, item
 
 
 def _short(description):
@@ -186,18 +207,20 @@ def _model(is_recommending):
     return os.environ.get(DESCRIBE_MODEL_ENV_VAR) or os.environ.get(MODEL_ENV_VAR) or DESCRIBE_MODEL
 
 
-def _run_query(prompt, readable_dirs, schema, max_turns, model):
-    """Ask Claude prompt (see SYSTEM_PROMPT), letting it read only (with the Read tool) what's in
-    readable_dirs, and return its answer by schema (a dict). Raises AIError if it can't."""
+def _run_query(prompt, readable_dirs, schema, max_turns, model, system_prompt=SYSTEM_PROMPT):
+    """Ask Claude (model) prompt, letting it read only (with the Read tool) what's in
+    readable_dirs (with none, it gets no tools), and return its answer by schema (a dict). Raises
+    AIError if it can't."""
     try:
         from claude_agent_sdk import ClaudeAgentOptions, ClaudeSDKError, ResultMessage, query
     except ImportError:
         raise AIError("The Claude Agent SDK isn't installed (pip install claude-agent-sdk)")
     options = ClaudeAgentOptions(
         model=model,
-        system_prompt=SYSTEM_PROMPT,
-        # Only reading, and nothing asks the user: what isn't allowed is denied
-        tools=['Read'], allowed_tools=['Read'], permission_mode='dontAsk',
+        system_prompt=system_prompt,
+        # Only reading (if anything), and nothing asks the user: what isn't allowed is denied
+        tools=['Read'] if readable_dirs else [], allowed_tools=['Read'] if readable_dirs else [],
+        permission_mode='dontAsk',
         # Not the user's own Claude Code settings or CLAUDE.md
         setting_sources=[],
         cwd=readable_dirs[0] if readable_dirs else None, add_dirs=readable_dirs[1:],

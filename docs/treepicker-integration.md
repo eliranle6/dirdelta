@@ -39,6 +39,11 @@ Like fzf: dirdelta starts `treepicker`, which draws on the terminal itself
   `picker.Selection`, for `pick_files(on_selection=...)`: the contents check of
   the selected file (`elsewhere.check_contents()`), which sends its preview
   through the same `--preview` pipe as the previews' thread.
+- Keys that don't end the picker: `--notify KEYS` with `--notify-fd FD`, each writing the key,
+  the selection and the picks (`KEY\0SELECTED\0PICKED...\0\0`) for `pick_files(on_notify=...)`:
+  the inbox's `Ctrl-I` (Tab), which describes files in the background. And an `--updates` line
+  with an empty path is a status, shown as a yellow label ("Claude: describing 2 files").
+- While a search filters the tree, Space on a dir picks only the matches under it.
 - The file picker always prints the selected node first (`--print-selection`,
   after `--expect`'s key), so after an action dirdelta shows it again where it
   was (`--select`).

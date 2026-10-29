@@ -17,7 +17,7 @@ class _Answering(object):
         self.answer = answer
         self.prompts = []
 
-    def __call__(self, prompt, readable_dirs, schema, max_turns, model):
+    def __call__(self, prompt, readable_dirs, schema, max_turns, model, system_prompt=None):
         self.prompts.append((prompt, readable_dirs, schema))
         self.models = getattr(self, 'models', []) + [model]
         return {'files': self.answer(prompt)}
@@ -71,17 +71,21 @@ class AITest(unittest.TestCase):
 
     def test_recommendations_per_sorted_tree_and_cleaned(self):
         answering = _Answering(lambda prompt: [
-            {'number': 1, 'description': 'a list', 'destination': '/lists/shopping/', 'reason': 'a list'},
-            {'number': 2, 'description': 'escape', 'destination': '../outside', 'reason': 'no'},
-            {'number': 3, 'description': 'top', 'destination': '', 'reason': 'top level'}])
+            {'number': 1, 'destination': '/lists/shopping/', 'reason': 'a list'},
+            {'number': 2, 'destination': '../outside', 'reason': 'no'},
+            {'number': 3, 'destination': '', 'reason': 'top level'}])
         with mock.patch('dirdelta.ai._run_query', side_effect=answering):
-            found = ai.recommend(self.files(3), self.key, ['lists', 'photos/2024'], 'cloud/me')
-        self.assertEqual(found['f0.txt']['destination'], 'lists/shopping')
+            found = ai.recommend(self.files(3), self.key, ['lists', 'photos/2024'], 'cloud/me',
+                                 {'f0.txt': 'a shopping list'})
+        self.assertEqual(found['f0.txt'], {'destination': 'lists/shopping', 'reason': 'a list'})
         self.assertNotIn('f1.txt', found)
         self.assertEqual(found['f2.txt']['destination'], '')
-        prompt, _, schema = answering.prompts[0]
+        prompt, readable_dirs, schema = answering.prompts[0]
         self.assertIn("The sorted tree's dirs:\nlists\nphotos/2024", prompt)
-        self.assertIn('destination', schema['properties']['files']['items']['required'])
+        # By the descriptions: nothing's read
+        self.assertIn("1. f0.txt (size 10 bytes): a shopping list", prompt)
+        self.assertEqual(readable_dirs, [])
+        self.assertEqual(schema['properties']['files']['items']['required'], ['number', 'destination', 'reason'])
         self.assertEqual(ai.cached(self.files(1), self.key, 'cloud/me')[1]['f0.txt']['destination'],
                          'lists/shopping')
         # Another sorted tree isn't the same recommendation
@@ -92,7 +96,7 @@ class AITest(unittest.TestCase):
         with mock.patch('dirdelta.ai._run_query', side_effect=answering), \
                 mock.patch.dict(os.environ, {}, clear=True):
             ai.describe(self.files(1), self.key)
-            ai.recommend(self.files(1), self.key, [], 'root')
+            ai.recommend(self.files(1), self.key, [], 'root', {})
         self.assertEqual(answering.models, ['claude-haiku-5-5', 'claude-sonnet-5-5'])
         env = {ai.MODEL_ENV_VAR: 'both', ai.RECOMMEND_MODEL_ENV_VAR: 'recommending'}
         with mock.patch.dict(os.environ, env, clear=True):
@@ -123,6 +127,16 @@ class RunQueryTest(unittest.TestCase):
         with mock.patch.object(claude_agent_sdk, 'query', query), \
                 mock.patch.object(claude_agent_sdk, 'ResultMessage', _Result):
             return ai._run_query('the prompt', ['/in', '/in/sub'], {'type': 'object'}, 7, 'the-model')
+
+    def test_with_nothing_to_read_claude_gets_no_tools(self):
+        async def query(prompt, options):
+            self.options = options
+            yield _Result(structured_output={'files': []})
+        with mock.patch.object(claude_agent_sdk, 'query', query), \
+                mock.patch.object(claude_agent_sdk, 'ResultMessage', _Result):
+            ai._run_query('the prompt', [], {'type': 'object'}, 5, 'the-model', system_prompt='sorting')
+        self.assertEqual((self.options.tools, self.options.allowed_tools), ([], []))
+        self.assertEqual(self.options.system_prompt, 'sorting')
 
     def test_claude_may_only_read_and_answers_by_the_schema(self):
         self.assertEqual(self.run_query([_Result(structured_output={'files': []})]), {'files': []})

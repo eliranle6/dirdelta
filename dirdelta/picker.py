@@ -63,7 +63,7 @@ def pick_from_tree(tree, header='', dirs_only=False, root_name=None):
 
 
 def pick_files(rootpath, relpaths, header='', picked=None, label=None, keys='', selected=None,
-               previews=None, on_selection=None, shown_as=None):
+               previews=None, on_selection=None, shown_as=None, notify_keys='', on_notify=None):
     """Let the user pick some of the files at relpaths (relative to rootpath, each dir's files and
     subdirs together, in the order to show them, as dirdiff lists them). Picking a dir picks the
     files under it. Returns a Picked: the picked ones (of relpaths), in that order, and where the
@@ -82,7 +82,12 @@ def pick_files(rootpath, relpaths, header='', picked=None, label=None, keys='', 
     once previews has returned.
 
     shown_as, if given: as pick_option()'s, for files (by relpath) to show otherwise than by their
-    names, e.g. with a description after the name.
+    names, e.g. with a description after the name; and '' for a status to show on the bottom line
+    (e.g. that something's being worked out).
+
+    notify_keys (e.g. '\\t', Ctrl-I): keys that don't end picking, but call on_notify(key, the
+    selected node's relpath, the files picked so far), on another thread, e.g. to start working
+    something out about them in the background.
 
     on_selection, if given, is called on another thread of its own as soon as the picker is shown,
     with a Selection (where the selection is, as it moves) and the same send(), e.g. to work out
@@ -100,9 +105,14 @@ def pick_files(rootpath, relpaths, header='', picked=None, label=None, keys='', 
             picked_file.write(_null_terminated(picked))
             picked_file.flush()
             args += ['--picked', picked_file.name]
+        notify = None
+        if notify_keys and on_notify is not None:
+            files = set(relpaths)
+            notify = (notify_keys, lambda key, selected, picked: on_notify(
+                key, selected, [path for path in picked if path in files]))
         picked_paths = _run(args + ['-'], ('f ' + relpath for relpath in relpaths),
                             shown_as=shown_as, label=label, previews=previews,
-                            on_selection=on_selection)
+                            on_selection=on_selection, notify=notify)
     if picked_paths is None:
         return None
     key = ''
@@ -177,10 +187,11 @@ def _header_args(header):
     return ['--header', header] if header else []
 
 
-def _run(args, input_items, shown_as=None, label=None, previews=None, on_selection=None):
+def _run(args, input_items, shown_as=None, label=None, previews=None, on_selection=None, notify=None):
     """Run treepicker with args and the items (or None) on its stdin, and with shown_as (see
     pick_option()) sending it what to show the items as, and previews and on_selection (see
-    pick_files()) what to show beside them. Returns what was picked, or None if the user quit.
+    pick_files()) what to show beside them, and notify (keys, a function of what they say) what
+    to do on its keys. Returns what was picked, or None if the user quit.
     Every picker shows whether it's a dry run, and then label (text, color), if given."""
     command = [_find_program(), '-0']
     for text, color in [dryrun.label()] + ([label] if label else []):
@@ -211,6 +222,10 @@ def _run(args, input_items, shown_as=None, label=None, previews=None, on_selecti
             jobs.append(functools.partial(_read_selection, pipe('--selection', False), selection))
             jobs.append(functools.partial(preview_sender.run,
                                           lambda send: on_selection(selection, send)))
+    if notify is not None:
+        keys, on_notify = notify
+        command.extend(['--notify', keys])
+        jobs.append(functools.partial(_read_notifications, pipe('--notify-fd', False), on_notify))
     threads = [threading.Thread(target=job, daemon=True) for job in jobs]
     try:
         # From a file, rather than written to a pipe by communicate(): with a sender busy on its
@@ -340,6 +355,27 @@ def _read_selection(fd, selection):
         pass
     finally:
         selection._close()
+
+
+def _read_notifications(fd, on_notify):
+    """Call on_notify(key, selected relpath, picked relpaths) for each of treepicker's --notify
+    records (the key, the selected node's path, the picked ones', each ending with '\\0', and an
+    empty item to end it), until it's gone"""
+    items, pending = [], b''
+    try:
+        for chunk in iter(lambda: os.read(fd, 4096), b''):
+            parts = (pending + chunk).split(b'\0')
+            pending = parts.pop()
+            for part in parts:
+                if part:
+                    items.append(part.decode('utf-8', 'surrogateescape'))
+                    continue
+                if len(items) >= 2:
+                    key, selected, picked = items[0], items[1], items[2:]
+                    on_notify(key, '' if selected == '.' else selected, picked)
+                items = []
+    except OSError:
+        pass
 
 
 class _PreviewSender(object):

@@ -60,13 +60,14 @@ _LABEL_STYLES = {'green': '\033[1;30;42m', 'red': '\033[1;37;41m'}
 
 
 @contextlib.contextmanager
-def progress_screen(title, label=None, is_stoppable=True):
+def progress_screen(title, label=None, is_stoppable=True, wait=True):
     """Show what's printed inside (an action's progress) on the whole screen, under title, which
     stays on the top line while the lines scroll under it. When the action ends, wait for Enter, so
     its report can be read before the next picker covers it.
 
     Ctrl-C inside stops the action (which may catch it itself, to say how far it got). label, a
-    (text, color) pair (e.g. dryrun.label()), starts the top line. Without is_stoppable, the top line
+    (text, color) pair (e.g. dryrun.label()), starts the top line. Without wait, it doesn't wait for
+    Enter (unless it was stopped), e.g. for an action whose results are shown next anyway. Without is_stoppable, the top line
     doesn't offer Ctrl-C (for messages). Without a terminal, the title and the lines are just printed.
     """
     global _is_stopped
@@ -90,14 +91,15 @@ def progress_screen(title, label=None, is_stoppable=True):
         note_stopped()
     finally:
         done = ("Stopped. " if _is_stopped else "Done. ") if is_stoppable else ""
-        # Save the cursor, rewrite the top line, and restore it. What to do first, in case the line
-        # is cut.
-        _write("\0337\033[1;1H" + _top_line("%sPress Enter to continue: %s" % (done, title), label) +
-               "\0338")
-        try:
-            input()
-        except (EOFError, KeyboardInterrupt):
-            pass
+        if wait or _is_stopped:
+            # Save the cursor, rewrite the top line, and restore it. What to do first, in case the
+            # line is cut.
+            _write("\0337\033[1;1H" + _top_line("%sPress Enter to continue: %s" % (done, title), label) +
+                   "\0338")
+            try:
+                input()
+            except (EOFError, KeyboardInterrupt):
+                pass
         # Back to scrolling the whole screen
         _write("\033[r")
 

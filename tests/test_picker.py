@@ -36,6 +36,11 @@ if '--selection' in sys.argv:
     fd = int(sys.argv[sys.argv.index('--selection') + 1])
     for path in os.environ.get('FAKE_PICKER_SELECTIONS', '').split('|'):
         os.write(fd, path.encode() + b'\\0')
+if '--notify-fd' in sys.argv:
+    fd = int(sys.argv[sys.argv.index('--notify-fd') + 1])
+    # Records ('|'-separated items, ';'-separated records), each ended by an empty item
+    for record in os.environ.get('FAKE_PICKER_NOTIFY', '').split(';'):
+        os.write(fd, b''.join(item.encode() + b'\\0' for item in record.split('|')) + b'\\0')
 updates = read_until('--updates', os.environ.get('FAKE_PICKER_WAIT_FOR', ''))
 preview = read_until('--preview', os.environ.get('FAKE_PICKER_PREVIEW_WAIT_FOR', ''))
 with open(os.environ['FAKE_PICKER_LOG'], 'w') as log:
@@ -251,6 +256,17 @@ class PickerTest(unittest.TestCase):
         picker.pick_files('/r', ['a/1.txt'], on_selection=on_selection)
         self.assertEqual(seen[-1], 'a')
         self.assertEqual(self.log_entry('preview'), 'a\tdone\0')
+
+    def test_notify_keys_tell_of_the_selection_and_the_picks(self):
+        os.environ['FAKE_PICKER_NOTIFY'] = '\t|a|a/1.txt|a;\t|.'
+        self.answer('.')
+        notified = []
+        picker.pick_files('/r', ['a/1.txt', 'b.txt'], notify_keys='\t',
+                          on_notify=lambda *args: notified.append(args))
+        args, _ = self.call()
+        self.assertEqual(args[args.index('--notify') + 1], '\t')
+        # The picks are files only (a dir all of whose files are picked is printed too); the root is ''
+        self.assertEqual(notified, [('\t', 'a', ['a/1.txt']), ('\t', '', [])])
 
     def test_a_selection_says_the_picker_is_gone(self):
         selection = picker.Selection()

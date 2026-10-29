@@ -129,22 +129,50 @@ class InboxSortTest(unittest.TestCase):
                          ['none of them has a recommendation yet'])
 
     def ask_claude(self, answers):
-        """Patch ai._run_query to answer with answers ({relpath: answer}) for the files in its prompt"""
-        def run_query(prompt, readable_dirs, schema, max_turns, model):
-            lines = prompt.split('The files:\n')[1].splitlines()
-            return {'files': [dict(answers[line.split('. ', 1)[1].split(' (')[0]], number=number)
-                              for number, line in enumerate(lines, 1)]}
+        """Patch ai._run_query to answer with answers ({relpath: {field: value}}) for the files in its
+        prompt, the fields its schema asks for; its calls are self.queries"""
+        self.queries = []
+
+        def run_query(prompt, readable_dirs, schema, max_turns, model, system_prompt=None):
+            fields = schema['properties']['files']['items']['required'][1:]
+            self.queries.append((fields, model, prompt))
+            lines = prompt.split('The files')[1].split(':\n', 1)[1].split('\n\n')[0].splitlines()
+            relpaths = [line.split('. ', 1)[1].split(' (')[0] for line in lines]
+            return {'files': [dict({field: answers[relpath][field] for field in fields}, number=number)
+                              for number, relpath in enumerate(relpaths, 1)]}
         return mock.patch('dirdelta.ai._run_query', side_effect=run_query)
 
     def test_descriptions_are_shown_after_the_names(self):
         with self.ask_claude({'a.txt': {'description': 'a shopping list'}}):
+            # Described in the background; quitting waits for it
             self.sort([['a.txt'], None], ['Describe 1 file'])
         labels = self.pick_files.call_args.kwargs['shown_as']()
-        self.assertEqual(labels, {'a.txt': 'a.txt  | a shopping list'})
+        self.assertEqual(labels, {'a.txt': 'a.txt  | a shopping list', '': ''})
+        self.assertEqual(self.queries[0][:2], (['description'], ai.DESCRIBE_MODEL))
         # Kept: shown on the next run too, without asking
         with mock.patch('dirdelta.ai._run_query', side_effect=AssertionError('asked again')):
             self.sort([None], [])
         self.assertEqual(self.pick_files.call_args.kwargs['shown_as'](), labels)
+
+    def test_files_being_described_say_so(self):
+        sorter = Sort(self.inbox, self.root)
+        sorter._describing = {'b.jpg'}
+        shown = sorter._shown_as(['a.txt', 'b.jpg'])
+        self.assertEqual(shown, {'b.jpg': 'b.jpg  | ' + inbox.LOOKING, '': 'Claude: describing 1 file'})
+        self.assertIn("Claude is looking at it...", sorter._previews(['b.jpg'])['b.jpg'])
+
+    def test_ctrl_i_describes_the_picked_files_or_the_selected_ones_in_the_background(self):
+        with self.ask_claude({'a.txt': {'description': 'a list'}, 'b.jpg': {'description': 'a cat'},
+                              'trip/c.jpg': {'description': 'a beach'}}):
+            self.sort([None], [])
+            kwargs = self.pick_files.call_args.kwargs
+            self.assertEqual(kwargs['notify_keys'], '\t')
+            kwargs['on_notify']('\t', 'trip', [])
+            self.sorter._finish_describing()
+            self.assertEqual(self.sorter._descriptions, {'trip/c.jpg': 'a beach'})
+            kwargs['on_notify']('\t', 'trip/c.jpg', ['a.txt'])
+            self.sorter._finish_describing()
+        self.assertEqual(sorted(self.sorter._descriptions), ['a.txt', 'trip/c.jpg'])
 
     def test_recommendations_are_shown_and_moved_to(self):
         with self.ask_claude({'b.jpg': {'description': 'a cat', 'destination': 'photos/cats', 'reason': 'a cat photo'},
@@ -152,21 +180,56 @@ class InboxSortTest(unittest.TestCase):
                                              'reason': 'a trip photo'}}):
             self.sort([['b.jpg', 'trip/c.jpg'], ['b.jpg'], ['b.jpg', 'trip/c.jpg'], None],
                       ['Ask Claude', NOTHING, "Move the 2 files to Claude's recommendations (2 dirs)", YES])
-        # The prompt had the sorted tree's dirs (not the inbox's)
+        # Described first (Haiku, reading them), then placed by the descriptions (Sonnet)
+        self.assertEqual([query[:2] for query in self.queries],
+                         [(['description'], ai.DESCRIBE_MODEL), (['destination', 'reason'], ai.RECOMMEND_MODEL)])
+        self.assertIn("b.jpg (size 5 bytes): a cat", self.queries[1][2])
         menus = [call.args[0] for call in self.pick_option.call_args_list]
         # One destination: the menu names it
         self.assertIn("Move the 1 file to Claude's recommendation: %s/photos/cats/" % (self.root,), menus[1])
         self.assertTrue(self.exists('sorted', 'photos', 'cats', 'b.jpg'))
         self.assertTrue(self.exists('sorted', 'photos', 'trips', '2024', 'c.jpg'))
-        lines = self.pick_files.call_args_list[1].kwargs['previews']
+        self.assertIn("  photos/cats/", self.sent_previews(self.pick_files.call_args_list[1])['b.jpg'])
+
+    def sent_previews(self, pick_files_call):
+        """What a picker's previews sent it first (then the picker is gone)"""
         sent = {}
-        lines(lambda found=None, default=None: sent.update(found or {}))
-        self.assertIn("  photos/cats/", sent['b.jpg'])
+
+        def send(found=None, default=None):
+            if sent:
+                raise picker.PickerClosed()
+            sent.update(found or {})
+        with self.assertRaises(picker.PickerClosed):
+            pick_files_call.kwargs['previews'](send)
+        return sent
+
+    def test_the_previews_are_sent_again_as_they_change(self):
+        sorter = Sort(self.inbox, self.root)
+        sends = []
+
+        def send(found=None, default=None):
+            sends.append(dict(found))
+            if len(sends) == 1:
+                sorter._descriptions['a.txt'] = 'a list'
+            elif len(sends) == 3:
+                raise picker.PickerClosed()
+        with mock.patch('dirdelta.inbox.PREVIEWS_INTERVAL', 0), self.assertRaises(picker.PickerClosed):
+            sorter._send_previews(['a.txt', 'b.jpg'], send)
+        self.assertEqual(sorted(sends[0]), ['a.txt', 'b.jpg'])
+        # Only the one that changed
+        self.assertEqual(list(sends[1]), ['a.txt'])
+        self.assertIn("  a list", sends[1]['a.txt'])
+        self.assertEqual(sends[2], {})
 
     def test_claudes_errors_are_said(self):
         with mock.patch('dirdelta.ai._run_query', side_effect=ai.AIError('not logged in')):
             self.sort([['a.txt'], None], ['Describe 1 file'])
-        inbox.messages.print_line.assert_any_call('not logged in', 'red')
+            self.assertEqual(self.sorter._failed, {'a.txt': 'not logged in'})
+            self.assertEqual(self.sorter._shown_as(['a.txt'])[''], "Claude: couldn't describe 1 file")
+            self.assertIn("  not logged in", self.sorter._previews(['a.txt'])['a.txt'])
+            # Asking where they go says so on a screen of its own
+            self.sort([['a.txt'], None], ['Ask Claude'])
+        self.assertEqual(self.show.call_args.args[:2], ("Claude couldn't say where they go", ['not logged in']))
 
     def test_the_sorted_trees_dirs_for_claude_leave_the_inbox_out(self):
         os.makedirs(os.path.join(self.root, 'unsorted', 'deep'))

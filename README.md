@@ -79,10 +79,14 @@ An inbox is a dir of files not sorted yet; the sorted tree is where they go (loc
 Drive folders; choosing it, the replicas you sync are offered too). The inbox's picker works like a sync's: pick files with `Space`, press
 `Enter`, and choose what to do with them, with "Nothing" selected first:
 
-- "Describe N files with Claude": a short description of each (at most 10 words), shown after its
-  name in the picker (`a.txt  | a shopping list`), and searchable.
-- "Ask Claude where N files go": Claude is given the sorted tree's dirs, and recommends a dir for
-  each file (an existing one, or a new one), with a reason, shown beside the file.
+- "Describe N files with Claude" (or `Ctrl-I` in the picker, on the picked files, or else the
+  selected file or dir): a short description of each (at most 10 words, by Claude Haiku, which reads
+  the files), shown after its name in the picker (`a.txt  | a shopping list`), and searchable. It's
+  done in the background: you go on picking, the files say "(Claude is looking at it...)" until
+  their descriptions come, and the bottom line says what Claude is doing.
+- "Ask Claude where N files go": their descriptions first (the missing ones), then Claude Sonnet is
+  given them and the sorted tree's dirs, and recommends a dir for each file (an existing one, or a
+  new one), with a reason, shown beside the file. It reads nothing itself.
 - "Move the N files to Claude's recommendation" (naming the dir, when they all go to one), "Move the N
   files to..." (pick a dir in the sorted tree), "Copy the N files to...", and "Remove the N files"
   (asked twice).
@@ -123,7 +127,8 @@ DRYRUN=0 .venv/bin/python3 -m dirdelta /tmp/dd/alpha /tmp/dd/bravo    # Copy, Re
 ```
 
 The menu offers, for each direction, "Files in A, not in B" (with how many there are). Choose one,
-pick files with `Space` (on a directory it picks everything under it), and press `Enter`. A
+pick files with `Space` (on a directory it picks everything under it, or while a search filters
+the tree, the matches under it), and press `Enter`. A
 directory is marked picked (`X`, red) when everything under it is, and partly picked (`-`, magenta)
 when only some of it is. Beside the tree, a column shows, for the selected file, where B has files
 of the same name, and for a big file, of its size with another name (found while you look, with

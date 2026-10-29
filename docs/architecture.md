@@ -73,8 +73,15 @@ copied. Either way the inbox and the root are `keep_dirs()` (never removed
 when left empty, never moved or trashed whole). `run()` is a loop like
 `InteractiveDirSync.browse()`: `pick_files` of the inbox's files, with
 Claude's descriptions as their tags (`shown_as`, through `--updates`: "name
-| description") and its recommendations in the preview column, both kept in
-`ai.CACHE_FILE` and loaded at each pick; Enter → `_act()`, the action menu
+| description", or "(Claude is looking at it...)", and the status, Claude's
+work, on the bottom line) and its recommendations in the preview column (sent
+again as they change, `_send_previews()`), both kept in `ai.CACHE_FILE` and
+loaded at each pick. Describing is in the background
+(`describe_in_background()`: a queue and one worker thread, a batch at a
+time, its Drive downloads and the screen's Drive changes one at a time,
+`_drive_lock`), from `Ctrl-I` (`pick_files(notify_keys='\t')`, treepicker's
+`--notify`: the picked files, or else the selected file or dir's) or the
+menu; quitting waits for it (`_finish_describing()`); Enter → `_act()`, the action menu
 (`NOTHING` first): describe, ask where they go, move to the recommendations
 (naming the dir when there's one), move to / copy to a picked dir
 (`pick_under_dir(dirs_only, lazy)`, or `pick_from_tree` of the sorted tree
@@ -84,8 +91,12 @@ is from beside it; files of one name to one dir are refused), then No/Yes,
 then `move_files()` / `copy_files_within()` (local `shutil.copy2`, Drive's
 `files().copy`) on a progress screen. `r` refreshes the selected Drive
 folder, as a sync's does.
-`ai.describe()` / `ai.recommend()` ask Claude about `ai.File`s (relpath, a
-local path to read, size), `BATCH_SIZE` a request, through the Claude Agent
+`ai.describe()` asks Claude (Haiku) about `ai.File`s (relpath, a local path
+to read, size), `BATCH_SIZE` a request, reading them; `ai.recommend()` asks
+Claude (Sonnet) where they go by their names, sizes and descriptions
+(`_recommend()` gets the missing descriptions first, and its progress screen
+goes by itself when it's done), reading nothing (no tools); both through the
+Claude Agent
 SDK, descriptions of `DESCRIBE_MODEL` (Haiku) and recommendations of
 `RECOMMEND_MODEL` (Sonnet), each overridable by an env var (`_model()`)
 (`_run_query()`: `query()` with tools and allowed tools only `Read`,

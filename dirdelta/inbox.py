@@ -7,11 +7,14 @@ When the inbox and the sorted tree are both local dirs, or both in Drive, the fi
 one tree that has both (their common dir, or Drive's), so a move is a rename (in Drive, one request
 that keeps the file's id). When one is local and the other in Drive, a move is a copy (an upload or
 a download, as a sync's), then the file's removal from the inbox, once it's there."""
+import collections
 import os
 import posixpath
 import subprocess
 import tempfile
 import textwrap
+import threading
+import time
 
 from dirdelta import ai
 from dirdelta import clouddirtree
@@ -31,6 +34,14 @@ from dirdelta import replicas
 LABEL = ('SORT', 'cyan')
 # How wide the preview column's wrapped lines are, at most
 PREVIEW_WIDTH = 40
+# How often the picker's previews are looked at for changes (Claude's descriptions coming in), and
+# how often Ask where they go looks whether the descriptions it waits for came, in seconds
+PREVIEWS_INTERVAL = 0.3
+DESCRIBED_WAIT_INTERVAL = 0.2
+# The key that describes the picked files (or the selected one) with Claude, in the background
+DESCRIBE_KEY = '\t'
+# What a file being described is shown as, after its name
+LOOKING = "(Claude is looking at it...)"
 
 
 class InboxError(Exception):
@@ -103,6 +114,15 @@ class InboxSort(object):
         # What Claude said of the inbox's files, by relpath (in the inbox)
         self._descriptions = {}
         self._recommendations = {}
+        # The files being described (in the background), the queue of them, and the worker; and why
+        # the ones that couldn't be weren't
+        self._describing = set()
+        self._queue = collections.deque()
+        self._worker = None
+        self._state_lock = threading.Lock()
+        self._failed = {}
+        # Drive is asked one request at a time: the describer's downloads and the screen's changes
+        self._drive_lock = threading.Lock()
 
     # The inbox's files
 
@@ -138,8 +158,9 @@ class InboxSort(object):
         """Let the user pick some of the inbox's files, then choose what to do with them (_act()),
         and back to the picker, where they were, until they quit, or the inbox is empty"""
         header = ("Files in %s, to sort into %s. Pick some, then choose what to do with them:\n"
-                  "(To pick a file, press Space. When finished, press Enter.%s After a '|': what "
-                  "Claude says it is.)" %
+                  "(To pick a file, press Space. When finished, press Enter. Ctrl-I: Claude describes "
+                  "the picked files, or the selected one, while you go on.%s After a '|': what Claude "
+                  "says it is.)" %
                   (self.inbox_path, self.root_path,
                    " %s: read the selected folder anew from Google Drive." % (self.REFRESH_KEY,)
                    if self.inbox_is_cloud else ""))
@@ -151,18 +172,21 @@ class InboxSort(object):
                               dryrun.label())
                 return
             self._load_cached(files)
-            labels = self._labels(files)
-            previews = self._previews(files)
             chosen = picker.pick_files(
                 self.inbox_path, files, header=header, picked=picked, label=LABEL,
                 keys=self.REFRESH_KEY if self.inbox_is_cloud else '', selected=selected,
-                previews=lambda send, previews=previews: send(previews, default=[]),
-                shown_as=lambda labels=labels: labels)
+                previews=lambda send, files=files: self._send_previews(files, send),
+                shown_as=lambda files=files: self._shown_as(files),
+                notify_keys=DESCRIBE_KEY,
+                on_notify=lambda key, selected, picked, files=files: self.describe_in_background(
+                    picked or [relpath for relpath in files if _is_at_or_under(relpath, selected)]))
             if chosen is None:
+                self._finish_describing()
                 return
             selected = chosen.selected
             if chosen.key == self.REFRESH_KEY:
-                interactive_dir_sync.refresh_replica(self._inbox_tree, self._full(selected))
+                with self._drive_lock:
+                    interactive_dir_sync.refresh_replica(self._inbox_tree, self._full(selected))
                 picked = chosen.files
                 continue
             done = self._act(chosen.files)
@@ -174,10 +198,32 @@ class InboxSort(object):
             left = [relpath for relpath in self._inbox_files()]
             selected = _shown(selected, left)
 
-    def _labels(self, relpaths):
-        """{relpath: what the picker shows it as}: its name, and Claude's description, if any"""
-        return {relpath: "%s  | %s" % (os.path.basename(relpath), self._descriptions[relpath])
-                for relpath in relpaths if relpath in self._descriptions}
+    def _shown_as(self, relpaths):
+        """{relpath: what the picker shows it as}: its name, and Claude's description, if any (or
+        that Claude's looking at it); and '': the status, what Claude is doing"""
+        shown = {}
+        for relpath in relpaths:
+            if relpath in self._descriptions:
+                shown[relpath] = "%s  | %s" % (os.path.basename(relpath), self._descriptions[relpath])
+            elif relpath in self._describing:
+                shown[relpath] = "%s  | %s" % (os.path.basename(relpath), LOOKING)
+        describing = len(self._describing)
+        failed = len([relpath for relpath in relpaths if relpath in self._failed])
+        shown[''] = ("Claude: describing %s" % (_files(describing),) if describing else
+                     "Claude: couldn't describe %s" % (_files(failed),) if failed else '')
+        return shown
+
+    def _send_previews(self, relpaths, send):
+        """Send the picker the files' previews, and again as they change (Claude's descriptions
+        coming in), until it's gone"""
+        sent = {}
+        while True:
+            changed = {relpath: lines for relpath, lines in self._previews(relpaths).items()
+                       if sent.get(relpath) != lines}
+            # Sent even with nothing to send: it raises PickerClosed once the picker is gone
+            send(changed, default=[] if not sent else None)
+            sent.update(changed)
+            time.sleep(PREVIEWS_INTERVAL)
 
     def _previews(self, relpaths):
         """{relpath: lines} beside the picker: the file's size, and what Claude said of it"""
@@ -187,6 +233,10 @@ class InboxSort(object):
             lines = ["This one: %s" % (elsewhere.format_size(size),)] if size is not None else []
             if relpath in self._descriptions:
                 lines += ["", "Claude says it's:"] + _wrapped(self._descriptions[relpath], "  ")
+            elif relpath in self._describing:
+                lines += ["", "Claude is looking at it..."]
+            elif relpath in self._failed:
+                lines += ["", "Claude couldn't describe it:"] + _wrapped(self._failed[relpath], "  ")
             recommendation = self._recommendations.get(relpath)
             if recommendation:
                 # Relative to the sorted tree, so a long root doesn't hide where in it
@@ -204,7 +254,8 @@ class InboxSort(object):
         confirm. Returns the ones done (moved, copied, removed; in a dry run, the ones it would have
         done), or None if none were (or Claude was asked: nothing moved)."""
         count = _files(len(relpaths))
-        undescribed = [relpath for relpath in relpaths if relpath not in self._descriptions]
+        undescribed = [relpath for relpath in relpaths
+                       if relpath not in self._descriptions and relpath not in self._describing]
         unrecommended = [relpath for relpath in relpaths if relpath not in self._recommendations]
         recommended = [relpath for relpath in relpaths if relpath in self._recommendations]
         destinations = sorted({self._recommendations[relpath]['destination'] for relpath in recommended})
@@ -213,9 +264,10 @@ class InboxSort(object):
         else:
             to = "Claude's recommendations (%d dirs)" % (len(destinations),)
         options = {
-            self.DESCRIBE: ("Describe %s with Claude (sends it their contents)" % (_files(len(undescribed)),),
-                            None if undescribed else "they all have a description"),
-            self.RECOMMEND: ("Ask Claude where %s go in %s (sends it their contents)" %
+            self.DESCRIBE: ("Describe %s with Claude, while you go on (sends it their contents; or Ctrl-I)" %
+                            (_files(len(undescribed)),),
+                            None if undescribed else "they all have a description, or are being described"),
+            self.RECOMMEND: ("Ask Claude where %s go in %s (describing them first)" %
                              (_files(len(unrecommended)), self.root_path),
                              None if unrecommended else "they all have a recommendation"),
             self.MOVE_RECOMMENDED: ("Move %s to %s" % ("the " + count if len(recommended) == len(relpaths) else
@@ -231,8 +283,11 @@ class InboxSort(object):
                                     header="%s picked in %s. What to do with them?" % (count, self.inbox_path),
                                     shown_as=lambda: disabled, label=LABEL)
         action = next((action for action, (label, _) in options.items() if label == answer), None)
-        if action in (self.DESCRIBE, self.RECOMMEND):
-            self._ask_claude(action, undescribed if action == self.DESCRIBE else unrecommended)
+        if action == self.DESCRIBE:
+            self.describe_in_background(undescribed)
+            return None
+        if action == self.RECOMMEND:
+            self._recommend(unrecommended)
             return None
         if action == self.MOVE_RECOMMENDED:
             return self._approve(self.MOVE_TO, [(relpath, self._recommendations[relpath]['destination'])
@@ -249,35 +304,93 @@ class InboxSort(object):
 
     # Claude
 
-    def _ask_claude(self, action, relpaths):
-        """Ask Claude to describe the files at relpaths (DESCRIBE), or where they go (RECOMMEND), on
-        a progress screen (Ctrl-C stops it: what it said so far is kept)"""
-        what = "Describing" if action == self.DESCRIBE else "Asking where they go:"
-        with messages.progress_screen("%s %s with Claude" % (what, _files(len(relpaths))), dryrun.label()):
-            with tempfile.TemporaryDirectory(prefix='dirdelta-ai-') as temp_dir:
-                try:
-                    files = self._ai_files(relpaths, temp_dir)
-                    progress = lambda done, total: messages.print_progress(
-                        "Claude has looked at %d of %d files" % (done, total))
-                    if action == self.DESCRIBE:
-                        self._descriptions.update(ai.describe(files, self._cache_key, progress))
-                    else:
-                        recommendations = ai.recommend(files, self._cache_key, self._root_dirs(),
-                                                       self.root_path, progress)
-                        self._recommendations.update(recommendations)
-                        self._descriptions.update({relpath: recommendation['description']
-                                                   for relpath, recommendation in recommendations.items()})
-                    messages.print_line("")
-                    messages.print_line("Done: what Claude said is shown in the picker.")
-                except ai.AIError as error:
-                    messages.print_line("")
-                    messages.print_line(str(error), "red")
-                except KeyboardInterrupt:
-                    messages.note_stopped()
+    def describe_in_background(self, relpaths):
+        """Have Claude describe the files at relpaths that have no description (and aren't being
+        described), on a thread of its own, a batch at a time, while the user goes on: each picker
+        shows them as they come"""
+        with self._state_lock:
+            new = [relpath for relpath in relpaths
+                   if relpath not in self._descriptions and relpath not in self._describing]
+            for relpath in new:
+                self._failed.pop(relpath, None)
+            self._describing.update(new)
+            self._queue.extend(new)
+            if new and self._worker is None:
+                self._worker = threading.Thread(target=self._describe_queued, daemon=True)
+                self._worker.start()
 
-    def _ai_files(self, relpaths, temp_dir):
+    def _describe_queued(self):
+        """Describe the queued files, a batch at a time, until there are none (on the describer's
+        thread: nothing is printed, as a picker may have the screen)"""
+        while True:
+            with self._state_lock:
+                if not self._queue:
+                    self._worker = None
+                    return
+                batch = [self._queue.popleft() for _ in range(min(ai.BATCH_SIZE, len(self._queue)))]
+            try:
+                with tempfile.TemporaryDirectory(prefix='dirdelta-ai-') as temp_dir:
+                    with self._drive_lock:
+                        files = self._ai_files(batch, temp_dir, is_quiet=True)
+                    found = ai.describe(files, self._cache_key)
+                self._descriptions.update(found)
+                for relpath in batch:
+                    if relpath not in found:
+                        self._failed[relpath] = "Claude gave no description of it."
+            except Exception as error:
+                for relpath in batch:
+                    self._failed[relpath] = str(error)
+            finally:
+                with self._state_lock:
+                    self._describing.difference_update(batch)
+
+    def _finish_describing(self):
+        """Wait for the files being described, if any, on a progress screen (Ctrl-C stops waiting:
+        what Claude said so far is kept)"""
+        if not self._describing:
+            return
+        with messages.progress_screen("Claude is still describing %s" % (_files(len(self._describing)),),
+                                      dryrun.label(), wait=False):
+            try:
+                while self._describing:
+                    messages.print_progress("Waiting for Claude: %s left" % (_files(len(self._describing)),))
+                    time.sleep(DESCRIBED_WAIT_INTERVAL)
+            except KeyboardInterrupt:
+                messages.note_stopped()
+
+    def _recommend(self, relpaths):
+        """Ask Claude where the files at relpaths go, on a progress screen (Ctrl-C stops it: what it
+        said so far is kept): their descriptions first (the ones being described in the background
+        waited for, the others described too), then where they go, by them. The screen goes once
+        it's done, unless something went wrong, which is shown."""
+        error = None
+        with messages.progress_screen("Asking Claude where %s go in %s" % (_files(len(relpaths)), self.root_path),
+                                      dryrun.label(), wait=False):
+            try:
+                self.describe_in_background(relpaths)
+                while True:
+                    waiting = [relpath for relpath in relpaths if relpath in self._describing]
+                    if not waiting:
+                        break
+                    messages.print_progress("Claude is describing them first: %d of %d done" %
+                                            (len(relpaths) - len(waiting), len(relpaths)))
+                    time.sleep(DESCRIBED_WAIT_INTERVAL)
+                messages.print_line("")
+                files = [ai.File(relpath, None, self._size(relpath)) for relpath in relpaths]
+                self._recommendations.update(ai.recommend(
+                    files, self._cache_key, self._root_dirs(), self.root_path, self._descriptions,
+                    lambda done, total: messages.print_progress("Claude has placed %d of %d files" % (done, total))))
+            except ai.AIError as error_:
+                error = str(error_)
+            except KeyboardInterrupt:
+                messages.note_stopped()
+        if error is not None:
+            messages.show("Claude couldn't say where they go", [error], dryrun.label(), 'red')
+
+    def _ai_files(self, relpaths, temp_dir, is_quiet=False):
         """ai.File of each of the inbox's files at relpaths: a Drive one downloaded into temp_dir
-        first (one at a time), unless it's too big to be read, or a Google file"""
+        first (one at a time), unless it's too big to be read, or a Google file. With is_quiet, it
+        prints nothing (a picker may have the screen)."""
         files = []
         for number, relpath in enumerate(relpaths, 1):
             size = self._size(relpath)
@@ -287,12 +400,15 @@ class InboxSort(object):
             elif (size or 0) <= ai.MAX_READ_SIZE and self._inbox_tree.cant_fetch(self._full(relpath)) is None:
                 local_path = os.path.join(temp_dir, relpath)
                 os.makedirs(os.path.dirname(local_path), exist_ok=True)
-                messages.print_progress("Downloading %d of %d files for Claude: %s" % (number, len(relpaths), relpath))
+                if not is_quiet:
+                    messages.print_progress("Downloading %d of %d files for Claude: %s" %
+                                            (number, len(relpaths), relpath))
                 try:
                     self._inbox_tree.fetch_file(self._full(relpath), local_path)
                 except OSError as error:
-                    messages.print_line("Couldn't download %s (%s): Claude goes by its name" % (relpath, error),
-                                        "yellow")
+                    if not is_quiet:
+                        messages.print_line("Couldn't download %s (%s): Claude goes by its name" %
+                                            (relpath, error), "yellow")
                     local_path = None
             files.append(ai.File(relpath, local_path, size))
         return files
@@ -383,7 +499,8 @@ class InboxSort(object):
             return None
         moves = [(self._full(relpath), _join(self._root_rel, destination, os.path.basename(relpath)))
                  for relpath, destination in plan]
-        with messages.progress_screen(summary + (" (a dry run)" if dryrun.DRYRUN else ""), dryrun.label()):
+        with messages.progress_screen(summary + (" (a dry run)" if dryrun.DRYRUN else ""), dryrun.label()), \
+                self._drive_lock:
             if self.is_one_tree:
                 done = (self._inbox_tree.move_files(moves) if action == self.MOVE_TO else
                         self._inbox_tree.copy_files_within(moves))
@@ -444,7 +561,7 @@ class InboxSort(object):
         file_entries = self._entries(self._full(relpath) for relpath in relpaths)
         with messages.progress_screen("Removing %s from %s%s" % (_files(len(relpaths)), self.inbox_path,
                                                                 " (a dry run)" if dryrun.DRYRUN else ""),
-                                      dryrun.label()):
+                                      dryrun.label()), self._drive_lock:
             self._inbox_tree.remove_files(file_entries)
         if dryrun.DRYRUN:
             return relpaths
