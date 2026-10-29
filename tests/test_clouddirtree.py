@@ -111,6 +111,13 @@ class CloudDirTreeTest(unittest.TestCase):
         self.assertIsNone(tree.file_size('song.mp3'))
         self.assertIsNone(tree.file_size('Budget.gsheet'))
 
+    def test_modification_times_are_the_caches(self):
+        with open(self.cache, 'a') as f:
+            f.write(json.dumps(dict(_item('t', 't.mp3', 'mein'), modifiedTime='2024-07-01T14:03:22.000Z')) + '\n')
+        tree = clouddirtree.factory('cloud/mein')
+        self.assertEqual(tree.modified_time('t.mp3'), 1719842602)
+        self.assertIsNone(tree.modified_time('song.mp3'))
+
     def test_dates_taken_are_the_caches(self):
         with open(self.cache, 'a') as f:
             f.write(json.dumps(dict(_item('photo', 'x.jpg', 'mein', 'image/jpeg'),
@@ -183,7 +190,9 @@ class CloudDirTreeChangesTest(unittest.TestCase):
         # Each create's body and execute()'s arguments
         self.executed = []
         def execute(body, **kwargs):
-            self.executed.append((body, kwargs))
+            # Without an upload's modification time, which is now (see test_an_upload_keeps_its_time)
+            self.executed.append(({key: value for key, value in body.items() if key != 'modifiedTime'},
+                                  kwargs))
             return self.create_result(body)
         files.create.side_effect = lambda body, **_: mock.Mock(
             execute=lambda **kwargs: execute(body, **kwargs))
@@ -209,8 +218,11 @@ class CloudDirTreeChangesTest(unittest.TestCase):
         self.addCleanup(shutil.rmtree, self.local_dir, ignore_errors=True)
         self.tree = clouddirtree.factory('cloud/mein')
 
-    def creates(self):
-        return [call.kwargs['body'] for call in self.service.files.return_value.create.call_args_list]
+    def creates(self, with_times=False):
+        """What each create was made with (without an upload's modification time, unless with_times)"""
+        return [{key: value for key, value in call.kwargs['body'].items()
+                 if with_times or key != 'modifiedTime'}
+                for call in self.service.files.return_value.create.call_args_list]
 
     def upload(self, relpaths, content='x'):
         """Upload files at relpaths (each with content) from a local dir"""
@@ -231,6 +243,13 @@ class CloudDirTreeChangesTest(unittest.TestCase):
         self.upload(['album/new.mp3'])
         self.assertEqual(self.creates(), [{'name': 'new.mp3', 'parents': ['album']}])
         self.assertIn('album/new.mp3', self.tree)
+
+    def test_an_upload_keeps_its_time(self):
+        helpers.make_files(self.local_dir, ['new.mp3'])
+        os.utime(os.path.join(self.local_dir, 'new.mp3'), (1719842602, 1719842602))
+        self.tree.copy_inner_entries_from_dirtree(dirtree.DirTree.from_file_entries(
+            [entries.FileEntry('new.mp3', 'new.mp3', os.path.join(self.local_dir, 'new.mp3'))], self.local_dir))
+        self.assertEqual(self.creates(with_times=True)[0]['modifiedTime'], '2024-07-01T14:03:22.000000Z')
 
     def test_a_small_file_is_uploaded_in_one_request_and_a_big_one_resumably(self):
         with mock.patch('dirdelta.clouddirtree.RESUMABLE_MIN_SIZE', 5):
@@ -287,6 +306,8 @@ class CloudDirTreeChangesTest(unittest.TestCase):
         self.upload(['new.mp3'])
         with open(self.cache) as f:
             last = json.loads(f.readlines()[-1])
+        # With the modification time it was made with
+        self.assertTrue(last.pop('modifiedTime'))
         self.assertEqual(last, {'id': 'x', 'name': 'new.mp3', 'parents': ['mein'],
                                 'mimeType': 'audio/mpeg', 'size': '3'})
         create = self.service.files.return_value.create
@@ -406,7 +427,8 @@ class CloudDirTreeChangesTest(unittest.TestCase):
         self.tree.remove_files([self.tree.get_node(relpath).data for relpath in relpaths])
 
     def trashed(self):
-        return [call.kwargs['fileId'] for call in self.service.files.return_value.update.call_args_list]
+        return [call.kwargs['fileId'] for call in self.service.files.return_value.update.call_args_list
+                if call.kwargs.get('body') == {'trashed': True}]
 
     def add(self, relpath, cloud_id):
         """Add a file to the tree (and the dirs it's in, each with its name as its id)"""
@@ -532,6 +554,23 @@ class CloudDirTreeChangesTest(unittest.TestCase):
         self.assertFalse(clouddirtree.drivecache.is_stale())
         self.assertIn('Move complete: moved 1 of 1 files in cloud/mein', self.lines())
 
+    def test_a_folder_a_move_leaves_empty_is_trashed(self):
+        # album/ has only track.mp3
+        self.move('album/track.mp3', 'track.mp3')
+        self.assertEqual(self.trashed(), ['album'])
+        self.assertNotIn('album', self.tree)
+        self.assertIn("Moved 1 folders left empty to Drive's trash: album/", self.lines())
+
+    def test_a_folder_drive_has_more_in_isnt_trashed(self):
+        self.listed = lambda query: [{'id': 'unknown', 'parents': ['album']}] if 'album' in query else []
+        self.move('album/track.mp3', 'track.mp3')
+        self.assertEqual(self.trashed(), [])
+        self.assertIn('album', self.tree)
+
+    def test_a_folder_with_more_in_it_isnt_trashed(self):
+        self.move('song.mp3', 'album/song.mp3')
+        self.assertEqual(self.trashed(), [])
+
     def test_move_into_a_new_folder_makes_it(self):
         self.move('song.mp3', 'new/moved.mp3')
         self.assertEqual([body['name'] for body in self.creates()], ['new'])
@@ -576,6 +615,15 @@ class CloudDirTreeChangesTest(unittest.TestCase):
         with open(os.path.join(self.local_dir, 'album', 'track.mp3'), 'rb') as f:
             self.assertEqual(f.read(), b'track content')
         self.assertIn('album/track.mp3', local)
+
+    def test_a_download_gets_drives_modification_time(self):
+        self.tree._modified['album/track.mp3'] = 1719842602
+        def downloader(local_file, request):
+            local_file.write(b'track content')
+            return mock.Mock(next_chunk=mock.Mock(return_value=(None, True)))
+        with mock.patch('dirdelta.clouddirtree.MediaIoBaseDownload', side_effect=downloader):
+            self.download_to_local_dir(['album/track.mp3'])
+        self.assertEqual(os.path.getmtime(os.path.join(self.local_dir, 'album', 'track.mp3')), 1719842602)
 
     def test_a_google_file_isnt_copied_to_a_dir_and_the_rest_are(self):
         self.tree.add_file_by_relpath('Budget.gsheet')

@@ -1,10 +1,14 @@
-"""When a photo was taken, from its EXIF data (DateTimeOriginal), read from a JPEG's header: enough
-to tell two photos of the same name apart, without a library for it. Other formats (HEIC, raw) aren't
-read: their date is unknown."""
+"""When a photo was taken, from its EXIF data (DateTimeOriginal), read from a JPEG's header or a HEIF
+(HEIC) file's EXIF item: enough to tell two photos of the same name apart, without a library for it.
+Other formats (raw) aren't read: their date is unknown."""
+import os
 import struct
 
 # The extensions of the files read (others aren't, to save reading them)
 JPEG_EXTENSIONS = ('.jpg', '.jpeg', '.jpe')
+HEIF_EXTENSIONS = ('.heic', '.heif')
+# The most of a HEIF file's EXIF item read
+MAX_EXIF_SIZE = 1 << 20
 # EXIF tags: the IFD of the EXIF ones, and the dates in it (and IFD0's, a fallback)
 _EXIF_IFD_TAG = 0x8769
 _DATE_TIME_ORIGINAL_TAG = 0x9003
@@ -14,14 +18,15 @@ _STANDALONE_MARKERS = set(range(0xD0, 0xDA)) | {0x01}
 
 
 def date_taken(path):
-    """When the JPEG photo at path was taken, 'YYYY-MM-DD HH:MM:SS', or None if it isn't a JPEG, has
-    no date, or can't be read"""
-    if not path.lower().endswith(JPEG_EXTENSIONS):
+    """When the JPEG or HEIF photo at path was taken, 'YYYY-MM-DD HH:MM:SS', or None if it isn't one,
+    has no date, or can't be read"""
+    lower = path.lower()
+    if not lower.endswith(JPEG_EXTENSIONS + HEIF_EXTENSIONS):
         return None
     try:
         with open(path, 'rb') as f:
-            exif = _exif_segment(f)
-    except OSError:
+            exif = _exif_segment(f) if lower.endswith(JPEG_EXTENSIONS) else _heif_exif(f)
+    except (OSError, struct.error, IndexError, ValueError):
         return None
     if exif is None:
         return None
@@ -64,6 +69,101 @@ def _exif_segment(f):
                 return data[6:]
         else:
             f.seek(length, 1)
+
+
+def _heif_exif(f):
+    """The TIFF data of a HEIF file's EXIF item, or None: the item whose type is 'Exif' (meta box's
+    iinf), at where its extents are in the file (iloc), after its header (the offset of the TIFF
+    header in it, often past an 'Exif\\0\\0')"""
+    end = os.fstat(f.fileno()).st_size
+    meta = next(((start, box_end) for kind, start, box_end in _boxes(f, 0, end) if kind == b'meta'), None)
+    if meta is None:
+        return None
+    # A full box: its version and flags first
+    children = {kind: (start, box_end) for kind, start, box_end in _boxes(f, meta[0] + 4, meta[1])}
+    if b'iinf' not in children or b'iloc' not in children:
+        return None
+    item_id = _exif_item_id(f, *children[b'iinf'])
+    if item_id is None:
+        return None
+    start, box_end = children[b'iloc']
+    f.seek(start)
+    extents = _item_extents(f.read(box_end - start), item_id)
+    if not extents:
+        return None
+    data = b''
+    for offset, length in extents:
+        f.seek(offset)
+        data += f.read(min(length, MAX_EXIF_SIZE - len(data)))
+    header_offset = struct.unpack('>I', data[:4])[0]
+    return data[4 + header_offset:]
+
+
+def _boxes(f, start, end):
+    """Yield (type, data start, end) of the ISO BMFF boxes in f from start to end"""
+    position = start
+    while position + 8 <= end:
+        f.seek(position)
+        size, kind = struct.unpack('>I4s', f.read(8))
+        header_size = 8
+        if size == 1:
+            size = struct.unpack('>Q', f.read(8))[0]
+            header_size = 16
+        elif size == 0:
+            size = end - position
+        if size < header_size:
+            return
+        yield kind, position + header_size, min(position + size, end)
+        position += size
+
+
+def _exif_item_id(f, start, end):
+    """The id of the item of type 'Exif' in the iinf box from start to end, or None"""
+    f.seek(start)
+    version = f.read(4)[0]
+    entries_start = start + 4 + (2 if version == 0 else 4)
+    for kind, infe_start, _ in _boxes(f, entries_start, end):
+        if kind != b'infe':
+            continue
+        f.seek(infe_start)
+        infe_version = f.read(4)[0]
+        if infe_version < 2:
+            continue
+        item_id = struct.unpack('>H' if infe_version == 2 else '>I', f.read(2 if infe_version == 2 else 4))[0]
+        # The protection index, then the type
+        f.read(2)
+        if f.read(4) == b'Exif':
+            return item_id
+    return None
+
+
+def _item_extents(iloc, wanted_id):
+    """The (offset in the file, length) of each extent of the item with wanted_id, from an iloc box's
+    data, or none if it's not there or not in the file itself (construction method 0)"""
+    version = iloc[0]
+    offset_size, length_size = iloc[4] >> 4, iloc[4] & 0xF
+    base_offset_size = iloc[5] >> 4
+    index_size = iloc[5] & 0xF if version in (1, 2) else 0
+    position = 6
+
+    def read(nr_bytes):
+        nonlocal position
+        value = int.from_bytes(iloc[position:position + nr_bytes], 'big') if nr_bytes else 0
+        position += nr_bytes
+        return value
+
+    for _ in range(read(2 if version < 2 else 4)):
+        item_id = read(2 if version < 2 else 4)
+        construction_method = read(2) & 0xF if version in (1, 2) else 0
+        read(2)  # The data reference index
+        base_offset = read(base_offset_size)
+        extents = []
+        for _ in range(read(2)):
+            read(index_size)
+            extents.append((base_offset + read(offset_size), read(length_size)))
+        if item_id == wanted_id:
+            return extents if construction_method == 0 else []
+    return []
 
 
 def _tiff_date(tiff):

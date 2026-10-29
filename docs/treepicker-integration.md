@@ -51,7 +51,9 @@ Like fzf: dirdelta starts `treepicker`, which draws on the terminal itself
   has files of its name): `--preview FD`, a pipe that a thread writes
   `PATH<tab>LINE<tab>LINE...\0` to as it finds them (a tab or newline in a line
   is sent as '?'), and `<tab>LINE...\0` (an empty path) for the nodes without
-  one yet: how far it's got. treepicker shows it in a column on the right (2/5
+  one yet: how far it's got. A line starting with `\x01COLOR\x01` (`picker.highlighted()`)
+  is shown bold on that color across the column ("surely this file, moved").
+  treepicker shows it in a column on the right (2/5
   of the width, on a screen 60 columns wide or more), which `p` hides or shows,
   redrawn as previews come in.
 - Menus: `treepicker -0 --list [--header TEXT] -`, with the labels on stdin

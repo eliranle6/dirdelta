@@ -33,6 +33,16 @@ class PickerError(programs.ProgramError):
 # doing nothing on it
 Disabled = collections.namedtuple('Disabled', ['text'])
 
+# A preview's line starting with it, a label color's name and it again is shown highlighted (see
+# highlighted())
+HIGHLIGHT_MARK = '\x01'
+
+
+def highlighted(text, color='green'):
+    """A pick_files() preview's line, shown bold on color (a --label-color), across the column"""
+    return '%s%s%s%s' % (HIGHLIGHT_MARK, color, HIGHLIGHT_MARK, text)
+
+
 # What pick_files() returns: the key that ended picking ('' for Enter), the selected node's relpath
 # ('' for the root), to show it again there, and the files picked
 Picked = collections.namedtuple('Picked', ['key', 'selected', 'files'])

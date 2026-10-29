@@ -7,6 +7,7 @@ What dirdelta changes in Drive is added to it as it goes (add(), trash()), so it
 a line per file or folder made, and a line with the id of each file moved to the trash. What's under
 a folder is replaced with what Drive lists there now (replace_under()) when it's refreshed."""
 import collections
+import datetime
 import json
 import os
 import posixpath
@@ -35,7 +36,7 @@ ROOT_ID_KEY = 'myDriveRootId'
 # The key of a line with the id of a file that dirdelta moved to the trash since the scan
 TRASHED_ID_KEY = 'trashedId'
 # The fields of a file or folder that the cache has, for the Drive API
-FILE_FIELDS = ('id, name, parents, kind, size, mimeType, sha1Checksum, sha256Checksum, '
+FILE_FIELDS = ('id, name, parents, kind, size, mimeType, modifiedTime, sha1Checksum, sha256Checksum, '
                'imageMediaMetadata(time)')
 # The hashes of a file's contents that Drive gives, by their hashlib names: the fastest to work out
 # first (SHA-1 is about twice as fast as SHA-256), for comparing with a local file
@@ -159,6 +160,25 @@ def hashes(md):
     return {algorithm: md[field] for algorithm, field in HASH_FIELDS if field in md}
 
 
+def modified_time(md):
+    """When the file whose metadata md is was last modified (Drive's modifiedTime), in seconds since
+    the epoch, or None if the cache doesn't have it (lines from before it was asked for)"""
+    modified = md.get('modifiedTime')
+    if not modified:
+        return None
+    try:
+        # RFC 3339, in UTC, e.g. 2024-07-01T14:03:22.123Z
+        return datetime.datetime.strptime(modified.rstrip('Z').split('.')[0], '%Y-%m-%dT%H:%M:%S').replace(
+            tzinfo=datetime.timezone.utc).timestamp()
+    except ValueError:
+        return None
+
+
+def rfc3339(timestamp):
+    """A time (seconds since the epoch) as Drive's modifiedTime takes it"""
+    return datetime.datetime.fromtimestamp(timestamp, datetime.timezone.utc).strftime('%Y-%m-%dT%H:%M:%S.%fZ')
+
+
 def date_taken(md):
     """When the photo whose metadata md is was taken, as exif.date_taken() gives it, or None"""
     taken = md.get('imageMediaMetadata', {}).get('time')
@@ -177,13 +197,14 @@ def path_name(md):
 # What entries() yields: size is a file's size in bytes, or None for a folder or a Google file (which
 # Drive gives none), date_taken a photo's (as exif.date_taken() gives it), if Drive knows it (and
 # the cache has it: lines from before it was asked for don't), and hashes its contents' hashes
-# (see hashes())
+# (see hashes()), and modified when it was last modified (see modified_time())
 Entry = collections.namedtuple('Entry', ['relpath', 'cloud_id', 'is_dir', 'is_google_file', 'size',
-                                         'date_taken', 'hashes'])
+                                         'date_taken', 'hashes', 'modified'])
 
 
 def entries(inner_rootpath):
-    """Yield an Entry (relpath, cloud_id, is_dir, is_google_file, size, date_taken, hashes) for inner_rootpath (a path in the cloud,
+    """Yield an Entry (relpath, cloud_id, is_dir, is_google_file, size, date_taken, hashes, modified)
+    for inner_rootpath (a path in the cloud,
     like /eliran), whose relpath is '', and each file and folder under it, each folder before what's
     in it. relpath is relative to inner_rootpath, and ends with a Google file's extension (see
     path_name()); two entries can have the same one, since Drive allows same-named files. Raises
@@ -202,14 +223,14 @@ def entries(inner_rootpath):
         if _is_at_or_under(folder_path, inner_rootpath):
             if folder_path == inner_rootpath:
                 found = True
-                yield Entry('', folder_cloud_id, True, False, None, None, {})
+                yield Entry('', folder_cloud_id, True, False, None, None, {}, None)
             problems += _name_problems(folder_path, children)
             for md in children:
                 path = posixpath.join(folder_path, path_name(md))
                 is_dir = md.get('mimeType') == FOLDER_MIME_TYPE
                 yield Entry(posixpath.relpath(path, inner_rootpath), md['id'], is_dir, is_google_file(md),
                             int(md['size']) if 'size' in md else None, date_taken(md),
-                            hashes(md))
+                            hashes(md), modified_time(md))
                 if is_dir:
                     dfs_stack.append((md['id'], path))
         else:

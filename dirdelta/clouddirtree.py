@@ -62,8 +62,10 @@ class CloudDirTree(dirtree.DirTree):
         # Each file's size, by its relpath (none for a Google file), and a photo's date taken
         self._sizes = {}
         self._dates_taken = {}
-        # Each file's contents' hashes, as Drive gives them (drivecache.hashes()), by its relpath
+        # Each file's contents' hashes, as Drive gives them (drivecache.hashes()), and when it was last
+        # modified, by its relpath
         self._hashes = {}
+        self._modified = {}
 
     def displayname(self):
         """The cloud path, as given (cloud/mein), rather than the path in Drive (/mein), which
@@ -75,7 +77,7 @@ class CloudDirTree(dirtree.DirTree):
         (or found: drivecache.entries() of it, already read)"""
         if found is None:
             found = drivecache.entries(self.fullpath())
-        for relpath, cloud_id, is_dir, is_google_file, size, date_taken, hashes in found:
+        for relpath, cloud_id, is_dir, is_google_file, size, date_taken, hashes, modified in found:
             if relpath == '':
                 self._cloud_ids[relpath] = cloud_id
                 continue
@@ -94,6 +96,8 @@ class CloudDirTree(dirtree.DirTree):
                     self._dates_taken[relpath] = date_taken
                 if hashes:
                     self._hashes[relpath] = hashes
+                if modified is not None:
+                    self._modified[relpath] = modified
             self._cloud_ids[relpath] = cloud_id
 
     def refresh_from_drive(self, relpath=''):
@@ -113,6 +117,7 @@ class CloudDirTree(dirtree.DirTree):
         self._sizes = {}
         self._dates_taken = {}
         self._hashes = {}
+        self._modified = {}
         self.update_from_cache(found)
         return relpath
 
@@ -128,6 +133,9 @@ class CloudDirTree(dirtree.DirTree):
 
     def known_hashes(self, relpath):
         return tuple(self._hashes.get(relpath, {}))
+
+    def modified_time(self, relpath):
+        return self._modified.get(relpath)
 
     def files_by_name(self, progress=None):
         # A same-named file's relpath has a DUP_SUFFIX, its name doesn't
@@ -162,6 +170,10 @@ class CloudDirTree(dirtree.DirTree):
                     _, is_done = downloader.next_chunk()
         except HttpError as error:
             raise OSError("Download of %s failed: %s" % (relpath, error))
+        # When it was modified, as in Drive, rather than when it was downloaded
+        modified = self.modified_time(relpath)
+        if modified is not None:
+            os.utime(local_path, (modified, modified))
 
     def _copy_files(self, files, source, starting, copied):
         """Upload files (of a local dir: their full paths are on the local disk) into the same
@@ -222,7 +234,9 @@ class CloudDirTree(dirtree.DirTree):
         can't."""
         path = file_entry.full_filesystem_path()
         media = MediaFileUpload(path, resumable=os.path.getsize(path) >= RESUMABLE_MIN_SIZE)
-        body = {'name': os.path.basename(file_entry.relpath), 'parents': [parent_id]}
+        # When it was modified, as on the disk, rather than when it was uploaded
+        body = {'name': os.path.basename(file_entry.relpath), 'parents': [parent_id],
+                'modifiedTime': drivecache.rfc3339(os.path.getmtime(path))}
         created = driveapi.service().files().create(
             body=body, media_body=media, fields=drivecache.FILE_FIELDS).execute(num_retries=NUM_RETRIES)
         return dict(body, **created)
@@ -244,6 +258,8 @@ class CloudDirTree(dirtree.DirTree):
             self._dates_taken[file_entry.relpath] = drivecache.date_taken(md)
         if drivecache.hashes(md):
             self._hashes[file_entry.relpath] = drivecache.hashes(md)
+        if drivecache.modified_time(md) is not None:
+            self._modified[file_entry.relpath] = drivecache.modified_time(md)
         return True
 
     def _make_folders(self, dir_relpaths):
@@ -357,10 +373,34 @@ class CloudDirTree(dirtree.DirTree):
         self.remove_node(relpath)
         self.add_file_by_relpath(new_relpath)
         self._cloud_ids[new_relpath] = self._cloud_ids.pop(relpath)
-        for by_relpath in (self._sizes, self._dates_taken, self._hashes):
+        for by_relpath in (self._sizes, self._dates_taken, self._hashes, self._modified):
             if relpath in by_relpath:
                 by_relpath[new_relpath] = by_relpath.pop(relpath)
         return True
+
+    def _moved(self, moves):
+        """Trash the folders the moves left empty: the topmost of them, each as one, once Drive says
+        it has nothing in them that the tree doesn't (see _folders_holding_more())"""
+        emptied = {os.path.dirname(relpath) for relpath, _ in moves}
+        emptied = {folder for folder in emptied if folder and folder in self and not self.children(folder)}
+        # And the folders that only those are in, up to the root
+        while True:
+            parents = {os.path.dirname(folder) for folder in emptied} - emptied - {''}
+            more = {parent for parent in parents
+                    if all(node.identifier in emptied for node in self.children(parent))}
+            if not more:
+                break
+            emptied |= more
+        topmost = sorted(folder for folder in emptied if os.path.dirname(folder) not in emptied)
+        if not topmost:
+            return
+        holding_more = self._folders_holding_more(topmost)
+        if holding_more is None:
+            return
+        trashed = [folder for folder in topmost if folder not in holding_more and self._trash_folder(folder)]
+        if trashed:
+            messages.print_line("Moved %d folders left empty to Drive's trash: %s" %
+                                (len(trashed), ', '.join(folder + '/' for folder in trashed[:MAX_LISTED])))
 
     def removal_notes(self, relpaths):
         lines = []

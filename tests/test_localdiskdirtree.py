@@ -81,7 +81,7 @@ class LocalDiskDirTreeTest(unittest.TestCase):
             src.add_file_by_relpath(name)
         dst = localdiskdirtree.LocalDiskDirTree(self.dst_root, silent=True)
 
-        real_copy = localdiskdirtree.shutil.copy
+        real_copy = localdiskdirtree.shutil.copy2
 
         def copy(source, dest):
             if source.endswith('2.txt'):
@@ -92,7 +92,7 @@ class LocalDiskDirTreeTest(unittest.TestCase):
 
         printed = []
         with mock.patch('dirdelta.dryrun.DRYRUN', False), \
-                mock.patch('dirdelta.localdiskdirtree.shutil.copy', side_effect=copy), \
+                mock.patch('dirdelta.localdiskdirtree.shutil.copy2', side_effect=copy), \
                 mock.patch('dirdelta.messages.print_line', side_effect=lambda line, *_: printed.append(line)):
             dst.copy_inner_entries_from_dirtree(src)
 
@@ -114,7 +114,7 @@ class LocalDiskDirTreeTest(unittest.TestCase):
         dst = localdiskdirtree.LocalDiskDirTree(self.dst_root, silent=True)
 
         with mock.patch('dirdelta.dryrun.DRYRUN', False), \
-                mock.patch('dirdelta.localdiskdirtree.shutil.copy', side_effect=KeyboardInterrupt()), \
+                mock.patch('dirdelta.localdiskdirtree.shutil.copy2', side_effect=KeyboardInterrupt()), \
                 mock.patch('dirdelta.messages.print_line'):
             dst.copy_inner_entries_from_dirtree(src)
 
@@ -274,6 +274,20 @@ class LocalDiskDirTreeTest(unittest.TestCase):
         with self.assertRaises(dirtree.HashStopped):
             tree.content_hash('x.txt', 'sha1', should_stop=lambda: True)
         self.assertEqual(tree.local_path('x.txt'), os.path.join(os.path.realpath(self.src_root), 'x.txt'))
+
+    def test_a_copy_keeps_its_modification_time(self):
+        os.makedirs(os.path.join(self.src_root, 'sub'))
+        path = os.path.join(self.src_root, 'sub', 'file.txt')
+        with open(path, 'w') as f:
+            f.write('content')
+        os.utime(path, (1000000, 1000000))
+        src = localdiskdirtree.LocalDiskDirTree(self.src_root, silent=True)
+        src.add_file_by_relpath('sub/file.txt')
+        dst = localdiskdirtree.LocalDiskDirTree(self.dst_root, silent=True)
+        with mock.patch('dirdelta.messages.print_line'), mock.patch('dirdelta.dryrun.DRYRUN', False):
+            dst.copy_inner_entries_from_dirtree(src)
+        self.assertEqual(dst.modified_time('sub/file.txt'), 1000000)
+        self.assertIsNone(dst.modified_time('nope'))
 
     def test_files_by_name_max_depth(self):
         self._scan(['top.txt', 'a/b/deep.txt'])

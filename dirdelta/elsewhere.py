@@ -1,18 +1,22 @@
-"""Where the other replica has a file of the same name as one it lacks, shown beside the file picker
-(picker.pick_files()'s previews), and offered for Rename: the diff is by path only, so a file moved
-(or a dir renamed) in one replica is missing from the other, and the user can tell such a file from
-one that's really missing before acting on it.
+"""Where the other replica has a file that a replica lacks, moved or renamed, shown beside the file
+picker (picker.pick_files()'s previews), and offered for Rename: the diff is by path only, so a file
+moved (or a dir renamed) in one replica is missing from the other, and the user can tell such a file
+from one that's really missing before acting on it.
 
-A match is likelier the more of these it has: the same size, the same date taken (photos), and the
-file's siblings (the other missing files of its dir, a few of them tried) in its dir too, as when a
-dir was moved or renamed; and then the closer its size is. For the selected file, the same-sized
-ones' contents are compared too (check_contents()): one with the same contents is surely it, and the
-others are dropped."""
+The candidates are the other replica's files of the same name, and, for a big file, those of its
+size with another name (renamed). A candidate is likelier the more of these it has: the same
+contents (compared for the selected file, with the same-sized candidates only: check_contents(), or
+for all the picked ones before a Rename: check_all()), the same name, the same size, the same date
+taken (photos), the file's siblings (the other missing files of its dir, a few of them tried) in its
+dir too, as when a dir was moved or renamed, the same modification time; and then the closer its
+size is. One with the same contents is surely it, and the others are dropped; one with other
+contents never is, and one with another name is dropped then."""
 import collections
 import os
 import time
 
 from dirdelta import dirtree
+from dirdelta import picker
 
 # How many of a name's files in the other replica a preview lists (a common name, like README.md,
 # may have many): the likeliest to be the file
@@ -21,25 +25,37 @@ MAX_MATCHES = 10
 SEND_INTERVAL = 0.1
 # How many of a file's siblings are looked for in a match's dir: a few say enough
 SIBLINGS_TRIED = 10
+# The smallest file whose files of its size (with other names) are candidates too: smaller sizes
+# are too common to say much
+RENAMED_MIN_SIZE = 64 * 1024
+# How many of them, at most (the first by path)
+MAX_RENAMED = 5
+# Modification times this close are the same (FAT keeps them to 2 seconds), in seconds
+SAME_TIME = 2
+# What says a candidate is surely the file, in its preview: highlighted, so it's seen when it comes
+SURELY_MOVED = picker.highlighted("→ surely this file, moved")
+SURELY_RENAMED = picker.highlighted("→ surely this file, renamed")
 
-# A file of the same name in the other replica: its relpath, size and date taken (or None), how
-# many of the file's siblings (of how many tried) are in its dir too, and whether its contents are
-# the same (None: not compared)
-Match = collections.namedtuple('Match', ['relpath', 'size', 'date_taken', 'siblings_found',
-                                         'siblings_tried', 'same_contents'])
+# A candidate in the other replica: its relpath, size, date taken and modification time (or None),
+# how many of the file's siblings (of how many tried) are in its dir too, whether its contents are
+# the same (None: not compared), and whether it has another name than the file's
+Match = collections.namedtuple('Match', ['relpath', 'size', 'date_taken', 'modified', 'siblings_found',
+                                         'siblings_tried', 'same_contents', 'is_other_name'])
 
 
 class Index(object):
-    """A replica's files by name, built once (in the background, by find_previews(), or by
-    sure_matches()), and then kept up to date as files are copied into the replica, removed from it
-    or moved in it (add(), remove(), move()), rather than built again; or built again after the
-    replica is read anew (invalidate())."""
+    """A replica's files by name (and the big ones by size), built once (in the background, by
+    find_previews(), or by sure_matches()), and then kept up to date as files are copied into the
+    replica, removed from it or moved in it (add(), remove(), move()), rather than built again; or
+    built again after the replica is read anew (invalidate())."""
 
     def __init__(self, replica):
         self.replica = replica
-        # {name: {relpath: size}}, and the names in each dir, once built
+        # {name: {relpath: size}}, the names in each dir, and {size: relpaths} of the big ones
+        # (RENAMED_MIN_SIZE), once built
         self._by_name = None
         self._names_by_dir = None
+        self._by_size = None
         # Dates taken read so far, and contents' hashes ({algorithm: hex}), by relpath
         self._dates_taken = {}
         self._hashes = {}
@@ -54,19 +70,28 @@ class Index(object):
             return
         by_name = {name: dict(files) for name, files in self.replica.files_by_name(progress).items()}
         names_by_dir = collections.defaultdict(set)
+        by_size = collections.defaultdict(set)
         for name, files in by_name.items():
-            for relpath in files:
+            for relpath, size in files.items():
                 names_by_dir[os.path.dirname(relpath)].add(name)
-        self._by_name, self._names_by_dir = by_name, names_by_dir
+                if size is not None and size >= RENAMED_MIN_SIZE:
+                    by_size[size].add(relpath)
+        self._names_by_dir, self._by_size = names_by_dir, by_size
+        # Last: is_built() says it is once all is
+        self._by_name = by_name
 
     def invalidate(self):
-        self._by_name = self._names_by_dir = None
+        self._by_name = self._names_by_dir = self._by_size = None
         self._dates_taken = {}
         self._hashes = {}
 
     def files_named(self, name):
         """{relpath: size} of the files with the name"""
         return self._by_name.get(name, {})
+
+    def files_sized(self, size):
+        """The relpaths of the files of the size, if it's big enough to be in (RENAMED_MIN_SIZE)"""
+        return self._by_size.get(size, set())
 
     def names_in(self, dirpath):
         return self._names_by_dir.get(dirpath, set())
@@ -75,6 +100,9 @@ class Index(object):
         if relpath not in self._dates_taken:
             self._dates_taken[relpath] = self.replica.date_taken(relpath)
         return self._dates_taken[relpath]
+
+    def modified_time(self, relpath):
+        return self.replica.modified_time(relpath)
 
     def content_hash(self, relpath, algorithm, should_stop=None):
         """The file's contents' hash, as the replica's content_hash() gives it (worked out once)"""
@@ -89,15 +117,18 @@ class Index(object):
             name = os.path.basename(relpath)
             self._by_name.setdefault(name, {})[relpath] = size
             self._names_by_dir[os.path.dirname(relpath)].add(name)
+            if size is not None and size >= RENAMED_MIN_SIZE:
+                self._by_size[size].add(relpath)
 
     def remove(self, relpath):
         if self.is_built():
             name = os.path.basename(relpath)
             files = self._by_name.get(name, {})
-            files.pop(relpath, None)
+            size = files.pop(relpath, None)
             if not files:
                 self._by_name.pop(name, None)
             self._names_by_dir.get(os.path.dirname(relpath), set()).discard(name)
+            self._by_size.get(size, set()).discard(relpath)
         self._dates_taken.pop(relpath, None)
         self._hashes.pop(relpath, None)
 
@@ -114,12 +145,27 @@ class Index(object):
             self._hashes[new_relpath] = hashes
 
 
+def _same_sized(relpath, size, index):
+    """The candidates of src's file at relpath of its size (in index): of its name, and if it's big
+    enough, of other names (at most MAX_RENAMED of them), each with whether it's of another name"""
+    if size is None:
+        return {}
+    name = os.path.basename(relpath)
+    found = {match_relpath: False for match_relpath, match_size in index.files_named(name).items()
+             if match_size == size}
+    if size >= RENAMED_MIN_SIZE:
+        renamed = sorted(match_relpath for match_relpath in index.files_sized(size)
+                         if os.path.basename(match_relpath) != name)
+        found.update((match_relpath, True) for match_relpath in renamed[:MAX_RENAMED])
+    return found
+
+
 class _Matcher(object):
-    """Finds the matches of src's missing files at relpaths in the other replica's index"""
+    """Finds the candidates of src's missing files at relpaths in the other replica's index"""
 
     def __init__(self, relpaths, src, index, checked=None):
-        """checked: {relpath: {match relpath: whether its contents are the same}} of the files whose
-        contents were compared (check_contents())"""
+        """checked: {relpath: {candidate relpath: whether its contents are the same}} of the files
+        whose contents were compared (check_contents())"""
         self._src = src
         self._index = index
         self._checked = checked if checked is not None else {}
@@ -143,47 +189,69 @@ class _Matcher(object):
         return self._dates_taken[relpath]
 
     def matches(self, relpath):
-        """The file's matches (Match), the likeliest first"""
+        """The file's candidates (Match), the likeliest first"""
         dirpath, name = os.path.split(relpath)
-        files = self._index.files_named(name)
-        if not files:
-            return []
+        size = self._src.file_size(relpath)
+        candidates = dict(self._index.files_named(name))
+        renamed = {match_relpath for match_relpath, is_other_name
+                   in _same_sized(relpath, size, self._index).items() if is_other_name}
+        candidates.update((match_relpath, size) for match_relpath in renamed)
         checked = self._checked.get(relpath, {})
-        if any(checked.get(match_relpath) for match_relpath in files):
+        if any(checked.get(match_relpath) for match_relpath in candidates):
             # The ones with the same contents are it: the others aren't
-            files = {match_relpath: size for match_relpath, size in files.items() if checked.get(match_relpath)}
-        size, date = self._src.file_size(relpath), self.date_taken(relpath)
+            candidates = {match_relpath: match_size for match_relpath, match_size in candidates.items()
+                          if checked.get(match_relpath)}
+        else:
+            # A file of another name with other contents is just another file
+            candidates = {match_relpath: match_size for match_relpath, match_size in candidates.items()
+                          if not (match_relpath in renamed and checked.get(match_relpath) is False)}
+        if not candidates:
+            return []
+        date = self.date_taken(relpath)
+        modified = self._src.modified_time(relpath)
         tried = [sibling for sibling in self._siblings[dirpath] if sibling != name][:SIBLINGS_TRIED]
         found = []
-        for match_relpath, match_size in files.items():
+        for match_relpath, match_size in candidates.items():
             match_dir = os.path.dirname(match_relpath)
             key = (dirpath, match_dir)
             if key not in self._siblings_in:
                 self._siblings_in[key] = set(self._siblings[dirpath]) & self._index.names_in(match_dir)
             nr_found = sum(1 for sibling in tried if sibling in self._siblings_in[key])
             found.append(Match(match_relpath, match_size, self._index.date_taken(match_relpath),
-                               nr_found, len(tried), checked.get(match_relpath)))
-        return sorted(found, key=lambda match: _unlikeliness(match, size, date))
+                               self._index.modified_time(match_relpath), nr_found, len(tried),
+                               checked.get(match_relpath), match_relpath in renamed))
+        return sorted(found, key=lambda match: _unlikeliness(match, size, date, modified))
 
 
-def _unlikeliness(match, size, date):
+def _is_same_time(time_a, time_b):
+    return time_a is not None and time_b is not None and abs(time_a - time_b) <= SAME_TIME
+
+
+def _unlikeliness(match, size, date, modified):
     """What sorts a match after the likelier ones (see the module's doc), then by path"""
     is_size_known = size is not None and match.size is not None
-    return (match.same_contents is not True, match.same_contents is False,
+    return (match.same_contents is not True, match.same_contents is False, match.is_other_name,
             not (is_size_known and match.size == size),
             not (date is not None and match.date_taken == date),
             -(match.siblings_found / match.siblings_tried if match.siblings_tried else 0),
+            not _is_same_time(match.modified, modified),
             not is_size_known, abs(match.size - size) if is_size_known else 0,
             match.relpath.split('/'))
 
 
 def sure_match(matches, size, date):
-    """Of a file's matches (likeliest first), the one surely the same file, moved, or None: the only
-    one of the same size (and the same date taken, where both are known, and not other contents),
-    or of several, the one with more of its siblings than any other"""
-    same = [match for match in matches
-            if size is not None and match.size == size and match.same_contents is not False and
-            (date is None or match.date_taken is None or match.date_taken == date)]
+    """Of a file's candidates (likeliest first), the one surely the same file, moved or renamed, or
+    None: of the ones with the same contents, the only one, or the one with more of the file's
+    siblings than any other; with none, of the same name, the only one of the same size whose
+    contents weren't found to be other (not compared yet, or they can't be, e.g. a Google file's;
+    so after check_all(), the contents decide where they can), and with the same date taken where
+    both are known, or of several, the one with the most siblings."""
+    same = [match for match in matches if match.same_contents]
+    if not same:
+        same = [match for match in matches
+                if not match.is_other_name and size is not None and match.size == size and
+                match.same_contents is None and
+                (date is None or match.date_taken is None or match.date_taken == date)]
     if len(same) == 1:
         return same[0]
     if len(same) > 1 and same[0].siblings_found > max(match.siblings_found for match in same[1:]):
@@ -206,12 +274,24 @@ def sure_matches(relpaths, src, index, checked=None):
     return found
 
 
+def may_be_elsewhere(relpaths, src, index, checked=None):
+    """Of src's missing files at relpaths, the ones that may be in index (built if it isn't), moved
+    or renamed: with a sure match by what's known now, or with candidates of their size whose
+    contents weren't compared yet (check_all() then says)"""
+    index.build()
+    checked = checked if checked is not None else {}
+    sure = sure_matches(relpaths, src, index, checked)
+    return [relpath for relpath in relpaths
+            if relpath in sure or (relpath not in checked and
+                                   _same_sized(relpath, src.file_size(relpath), index))]
+
+
 def find_previews(relpaths, src, index, send, checked=None):
     """Find, for each of src's files at relpaths (which the other replica, index's, lacks at those
-    paths), where the other replica has files of the same name, and send() them
-    (picker.pick_files()'s previews) as they're found (see _preview()). Until a file's are sent, the
-    picker shows how far it's got: building the index (if it isn't), then matching. Lets
-    picker.PickerClosed go up, once the picker is gone. checked: as _Matcher's."""
+    paths), where the other replica may have it, and send() them (picker.pick_files()'s previews)
+    as they're found (see _preview()). Until a file's are sent, the picker shows how far it's got:
+    building the index (if it isn't), then matching. Lets picker.PickerClosed go up, once the
+    picker is gone. checked: as _Matcher's."""
     dst_name = index.replica.displayname()
     title = ["Looking for files of the same", "names in %s..." % (dst_name,)]
     is_due = _Throttle(SEND_INTERVAL)
@@ -238,12 +318,11 @@ INDEX_WAIT_INTERVAL = 0.2
 
 def check_contents(relpaths, src, src_index, index, checked, selection, send):
     """For each of src's missing files at relpaths as it's selected in the picker (selection, a
-    picker.Selection), compare its contents with those of its matches of the same size in index
-    (once it's built; see _same_contents()), and note which are the same in checked ({relpath:
-    {match relpath: whether the same}}, kept by the caller): then its preview (send()) has only the
-    ones with the same contents, or says which aren't. Each file once: checked has it then. Reading
-    a local file may take a while, so it's stopped when the selection moves on, for the file it's
-    on now. Lets picker.PickerClosed go up, once the picker is gone."""
+    picker.Selection), once index is built: send its preview at once (rather than when
+    find_previews() gets to it), then compare its contents with those of its candidates of its size
+    (_check()), and send its preview again. Each file once: checked has it then. Reading a local
+    file may take a while, so it's stopped when the selection moves on, for the file it's on now.
+    Lets picker.PickerClosed go up, once the picker is gone."""
     missing = set(relpaths)
     matcher = None
     dst_name = index.replica.displayname()
@@ -255,31 +334,56 @@ def check_contents(relpaths, src, src_index, index, checked, selection, send):
                 pending = moved_to
             continue
         relpath, pending = pending, None
-        if relpath not in missing or relpath in checked:
-            continue
-        size = src.file_size(relpath)
-        candidates = [match_relpath for match_relpath, match_size
-                      in index.files_named(os.path.basename(relpath)).items()
-                      if size is not None and match_size == size]
-        if not candidates:
+        if relpath not in missing:
             continue
         matcher = matcher or _Matcher(relpaths, src, index, checked)
+        candidates = _same_sized(relpath, src.file_size(relpath), index)
+        if relpath in checked or not candidates:
+            send({relpath: _preview(relpath, src, dst_name, matcher)})
+            continue
         send({relpath: _preview(relpath, src, dst_name, matcher) +
               ["", "Comparing its contents with the", "%s of its size..." % (_files(len(candidates)),)]})
-        should_stop = lambda: not selection.is_at(relpath)
         try:
-            found = {match_relpath: _same_contents(src, src_index, relpath, index, match_relpath,
-                                                   should_stop)
-                     for match_relpath in candidates}
+            _check(relpath, candidates, src, src_index, index, checked,
+                   lambda: not selection.is_at(relpath))
         except dirtree.HashStopped:
             # Moved on: its preview as it was, and on to where the selection is now
             send({relpath: _preview(relpath, src, dst_name, matcher)})
             pending = selection.wait_next(0)
             continue
-        # Not where it couldn't be told (e.g. a Google file's, which has no hash)
-        checked[relpath] = {match_relpath: is_same for match_relpath, is_same in found.items()
-                            if is_same is not None}
         send({relpath: _preview(relpath, src, dst_name, matcher)})
+
+
+def to_check(relpaths, src, index, checked):
+    """Of src's missing files at relpaths, the ones whose contents weren't compared yet with their
+    candidates of their size in index (built if it isn't), which they have"""
+    index.build()
+    return [relpath for relpath in relpaths
+            if relpath not in checked and _same_sized(relpath, src.file_size(relpath), index)]
+
+
+def check_all(relpaths, src, src_index, index, checked, progress=None):
+    """Compare the contents of each of src's missing files at relpaths that wasn't yet with its
+    candidates of its size in index (built if it isn't), as check_contents() does, calling
+    progress(number, count, relpath) before each (count: how many need it). Stopped by Ctrl-C (it's
+    let go up): what was compared is kept."""
+    needed = to_check(relpaths, src, index, checked)
+    for number, relpath in enumerate(needed, 1):
+        if progress is not None:
+            progress(number, len(needed), relpath)
+        _check(relpath, _same_sized(relpath, src.file_size(relpath), index), src, src_index, index,
+               checked, lambda: False)
+
+
+def _check(relpath, candidates, src, src_index, index, checked, should_stop):
+    """Compare the contents of src's file at relpath with those of candidates (relpaths in index;
+    see _same_contents()), and note which are the same in checked[relpath] (not those where it
+    couldn't be told, e.g. a Google file's, which has no hash). Raises dirtree.HashStopped once
+    should_stop() says to, noting nothing."""
+    found = {match_relpath: _same_contents(src, src_index, relpath, index, match_relpath, should_stop)
+             for match_relpath in candidates}
+    checked[relpath] = {match_relpath: is_same for match_relpath, is_same in found.items()
+                        if is_same is not None}
 
 
 # The hashes that Drive gives (drivecache.HASH_FIELDS), the fastest to work out first
@@ -337,37 +441,69 @@ class _Throttle(object):
 
 
 def _preview(relpath, src, dst_name, matcher):
-    """The lines about src's file at relpath: its size and date taken, and its matches, the
-    likeliest first, each with its dir, size, date taken and siblings found, and which is surely the
-    file, if one is; or that there are none"""
+    """The lines about src's file at relpath: its size, date taken and modification time, and its
+    candidates, the likeliest first, of its name, then of other names, each with its dir, size,
+    date taken, modification time, siblings found and contents, and which is surely the file, if
+    one is; or that there are none"""
     matches = matcher.matches(relpath)
     size = src.file_size(relpath)
-    # Read only for a file with matches: it's to compare
+    # Read only for a file with candidates: they're to compare with
     date = matcher.date_taken(relpath) if matches else None
+    modified = src.modified_time(relpath) if matches else None
     about = [format_size(size)] if size is not None else []
     if date is not None:
         about.append("taken " + date)
     lines = ["This one: " + ", ".join(about)] if about else []
-    if not matches:
-        return lines + ["In %s:" % (dst_name,), "  no file of this name"]
-    lines.append("In %s, likeliest first:" % (dst_name,))
+    if modified is not None:
+        lines.append("  modified " + _format_time(modified))
+    named = [match for match in matches if not match.is_other_name]
+    renamed = [match for match in matches if match.is_other_name]
     sure = sure_match(matches, size, date)
+    if named:
+        lines.append("In %s, likeliest first:" % (dst_name,))
+        lines += _matches_lines(named, size, date, modified, sure, SURELY_MOVED)
+    else:
+        lines += ["In %s:" % (dst_name,), "  no file of this name"]
+    if renamed:
+        lines.append("Of its size, another name:")
+        lines += _matches_lines(renamed, size, date, modified, sure, SURELY_RENAMED)
+    return lines
+
+
+def _matches_lines(matches, size, date, modified, sure, surely):
+    lines = []
     for match in matches[:MAX_MATCHES]:
         dirpath, name = os.path.split(match.relpath)
         lines += ["  %s/" % (dirpath or '.',), "    %s%s" % (name, _size_note(match.size, size))]
         if match.date_taken is not None:
             lines.append("    taken %s%s" % (match.date_taken,
                                              ", the same" if match.date_taken == date else ""))
+        if match.modified is not None:
+            lines.append("    modified %s%s" % (_format_time(match.modified),
+                                                _time_note(match.modified, modified)))
         if match.siblings_tried:
             lines.append("    with %d of %d of its dir's files" % (match.siblings_found,
                                                                    match.siblings_tried))
         if match.same_contents is not None:
             lines.append("    the same contents" if match.same_contents else "    other contents")
         if match is sure:
-            lines.append("    surely this file, moved")
+            lines.append(surely)
     if len(matches) > MAX_MATCHES:
         lines.append("(and %d more)" % (len(matches) - MAX_MATCHES,))
     return lines
+
+
+def _format_time(timestamp):
+    return time.strftime('%Y-%m-%d %H:%M', time.localtime(timestamp))
+
+
+def _time_note(match_modified, modified):
+    """Whether a match's modification time is the same as the file's, or newer, or older"""
+    if modified is None:
+        return ""
+    if _is_same_time(match_modified, modified):
+        return ", the same"
+    return ", newer" if match_modified > modified else ", older"
 
 
 def _files(count):

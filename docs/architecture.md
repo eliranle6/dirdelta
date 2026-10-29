@@ -291,7 +291,8 @@ took ~2.5s; the picker now opens 0.2s after the diff).
   `_copy(files)`/`_remove(files)`; Rename calls the replica's `move_files()`
   (`os.rename` locally, removing the dirs left empty; in Drive, one
   `files().update` with the new name and `addParents`/`removeParents`, which
-  keeps the file's id).
+  keeps the file's id, then the folders left empty trashed, `_moved()`, once
+  Drive says they hold nothing more).
 - `_copy()` rebuilds a `DirTree` from just the selected `FileEntry`s via
   `dirtree.DirTree.from_file_entries` (previously
   miscalled as a `DirTree` classmethod — fixed, known-issues.md #3), then
@@ -365,46 +366,59 @@ Copy's and Remove's file picker and confirmation add their own label after
 it (`InteractiveDirSync.LABELS`: COPY in blue, REMOVE in magenta).
 
 ### `elsewhere.py`, `exif.py`
-`Index(replica)`: a replica's files by name (`{name: {relpath: size}}`, and
-the names in each dir), built once from its `files_by_name(progress)` and
-then kept up to date by `add()`, `remove()` and `move()` as files are copied,
-removed and moved (or dropped with `invalidate()` after a refresh). dst's
-files by name come from: a `DirTree`'s nodes and `file_size()` (None), a
-`CloudDirTree`'s nodes with the cache's sizes (a same-named file's
+`Index(replica)`: a replica's files by name (`{name: {relpath: size}}`, the
+names in each dir, and the big ones by size, `RENAMED_MIN_SIZE`), built once
+from its `files_by_name(progress)` and then kept up to date by `add()`,
+`remove()` and `move()` as files are copied, removed and moved (or dropped
+with `invalidate()` after a refresh); it also keeps the dates taken and the
+contents' hashes worked out. The files by name come from: a `DirTree`'s
+nodes, a `CloudDirTree`'s nodes with the cache's sizes (a same-named file's
 `___DUP__` relpath under its real name), and a `LocalDiskDirTree`'s one
 `find -type f -printf '%s %P'` of the dir (its tree may not be scanned: see
 dirdiff), read as it goes; each calls `progress(count)` now and then.
-`find_previews(relpaths, src, index, send)`, run by `picker.pick_files()` on
-a thread of its own while the picker is shown, builds the index if it isn't,
-then sends, for each missing file, the lines of the file picker's preview
-column: the file's own size and date taken, and its matches (files of the
-same name in the index), likeliest first (`_unlikeliness()`): the same size,
-the same date taken, the most of the file's siblings in the match's dir (a
-few of its dir's missing files, `SIBLINGS_TRIED`, looked up once per pair of
-dirs), then the closest size; at most `MAX_MATCHES`, each with its dir,
-size, date taken and siblings found, and "surely this file, moved" for the
-`sure_match()` (the only one of the same size, and the same date taken where
-both are known, or of several, the one with the most siblings). What's found
-is sent every `SEND_INTERVAL` (0.1s), with how far it's got as the text of
-the files not done yet ("Listed N of its files", then "Matched X of Y
-files"). `send()` raises `picker.PickerClosed` once the picker is gone, which
-stops it (and the `find`). `check_contents()` runs too, on another thread
-(`pick_files(on_selection=...)`, fed by treepicker's `--selection`): for the
-selected file, once the index is built, it compares its contents with its
-same-sized matches' (`_same_contents()`: two local files read side by side up
-to where they differ, no hash; with a Drive file, the fastest hash Drive has
-for it, SHA-1 else SHA-256, worked out for the local one and kept in the
-`Index`), stopped when the selection moves on, and notes the results in the
-way's `checked` (`{relpath: {match: whether the same}}`, kept by
-`dirsync_main._Way`, cleared by a refresh): a match with the same contents
-then drops the others and is the sure one, and one with other contents is
-never sure. Each file is compared once. `sure_matches()` is what Rename
-moves. Dates taken
-are the replicas' `date_taken()`: Drive's `imageMediaMetadata.time` (in the
-cache's lines from 2026-10-29 on: older ones have none until a refresh), or a
-local JPEG's EXIF `DateTimeOriginal` (`exif.date_taken()`, which reads only up
-to the EXIF segment, and only for files with matches); other formats (HEIC)
-have none locally.
+
+A missing file's candidates (`_Matcher.matches()`) are the index's files of
+its name and, for a big file, up to `MAX_RENAMED` of its size with other
+names; ranked (`_unlikeliness()`) by: the same contents, the same name, the
+same size, the same date taken, the most of its siblings in the candidate's
+dir (a few of its dir's missing files, `SIBLINGS_TRIED`, looked up once per
+pair of dirs), the same modification time (within `SAME_TIME`), then the
+closest size. Once compared, one with the same contents drops the others, and
+one of another name with other contents is dropped. `sure_match()`: of the
+ones with the same contents, the only one (or the one with the most
+siblings); else the only one of the same name and size whose contents weren't
+found to be other (and the same date taken). Its preview line is
+highlighted (`SURELY_MOVED`, `SURELY_RENAMED`: `picker.highlighted()`).
+
+`find_previews(relpaths, src, index, send, checked)`, run by
+`picker.pick_files()` on a thread of its own while the picker is shown, builds
+the index if it isn't, then sends each missing file's preview (`_preview()`:
+its size, date taken and modification time, then its candidates of its name,
+then "Of its size, another name", each with its dir, size, date, time ("the
+same", "newer", "older"), siblings found and contents), every `SEND_INTERVAL`
+(0.1s), with how far it's got as the text of the files not done yet ("Listed N
+of its files", then "Matched X of Y files"). `send()` raises
+`picker.PickerClosed` once the picker is gone, which stops it (and the `find`).
+`check_contents()` runs too, on another thread (`pick_files(on_selection=...)`,
+fed by treepicker's `--selection`): for the selected file, once the index is
+built, it sends its preview at once, then compares its contents with its
+same-sized candidates' (`_check()`, `_same_contents()`: two local files read
+side by side up to where they differ, no hash; with a Drive file, the fastest
+hash Drive has for it, SHA-1 else SHA-256, worked out for the local one),
+stopped when the selection moves on, notes the results in the way's `checked`
+(`{relpath: {candidate: whether the same}}`, kept by `dirsync_main._Way`,
+cleared by a refresh) and sends the preview again. Each file is compared once.
+Rename uses `may_be_elsewhere()` (sure, or with candidates to compare) for its
+menu count, then `check_all()` (on a progress screen, Ctrl-C stops it) for
+the picked files not compared yet, then `sure_matches()`.
+
+Dates taken are the replicas' `date_taken()`: Drive's
+`imageMediaMetadata.time`, or a local photo's EXIF `DateTimeOriginal`
+(`exif.date_taken()`: a JPEG's header up to its EXIF segment, or a HEIF
+file's EXIF item, found through its `meta` box's `iinf` and `iloc`), read
+only for files with candidates. Modification times are `modified_time()`:
+`lstat` locally, Drive's `modifiedTime`; copies keep them (`shutil.copy2`,
+`os.utime` after a download, `modifiedTime` in an upload's body).
 
 ### `picker.py`
 Runs `treepicker` (from github.com/eliranle6/treepicker; `$DIRDELTA_PICKER`, or

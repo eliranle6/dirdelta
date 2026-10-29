@@ -198,14 +198,9 @@ class InteractiveDirSync(object):
         user chose nothing (or didn't confirm)."""
         if not self.dst_index.is_built():
             messages.print_line("Looking for files of the same names in %s..." % (self._dst.displayname(),))
-        renames = elsewhere.sure_matches(relpaths, self._src, self.dst_index, self.checked)
-        # Moving dst's matches to the picked files' paths, or the picked files to the matches'
-        moves = {
-            self.RENAME_IN_DST: [(match, relpath) for relpath, match in renames.items()
-                                 if self._dst.cant_move(match) is None],
-            self.RENAME_IN_SRC: [(relpath, match) for relpath, match in renames.items()
-                                 if self._src.cant_move(relpath) is None],
-        }
+        # The ones that may be in dst, moved or renamed: their contents are compared before a Rename
+        may_be_there = elsewhere.may_be_elsewhere(relpaths, self._src, self.dst_index, self.checked)
+        nr_renamed_in_src = sum(1 for relpath in may_be_there if self._src.cant_move(relpath) is None)
         src_name, dst_name = self._src.displayname(), self._dst.displayname()
         count = _files(len(relpaths))
         options = {
@@ -215,14 +210,14 @@ class InteractiveDirSync(object):
                                        "both are Google Drive's",)),
             self.REMOVE: ("Remove the %s from %s" % (count, src_name),
                           None if is_writable(self._src) else "can't: it's read-only"),
-            # Each counts the picked files with a match that's surely them, moved. The replica
-            # last, as in the others, so a long path doesn't hide what it does.
-            self.RENAME_IN_DST: ("Rename the %s matching these to these paths, in %s" %
-                                 (_files(len(moves[self.RENAME_IN_DST])), dst_name),
-                                 self._cant_rename(self._dst, moves[self.RENAME_IN_DST])),
+            # Each counts the picked files that may be in dst, moved or renamed. The replica last,
+            # as in the others, so a long path doesn't hide what it does.
+            self.RENAME_IN_DST: ("Rename the files matching %s of these to these paths, in %s" %
+                                 (len(may_be_there), dst_name),
+                                 self._cant_rename(self._dst, len(may_be_there))),
             self.RENAME_IN_SRC: ("Rename %s of these to their matches' paths, in %s" %
-                                 (_files(len(moves[self.RENAME_IN_SRC])), src_name),
-                                 self._cant_rename(self._src, moves[self.RENAME_IN_SRC])),
+                                 (_files(nr_renamed_in_src), src_name),
+                                 self._cant_rename(self._src, nr_renamed_in_src)),
         }
         disabled = {label: picker.Disabled("%s: %s" % (label, reason))
                     for label, reason in options.values() if reason is not None}
@@ -234,7 +229,8 @@ class InteractiveDirSync(object):
         if action is None:
             return None
         if action in (self.RENAME_IN_DST, self.RENAME_IN_SRC):
-            return self._rename(action, moves[action])
+            moves = self._renames(action, may_be_there)
+            return None if moves is None else self._rename(action, moves)
         if not self._confirm(action, relpaths):
             return None
         files = [self._file_entry(relpath) for relpath in relpaths]
@@ -261,12 +257,50 @@ class InteractiveDirSync(object):
                 self.src_index.remove(relpath)
         return done
 
-    def _cant_rename(self, replica, moves):
+    def _cant_rename(self, replica, count):
         if not is_writable(replica):
             return "can't: it's read-only"
-        if not moves:
-            return "none of these has a file of its name there that's surely it"
+        if not count:
+            return "none of these may be there, moved or renamed"
         return None
+
+    def _renames(self, action, relpaths):
+        """The moves of a Rename (RENAME_IN_DST or RENAME_IN_SRC, see _rename()) of the picked files
+        at relpaths, which may be in dst: their contents compared first, where they weren't (on a
+        progress screen, stoppable), so each is moved only if its match is surely it. None if it's
+        stopped, or none is (which is said)."""
+        to_compare = elsewhere.to_check(relpaths, self._src, self.dst_index, self.checked)
+        if to_compare:
+            is_stopped = False
+            with messages.progress_screen("Comparing the contents of %s with their matches in %s" %
+                                          (_files(len(to_compare)), self._dst.displayname()),
+                                          dryrun.label()):
+                try:
+                    elsewhere.check_all(to_compare, self._src, self.src_index, self.dst_index, self.checked,
+                                        lambda number, count, relpath: messages.print_progress(
+                                            "Comparing %d of %d: %s" % (number, count, relpath)))
+                except KeyboardInterrupt:
+                    messages.note_stopped()
+                    is_stopped = True
+                else:
+                    messages.print_line("")
+                    messages.print_line("Compared %s" % (_files(len(to_compare)),))
+            if is_stopped:
+                return None
+        renames = elsewhere.sure_matches(relpaths, self._src, self.dst_index, self.checked)
+        # Moving dst's matches to the picked files' paths, or the picked files to the matches'
+        if action == self.RENAME_IN_DST:
+            moves = [(match, relpath) for relpath, match in renames.items() if self._dst.cant_move(match) is None]
+        else:
+            moves = [(relpath, match) for relpath, match in renames.items() if self._src.cant_move(relpath) is None]
+        if not moves:
+            messages.show("Nothing to rename",
+                          ["None of the %s is surely in %s, moved or renamed%s." %
+                           (_files(len(relpaths)), self._dst.displayname(),
+                            " (their contents were compared)" if to_compare else "")],
+                          dryrun.label())
+            return None
+        return moves
 
     def _rename(self, action, moves):
         """Move files, each of moves (relpath, new_relpath), in dst (RENAME_IN_DST) or src, once the

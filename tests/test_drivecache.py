@@ -21,7 +21,7 @@ class EntriesTest(unittest.TestCase):
         self.addCleanup(os.remove, self.cache)
 
     def test_the_folder_itself_comes_first(self):
-        self.assertEqual(next(drivecache.entries('/mein')), ('', 'mein', True, False, None, None, {}))
+        self.assertEqual(next(drivecache.entries('/mein')), ('', 'mein', True, False, None, None, {}, None))
 
     def test_entries_under_a_folder(self):
         entries = [entry[:3] for entry in drivecache.entries('/mein')][1:]
@@ -153,6 +153,14 @@ FOLDER = drivecache.FOLDER_MIME_TYPE
 
 def _item(id, name, parent, mime='audio/mpeg'):
     return {'id': id, 'name': name, 'parents': [parent], 'mimeType': mime}
+
+
+class ModifiedTimeTest(unittest.TestCase):
+    def test_drives_modified_time(self):
+        self.assertEqual(drivecache.modified_time({'modifiedTime': '2024-07-01T14:03:22.123Z'}), 1719842602)
+        self.assertIsNone(drivecache.modified_time({}))
+        self.assertIsNone(drivecache.modified_time({'modifiedTime': 'yesterday'}))
+        self.assertEqual(drivecache.rfc3339(1719842602), '2024-07-01T14:03:22.000000Z')
 
 
 class CacheContentsTest(unittest.TestCase):

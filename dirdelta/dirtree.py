@@ -190,6 +190,8 @@ class DirTree(object):
         except KeyboardInterrupt:
             messages.note_stopped()
             is_stopped = True
+        if done:
+            self._moved(done)
         ended = "stopped" if is_stopped else "complete"
         if dryrun.DRYRUN:
             messages.print_line("Dry run %s: nothing was moved in %s (DRYRUN=0 moves)" % (ended, self.displayname()))
@@ -241,6 +243,9 @@ class DirTree(object):
         whether it was moved (if not, says why)."""
         raise NotImplementedError("Can't move files in %s" % (self.displayname(),))
 
+    def _moved(self, moves):
+        """After move_files() did the moves (relpath, new_relpath), e.g. to tidy the dirs they left"""
+
     def cant_move(self, relpath):
         """Why the file at relpath can't be moved (move_files()), or None if it can"""
         return None
@@ -276,6 +281,11 @@ class DirTree(object):
 
     def local_path(self, relpath):
         """The file's path on the local disk, if it's there (to read it), or None"""
+        return None
+
+    def modified_time(self, relpath):
+        """When the file at relpath was last modified (seconds since the epoch), or None if that
+        isn't known"""
         return None
 
     def has_file(self, relpath):

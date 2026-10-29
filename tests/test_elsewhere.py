@@ -14,11 +14,12 @@ import helpers
 
 class _SizedTree(dirtree.DirTree):
     """A DirTree whose files have the given sizes (and dates taken)"""
-    def __init__(self, rootpath, sizes, dates=None, hashes=None):
+    def __init__(self, rootpath, sizes, dates=None, hashes=None, times=None):
         super(_SizedTree, self).__init__(rootpath)
         self._sizes = sizes
         self._dates = dates or {}
         self._hashes = hashes or {}
+        self._times = times or {}
         self.dates_read = []
         self.hashed = []
         for relpath in sizes:
@@ -40,6 +41,9 @@ class _SizedTree(dirtree.DirTree):
 
     def known_hashes(self, relpath):
         return ('sha256',) if self._hashes.get(relpath) else ()
+
+    def modified_time(self, relpath):
+        return self._times.get(relpath)
 
 
 class _Sent(object):
@@ -76,7 +80,7 @@ class FindPreviewsTest(unittest.TestCase):
             "In /dst, likeliest first:",
             "  old/2024/",
             "    x.jpg  2.0 KB, same size",
-            "    surely this file, moved",
+            elsewhere.SURELY_MOVED,
             "  ./",
             "    x.jpg  2000 B",
             "  old/",
@@ -94,7 +98,7 @@ class FindPreviewsTest(unittest.TestCase):
         sizes['z/README'] = 1000
         src = _SizedTree('/src', {'README': 1000})
         lines = _previews(['README'], src, _SizedTree('/dst', sizes)).previews['README']
-        self.assertEqual(lines[2:5], ["  z/", "    README  1000 B, same size", "    surely this file, moved"])
+        self.assertEqual(lines[2:5], ["  z/", "    README  1000 B, same size", elsewhere.SURELY_MOVED])
         self.assertEqual(lines[-1], "(and 4 more)")
         self.assertEqual(sum(1 for line in lines if line.startswith('    README')), elsewhere.MAX_MATCHES)
 
@@ -127,9 +131,10 @@ class FindPreviewsTest(unittest.TestCase):
         src = localdiskdirtree.LocalDiskDirTree(os.path.join(root, 'src'), True)
         # Not scanned, as for a dirdiff
         dst = localdiskdirtree.LocalDiskDirTree(os.path.join(root, 'dst'), True)
-        self.assertEqual(_previews(['x.txt'], src, dst).previews['x.txt'],
-                         ["This one: 9 B", "In %s, likeliest first:" % (dst.displayname(),),
-                          "  moved/", "    x.txt  15 B"])
+        lines = _previews(['x.txt'], src, dst).previews['x.txt']
+        self.assertEqual(lines[0], "This one: 9 B")
+        self.assertIn("In %s, likeliest first:" % (dst.displayname(),), lines)
+        self.assertEqual(lines[lines.index("  moved/") + 1], "    x.txt  15 B")
 
     def test_siblings_in_a_matchs_dir_make_it_likelier(self):
         # photos/ was moved to old/photos/; other/ has one of its names, of a different size
@@ -160,6 +165,80 @@ class FindPreviewsTest(unittest.TestCase):
         src = _SizedTree('/src', {'x.jpg': 10})
         _previews(['x.jpg'], src, _SizedTree('/dst', {}))
         self.assertEqual(src.dates_read, [])
+
+
+class RenamedTest(unittest.TestCase):
+    """src's big.mov, which dst has as clip.mov (another name, the same size)"""
+    BIG = elsewhere.RENAMED_MIN_SIZE
+
+    def setUp(self):
+        self.src = _SizedTree('/src', {'big.mov': self.BIG, 'small.txt': 10}, hashes={'big.mov': 'H'})
+        self.dst = _SizedTree('/dst', {'v/clip.mov': self.BIG, 'v/other.mov': self.BIG, 'w/note.txt': 10},
+                              hashes={'v/clip.mov': 'H', 'v/other.mov': 'X'})
+        self.index = elsewhere.Index(self.dst)
+        self.checked = {}
+
+    def lines(self, relpath):
+        sent = _Sent()
+        elsewhere.find_previews(['big.mov', 'small.txt'], self.src, self.index, sent, self.checked)
+        return sent.previews[relpath]
+
+    def test_big_files_of_its_size_are_candidates_too(self):
+        lines = self.lines('big.mov')
+        self.assertIn("  no file of this name", lines)
+        section = lines[lines.index("Of its size, another name:"):]
+        self.assertEqual(section[1:3], ["  v/", "    clip.mov  64.0 KB, same size"])
+        self.assertIn("    other.mov  64.0 KB, same size", section)
+        # Not sure until their contents are compared
+        self.assertNotIn(elsewhere.SURELY_RENAMED, lines)
+        # Small files' sizes are too common
+        self.assertNotIn("Of its size, another name:", self.lines('small.txt'))
+
+    def test_the_same_contents_make_it_surely_renamed_and_drop_the_others(self):
+        self.index.build()
+        elsewhere.check_all(['big.mov'], self.src, elsewhere.Index(self.src), self.index, self.checked)
+        lines = self.lines('big.mov')
+        self.assertNotIn("    other.mov  64.0 KB, same size", lines)
+        self.assertEqual(lines[-2:], ["    the same contents", elsewhere.SURELY_RENAMED])
+        self.assertEqual(elsewhere.sure_matches(['big.mov'], self.src, self.index, self.checked),
+                         {'big.mov': 'v/clip.mov'})
+
+    def test_other_contents_drop_a_renamed_one(self):
+        self.dst._hashes['v/clip.mov'] = 'X'
+        self.index.build()
+        elsewhere.check_all(['big.mov'], self.src, elsewhere.Index(self.src), self.index, self.checked)
+        self.assertNotIn("Of its size, another name:", self.lines('big.mov'))
+
+    def test_what_may_be_elsewhere_and_whats_left_to_compare(self):
+        self.assertEqual(elsewhere.may_be_elsewhere(['big.mov', 'small.txt'], self.src, self.index), ['big.mov'])
+        self.assertEqual(elsewhere.to_check(['big.mov', 'small.txt'], self.src, self.index, self.checked),
+                         ['big.mov'])
+        progress = []
+        elsewhere.check_all(['big.mov', 'small.txt'], self.src, elsewhere.Index(self.src), self.index,
+                            self.checked, lambda *args: progress.append(args))
+        self.assertEqual(progress, [(1, 1, 'big.mov')])
+        self.assertEqual(elsewhere.to_check(['big.mov'], self.src, self.index, self.checked), [])
+
+    def test_the_index_by_size_is_kept_up_to_date(self):
+        self.index.build()
+        self.index.move('v/clip.mov', 'x/clip.mov')
+        self.index.add('y/new.mov', self.BIG)
+        self.index.remove('v/other.mov')
+        self.assertEqual(self.index.files_sized(self.BIG), {'x/clip.mov', 'y/new.mov'})
+        self.assertEqual(self.index.files_sized(10), set())
+
+
+class ModifiedTimeTest(unittest.TestCase):
+    def test_modification_times_are_shown_and_make_a_match_likelier(self):
+        src = _SizedTree('/src', {'x': 5}, times={'x': 1000})
+        dst = _SizedTree('/dst', {'a/x': 5, 'b/x': 5, 'c/x': 5}, times={'a/x': 5000, 'b/x': 1001, 'c/x': 10})
+        lines = _previews(['x'], src, dst).previews['x']
+        self.assertEqual(lines[1], "  modified " + elsewhere._format_time(1000))
+        # The same time (within SAME_TIME) first, then the others by path
+        self.assertEqual(lines[3:5], ["  b/", "    x  5 B, same size"])
+        self.assertIn("    modified %s, the same" % (elsewhere._format_time(1001),), lines)
+        self.assertIn("    modified %s, newer" % (elsewhere._format_time(5000),), lines)
+        self.assertIn("    modified %s, older" % (elsewhere._format_time(10),), lines)
 
 
 class SureMatchTest(unittest.TestCase):
@@ -270,6 +349,10 @@ class CheckContentsTest(unittest.TestCase):
             elsewhere.check_contents(sorted(self.src._sizes), self.src, elsewhere.Index(self.src),
                                      self.index, self.checked, _Selection(moves, at), self.sent)
 
+    def test_the_surely_line_is_highlighted(self):
+        self.assertEqual(elsewhere.SURELY_MOVED, picker.highlighted("\u2192 surely this file, moved"))
+        self.assertTrue(elsewhere.SURELY_MOVED.startswith(picker.HIGHLIGHT_MARK + 'green' + picker.HIGHLIGHT_MARK))
+
     def test_the_same_contents_are_it_and_the_others_are_dropped(self):
         self.check(['x'])
         # Only the ones of its size are compared
@@ -277,7 +360,7 @@ class CheckContentsTest(unittest.TestCase):
         self.assertNotIn('c/x', self.dst.hashed)
         lines = self.sent.previews['x']
         self.assertEqual(lines[2:], ["  a/", "    x  5 B, same size", "    with 0 of 1 of its dir's files",
-                                     "    the same contents", "    surely this file, moved"])
+                                     "    the same contents", elsewhere.SURELY_MOVED])
 
     def test_it_says_its_comparing_meanwhile(self):
         sends = []
@@ -290,7 +373,7 @@ class CheckContentsTest(unittest.TestCase):
         self.check(['x'])
         lines = self.sent.previews['x']
         self.assertEqual(lines.count("    other contents"), 2)
-        self.assertNotIn("    surely this file, moved", lines)
+        self.assertNotIn(elsewhere.SURELY_MOVED, lines)
         self.assertEqual(elsewhere.sure_matches(['x'], self.src, self.index, self.checked), {})
 
     def test_unknown_hashes_arent_compared(self):
@@ -301,7 +384,8 @@ class CheckContentsTest(unittest.TestCase):
     def test_each_file_once_and_only_files_with_matches_of_its_size(self):
         self.check(['x', 'd', 'd/z', 'x'])
         self.assertEqual(sorted(self.dst.hashed), ['a/x', 'b/x'])
-        self.assertEqual(sorted(self.sent.previews), ['x'])
+        # Each selected file's preview is sent at once, compared or not
+        self.assertEqual(sorted(self.sent.previews), ['d/z', 'x'])
 
     def test_moving_on_stops_it_and_goes_on_where_the_selection_is(self):
         # While x is hashed, the selection moves to y
@@ -362,6 +446,7 @@ class CheckContentsTest(unittest.TestCase):
         dst.files_by_name.return_value = {'x': [('a/x', 4)]}
         dst.date_taken.return_value = None
         dst.local_path.return_value = None
+        dst.modified_time.return_value = None
         # Drive has both: SHA-1 is the faster to work out
         dst.known_hashes.return_value = ('sha1', 'sha256')
         dst.content_hash.side_effect = lambda relpath, algorithm, should_stop=None: \

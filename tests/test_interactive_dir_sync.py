@@ -72,14 +72,14 @@ class InteractiveDirSyncTest(unittest.TestCase):
 
     def test_the_other_picks_stay_picked(self):
         # Both picked, but only one copied: the other's copy fails
-        real_copy = localdiskdirtree.shutil.copy
+        real_copy = localdiskdirtree.shutil.copy2
 
         def copy(src, dst):
             if src.endswith('c.txt'):
                 raise OSError('disk full')
             real_copy(src, dst)
         with mock.patch('dirdelta.dryrun.DRYRUN', False), \
-                mock.patch('dirdelta.localdiskdirtree.shutil.copy', side_effect=copy):
+                mock.patch('dirdelta.localdiskdirtree.shutil.copy2', side_effect=copy):
             self._browse([['sub/b.txt', 'sub/c.txt'], None], ['Copy', YES])
         self.assertEqual(self._offered()[1], (['sub/c.txt'], ['sub/c.txt']))
 
@@ -180,8 +180,8 @@ class InteractiveDirSyncTest(unittest.TestCase):
         self.assertEqual(len(texts), 3)
         self.assertEqual(texts[0], "Copy the 1 file to %s: can't: it's read-only" % (self.dst_root,))
         self.assertEqual(texts[1], "Rename 0 files of these to their matches' paths, in %s: none of "
-                                   "these has a file of its name there that's surely it" % (self.src_root,))
-        self.assertEqual(texts[2], "Rename the 0 files matching these to these paths, in %s: can't: "
+                                   "these may be there, moved or renamed" % (self.src_root,))
+        self.assertEqual(texts[2], "Rename the files matching 0 of these to these paths, in %s: can't: "
                                    "it's read-only" % (self.dst_root,))
 
     def test_two_cloud_replicas_cant_copy(self):
@@ -220,7 +220,8 @@ class InteractiveDirSyncTest(unittest.TestCase):
         sent = {}
         self.pick_files.call_args.kwargs['previews'](lambda found=None, default=None: sent.update(found or {}))
         self.assertEqual(sorted(sent), ['sub/b.txt', 'sub/c.txt'])
-        self.assertEqual(sent['sub/b.txt'][2:4], ["  elsewhere/", "    b.txt  15 B"])
+        lines = sent['sub/b.txt']
+        self.assertEqual(lines[lines.index("  elsewhere/") + 1], "    b.txt  15 B")
 
     def test_the_selected_files_contents_are_compared_and_kept(self):
         helpers.make_files(self.dst_root, ['elsewhere/b.txt'])
@@ -295,8 +296,37 @@ class RenameTest(unittest.TestCase):
     def test_the_menu_counts_the_files_with_a_sure_match(self):
         self.browse([NOTHING])
         options = self.pick_option.call_args.args[0]
-        self.assertIn("Rename the 1 file matching these to these paths, in %s" % (self.dst_root,), options)
+        self.assertIn("Rename the files matching 1 of these to these paths, in %s" % (self.dst_root,), options)
         self.assertIn("Rename 1 file of these to their matches' paths, in %s" % (self.src_root,), options)
+
+    def test_a_renamed_file_is_compared_then_renamed(self):
+        # dst has big.mov as clip.mov, and another file of its size
+        big = b'x' * elsewhere.RENAMED_MIN_SIZE
+        for root, relpath, contents in ((self.src_root, 'videos/big.mov', big),
+                                        (self.dst_root, 'v/clip.mov', big),
+                                        (self.dst_root, 'v/other.mov', b'y' * len(big))):
+            os.makedirs(os.path.dirname(os.path.join(root, relpath)), exist_ok=True)
+            with open(os.path.join(root, relpath), 'wb') as f:
+                f.write(contents)
+        self.src = localdiskdirtree.LocalDiskDirTree(self.src_root, True)
+        self.dst = localdiskdirtree.LocalDiskDirTree(self.dst_root, True)
+        sync = Sync(self.src, self.dst)
+        picks = [['videos/big.mov'], None]
+        with helpers.scripted_files_picker(lambda relpaths: picks.pop(0)), \
+                helpers.answering_option_picker(['Rename the', YES]) as self.pick_option, \
+                mock.patch('dirdelta.dryrun.DRYRUN', False):
+            sync.browse()
+        self.assertEqual(sync.checked['videos/big.mov'], {'v/clip.mov': True, 'v/other.mov': False})
+        self.assertTrue(os.path.isfile(os.path.join(self.dst_root, 'videos/big.mov')))
+        self.assertTrue(os.path.isfile(os.path.join(self.dst_root, 'v/other.mov')))
+        self.assertIn('  v/clip.mov -> videos/big.mov', self.pick_option.call_args.kwargs['header'])
+
+    def test_a_rename_with_none_surely_there_after_comparing_says_so(self):
+        with open(os.path.join(self.dst_root, 'old/x.jpg'), 'w') as f:
+            f.write('another!!')
+        self.browse(['Rename the'])
+        self.assertEqual(interactive_dir_sync.messages.show.call_args.args[0], 'Nothing to rename')
+        self.assertTrue(os.path.isfile(os.path.join(self.dst_root, 'old/x.jpg')))
 
     def test_a_dry_run_moves_nothing(self):
         sync = self.browse(['Rename the', YES], is_dry_run=True)

@@ -78,6 +78,12 @@ class LocalDiskDirTree(dirtree.DirTree):
     def date_taken(self, relpath):
         return exif.date_taken(os.path.join(self._rootpath, relpath))
 
+    def modified_time(self, relpath):
+        try:
+            return os.lstat(os.path.join(self._rootpath, relpath)).st_mtime
+        except OSError:
+            return None
+
     def local_path(self, relpath):
         return os.path.join(self._rootpath, relpath)
 
@@ -230,4 +236,5 @@ class LocalDiskDirTree(dirtree.DirTree):
         self._copy_local_file_to_tree_with_path(os.path.join(self._rootpath, relpath), local_path)
 
     def _copy_local_file_to_tree_with_path(self, src, dst):
-        shutil.copy(src, dst)
+        # copy2: with its modification time, rather than the copy's
+        shutil.copy2(src, dst)
