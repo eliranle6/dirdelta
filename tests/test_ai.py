@@ -17,8 +17,9 @@ class _Answering(object):
         self.answer = answer
         self.prompts = []
 
-    def __call__(self, prompt, readable_dirs, schema, max_turns):
+    def __call__(self, prompt, readable_dirs, schema, max_turns, model):
         self.prompts.append((prompt, readable_dirs, schema))
+        self.models = getattr(self, 'models', []) + [model]
         return {'files': self.answer(prompt)}
 
 
@@ -86,6 +87,17 @@ class AITest(unittest.TestCase):
         # Another sorted tree isn't the same recommendation
         self.assertEqual(ai.cached(self.files(1), self.key, 'cloud/other')[1], {})
 
+    def test_haiku_describes_and_sonnet_recommends_unless_said_otherwise(self):
+        answering = _Answering(lambda prompt: [])
+        with mock.patch('dirdelta.ai._run_query', side_effect=answering), \
+                mock.patch.dict(os.environ, {}, clear=True):
+            ai.describe(self.files(1), self.key)
+            ai.recommend(self.files(1), self.key, [], 'root')
+        self.assertEqual(answering.models, ['claude-haiku-5-5', 'claude-sonnet-5-5'])
+        env = {ai.MODEL_ENV_VAR: 'both', ai.RECOMMEND_MODEL_ENV_VAR: 'recommending'}
+        with mock.patch.dict(os.environ, env, clear=True):
+            self.assertEqual((ai._model(False), ai._model(True)), ('both', 'recommending'))
+
     def test_progress(self):
         progress = []
         with mock.patch('dirdelta.ai._run_query', side_effect=_Answering(lambda prompt: [])):
@@ -110,7 +122,7 @@ class RunQueryTest(unittest.TestCase):
                 yield result
         with mock.patch.object(claude_agent_sdk, 'query', query), \
                 mock.patch.object(claude_agent_sdk, 'ResultMessage', _Result):
-            return ai._run_query('the prompt', ['/in', '/in/sub'], {'type': 'object'}, 7)
+            return ai._run_query('the prompt', ['/in', '/in/sub'], {'type': 'object'}, 7, 'the-model')
 
     def test_claude_may_only_read_and_answers_by_the_schema(self):
         self.assertEqual(self.run_query([_Result(structured_output={'files': []})]), {'files': []})
@@ -122,13 +134,9 @@ class RunQueryTest(unittest.TestCase):
         self.assertEqual(options.setting_sources, [])
         self.assertEqual((options.cwd, options.add_dirs), ('/in', ['/in/sub']))
         self.assertEqual(options.max_turns, 7)
-        self.assertEqual(options.model, ai.MODEL)
+        self.assertEqual(options.model, 'the-model')
         self.assertEqual(options.output_format, {'type': 'json_schema', 'schema': {'type': 'object'}})
 
-    def test_the_model_can_be_another(self):
-        with mock.patch.dict(os.environ, {ai.MODEL_ENV_VAR: 'claude-sonnet-5-5'}):
-            self.run_query([_Result(structured_output={'files': []})])
-        self.assertEqual(self.calls[0][1].model, 'claude-sonnet-5-5')
 
     def test_no_answer_is_an_error(self):
         with self.assertRaises(ai.AIError):

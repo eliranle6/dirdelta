@@ -267,6 +267,21 @@ Claude's help, 2026-10-29) are in git history. treepicker's own are in `lib/tree
       built in; or a local web app (dirdelta serving a page, opened in the browser), which is
       also the way to idea 4's phone app. Both reuse the same frontend interface.
 
+11. **An env file for dirdelta's settings.** Its settings are env vars now (`DIRDELTA_PICKER`,
+    `DIRDELTA_DIRDIFF`, `DIRDELTA_AI_DESCRIBE_MODEL`, `DIRDELTA_AI_RECOMMEND_MODEL`,
+    `DIRDELTA_AI_MODEL`, and `ANTHROPIC_API_KEY` for Claude without the laptop's login), so each
+    must be set in the shell that runs it, or in `bin/sync.sh`. A file would keep them:
+    `~/.config/dirdelta/env` (`NAME=value` lines, `#` comments), read at the start into
+    `os.environ` for the names not set already, so a var set in the shell still wins (and tests,
+    which patch `os.environ`, aren't affected: the file's path patched like `REPLICAS_FILE`).
+    - `DRYRUN` stays out of it (ignored there, with a warning): a file that makes every run live
+      would be easy to forget, and a live run should be asked for each time.
+    - A secret in it (`ANTHROPIC_API_KEY`) asks for care: refuse the file unless only its owner can
+      read it (mode 600), as ssh does with its keys, and never print it, as `secrets/` isn't.
+    - One place for every setting's default and meaning (a module of them, `settings.py`), which
+      `--help` (or a `dirdelta --settings`) could list, with where each value came from (the
+      default, the file, the shell).
+
 ## Parked: performance
 
 Decided 2026-10-25: speed is good enough, so no more work on it until decided otherwise. A sync

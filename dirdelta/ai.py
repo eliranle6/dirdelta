@@ -13,8 +13,13 @@ import os
 
 from dirdelta import messages
 
-# The model, unless DIRDELTA_AI_MODEL says otherwise
-MODEL = 'claude-opus-5-5'
+# The models: a description is a short sentence, so the fastest and cheapest does; a recommendation
+# is a choice among the sorted tree's dirs, which takes more judgment. Each is set by its env var, or
+# both by MODEL_ENV_VAR.
+DESCRIBE_MODEL = 'claude-haiku-5-5'
+RECOMMEND_MODEL = 'claude-sonnet-5-5'
+DESCRIBE_MODEL_ENV_VAR = 'DIRDELTA_AI_DESCRIBE_MODEL'
+RECOMMEND_MODEL_ENV_VAR = 'DIRDELTA_AI_RECOMMEND_MODEL'
 MODEL_ENV_VAR = 'DIRDELTA_AI_MODEL'
 CACHE_FILE = os.path.expanduser('~/.cache/dirdelta/ai.json')
 # How many files one request is about
@@ -143,7 +148,7 @@ def _ask_claude(files, sorted_tree):
     prompt = "%s\n\nThe files:\n%s" % (task, '\n'.join(lines))
     readable = [os.path.dirname(file.local_path) for file in files if file.local_path is not None]
     result = _run_query(prompt, sorted(set(readable)), _description_schema(sorted_tree is not None),
-                        max_turns=2 * len(files) + 5)
+                        max_turns=2 * len(files) + 5, model=_model(sorted_tree is not None))
     answers = {}
     for item in result.get('files', []):
         number = item.get('number')
@@ -174,7 +179,14 @@ def _clean_destination(destination):
     return '/'.join(parts)
 
 
-def _run_query(prompt, readable_dirs, schema, max_turns):
+def _model(is_recommending):
+    """The model to ask for a recommendation, or else for a description"""
+    if is_recommending:
+        return os.environ.get(RECOMMEND_MODEL_ENV_VAR) or os.environ.get(MODEL_ENV_VAR) or RECOMMEND_MODEL
+    return os.environ.get(DESCRIBE_MODEL_ENV_VAR) or os.environ.get(MODEL_ENV_VAR) or DESCRIBE_MODEL
+
+
+def _run_query(prompt, readable_dirs, schema, max_turns, model):
     """Ask Claude prompt (see SYSTEM_PROMPT), letting it read only (with the Read tool) what's in
     readable_dirs, and return its answer by schema (a dict). Raises AIError if it can't."""
     try:
@@ -182,7 +194,7 @@ def _run_query(prompt, readable_dirs, schema, max_turns):
     except ImportError:
         raise AIError("The Claude Agent SDK isn't installed (pip install claude-agent-sdk)")
     options = ClaudeAgentOptions(
-        model=os.environ.get(MODEL_ENV_VAR) or MODEL,
+        model=model,
         system_prompt=SYSTEM_PROMPT,
         # Only reading, and nothing asks the user: what isn't allowed is denied
         tools=['Read'], allowed_tools=['Read'], permission_mode='dontAsk',

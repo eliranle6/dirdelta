@@ -80,7 +80,9 @@ then `move_files()` / `copy_files_within()` (local `shutil.copy2`, Drive's
 folder, as a sync's does.
 `ai.describe()` / `ai.recommend()` ask Claude about `ai.File`s (relpath, a
 local path to read, size), `BATCH_SIZE` a request, through the Claude Agent
-SDK (`_run_query()`: `query()` with tools and allowed tools only `Read`,
+SDK, descriptions of `DESCRIBE_MODEL` (Haiku) and recommendations of
+`RECOMMEND_MODEL` (Sonnet), each overridable by an env var (`_model()`)
+(`_run_query()`: `query()` with tools and allowed tools only `Read`,
 `permission_mode='dontAsk'`, no settings sources, the files' dirs as `cwd` and
 `add_dirs`, and `output_format` a JSON schema of the answers by file number).
 A Drive file is downloaded to a temp dir first (one at a time); one over

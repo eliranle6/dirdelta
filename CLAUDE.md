@@ -65,7 +65,9 @@ Env vars that change execution mode:
 - `DIRDELTA_PICKER`, `DIRDELTA_DIRDIFF` — the treepicker and dirdiff programs
   to run (default, `programs.find()`: the first of the program next to the
   running python, in `lib/treepicker/build/`, on `PATH`)
-- `DIRDELTA_AI_MODEL` — the model `ai.py` asks (default `claude-opus-5-5`)
+- `DIRDELTA_AI_DESCRIBE_MODEL`, `DIRDELTA_AI_RECOMMEND_MODEL` — the models `ai.py`
+  asks for descriptions (default `claude-haiku-5-5`) and recommendations
+  (default `claude-sonnet-5-5`); `DIRDELTA_AI_MODEL` sets both
 - `DRYRUN=0` — actually change files: Copy, Remove and Rename (`dryrun.py`, used by
   `localdiskdirtree.py`). Every screen shows the mode: "DRY RUN" in green, or
   "LIVE" in red.

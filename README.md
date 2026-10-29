@@ -95,8 +95,9 @@ Claude is asked through the Claude Agent SDK (`pip install claude-agent-sdk`, in
 which runs Claude Code: the laptop's logged-in Claude, or `ANTHROPIC_API_KEY` if it's set. Claude reads
 the picked files itself (text, images, PDFs; a Drive file is downloaded first), with no tool but
 `Read`, so their contents are sent to Anthropic: only when you choose to. What it says is kept in
-`~/.cache/dirdelta/ai.json`, so a file is asked about once. The model is `claude-opus-5-5`
-(`DIRDELTA_AI_MODEL` changes it).
+`~/.cache/dirdelta/ai.json`, so a file is asked about once. Descriptions are asked of
+`claude-haiku-5-5` and recommendations of `claude-sonnet-5-5` (`DIRDELTA_AI_DESCRIBE_MODEL` and
+`DIRDELTA_AI_RECOMMEND_MODEL` change them, `DIRDELTA_AI_MODEL` both).
 
 ### Picker mode (one path)
 

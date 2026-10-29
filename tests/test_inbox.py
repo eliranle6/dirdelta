@@ -127,7 +127,7 @@ class InboxSortTest(unittest.TestCase):
 
     def ask_claude(self, answers):
         """Patch ai._run_query to answer with answers ({relpath: answer}) for the files in its prompt"""
-        def run_query(prompt, readable_dirs, schema, max_turns):
+        def run_query(prompt, readable_dirs, schema, max_turns, model):
             lines = prompt.split('The files:\n')[1].splitlines()
             return {'files': [dict(answers[line.split('. ', 1)[1].split(' (')[0]], number=number)
                               for number, line in enumerate(lines, 1)]}
