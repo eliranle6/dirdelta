@@ -71,13 +71,14 @@ class AITest(unittest.TestCase):
 
     def test_recommendations_per_sorted_tree_and_cleaned(self):
         answering = _Answering(lambda prompt: [
-            {'number': 1, 'path': '/lists/shopping/2026-10 groceries.txt', 'reason': 'a list'},
-            {'number': 2, 'path': '../outside/f1.txt', 'reason': 'no'},
-            {'number': 3, 'path': 'top', 'reason': 'top level'}])
+            {'number': 1, 'action': 'move', 'path': '/lists/shopping/2026-10 groceries.txt', 'reason': 'a list'},
+            {'number': 2, 'action': 'move', 'path': '../outside/f1.txt', 'reason': 'no'},
+            {'number': 3, 'action': 'move', 'path': 'top', 'reason': 'top level'}])
         dirs = {'': ['notes.txt'], 'lists': ['2026-09 groceries.txt'], 'photos/2024': []}
         with mock.patch('dirdelta.ai._run_query', side_effect=answering):
             found = ai.recommend(self.files(3), self.key, dirs, 'cloud/me', {'f0.txt': 'a shopping list'})
-        self.assertEqual(found['f0.txt'], {'path': 'lists/shopping/2026-10 groceries.txt', 'reason': 'a list'})
+        self.assertEqual(found['f0.txt'], {'action': 'move', 'path': 'lists/shopping/2026-10 groceries.txt',
+                                           'reason': 'a list', 'copies': []})
         self.assertNotIn('f1.txt', found)
         # A new name without the file's extension gets it
         self.assertEqual(found['f2.txt']['path'], 'top.txt')
@@ -87,11 +88,32 @@ class AITest(unittest.TestCase):
         # By the descriptions: nothing's read
         self.assertIn("1. f0.txt (size 10 bytes): a shopping list", prompt)
         self.assertEqual(readable_dirs, [])
-        self.assertEqual(schema['properties']['files']['items']['required'], ['number', 'path', 'reason'])
+        self.assertEqual(schema['properties']['files']['items']['required'], ['number', 'action', 'path', 'reason'])
+        self.assertEqual(schema['properties']['files']['items']['properties']['action']['enum'], ['move', 'remove'])
         self.assertEqual(ai.cached(self.files(1), self.key, 'cloud/me')[1]['f0.txt']['path'],
                          'lists/shopping/2026-10 groceries.txt')
         # Another sorted tree isn't the same recommendation
         self.assertEqual(ai.cached(self.files(1), self.key, 'cloud/other')[1], {})
+
+    def test_a_copy_may_be_recommended_to_be_removed(self):
+        answering = _Answering(lambda prompt: [
+            {'number': 1, 'action': 'remove', 'path': '', 'reason': 'a copy'},
+            # Not a copy: removing it isn't Claude's to say, so it's not taken
+            {'number': 2, 'action': 'remove', 'path': '', 'reason': 'junk'}])
+        with mock.patch('dirdelta.ai._run_query', side_effect=answering):
+            found = ai.recommend(self.files(2), self.key, {}, 'root', {}, {'f0.txt': ['docs/f0.txt']})
+        self.assertEqual(found, {'f0.txt': {'action': 'remove', 'path': '', 'reason': 'a copy',
+                                            'copies': ['docs/f0.txt']}})
+        self.assertIn("1. f0.txt (size 10 bytes); already in the sorted tree, with the same contents, at docs/f0.txt",
+                      answering.prompts[0][0])
+        self.assertIsNone(ai.recommended_path('f0.txt', found['f0.txt']))
+        # A file found to be a copy since is asked about again
+        with mock.patch('dirdelta.ai._run_query', side_effect=AssertionError('asked again')):
+            ai.recommend(self.files(1), self.key, {}, 'root', {}, {'f0.txt': ['docs/f0.txt']})
+        answering = _Answering(lambda prompt: [{'number': 1, 'action': 'move', 'path': 'a/f0.txt', 'reason': ''}])
+        with mock.patch('dirdelta.ai._run_query', side_effect=answering):
+            ai.recommend(self.files(1), self.key, {}, 'root', {}, {'f0.txt': ['docs/f0.txt', 'other/f0.txt']})
+        self.assertEqual(len(answering.prompts), 1)
 
     def test_haiku_describes_and_sonnet_recommends_unless_said_otherwise(self):
         answering = _Answering(lambda prompt: [])

@@ -29,8 +29,9 @@ Claude's help, 2026-10-29) are in git history. treepicker's own are in `lib/tree
    - Some photos have no date taken: CR3 and RAF raws (not TIFF files). HEIF's and the TIFF raws'
      reading was tested only on files built by the tests, not on a camera's or phone's.
 
-   Idea: a local hash cache (see idea 7, which needs it too) would let a local replica be looked
-   up by hash as Drive is, finding renamed files of any size there.
+   Idea: local files' hashes are kept now (`hashcache.py`, 2026-10-29), but only of the files
+   compared so far; hashing a whole local replica once (in the background, then kept) would let it
+   be looked up by hash as Drive is, finding renamed files (and an inbox's copies) of any size.
 
 2. **Sort an inbox: what's left.** Sorting an inbox into a sorted tree, with Claude's descriptions
    and recommendations, is there (2026-10-29: `inbox.py`, `ai.py`). What's left:
@@ -157,8 +158,8 @@ Claude's help, 2026-10-29) are in git history. treepicker's own are in `lib/tree
      files, as of 2026-10-27) and, since 2026-10-29, `sha1Checksum`. So the Drive side is free;
      the cost is the local side,
      which must read every file to hash it (slow for a big replica, on `/mnt/win` more so).
-     A local hash cache, keyed by path, size and mtime, makes the next run hash only what
-     changed; and hashing only the files whose sizes match (a different size is already a
+     The local hash cache (`hashcache.py`: by path, size and mtime) makes the next run hash
+     only what changed; and hashing only the files whose sizes match (a different size is already a
      different file). Between two local dirs, both sides are hashed, the same way.
    - The result: a third kind of entry besides "only in A" and "only in B": "in both, but
      different" (by size, or by contents), with its own actions: copy A's over B's, or B's

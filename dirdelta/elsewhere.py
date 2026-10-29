@@ -14,10 +14,12 @@ dir too, as when a dir was moved or renamed, the same modification time; and the
 size is. One with the same contents is surely it, and the others are dropped; one with other
 contents never is, and one with another name is dropped then."""
 import collections
+import hashlib
 import os
 import time
 
 from dirdelta import dirtree
+from dirdelta import hashcache
 from dirdelta import picker
 
 # How many of a name's files in the other replica a preview lists (a common name, like README.md,
@@ -52,8 +54,11 @@ class Index(object):
     replica, removed from it or moved in it (add(), remove(), move()), rather than built again; or
     built again after the replica is read anew (invalidate())."""
 
-    def __init__(self, replica):
+    def __init__(self, replica, excluded=None):
+        """excluded: a dir (relpath) of the replica whose files aren't in it (e.g. an inbox in a
+        sorted tree, whose files would be their own matches)"""
         self.replica = replica
+        self._excluded = excluded
         # {name: {relpath: size}}, the names in each dir, {size: relpaths} of the big ones
         # (RENAMED_MIN_SIZE), and {(algorithm, hash): relpaths} of the files whose hashes are known
         # without reading them (Drive's), once built
@@ -73,7 +78,11 @@ class Index(object):
         stop it (and then it isn't built)"""
         if self.is_built():
             return
-        by_name = {name: dict(files) for name, files in self.replica.files_by_name(progress).items()}
+        by_name = {}
+        for name, files in self.replica.files_by_name(progress).items():
+            files = {relpath: size for relpath, size in files if not self._is_excluded(relpath)}
+            if files:
+                by_name[name] = files
         names_by_dir = collections.defaultdict(set)
         by_size = collections.defaultdict(set)
         by_hash = collections.defaultdict(set)
@@ -89,6 +98,10 @@ class Index(object):
         self._names_by_dir, self._by_size, self._by_hash = names_by_dir, by_size, by_hash
         # Last: is_built() says it is once all is
         self._by_name = by_name
+
+    def _is_excluded(self, relpath):
+        return self._excluded is not None and (relpath == self._excluded or
+                                               relpath.startswith(self._excluded + '/'))
 
     def invalidate(self):
         self._by_name = self._names_by_dir = self._by_size = self._by_hash = None
@@ -138,7 +151,7 @@ class Index(object):
 
     def add(self, relpath, size):
         """A file is at relpath now (unless it isn't built yet, when there's nothing to change)"""
-        if self.is_built():
+        if self.is_built() and not self._is_excluded(relpath):
             name = os.path.basename(relpath)
             self._by_name.setdefault(name, {})[relpath] = size
             self._names_by_dir[os.path.dirname(relpath)].add(name)
@@ -352,13 +365,16 @@ def find_previews(relpaths, src, index, send, checked=None):
 INDEX_WAIT_INTERVAL = 0.2
 
 
-def check_contents(relpaths, src, src_index, index, checked, selection, send):
+def check_contents(relpaths, src, src_index, index, checked, selection, send, sends_previews=True):
     """For each of src's missing files at relpaths as it's selected in the picker (selection, a
     picker.Selection), once index is built: send its preview at once (rather than when
     find_previews() gets to it), then compare its contents with those of its candidates of its size
     (_check()), and send its preview again. Each file once: checked has it then. Reading a local
     file may take a while, so it's stopped when the selection moves on, for the file it's on now.
+    Without sends_previews, it sends nothing (its caller sends its own previews, from checked).
     Lets picker.PickerClosed go up, once the picker is gone."""
+    if not sends_previews:
+        send = lambda found=None, default=None: None
     missing = set(relpaths)
     matcher = None
     dst_name = index.replica.displayname()
@@ -444,6 +460,10 @@ def _same_contents(src, src_index, relpath, index, match_relpath, should_stop):
     too), kept in the indexes. Raises dirtree.HashStopped once should_stop() says to."""
     path, match_path = src.local_path(relpath), index.replica.local_path(match_relpath)
     if path is not None and match_path is not None:
+        # Their hashes, if both are kept from before (the hash cache); else read side by side
+        hashes = [hashcache.get(path, 'sha1'), hashcache.get(match_path, 'sha1')]
+        if None not in hashes:
+            return hashes[0] == hashes[1]
         return _same_bytes(path, match_path, should_stop)
     known = set(src.known_hashes(relpath)) | set(index.replica.known_hashes(match_relpath))
     for algorithm in [algorithm for algorithm in _HASH_PREFERENCE if algorithm in known]:
@@ -455,7 +475,9 @@ def _same_contents(src, src_index, relpath, index, match_relpath, should_stop):
 
 
 def _same_bytes(path, other_path, should_stop):
-    """Whether the files at the paths have the same contents, or None if they can't be read"""
+    """Whether the files at the paths have the same contents, or None if they can't be read. Ones
+    found the same (read whole) get their hash kept in the hash cache, for the next time."""
+    digest = hashlib.sha1()
     try:
         with open(path, 'rb') as f, open(other_path, 'rb') as other:
             while True:
@@ -465,9 +487,13 @@ def _same_bytes(path, other_path, should_stop):
                 if chunk != other.read(COMPARE_READ_SIZE):
                     return False
                 if not chunk:
-                    return True
+                    break
+                digest.update(chunk)
     except OSError:
         return None
+    for same_path in (path, other_path):
+        hashcache.put(same_path, {'sha1': digest.hexdigest()})
+    return True
 
 
 class _Throttle(object):

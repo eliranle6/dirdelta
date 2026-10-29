@@ -1,8 +1,18 @@
 """Fakes shared by the dirdelta tests, for code that would otherwise run treepicker (dirdelta.picker)."""
+import atexit
 import os
+import shutil
+import tempfile
 from unittest import mock
 
+from dirdelta import hashcache
 from dirdelta import picker
+
+# The tests never keep hashes in the real hash cache (~/.cache/dirdelta/hashes.json): every test
+# module that hashes files imports this one, and unittest imports them all before running any
+_hash_cache_dir = tempfile.mkdtemp(prefix='dirdelta-test-hashes-')
+hashcache.CACHE_FILE = os.path.join(_hash_cache_dir, 'hashes.json')
+atexit.register(shutil.rmtree, _hash_cache_dir, ignore_errors=True)
 
 
 def scripted_option_picker(answers):

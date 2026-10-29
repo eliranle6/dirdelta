@@ -94,7 +94,26 @@ first shows the tree it makes (`picker.view_files()`, with where each file
 is from beside it; files of one name to one dir are refused), then No/Yes,
 then `move_files()` / `copy_files_within()` (local `shutil.copy2`, Drive's
 `files().copy`) on a progress screen. `r` refreshes the selected Drive
-folder, as a sync's does.
+folder, as a sync's does. Copies: the inbox and the sorted tree are each a
+replica of its own too (`_inbox_view`, and a view of the sorted tree, with
+their `elsewhere.Index`es, the sorted tree's built in the background and
+without the inbox's files, if it's in it), and the picker runs
+`elsewhere.check_contents()` on the selection, as a sync's does
+(`sends_previews=False`: the inbox's own previews show `_checked`); before
+Claude is asked where files go, `check_all()` compares the picked ones. A file
+with the same contents as one of the sorted tree's is a copy (`_copies()`,
+highlighted `SURELY_A_COPY`); Claude is told (`ai.recommend(copies=...)`) and
+may answer `action: 'remove'`, offered as "Remove the N files Claude says are
+copies". After a move or copy, the sorted tree's index has the file.
+
+### `hashcache.py`
+Local files' contents' hashes, in `~/.cache/dirdelta/hashes.json`
+(`CACHE_FILE`), by path, with the size and mtime (ns) they were of: a hash of
+a file changed since isn't given. `LocalDiskDirTree.content_hashes()` reads
+it first and keeps what it works out; `elsewhere._same_contents()` compares
+two local files by it when both are kept, else reads them side by side (and
+keeps both hashes when they're the same). Written at most every
+`SAVE_INTERVAL`, and at exit.
 `ai.describe()` asks Claude (Haiku) about `ai.File`s (relpath, a local path
 to read, size), `BATCH_SIZE` a request, reading them; `ai.recommend()` asks
 Claude (Sonnet) where they go by their names, sizes and descriptions

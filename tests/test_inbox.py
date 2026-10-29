@@ -122,11 +122,12 @@ class InboxSortTest(unittest.TestCase):
         options = self.pick_option.call_args.args[0]
         self.assertEqual(options[0], NOTHING)
         self.assertEqual([option.split(' ')[0] for option in options[1:]],
-                         ['Describe', 'Ask', 'Move', 'Move', 'Copy', 'Remove'])
-        # With nothing recommended yet, that move is greyed out
+                         ['Describe', 'Ask', 'Move', 'Remove', 'Move', 'Copy', 'Remove'])
+        # With nothing recommended yet, those are greyed out
         disabled = self.pick_option.call_args.kwargs['shown_as']()
-        self.assertEqual([text.text.split(':')[-1].strip() for text in disabled.values()],
-                         ['none of them has a recommendation yet'])
+        self.assertEqual([text.text.split(': ')[-1] for text in disabled.values()],
+                         ['none of them has a recommendation to move it yet',
+                          "Claude says none of them is a copy (or wasn't asked)"])
 
     def ask_claude(self, answers):
         """Patch ai._run_query to answer with answers ({relpath: {field: value}}) for the files in its
@@ -175,14 +176,15 @@ class InboxSortTest(unittest.TestCase):
         self.assertEqual(sorted(self.sorter._descriptions), ['a.txt', 'trip/c.jpg'])
 
     def test_recommendations_are_shown_and_moved_to(self):
-        with self.ask_claude({'b.jpg': {'description': 'a cat', 'path': 'photos/cats/b.jpg', 'reason': 'a cat photo'},
-                              'trip/c.jpg': {'description': 'a beach', 'path': 'photos/trips/2024/beach.jpg',
-                                             'reason': 'a trip photo'}}):
+        with self.ask_claude({'b.jpg': {'description': 'a cat', 'action': 'move', 'path': 'photos/cats/b.jpg',
+                                        'reason': 'a cat photo'},
+                              'trip/c.jpg': {'description': 'a beach', 'action': 'move',
+                                             'path': 'photos/trips/2024/beach.jpg', 'reason': 'a trip photo'}}):
             self.sort([['b.jpg', 'trip/c.jpg'], ['b.jpg'], ['b.jpg', 'trip/c.jpg'], None],
                       ['Ask Claude', NOTHING, "Move the 2 files to Claude's recommendations (2 dirs, 1 renamed)", YES])
         # Described first (Haiku, reading them), then placed by the descriptions (Sonnet)
         self.assertEqual([query[:2] for query in self.queries],
-                         [(['description'], ai.DESCRIBE_MODEL), (['path', 'reason'], ai.RECOMMEND_MODEL)])
+                         [(['description'], ai.DESCRIBE_MODEL), (['action', 'path', 'reason'], ai.RECOMMEND_MODEL)])
         self.assertIn("b.jpg (size 5 bytes): a cat", self.queries[1][2])
         menus = [call.args[0] for call in self.pick_option.call_args_list]
         # One destination: the menu names it
@@ -227,6 +229,42 @@ class InboxSortTest(unittest.TestCase):
         self.assertEqual(list(sends[1]), ['a.txt'])
         self.assertIn("  a list", sends[1]['a.txt'])
         self.assertEqual(sends[2], {})
+
+    def copy_in_the_inbox(self):
+        """An inbox file with the same name and contents as the sorted tree's docs/old.txt"""
+        with open(os.path.join(self.inbox, 'old.txt'), 'w') as f:
+            f.write('docs/old.txt')
+
+    def test_a_copy_of_a_sorted_file_is_found_and_said(self):
+        self.copy_in_the_inbox()
+        sorter = Sort(self.inbox, self.root)
+        sorter._compare_with_the_sorted_tree(['old.txt', 'a.txt'])
+        self.assertEqual(sorter._copies('old.txt'), ['docs/old.txt'])
+        lines = sorter._previews(['old.txt'])['old.txt']
+        self.assertIn("  docs/old.txt", lines)
+        self.assertIn(inbox.SURELY_A_COPY, lines)
+        # Its hash is kept, for next time
+        self.assertIsNotNone(inbox.elsewhere.hashcache.get(os.path.join(self.inbox, 'old.txt'), 'sha1'))
+
+    def test_claude_is_told_of_copies_and_its_removals_are_offered(self):
+        self.copy_in_the_inbox()
+        with self.ask_claude({'old.txt': {'description': 'an old note', 'action': 'remove', 'path': '',
+                                          'reason': 'a copy'},
+                              'a.txt': {'description': 'a list', 'action': 'move', 'path': 'docs/a.txt',
+                                        'reason': 'a list'}}):
+            self.sort([['a.txt', 'old.txt'], ['a.txt', 'old.txt'], None],
+                      ['Ask Claude', 'Remove the 1 file Claude says are copies', YES, SURE])
+        self.assertIn("already in the sorted tree, with the same contents, at docs/old.txt", self.queries[1][2])
+        self.assertIn("  old.txt: a copy of %s/docs/old.txt" % (self.root,),
+                      self.pick_option.call_args_list[2].kwargs['header'])
+        self.assertFalse(self.exists('inbox', 'old.txt'))
+        self.assertTrue(self.exists('inbox', 'a.txt'))
+
+    def test_the_selected_file_is_compared_in_the_background(self):
+        self.sort([None], [])
+        on_selection = self.pick_files.call_args.kwargs['on_selection']
+        self.assertIs(on_selection.args[4], self.sorter._checked)
+        self.assertEqual(on_selection.keywords, {'sends_previews': False})
 
     def test_claudes_errors_are_said(self):
         with mock.patch('dirdelta.ai._run_query', side_effect=ai.AIError('not logged in')):

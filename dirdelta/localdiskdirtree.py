@@ -9,6 +9,7 @@ from dirdelta import dirtree
 from dirdelta import dryrun
 from dirdelta import entries
 from dirdelta import exif
+from dirdelta import hashcache
 from dirdelta import messages
 
 
@@ -92,18 +93,26 @@ class LocalDiskDirTree(dirtree.DirTree):
         return self.content_hashes(relpath, [algorithm], should_stop)[algorithm]
 
     def content_hashes(self, relpath, algorithms, should_stop=None):
-        # All in one read of the file
-        digests = {algorithm: hashlib.new(algorithm) for algorithm in algorithms}
+        # From the hash cache, if it has them (and the file didn't change); the others all in one
+        # read of the file, then kept there
+        path = os.path.join(self._rootpath, relpath)
+        found = {algorithm: hashcache.get(path, algorithm) for algorithm in algorithms}
+        needed = [algorithm for algorithm, value in found.items() if value is None]
+        if not needed:
+            return found
+        digests = {algorithm: hashlib.new(algorithm) for algorithm in needed}
         try:
-            with open(os.path.join(self._rootpath, relpath), 'rb') as f:
+            with open(path, 'rb') as f:
                 for chunk in iter(lambda: f.read(HASH_READ_SIZE), b''):
                     if should_stop is not None and should_stop():
                         raise dirtree.HashStopped()
                     for digest in digests.values():
                         digest.update(chunk)
         except OSError:
-            return {algorithm: None for algorithm in algorithms}
-        return {algorithm: digest.hexdigest() for algorithm, digest in digests.items()}
+            return found
+        computed = {algorithm: digest.hexdigest() for algorithm, digest in digests.items()}
+        hashcache.put(path, computed)
+        return dict(found, **computed)
 
     def has_file(self, relpath):
         # On disk: the tree may not be scanned (see dirdiff.py)

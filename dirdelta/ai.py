@@ -51,10 +51,14 @@ class AIError(Exception):
 File = collections.namedtuple('File', ['relpath', 'local_path', 'size'])
 
 
-def _schema(fields):
-    """The answers' schema: a list of {number, the fields (strings)}"""
+def _schema(fields, enums=None):
+    """The answers' schema: a list of {number, the fields (strings; those in enums, {field: values},
+    one of their values)}"""
+    enums = enums or {}
     item = {"type": "object",
-            "properties": dict({"number": {"type": "integer"}}, **{field: {"type": "string"} for field in fields}),
+            "properties": dict({"number": {"type": "integer"}},
+                               **{field: dict({"type": "string"}, **({"enum": enums[field]} if field in enums else {}))
+                                  for field in fields}),
             "required": ["number"] + list(fields)}
     return {"type": "object", "properties": {"files": {"type": "array", "items": item}}, "required": ["files"]}
 
@@ -73,20 +77,27 @@ def describe(files, cache_key, progress=None):
     return {relpath: answer['description'] for relpath, answer in found.items()}
 
 
-def recommend(files, cache_key, dirs, root_name, descriptions, progress=None):
-    """{relpath: {'path', 'reason'}} of files (File): where in the sorted tree (root_name, whose dirs
-    are dirs: {relpath: a few of its files' names}) each belongs, as a path relative to its root:
-    a dir (an existing one, or a new one where none fits) and a name (its own, or a better one if
-    it says little, or doesn't fit the names in that dir), from the cache or Claude
+def recommend(files, cache_key, dirs, root_name, descriptions, copies=None, progress=None):
+    """{relpath: {'action', 'path', 'reason'}} of files (File): what to do with each, 'move' it to
+    where in the sorted tree (root_name, whose dirs are dirs: {relpath: a few of its files' names})
+    it belongs, its path relative to its root: a dir (an existing one, or a new one where none
+    fits) and a name (its own, or a better one if it says little, or doesn't fit the names in that
+    dir); or 'remove' it, a copy of a file already there (copies: {relpath: the paths in the sorted
+    tree of files with the same contents}; its path is then ''), from the cache or Claude
     (RECOMMEND_MODEL). It goes by the files' names, sizes and descriptions ({relpath: description},
     e.g. describe()'s), so it reads nothing."""
+    copies = copies or {}
     def is_cached(entry):
-        return entry.get('recommendations', {}).get(root_name)
+        recommendation = entry.get('recommendations', {}).get(root_name)
+        # One made before the file was found to be a copy isn't of what's known now
+        if recommendation and recommendation.get('copies', []) != sorted(copies.get(entry.get('_relpath'), [])):
+            return None
+        return recommendation
 
     def keep(entry, answer):
         entry.setdefault('recommendations', {})[root_name] = answer
     return _ask(files, cache_key, is_cached, keep,
-                lambda batch: _ask_for_recommendations(batch, dirs, root_name, descriptions), progress)
+                lambda batch: _ask_for_recommendations(batch, dirs, root_name, descriptions, copies), progress)
 
 
 def cached(files, cache_key, root_name):
@@ -111,7 +122,7 @@ def _ask(files, cache_key, is_cached, keep, ask, progress):
     found = {}
     needed = []
     for file in files:
-        answer = is_cached(cache.get(cache_key(file), {}))
+        answer = is_cached(dict(cache.get(cache_key(file), {}), _relpath=file.relpath))
         if answer:
             found[file.relpath] = answer
         else:
@@ -156,10 +167,13 @@ def _ask_for_descriptions(files):
             for number, item in _numbered(result, files)}
 
 
-def _ask_for_recommendations(files, dirs, root_name, descriptions):
-    """{relpath: {'path', 'reason'}} of where Claude says files go, by what's known of them"""
-    lines = ["%d. %s (%s)%s" % (number, file.relpath, _size_text(file),
-                                ": " + descriptions[file.relpath] if file.relpath in descriptions else "")
+def _ask_for_recommendations(files, dirs, root_name, descriptions, copies):
+    """{relpath: {'action', 'path', 'reason', 'copies'}} of what Claude says to do with files, by
+    what's known of them"""
+    lines = ["%d. %s (%s)%s%s" % (number, file.relpath, _size_text(file),
+                                  ": " + descriptions[file.relpath] if file.relpath in descriptions else "",
+                                  "; already in the sorted tree, with the same contents, at %s" %
+                                  (', '.join(copies[file.relpath]),) if copies.get(file.relpath) else "")
              for number, file in enumerate(files, 1)]
     listed = ["%s%s" % (dirpath or '. (the root)', " (e.g. %s)" % (', '.join(dirs[dirpath]),) if dirs[dirpath] else "")
               for dirpath in sorted(dirs, key=lambda relpath: (relpath.count('/'), relpath))[:MAX_DIRS_GIVEN]]
@@ -170,23 +184,34 @@ def _ask_for_recommendations(files, dirs, root_name, descriptions):
               "unless it says little of what the file is (e.g. IMG_2041.jpg, scan001.pdf, "
               "document(3).pdf) or doesn't fit how the files in that dir are named: then a name like "
               "theirs, with the file's extension. And the reason, in a few words. Files that go "
-              "together (e.g. one trip's photos) should go to one dir.\n\n"
+              "together (e.g. one trip's photos) should go to one dir. A file said to be in the "
+              "sorted tree already is a copy: its action should be 'remove' (with an empty path), "
+              "unless the copy in the tree is in the wrong place, and this one should go elsewhere; "
+              "every other file's action is 'move'.\n\n"
               "The files (name, size, and what each is):\n%s\n\nThe sorted tree's dirs:\n%s" %
               (root_name, '\n'.join(lines), '\n'.join(listed) or "(none yet)"))
-    result = _run_query(prompt, [], _schema(['path', 'reason']), max_turns=5, model=_model(True),
-                        system_prompt=RECOMMEND_SYSTEM_PROMPT)
+    result = _run_query(prompt, [], _schema(['action', 'path', 'reason'], {'action': ['move', 'remove']}),
+                        max_turns=5, model=_model(True), system_prompt=RECOMMEND_SYSTEM_PROMPT)
     answers = {}
     for number, item in _numbered(result, files):
         relpath = files[number - 1].relpath
+        reason = item.get('reason', '').strip()
+        known = sorted(copies.get(relpath, []))
+        if item.get('action') == 'remove' and known:
+            answers[relpath] = {'action': 'remove', 'path': '', 'reason': reason, 'copies': known}
+            continue
         path = _clean_path(item.get('path', ''), os.path.basename(relpath))
         if path is not None:
-            answers[relpath] = {'path': path, 'reason': item.get('reason', '').strip()}
+            answers[relpath] = {'action': 'move', 'path': path, 'reason': reason, 'copies': known}
     return answers
 
 
 def recommended_path(relpath, recommendation):
     """The path in the sorted tree that a recommendation (of the file at relpath) says it goes to:
-    its path, or (cached before it had one) its dir and the file's name"""
+    its path, or (cached before it had one) its dir and the file's name; None if it says to remove
+    the file"""
+    if recommendation.get('action') == 'remove':
+        return None
     if recommendation.get('path'):
         return recommendation['path']
     return '/'.join(part for part in (recommendation.get('destination', ''), os.path.basename(relpath)) if part)

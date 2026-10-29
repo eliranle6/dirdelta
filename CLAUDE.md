@@ -85,7 +85,8 @@ time: a replica's, at the start or from the main menu, or one in it, with the fi
 picker's `r`; with a `files.txt.stale` next to it, listing the folders where a
 change dirdelta made to Drive was cut off before it was added to the cache),
 `~/.config/dirdelta/replicas.json` (the history, favorites and sorts),
-`~/.cache/dirdelta/ai.json` (what Claude said of files) or `secrets/`.
+`~/.cache/dirdelta/ai.json` (what Claude said of files),
+`~/.cache/dirdelta/hashes.json` (local files' hashes) or `secrets/`.
 
 ## Structure
 
@@ -139,7 +140,7 @@ module:
 PYTHONPATH=.:tests .venv/bin/python3 -m unittest test_interactive_dir_sync -v
 ```
 
-Every module has a test file (388 tests, all passing as of 2026-10-29) except
+Every module has a test file (399 tests, all passing as of 2026-10-29) except
 the thin wiring in `main.py`/`dirsync_main.py`, covered only by running the
 app. Shared fakes:
 - `tests/helpers.py`: `scripted_option_picker` / `scripted_tree_picker` /
@@ -149,6 +150,9 @@ app. Shared fakes:
   a fake treepicker script. App tests build their own `tempfile.mkdtemp()` trees
   rather than using `tests/fixtures/`, so they never depend on (or modify)
   the repo.
+- The real hash cache isn't written: `tests/helpers.py` points
+  `hashcache.CACHE_FILE` at a temp file when it's imported, and every test
+  module that hashes files imports it.
 - Claude is never asked in the tests: `test_ai` patches `ai._run_query` or the
   SDK's `query`, and `test_inbox` patches `ai._run_query`; `ai.CACHE_FILE` goes
   to a temp file. A manual run with a scratch `HOME` can't reach Claude Code's

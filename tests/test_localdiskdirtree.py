@@ -8,6 +8,7 @@ from unittest import mock
 from dirdelta import dirtree
 from dirdelta import entries
 from dirdelta import localdiskdirtree
+import helpers
 
 
 class LocalDiskDirTreeTest(unittest.TestCase):
@@ -294,8 +295,20 @@ class LocalDiskDirTreeTest(unittest.TestCase):
         self.assertEqual(tree.content_hash('x.txt', 'sha1'), hashlib.sha1(b'abc').hexdigest())
         self.assertIsNone(tree.content_hash('nope.txt', 'sha1'))
         with self.assertRaises(dirtree.HashStopped):
-            tree.content_hash('x.txt', 'sha1', should_stop=lambda: True)
+            tree.content_hash('x.txt', 'sha256', should_stop=lambda: True)
         self.assertEqual(tree.local_path('x.txt'), os.path.join(os.path.realpath(self.src_root), 'x.txt'))
+
+    def test_a_hash_is_kept_and_read_again_only_when_the_file_changes(self):
+        tree = self._scan(['x.txt'])
+        path = os.path.join(self.src_root, 'x.txt')
+        with open(path, 'wb') as f:
+            f.write(b'abc')
+        tree.content_hash('x.txt', 'sha1')
+        with mock.patch('builtins.open', side_effect=AssertionError('read again')):
+            self.assertEqual(tree.content_hash('x.txt', 'sha1'), hashlib.sha1(b'abc').hexdigest())
+        with open(path, 'wb') as f:
+            f.write(b'abcd')
+        self.assertEqual(tree.content_hash('x.txt', 'sha1'), hashlib.sha1(b'abcd').hexdigest())
 
     def test_a_copy_keeps_its_modification_time(self):
         os.makedirs(os.path.join(self.src_root, 'sub'))
