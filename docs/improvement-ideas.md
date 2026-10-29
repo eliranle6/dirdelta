@@ -242,6 +242,32 @@ picker, 2026-10-29) are in git history. treepicker's own are in `lib/treepicker/
      trees are made; picker mode too. Mounting changes the system, not files, so it's asked
      even in a dry run, and never done without asking.
 
+10. **A desktop (or web) app on dirdelta's own libraries.** dirdelta's Python already decides what
+    every screen holds: the main menu's options (with their counts, and which are greyed out),
+    a picker's files and dirs, the preview column's lines, the confirmations, the progress and
+    report lines. Only the drawing is treepicker's and `messages`'. A desktop app (or a web app)
+    could reuse all of that, and draw it with its own widgets: a menu as a list or buttons, a
+    file picker as a tree view with checkboxes, the preview column as a side pane (idea 3's
+    image there too), a confirmation as a dialog with No as the default button, progress as a
+    progress bar.
+    - The split: the screens' contents as plain data (a menu: a title, header lines, its options
+      and which are disabled; a picker: its root, paths, picks, the selection, the previews as
+      they come; a confirmation; a progress screen's lines), handed to a frontend, which shows
+      them and returns the user's answer (the option, the picks, the key). `picker.py` and
+      `messages.py` are already close to that interface: their functions take the contents and
+      return the answer, so the terminal frontend is today's treepicker runs and screens, and a
+      desktop one is another implementation of the same functions, chosen at startup (e.g.
+      `dirdelta --gui`). The flows (`dirsync_main`, `interactive_dir_sync`, `choose_replicas`)
+      stay as they are.
+    - What needs care: the parts that run while a screen is shown, the menu's counts coming in
+      (`shown_as`) and the previews (`send()`), become calls the frontend gets on a thread
+      other than its UI thread, so it must hand them to it (Qt's signals, a web socket's
+      messages); and an action's progress, which now prints, must go to the frontend's
+      progress screen instead.
+    - Which toolkit: Qt (PySide6) for a desktop app, with tree views, dialogs and image views
+      built in; or a local web app (dirdelta serving a page, opened in the browser), which is
+      also the way to idea 4's phone app. Both reuse the same frontend interface.
+
 ## Parked: performance
 
 Decided 2026-10-25: speed is good enough, so no more work on it until decided otherwise. A sync
@@ -253,3 +279,4 @@ treepicker's load 0.15s). Ideas measured then, if it's ever reopened:
   built during the scan: ~0.15s. ("Nothing to copy" and the find warning need the whole diff.)
 - treepicker showing the tree while it loads (like fzf): the first screen at once, but a tree that
   changes under the user. Streaming dirdiff's list from Python would save only ~0.02s.
+
