@@ -13,22 +13,28 @@ from dirdelta import picker
 from dirdelta import programs
 
 # Stands in for treepicker: records its arguments and stdin into $FAKE_PICKER_LOG, and with
-# --updates, what it read from that fd until it read $FAKE_PICKER_WAIT_FOR; then prints
+# --updates (--preview), what it read from that fd until it read $FAKE_PICKER_WAIT_FOR
+# ($FAKE_PICKER_PREVIEW_WAIT_FOR); then prints
 # $FAKE_PICKER_OUTPUT (items separated by '|', each printed '\0'-terminated, empty ones too) and exits with
 # $FAKE_PICKER_EXIT_CODE
 FAKE_PICKER = '''#!%s
 import json, os, sys
 stdin = sys.stdin.buffer.read().decode('utf-8', 'surrogateescape')
 updates = b''
-if '--updates' in sys.argv:
-    fd = int(sys.argv[sys.argv.index('--updates') + 1])
-    while os.environ['FAKE_PICKER_WAIT_FOR'].encode() not in updates:
-        chunk = os.read(fd, 4096)
-        if not chunk:
-            break
-        updates += chunk
+def read_until(option, wait_for):
+    read = b''
+    if option in sys.argv:
+        fd = int(sys.argv[sys.argv.index(option) + 1])
+        while wait_for.encode() not in read:
+            chunk = os.read(fd, 4096)
+            if not chunk:
+                break
+            read += chunk
+    return read.decode()
+updates = read_until('--updates', os.environ.get('FAKE_PICKER_WAIT_FOR', ''))
+preview = read_until('--preview', os.environ.get('FAKE_PICKER_PREVIEW_WAIT_FOR', ''))
 with open(os.environ['FAKE_PICKER_LOG'], 'w') as log:
-    json.dump({'args': sys.argv[1:], 'stdin': stdin, 'updates': updates.decode()}, log)
+    json.dump({'args': sys.argv[1:], 'stdin': stdin, 'updates': updates, 'preview': preview}, log)
 output = os.environ.get('FAKE_PICKER_OUTPUT', '')
 sys.stdout.buffer.write(b''.join(item.encode('utf-8', 'surrogateescape') + b'\\0'
                                  for item in (output.split('|') if output else [])))
@@ -55,6 +61,11 @@ class PickerTest(unittest.TestCase):
     def answer(self, output='', exit_code=0):
         os.environ['FAKE_PICKER_OUTPUT'] = output
         os.environ['FAKE_PICKER_EXIT_CODE'] = str(exit_code)
+
+    def log_entry(self, key):
+        """What the fake treepicker logged as key (e.g. 'preview': what it read from that fd)"""
+        with open(self.log) as f:
+            return json.load(f)[key]
 
     def call(self, with_label=False):
         """The arguments and the stdin items the fake treepicker got (the arguments without the
@@ -185,25 +196,38 @@ class PickerTest(unittest.TestCase):
         args, _ = self.call()
         self.assertEqual(args[args.index('--select') + 1], '.')
 
-    def test_pick_files_shows_previews(self):
+    def test_pick_files_sends_previews_as_they_come(self):
+        os.environ['FAKE_PICKER_PREVIEW_WAIT_FOR'] = 'done'
         self.answer('a/1.txt')
 
-        # The fake records the --preview file's contents, which is gone once the picker returns
-        def popen(command, **kwargs):
-            with open(command[command.index('--preview') + 1], 'rb') as f:
-                self.previews_file_contents = f.read()
-            return real_popen(command, **kwargs)
-        real_popen = picker.subprocess.Popen
-        with mock.patch('dirdelta.picker.subprocess.Popen', side_effect=popen):
-            picker.pick_files('/r', ['a/1.txt'], previews={'a/1.txt': ['In b:', '  x\ty'], '': ['root']})
+        def previews(send):
+            send({'a/1.txt': ['In b:', '  x\ty']})
+            send({'': ['root']}, default=['done'])
+        picker.pick_files('/r', ['a/1.txt'], previews=previews)
 
-        # Each line after a tab, the root as '.', and a tab in a line shown as '?'
-        self.assertEqual(sorted(self.previews_file_contents.split(b'\0')),
-                         [b'', b'.\troot', b'a/1.txt\tIn b:\t  x?y'])
+        # Each line after a tab, the root as '.', the default's path empty, and a tab in a line
+        # shown as '?'
+        self.assertEqual(self.log_entry('preview').split('\0'),
+                         ['a/1.txt\tIn b:\t  x?y', '.\troot', '\tdone', ''])
 
-    def test_pick_files_without_previews_passes_no_preview_file(self):
+    def test_previews_stop_once_the_picker_is_gone(self):
         self.answer('a/1.txt')
-        picker.pick_files('/r', ['a/1.txt'], previews={})
+        stopped = []
+
+        def previews(send):
+            try:
+                while True:
+                    send(default=['still going'])
+            except picker.PickerClosed:
+                stopped.append(True)
+                raise
+        picker.pick_files('/r', ['a/1.txt'], previews=previews)
+        # pick_files() waited for it
+        self.assertEqual(stopped, [True])
+
+    def test_pick_files_without_previews_passes_no_preview_fd(self):
+        self.answer('a/1.txt')
+        picker.pick_files('/r', ['a/1.txt'])
         args, _ = self.call()
         self.assertNotIn('--preview', args)
 

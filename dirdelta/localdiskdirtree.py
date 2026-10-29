@@ -10,6 +10,8 @@ from dirdelta import messages
 
 # How many of find's error messages a scan warning lists
 MAX_SCAN_ERRORS_SHOWN = 3
+# How much of find's output files_by_name() reads at a time, at most
+FIND_READ_SIZE = 1 << 16
 
 
 def factory(filesystem_dirpath, max_depth=None, silent=False):
@@ -68,19 +70,35 @@ class LocalDiskDirTree(dirtree.DirTree):
         except OSError:
             return None
 
-    def files_by_name(self):
+    def files_by_name(self, progress=None):
         """As DirTree's, but from a find of the dir (down to max_depth levels), with its files'
-        sizes: the tree may not be scanned (see dirdiff.py), or be from an older scan"""
+        sizes: the tree may not be scanned (see dirdiff.py), or be from an older scan. Read as find
+        goes, for progress; if progress raises, find is stopped."""
         command = ["find", self._rootpath, "-mindepth", "1"]
         if self.max_depth is not None:
             command += ["-maxdepth", str(self.max_depth)]
         command += ["-type", "f", "-printf", "%s %P\\0"]
-        result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
         found = collections.defaultdict(list)
-        for entry in result.stdout.split(b'\0')[:-1]:
-            size, relpath = entry.split(b' ', 1)
-            relpath = os.fsdecode(relpath)
-            found[os.path.basename(relpath)].append((relpath, int(size)))
+        count = 0
+        # The start of an entry whose end hasn't been read yet
+        pending = b''
+        process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+        try:
+            for chunk in iter(lambda: process.stdout.read1(FIND_READ_SIZE), b''):
+                items = (pending + chunk).split(b'\0')
+                pending = items.pop()
+                for item in items:
+                    size, relpath = item.split(b' ', 1)
+                    relpath = os.fsdecode(relpath)
+                    found[os.path.basename(relpath)].append((relpath, int(size)))
+                count += len(items)
+                if progress is not None:
+                    progress(count)
+        finally:
+            if process.poll() is None:
+                process.kill()
+            process.stdout.close()
+            process.wait()
         return found
 
     def _copy_file(self, file_entry, source):

@@ -40,10 +40,12 @@ Like fzf: dirdelta starts `treepicker`, which draws on the terminal itself
   a key, the selected node's path, then the picks so far, so dirdelta runs it
   again with `--picked` and `--select`.
 - Text beside the file picker for the selected node (where the other replica
-  has files of its name): `--preview FILE`, FILE holding `PATH<tab>LINE<tab>LINE...\0`
-  per file (a tab or newline in a line is sent as '?'). treepicker shows it in
-  a column on the right (2/5 of the width, on a screen 60 columns wide or more),
-  which `p` hides or shows.
+  has files of its name): `--preview FD`, a pipe that a thread writes
+  `PATH<tab>LINE<tab>LINE...\0` to as it finds them (a tab or newline in a line
+  is sent as '?'), and `<tab>LINE...\0` (an empty path) for the nodes without
+  one yet: how far it's got. treepicker shows it in a column on the right (2/5
+  of the width, on a screen 60 columns wide or more), which `p` hides or shows,
+  redrawn as previews come in.
 - Menus: `treepicker -0 --list [--header TEXT] -`, with the labels on stdin
   (`--list` keeps them flat, since labels contain '/'). With `shown_as`,
   `pick_option` adds `--updates FD`, a pipe that a thread writes `LABEL<tab>TEXT\0`

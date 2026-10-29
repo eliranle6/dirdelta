@@ -110,10 +110,10 @@ class CloudDirTree(dirtree.DirTree):
     def file_size(self, relpath):
         return self._sizes.get(relpath)
 
-    def files_by_name(self):
+    def files_by_name(self, progress=None):
         # A same-named file's relpath has a DUP_SUFFIX, its name doesn't
         found = collections.defaultdict(list)
-        for name, files in super(CloudDirTree, self).files_by_name().items():
+        for name, files in super(CloudDirTree, self).files_by_name(progress).items():
             found[name.split(DUP_SUFFIX)[0]] += files
         return found
 

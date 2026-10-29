@@ -60,8 +60,15 @@ def pick_files(rootpath, relpaths, header='', picked=None, label=None, keys='', 
     color): a label shown after the mode's, e.g. what the picks are for. keys (e.g. 'r'): keys
     that end picking too, for the caller to act on the selected file or dir, and then it returns a
     KeyPressed. selected: the relpath of the file or dir to start with selected ('' the root),
-    e.g. the KeyPressed's, to go on where it was. previews: {relpath: lines} to show beside the
-    tree, in a column on the right, while the file (or dir) at relpath is selected.
+    e.g. the KeyPressed's, to go on where it was.
+
+    previews, if given, is called on a thread of its own as soon as the picker is shown, with a
+    send(found=None, default=None) for what to show beside the tree, in a column on the right:
+    found is {relpath: lines} for files or dirs ('' the root), shown while one is selected, and
+    default, if not None, the lines of the ones without any (e.g. how far previews has got). It
+    may send as it goes, for the picker shows each at once. send raises PickerClosed once the
+    picker is gone (and previews should then stop, letting it go up): pick_files() returns only
+    once previews has returned.
 
     Only the files are sent: treepicker adds their dirs, so no tree is built here."""
     args = ['--typed', '--root', rootpath, '-m'] + _header_args(header)
@@ -69,20 +76,13 @@ def pick_files(rootpath, relpaths, header='', picked=None, label=None, keys='', 
         args += ['--expect', keys]
     if selected is not None:
         args += ['--select', selected or '.']
-    with tempfile.NamedTemporaryFile('wb', prefix='dirdelta-picked-') as picked_file, \
-            tempfile.NamedTemporaryFile('wb', prefix='dirdelta-previews-') as previews_file:
+    with tempfile.NamedTemporaryFile('wb', prefix='dirdelta-picked-') as picked_file:
         if picked:
             picked_file.write(_null_terminated(picked))
             picked_file.flush()
             args += ['--picked', picked_file.name]
-        if previews:
-            previews_file.write(_null_terminated(
-                '\t'.join([relpath or '.'] + [_one_line(line) for line in lines])
-                for relpath, lines in previews.items()))
-            previews_file.flush()
-            args += ['--preview', previews_file.name]
         picked_paths = _run(args + ['-'], ('f ' + relpath for relpath in relpaths),
-                            label=label)
+                            label=label, previews=previews)
     if picked_paths is None:
         return None
     key = None
@@ -147,42 +147,60 @@ def _header_args(header):
     return ['--header', header] if header else []
 
 
-def _run(args, input_items, shown_as=None, label=None):
+def _run(args, input_items, shown_as=None, label=None, previews=None):
     """Run treepicker with args and the items (or None) on its stdin, and with shown_as (see
-    pick_option()) sending it what to show the items as. Returns what was picked, or None if the
-    user quit. Every picker shows whether it's a dry run, and then label (text, color), if given."""
+    pick_option()) sending it what to show the items as, and previews (see pick_files()) what to
+    show beside them. Returns what was picked, or None if the user quit. Every picker shows whether
+    it's a dry run, and then label (text, color), if given."""
     command = [_find_program(), '-0']
     for text, color in [dryrun.label()] + ([label] if label else []):
         command += ['--label', text, '--label-color', color]
     command += args
-    input_bytes = None if input_items is None else _null_terminated(input_items)
-    updates_read_fd = updates_write_fd = None
+    # Each sender writes to a pipe of its own, on a thread of its own, while treepicker runs
+    senders = []
     if shown_as is not None:
-        updates_read_fd, updates_write_fd = os.pipe()
-        command += ['--updates', str(updates_read_fd)]
+        senders.append(('--updates', lambda fd, is_done: _send_updates(fd, shown_as, is_done)))
+    if previews is not None:
+        senders.append(('--preview', lambda fd, is_done: _send_previews(fd, previews, is_done)))
+    read_fds, write_fds = [], []
+    for option, _ in senders:
+        read_fd, write_fd = os.pipe()
+        read_fds.append(read_fd)
+        write_fds.append(write_fd)
+        command += [option, str(read_fd)]
+    is_done = threading.Event()
+    threads = []
     try:
-        try:
-            process = subprocess.Popen(
-                command, stdout=subprocess.PIPE,
-                stdin=subprocess.PIPE if input_bytes is not None else subprocess.DEVNULL,
-                pass_fds=() if updates_read_fd is None else (updates_read_fd,))
-        except OSError as error:
-            raise PickerError('Cannot run %s: %s' % (command[0], error))
-        finally:
-            # treepicker has its own copy
-            if updates_read_fd is not None:
-                os.close(updates_read_fd)
-        is_done = threading.Event()
-        if shown_as is not None:
-            sender = threading.Thread(target=_send_updates,
-                                      args=(updates_write_fd, shown_as, is_done), daemon=True)
-            updates_write_fd = None  # The sender closes it
-            sender.start()
-        stdout, _ = process.communicate(input_bytes)
-        is_done.set()
+        # From a file, rather than written to a pipe by communicate(): with a sender busy on its
+        # thread (holding the GIL), writing a big input would be slow to get the GIL back each time
+        with tempfile.TemporaryFile() as input_file:
+            if input_items is not None:
+                input_file.write(_null_terminated(input_items))
+                input_file.seek(0)
+            try:
+                process = subprocess.Popen(
+                    command, stdout=subprocess.PIPE,
+                    stdin=input_file if input_items is not None else subprocess.DEVNULL,
+                    pass_fds=read_fds)
+            except OSError as error:
+                raise PickerError('Cannot run %s: %s' % (command[0], error))
+            finally:
+                # treepicker has its own copies
+                for read_fd in read_fds:
+                    os.close(read_fd)
+        for (_, send), write_fd in zip(senders, write_fds):
+            threads.append(threading.Thread(target=send, args=(write_fd, is_done), daemon=True))
+        write_fds = []  # The senders close them
+        for thread in threads:
+            thread.start()
+        stdout, _ = process.communicate()
     finally:
-        if updates_write_fd is not None:
-            os.close(updates_write_fd)
+        is_done.set()
+        for write_fd in write_fds:
+            os.close(write_fd)
+        # So nothing a sender started (e.g. a find) outlives the picker
+        for thread in threads:
+            thread.join()
     if process.returncode == _EXIT_CODE_QUIT:
         return None
     if process.returncode != 0:
@@ -218,8 +236,41 @@ def _update(item, shown):
     return '%s\t%s' % (item, shown)
 
 
+class PickerClosed(Exception):
+    """Raised by pick_files()'s previews' send() once the picker is gone"""
+
+
+def _send_previews(fd, previews, is_done):
+    """Call previews(send), with send() writing what it's given to treepicker (see pick_files()),
+    until previews returns, or treepicker is gone (is_done, or the pipe is broken). Closes fd."""
+    def send(found=None, default=None):
+        if is_done.is_set():
+            raise PickerClosed()
+        items = [_preview(relpath or '.', lines) for relpath, lines in (found or {}).items()]
+        if default is not None:
+            # An empty path: the lines of the ones without any
+            items.append(_preview('', default))
+        data = _null_terminated(items)
+        try:
+            while data:
+                data = data[os.write(fd, data):]
+        except BrokenPipeError:
+            raise PickerClosed()
+    try:
+        previews(send)
+    except PickerClosed:
+        pass
+    finally:
+        os.close(fd)
+
+
+def _preview(path, lines):
+    """treepicker's --preview line showing lines for path"""
+    return path + '\t' + '\t'.join(_one_line(line) for line in lines)
+
+
 def _one_line(text):
-    """text without what would end a line of a --preview file, or the line itself (e.g. a file
+    """text without what would end a --preview line, or the preview's line itself (e.g. a file
     name's tab), shown as '?' like treepicker shows control characters"""
     return text.replace('\t', '?').replace('\n', '?').replace('\0', '?')
 

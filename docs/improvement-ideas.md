@@ -10,8 +10,9 @@ picker, 2026-10-29) are in git history. treepicker's own are in `lib/treepicker/
 1. **Rename a moved file, rather than copying and removing it.** The diff is by path only, so a
    file moved (or a dir renamed) in one replica shows up as missing from the other. The Copy and
    Remove pickers now show, beside the selected file, where the other replica has files of its
-   name, with their sizes (`elsewhere.py`, treepicker's `--preview`, 2026-10-29), so the user can
-   tell a moved file from a missing one. What's left:
+   name, with their sizes, likeliest first (`elsewhere.py`, treepicker's `--preview`, found while
+   the picker is shown, 2026-10-29), so the user can tell a moved file from a missing one. What's
+   left:
    - A "Rename" action for a file whose match is found, that moves the match in the other
      replica to this file's path (or this file to the match's), so both have it at one path,
      rather than a Copy and a Remove. Cheap on both sides: `os.rename` (a move within one disk)
@@ -21,14 +22,13 @@ picker, 2026-10-29) are in git history. treepicker's own are in `lib/treepicker/
      as a line too (the file again, with its new name and parents). The Copy/Remove pickers
      could say which of their files have a match ("moved?", e.g. by an `--updates` tag), and the
      confirmation offer Rename for those.
-   - Matching is by name, with the sizes shown (and "same size" said). A hash would tell
-     same-sized files apart (idea 7): the Drive cache has `sha256Checksum`, a local dir would
-     need to read the file.
-   - The previews are all made before the picker opens (for a local dst, one more `find` of
-     it, since dirdiff lists only the diff), not asked for as the selection moves: cheap for
-     the diffs seen so far. A huge diff with a common name everywhere could make the file
-     big; then an `--updates`-like protocol (treepicker writes the selected path to an fd,
-     dirdelta answers with its lines) would make them only as they're shown.
+   - Matching is by name, ordered by size (and "same size" said). A hash would tell same-sized
+     files apart (idea 7): the Drive cache has `sha256Checksum`, a local dir would need to read
+     the file.
+   - The previews are found in the picker's tree order, whatever is selected; the selected
+     file's could come first (treepicker telling dirdelta the selection as it moves). And they
+     are found anew each time the picker opens (for a local dst, one more `find` of it): they
+     could be kept while the diff is the same.
 
 2. **Sort an inbox folder: file each one away, or remove it.** A mode for a folder of files
    not yet sorted (e.g. `cloud/unsorted`), rather than a diff of two replicas: for each file

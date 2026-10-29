@@ -222,13 +222,19 @@ class DirTree(object):
         """The size in bytes of the file at relpath, or None if it isn't known"""
         return None
 
-    def files_by_name(self):
+    # How many files files_by_name() goes through between its progress() calls
+    FILES_PER_PROGRESS = 1000
+
+    def files_by_name(self, progress=None):
         """{name: [(relpath, size)]} of all the tree's files (size: as file_size()), to find where
-        it has a file of a name"""
+        it has a file of a name. progress, if given, is called now and then with how many files
+        it has so far (and may raise, to stop it)."""
         found = collections.defaultdict(list)
-        for file_entry in self.iter_files():
+        for count, file_entry in enumerate(self.iter_files(), 1):
             found[os.path.basename(file_entry.relpath)].append(
                 (file_entry.relpath, self.file_size(file_entry.relpath)))
+            if progress is not None and count % self.FILES_PER_PROGRESS == 0:
+                progress(count)
         return found
 
     def does_dir_contain_any_files(self):
