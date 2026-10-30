@@ -31,6 +31,7 @@ from dirdelta import localdiskdirtree
 from dirdelta import messages
 from dirdelta import paths
 from dirdelta import picker
+from dirdelta import replicalog
 from dirdelta import replicas
 
 # The label of the inbox's screens, so they're told from a sync's
@@ -121,6 +122,9 @@ class InboxSort(object):
         self.root_path = _normalized(root_path)
         # Where the sorted tree's recent dirs are kept (a replicas.Replicas, saved), if anywhere
         self._known_replicas = known_replicas
+        # What's changed live in the inbox and the sorted tree, by their paths, for their logs'
+        # entries (see replicalog.py)
+        self.changes = replicalog.Changes()
         for path in (self.inbox_path, self.root_path):
             if not paths.is_cloud_path(path) and not os.path.isdir(path):
                 raise InboxError("%s is not a directory" % (path,))
@@ -881,6 +885,11 @@ class InboxSort(object):
         targets = dict(plan)
         for relpath in done:
             self._root_index.add(targets[relpath], sizes[relpath])
+        if action == self.MOVE_TO:
+            self.changes.note(self.root_path, 'added', len(done), self.inbox_path)
+            self.changes.note(self.inbox_path, 'moved', len(done), self.root_path, 'to')
+        else:
+            self.changes.note(self.root_path, 'copied', len(done), self.inbox_path)
         not_done = [relpath for relpath, _ in plan if relpath not in set(done)]
         if not_done:
             self._say_not_done("moved" if action == self.MOVE_TO else "copied", not_done, len(plan))
@@ -927,6 +936,11 @@ class InboxSort(object):
                     if not self._inbox_tree.has_file(relpath)]
         return done
 
+    def log_trees(self):
+        """[(tree, path)] of the inbox and the sorted tree, each a tree of its own (as it is now: a
+        Drive one from the cache), to read and write their logs (see replicalog.py)"""
+        return [(_tree(path), path) for path in (self.inbox_path, self.root_path)]
+
     def _entries(self, relpaths):
         """The entries of the inbox's files at relpaths (in its tree), to remove them"""
         found = []
@@ -968,7 +982,9 @@ class InboxSort(object):
         kept = [relpath for relpath in relpaths if relpath in left]
         if kept:
             self._say_not_done("removed", kept, len(relpaths))
-        return [relpath for relpath in relpaths if relpath not in left]
+        removed = [relpath for relpath in relpaths if relpath not in left]
+        self.changes.note(self.inbox_path, 'removed', len(removed))
+        return removed
 
 
 class _Renamed(object):
@@ -1002,12 +1018,16 @@ def _normalized(path):
 
 def run(inbox_path, root_path, known_replicas=None):
     """Sort the inbox at inbox_path into root_path (see InboxSort), with known_replicas (a
-    replicas.Replicas, saved) remembering them as a recent sort"""
+    replicas.Replicas, saved) remembering them as a recent sort, and what's known of each (its log,
+    see replicalog.py); once it's done, offer entries for the logs of the ones it changed"""
     sort = InboxSort(inbox_path, root_path, known_replicas)
     if known_replicas is not None:
         known_replicas.record_sort(sort.inbox_path, sort.root_path)
+        replicalog.note_seen(sort.log_trees(), known_replicas)
         replicas.save(known_replicas)
     sort.run()
+    if known_replicas is not None:
+        replicalog.offer_entries(sort.changes, sort.log_trees(), known_replicas)
 
 
 def _wrapped(text, indent):

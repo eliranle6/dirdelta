@@ -101,7 +101,7 @@ class InteractiveDirSync(object):
     # The file picker's key that reads the selected folder anew from Drive, when a replica is Drive's
     REFRESH_KEY = 'r'
 
-    def __init__(self, src, dst, missing=None, src_index=None, dst_index=None, checked=None):
+    def __init__(self, src, dst, missing=None, src_index=None, dst_index=None, checked=None, changes=None):
         """missing: a future (concurrent.futures.Future) of find_missing(src, dst), e.g. found in
         the background, to use rather than finding it again. src_index, dst_index: the replicas'
         elsewhere.Index, kept by the caller so they're built once, and kept up to date here.
@@ -113,6 +113,9 @@ class InteractiveDirSync(object):
         self.src_index = src_index or elsewhere.Index(src)
         self.dst_index = dst_index or elsewhere.Index(dst)
         self.checked = checked if checked is not None else {}
+        # Where what's changed live is noted (a replicalog.Changes, by the replicas' displaynames),
+        # for the entries of their logs, if anywhere
+        self.changes = changes
         # Whether the replicas' files changed here (copied, removed, moved, or read anew from
         # Drive), so what each lacks may have
         self.has_changed = False
@@ -251,11 +254,18 @@ class InteractiveDirSync(object):
             done = [relpath for relpath in relpaths if self._dst.has_file(relpath)]
             for relpath in done:
                 self.dst_index.add(relpath, self._src.file_size(relpath))
+            self._note(self._dst, 'copied', len(done), self._src.displayname())
         else:
             done = [relpath for relpath in relpaths if not self._src.has_file(relpath)]
             for relpath in done:
                 self.src_index.remove(relpath)
+            self._note(self._src, 'removed', len(done))
         return done
+
+    def _note(self, replica, verb, count, source=None):
+        """Note a live change of the replica's files (see replicalog.Changes.note())"""
+        if self.changes is not None:
+            self.changes.note(replica.displayname(), verb, count, source)
 
     def _cant_rename(self, replica, count):
         if not is_writable(replica):
@@ -334,6 +344,7 @@ class InteractiveDirSync(object):
             return [picked_of[move] for move in moves]
         for relpath, new_relpath in done:
             index.move(relpath, new_relpath)
+        self._note(replica, 'moved', len(done))
         return [picked_of[move] for move in done]
 
     def _file_entry(self, relpath):

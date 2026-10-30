@@ -284,6 +284,21 @@ def _name_problems(folder_path, children):
     return problems
 
 
+def root_id():
+    """My Drive's root folder's id, as the cache has it (its first lines), or None if it doesn't"""
+    try:
+        with open(FILE_LIST_CACHE) as f:
+            for line in f:
+                if line.startswith('{'):
+                    md = json.loads(line)
+                    if ROOT_ID_KEY in md:
+                        return md[ROOT_ID_KEY]
+                    return None
+    except (OSError, ValueError):
+        pass
+    return None
+
+
 def _parsefile(filename):
     """Read the cache into an id->children map, an id->metadata map and My Drive's root folder's id.
     What isn't in My Drive is left out (files shared with the user, which have no parents, or whose

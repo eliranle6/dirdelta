@@ -1,7 +1,9 @@
 """The pairs of replicas the user synced (history, the latest first) and the ones they made favorites,
 and the inboxes they sorted (each with its sorted tree, see inbox.py), kept in REPLICAS_FILE (JSON)
-for the menu that chooses what to sync or sort (see choose_replicas.py); and the dirs of each sorted
-tree that its inboxes' files were moved or copied to last, offered first next time.
+for the menu that chooses what to sync or sort (see choose_replicas.py); the dirs of each sorted
+tree that its inboxes' files were moved or copied to last, offered first next time; and what's known
+of each replica synced (see replicalog.py), by its identity: the paths it was seen at, its log's
+last entry, and when dirdelta last saw it and changed it.
 
 A pair is the same pair either way around (A and B, or B and A), and is kept the way around it was
 last used. Local paths are kept absolute and cloud ones cleaned (see normalized()), so the same dir
@@ -18,6 +20,8 @@ MAX_HISTORY = 20
 MAX_SORTS = 10
 # How many of a sorted tree's dirs are kept as its recent ones
 MAX_RECENT_DIRS = 10
+# How many of the paths a replica was seen at are kept
+MAX_PATHS_KEPT = 5
 
 
 class ReplicasError(Exception):
@@ -33,7 +37,7 @@ def normalized(path):
 
 
 class Replicas(object):
-    def __init__(self, history=None, favorites=None, sorts=None, recent_dirs=None):
+    def __init__(self, history=None, favorites=None, sorts=None, recent_dirs=None, known=None):
         # Pairs (tuples of 2 normalized paths), the latest first
         self.history = list(history or [])
         # Pairs, in the order they were added
@@ -43,6 +47,39 @@ class Replicas(object):
         # {a sorted tree's path (normalized): its dirs' relpaths ('' its root) files went to, the
         # latest first}
         self.recent_dirs = {root: list(dirs) for root, dirs in (recent_dirs or {}).items()}
+        # {a replica's identity (replicalog.identity()): {'paths': the paths it was seen at (the
+        # latest first), 'last_entry': its log's last entry ({'date': 'YYYY-MM-DD' or None, 'text'}),
+        # or None, 'seen': when dirdelta last synced it, 'changed': when a sync last changed it (or
+        # None); times as 'YYYY-MM-DD HH:MM'}}
+        self.known = {identity: dict(info) for identity, info in (known or {}).items()}
+
+    def note_seen(self, identity, path, entry, when):
+        """Note that the replica with identity was just synced at path (when, a datetime), with its
+        log's last entry (a replicalog.Entry, or None if it has none, or it couldn't be read: the
+        one kept stays)"""
+        info = self.known.setdefault(identity, {'paths': [], 'last_entry': None, 'seen': None, 'changed': None})
+        path = normalized(path)
+        info['paths'] = ([path] + [old for old in info['paths'] if old != path])[:MAX_PATHS_KEPT]
+        if entry is not None:
+            info['last_entry'] = {'date': entry.date.isoformat() if entry.date else None, 'text': entry.text}
+        info['seen'] = _time(when)
+
+    def note_changed(self, identity, when):
+        """Note that a sync just changed the replica with identity (when, a datetime)"""
+        info = self.known.setdefault(identity, {'paths': [], 'last_entry': None, 'seen': None, 'changed': None})
+        info['changed'] = _time(when)
+
+    def note_entry(self, identity, entry):
+        """Note that the log of the replica with identity has entry last now (a replicalog.Entry)"""
+        info = self.known.setdefault(identity, {'paths': [], 'last_entry': None, 'seen': None, 'changed': None})
+        info['last_entry'] = {'date': entry.date.isoformat() if entry.date else None, 'text': entry.text}
+
+    def info_at(self, path):
+        """What's known of the replica last seen at path (the latest seen, if several were), or
+        None"""
+        path = normalized(path)
+        found = [info for info in self.known.values() if path in info.get('paths', [])]
+        return max(found, key=lambda info: info.get('seen') or '') if found else None
 
     def record_dir(self, root_path, relpath):
         """Note that files were just moved or copied to the dir at relpath in the sorted tree at
@@ -91,7 +128,8 @@ def load():
         with open(REPLICAS_FILE) as replicas_file:
             content = json.load(replicas_file)
         return Replicas(_pairs(content.get('history', [])), _pairs(content.get('favorites', [])),
-                        _pairs(content.get('sorts', [])), _recent_dirs(content.get('recent_dirs', {})))
+                        _pairs(content.get('sorts', [])), _recent_dirs(content.get('recent_dirs', {})),
+                        _known(content.get('known', {})))
     except FileNotFoundError:
         return Replicas()
     except (OSError, ValueError, AttributeError, TypeError) as error:
@@ -104,7 +142,8 @@ def save(replicas):
     content = {'favorites': [list(pair) for pair in replicas.favorites],
                'history': [list(pair) for pair in replicas.history],
                'sorts': [list(pair) for pair in replicas.sorts],
-               'recent_dirs': replicas.recent_dirs}
+               'recent_dirs': replicas.recent_dirs,
+               'known': replicas.known}
     try:
         os.makedirs(os.path.dirname(REPLICAS_FILE), exist_ok=True)
         temp_path = REPLICAS_FILE + '.tmp'
@@ -140,3 +179,15 @@ def _recent_dirs(content):
             isinstance(dirs, list) and all(isinstance(relpath, str) for relpath in dirs) for dirs in content.values()):
         raise ValueError("not sorted trees' recent dirs: %r" % (content,))
     return {normalized(root): dirs for root, dirs in content.items()}
+
+
+def _known(content):
+    """What's known of the replicas, as read from the file: {identity: {'paths': [...], ...}}"""
+    if not isinstance(content, dict) or not all(
+            isinstance(info, dict) and isinstance(info.get('paths', []), list) for info in content.values()):
+        raise ValueError("not what's known of the replicas: %r" % (content,))
+    return content
+
+
+def _time(when):
+    return when.strftime('%Y-%m-%d %H:%M')

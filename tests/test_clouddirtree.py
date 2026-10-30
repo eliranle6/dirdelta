@@ -291,6 +291,26 @@ class CloudDirTreeChangesTest(unittest.TestCase):
         self.assertIn('1.mp3', relpaths)
         self.assertFalse(clouddirtree.drivecache.is_stale())
 
+    def test_writing_a_file_there_makes_a_new_version_of_it(self):
+        files = self.service.files.return_value
+        files.update.side_effect = lambda **kwargs: mock.Mock(execute=lambda **_: {
+            'id': kwargs['fileId'], 'name': 'song.mp3', 'size': '7', 'sha1Checksum': 'abc'})
+        self.tree.write_file('song.mp3', os.path.join(self.local_dir, 'new'))
+        self.assertEqual(files.update.call_args.kwargs['fileId'], 'song')
+        clouddirtree.MediaFileUpload.assert_called_with(os.path.join(self.local_dir, 'new'))
+        self.assertEqual(self.creates(), [])
+        self.assertEqual(self.tree.file_size('song.mp3'), 7)
+        # In the cache, in its folder still
+        tree = clouddirtree.factory('cloud/mein')
+        self.assertEqual(tree.file_size('song.mp3'), 7)
+        self.assertFalse(clouddirtree.drivecache.is_stale())
+
+    def test_writing_a_file_that_isnt_there_makes_it(self):
+        helpers.make_files(self.local_dir, ['last_update.txt'])
+        self.tree.write_file('last_update.txt', os.path.join(self.local_dir, 'last_update.txt'))
+        self.assertEqual(self.creates(), [{'name': 'last_update.txt', 'parents': ['mein']}])
+        self.assertIn('last_update.txt', [entry.relpath for entry in clouddirtree.factory('cloud/mein').iter_files()])
+
     def test_changes_are_kept_in_the_cache(self):
         self.upload(['a/b/new.mp3'])
         self.tree.remove_files([self.tree.get_node('song.mp3').data])

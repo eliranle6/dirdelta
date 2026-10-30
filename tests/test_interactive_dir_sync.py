@@ -12,6 +12,7 @@ from dirdelta import elsewhere
 from dirdelta import interactive_dir_sync
 from dirdelta import localdiskdirtree
 from dirdelta import picker
+from dirdelta import replicalog
 
 Sync = interactive_dir_sync.InteractiveDirSync
 YES = Sync.CONFIRM_YES
@@ -38,14 +39,14 @@ class InteractiveDirSyncTest(unittest.TestCase):
         self.addCleanup(shutil.rmtree, self.src_root, ignore_errors=True)
         self.addCleanup(shutil.rmtree, self.dst_root, ignore_errors=True)
 
-    def _browse(self, picks, answers, src=None, dst=None):
+    def _browse(self, picks, answers, src=None, dst=None, changes=None):
         """Browse src's files that dst lacks (by default, the local dirs', unscanned as dirsync_main
         leaves them), the file picker answering picks in turn (see helpers.scripted_files_picker),
         and the menus answers (see helpers.answering_option_picker). Returns the sync."""
         src = src or localdiskdirtree.LocalDiskDirTree(self.src_root, True)
         dst = dst or localdiskdirtree.LocalDiskDirTree(self.dst_root, True)
         picks = list(picks)
-        self.sync = Sync(src, dst)
+        self.sync = Sync(src, dst, changes=changes)
         with helpers.scripted_files_picker(lambda relpaths: picks.pop(0)) as self.pick_files, \
                 helpers.answering_option_picker(answers) as self.pick_option:
             self.sync.browse()
@@ -69,6 +70,17 @@ class InteractiveDirSyncTest(unittest.TestCase):
         self.assertEqual(self.pick_files.call_args.kwargs['selected'], 'sub')
         self.assertTrue(self.sync.has_changed)
         self.assertIn('Copy complete: copied 1 of 1 files to %s' % (self.dst_root,), self.messages)
+
+    def test_live_changes_are_noted_for_the_replicas_logs(self):
+        changes = replicalog.Changes()
+        with mock.patch('dirdelta.dryrun.DRYRUN', False):
+            self._browse([['sub/b.txt'], ['sub/c.txt'], None], ['Copy', YES, 'Remove', YES, SURE], changes=changes)
+        self.assertEqual(changes.summary(self.dst_root), "copied 1 file from %s" % (self.src_root,))
+        self.assertEqual(changes.summary(self.src_root), "removed 1 file")
+        # Not in a dry run
+        changes = replicalog.Changes()
+        self._browse([['sub/b.txt'], None], ['Copy', YES], changes=changes)
+        self.assertEqual(changes.paths(), [])
 
     def test_the_other_picks_stay_picked(self):
         # Both picked, but only one copied: the other's copy fails

@@ -12,6 +12,7 @@ from dirdelta import clouddirtree
 from dirdelta import inbox
 from dirdelta import localdiskdirtree
 from dirdelta import picker
+from dirdelta import replicalog
 from dirdelta import replicas
 
 Sort = inbox.InboxSort
@@ -179,6 +180,42 @@ class InboxSortTest(unittest.TestCase):
             self.sort([['Thumbs.db'], None], ['Remove the 1 file that look like junk', YES, SURE], is_dry_run=True)
         self.assertTrue(self.exists('inbox', 'Thumbs.db'))
         self.assertFalse([call for call in run.call_args_list if call.args[0][:1] == ['gio']])
+
+    def test_live_changes_are_noted_for_the_logs(self):
+        with mock.patch('dirdelta.messages.ask', return_value='x'):
+            self.sort([['a.txt'], ['b.jpg'], ['trip/c.jpg'], None],
+                      ['Move the 1 file to...', YES, 'Copy the 1 file to...', YES, 'Remove the 1 file', YES, SURE],
+                      dirs=[os.path.join(self.root, 'docs')] * 2)
+        changes = self.sorter.changes
+        self.assertEqual(changes.summary(self.root), "added 1 file from %s; copied 1 file from %s" % (self.inbox, self.inbox))
+        self.assertEqual(changes.summary(self.inbox), "moved 1 file to %s; removed 1 file" % (self.root,))
+        # Not in a dry run
+        self.sort([['b.jpg'], None], ['Remove the 1 file', YES, SURE], is_dry_run=True)
+        self.assertEqual(self.sorter.changes.paths(), [])
+
+    def test_a_sort_reads_the_logs_and_offers_entries_once_done(self):
+        with open(os.path.join(self.root, 'last_update.txt'), 'w') as log:
+            log.write("17.05.2026 - removed old money.ods\n")
+        known = replicas.Replicas()
+        picks = [['a.txt'], None]
+        with helpers.scripted_files_picker(lambda relpaths: picks.pop(0)), \
+                helpers.answering_option_picker(['Move the 1 file to...', YES, 'Add it to its', replicalog.NO_ENTRY]) as pick, \
+                mock.patch('dirdelta.picker.pick_under_dir', return_value=('', os.path.join(self.root, 'docs'))), \
+                mock.patch('dirdelta.picker.view_files', return_value=True), \
+                mock.patch('dirdelta.replicas.save'), mock.patch('dirdelta.dryrun.DRYRUN', False), \
+                mock.patch('dirdelta.replicalog.identity', side_effect=lambda path: 'id:' + path), \
+                self.synchronously():
+            inbox.run(self.inbox, self.root, known)
+        # Seen at the start, and its log's last entry is the one added since
+        self.assertIsNotNone(known.known['id:' + self.root]['seen'])
+        self.assertEqual(known.known['id:' + self.root]['last_entry']['text'], "added 1 file from %s" % (self.inbox,))
+        self.assertIsNone(known.known['id:' + self.inbox]['last_entry'])
+        # Then offered for each changed one: the sorted tree first (it's added the file), then the inbox
+        headers = [call.kwargs['header'] for call in pick.call_args_list[2:]]
+        self.assertIn("added 1 file from %s" % (self.inbox,), headers[0])
+        self.assertIn("moved 1 file to %s" % (self.root,), headers[1])
+        with open(os.path.join(self.root, 'last_update.txt')) as log:
+            self.assertTrue(log.read().endswith(" - added 1 file from %s\n" % (self.inbox,)))
 
     def test_remove_is_asked_twice(self):
         self.sort([['a.txt'], None], ['Remove the 1 file', YES, SURE])

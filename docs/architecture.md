@@ -148,6 +148,11 @@ highlighted `SURELY_A_COPY`); Claude is told (`ai.recommend(copies=...)`) and
 may answer `action: 'remove'` (for junk too, with no copies: what Claude says,
 by the names, sizes and descriptions it's given), and the copies (by their contents, whatever Claude says) are offered as
 "Remove N of the M files that are copies of files in X". After a move or copy, the sorted tree's index has the file.
+Logs (see `dirsync_main.py` below): `inbox.run()` notes both replicas seen
+(`replicalog.note_seen()`, `InboxSort.log_trees()`: a tree of each, apart from
+the one moves happen in), the sort notes what it does live in `InboxSort.changes`
+(the sorted tree: 'added' from the inbox, 'copied'; the inbox: 'moved' to the
+sorted tree, 'removed'), and once it's quit, `replicalog.offer_entries()`.
 Junk (`_junk()`): by its name or size (`junk.find()` at each pick, `_junk_by_name`: system,
 temporary, partly downloaded, empty files, installers, archives unpacked beside them), or a
 `remove` of Claude's for a file with no copies. Shown as `[junk? why]` (`JUNK_BY_NAME`) or
@@ -443,6 +448,25 @@ took ~2.5s; the picker now opens 0.2s after the diff).
   to crash it is fixed, known-issues.md #16.)
 
 ### `dirsync_main.py` / `dirpick_main.py`
+Before the menu, `run()` reads each replica's log (`replicalog.note_seen()`, `replicalog.read()`: its
+`last_update.txt`, a Drive one downloaded through `downloads.get()`) and notes
+it in `replicas.json` (`Replicas.note_seen()`, by `replicalog.identity()`: a local
+replica's filesystem UUID, `mounts.current_mount()`, and its path in it; a Drive
+one's My Drive root id, `drivecache.root_id()`, and its path). The ways note
+what they change live in a `replicalog.Changes` (`InteractiveDirSync(changes=...)`:
+copied, removed, moved, added up per replica), and after Quit,
+`replicalog.offer_entries()` offers each changed replica an entry for its log
+(`replicalog.entry_line()`: today's date and `Changes.summary()`): added to its
+log or to both replicas' (`replicalog.write()`: a local file replaced at once, a
+Drive one by `CloudDirTree.write_file()`, a new version of it, or a new file),
+edited first (`messages.ask()`), or not; `note_changed()`/`note_entry()` keep
+when and what. `replicalog.parse()`/`last_entry()` read the log's format
+(`DD.MM.YYYY - text`, its continuation lines after it; what it can't parse is
+kept as text). `choose_replicas` shows each pair's paths with when they were
+last updated (`pair_label(known=...)`), and "Known replicas" (`show_known()`):
+each one's last entry, last sync and change, other paths, and whether its disk
+is connected (`replicalog.is_disk_connected()`).
+
 Thin wiring: for two local dirs, make their `LocalDiskDirTree`s without
 scanning them (each action diffs them with dirdiff, see below); else build
 both `DirTree`s, warn (`scan_errors_warning`, shown with

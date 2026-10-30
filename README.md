@@ -194,6 +194,21 @@ runs: they change nothing on disk (not even the dirs copied files would go into)
 would have done. Every screen says which it is, at the start of its bottom line (the progress
 screen: its top line): "DRY RUN" in green, or "LIVE" in red.
 
+Each replica's log, `last_update.txt` at its root, which you keep (newest last; an entry a line
+starting with its date, `DD.MM.YYYY - what changed`, its other lines after it): when a sync starts,
+dirdelta reads each replica's (a Drive one is downloaded, once until it changes) and keeps its last
+entry in `replicas.json`, by the replica's identity: a local one by its filesystem's UUID and the path
+in it (so a disk is the same replica wherever it's mounted), a Drive one by the account and its path.
+The menu of a run without paths says when each was last updated (`/mnt/win/eliran (updated
+17.05.2026) <-> cloud/eliran`), and "Known replicas: when each was last updated" lists them all, with
+their last entry, when they were last synced and changed by dirdelta, and which disks aren't
+connected now. When you quit a sync that changed files (live: copied, removed or moved), it offers
+an entry for each changed replica, e.g. `30.10.2026 - copied 12 files from cloud/eliran`: added to its
+log, to both replicas' logs (so both say it), edited first, or not (a log is made if there's none).
+An inbox's sort does the same for the inbox and the sorted tree, when you quit it: e.g. `30.10.2026 -
+added 12 files from cloud/unsorted` for the sorted tree, and `moved 12 files to cloud/eliran; removed
+3 files` for the inbox.
+
 The fixtures are a small music library. Both have 106 files in common; only `alpha` has 364 (e.g.
 `podcasts/`, `music/Nina Simone/` and `first/infirst/ininfirst/huh/99.mp3`), and only `bravo` has 31
 (e.g. `audiobooks/Dune/`, `music/The Beatles/` and `third/anotherinthird/7.mp3`), so copying or

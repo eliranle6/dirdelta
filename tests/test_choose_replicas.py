@@ -1,9 +1,11 @@
+import datetime
 import unittest
 from unittest import mock
 
 from dirdelta import choose_replicas
 from dirdelta import dirtree
 from dirdelta import drivecache
+from dirdelta import replicalog
 from dirdelta import replicas
 import helpers
 
@@ -185,6 +187,38 @@ class ChooseReplicasTest(unittest.TestCase):
         # Going back from the first, the second isn't asked about
         self.assertEqual(asked, ['/mnt/win', '/mnt/win', 'cloud/me'])
 
+
+    def test_pairs_say_when_each_replica_was_last_updated(self):
+        self.known.toggle_favorite('/mnt/win', 'cloud/me')
+        self.known.note_seen('uuid:U:/', '/mnt/win', replicalog.Entry(datetime.date(2026, 5, 17), 'removed x'),
+                             datetime.datetime(2026, 10, 30, 9, 0))
+        with mock.patch('os.path.isdir', return_value=True):
+            chosen = self.run_menu(['  Favorite: /mnt/win (updated 17.05.2026) <-> cloud/me'])
+        self.assertEqual(chosen, ('/mnt/win', 'cloud/me'))
+
+    def test_the_known_replicas_with_disks_not_connected(self):
+        self.known.note_seen('uuid:U:/eliran', '/mnt/win/eliran',
+                             replicalog.Entry(datetime.date(2026, 5, 17), 'removed old money.ods\nremove Resume.*'),
+                             datetime.datetime(2026, 10, 30, 9, 5))
+        self.known.note_changed('uuid:U:/eliran', datetime.datetime(2026, 10, 30, 9, 30))
+        self.known.note_seen('drive:R:/eliran', 'cloud/eliran', None, datetime.datetime(2026, 10, 29, 8, 0))
+        with mock.patch('dirdelta.replicalog.is_disk_connected', side_effect=lambda identity: identity.startswith('drive')):
+            self.assertIsNone(self.run_menu([choose_replicas.KNOWN_LIST, 'Quit']))
+        title, lines = self.show.call_args.args[:2]
+        self.assertEqual(title, choose_replicas.KNOWN_LIST)
+        self.assertEqual(lines, [
+            '/mnt/win/eliran',
+            '  Last update: 17.05.2026 - removed old money.ods (+1 more line)',
+            '  Synced 30.10.2026 09:05; changed by dirdelta 30.10.2026 09:30',
+            "  Its disk isn't connected now (filesystem UUID U)",
+            '',
+            'cloud/eliran',
+            '  Last update: (no last_update.txt)',
+            '  Synced 29.10.2026 08:00'])
+
+    def test_no_known_replicas_no_option(self):
+        self.run_menu(['Quit'])
+        self.assertNotIn(choose_replicas.KNOWN_LIST, self.menus[0])
 
 if __name__ == '__main__':
     unittest.main()

@@ -10,6 +10,7 @@ from dirdelta import localdiskdirtree
 from dirdelta import messages
 from dirdelta import paths
 from dirdelta import picker
+from dirdelta import replicalog
 from dirdelta import replicas
 from dirdelta import utils
 
@@ -28,11 +29,16 @@ def run(args):
         warnings = scan_errors_warning(dirtree_a) + scan_errors_warning(dirtree_b)
         if warnings:
             messages.show("Warning: find couldn't read everything", warnings, dryrun.label(), 'red')
-    # Both are dirs (or Drive's), so they're the history's latest
+    # Both are dirs (or Drive's), so they're the history's latest; and what's known of each (its
+    # log's last entry, see replicalog.py) is as it is now
     known_replicas = replicas.load()
     known_replicas.record(args.dir_a_path, args.dir_b_path)
+    trees = [(dirtree_a, args.dir_a_path), (dirtree_b, args.dir_b_path)]
+    replicalog.note_seen(trees, known_replicas)
     replicas.save(known_replicas)
-    _sync(dirtree_a, dirtree_b, args.dir_a_path, args.dir_b_path, known_replicas)
+    changes = replicalog.Changes()
+    _sync(dirtree_a, dirtree_b, args.dir_a_path, args.dir_b_path, known_replicas, changes)
+    replicalog.offer_entries(changes, trees, known_replicas)
 
 
 def scan_errors_warning(tree):
@@ -40,9 +46,10 @@ def scan_errors_warning(tree):
     return localdiskdirtree.scan_warning(tree.fullpath(), getattr(tree, 'scan_errors', []))
 
 
-def _sync(replica_a, replica_b, replica_a_path, replica_b_path, known_replicas=None):
+def _sync(replica_a, replica_b, replica_a_path, replica_b_path, known_replicas=None, changes=None):
     """The main menu, until the user quits. With known_replicas (a Replicas, saved when changed),
-    it also makes the pair a favorite, or not."""
+    it also makes the pair a favorite, or not. changes: where the files changed live are noted (a
+    replicalog.Changes), if anywhere."""
     QUIT = "Quit"
     ADD_FAVORITE = "Add to favorites"
     REMOVE_FAVORITE = "Remove from favorites"
@@ -59,7 +66,7 @@ def _sync(replica_a, replica_b, replica_a_path, replica_b_path, known_replicas=N
     for way, src_path, dst_path in ((ways[0], replica_a_path, replica_b_path),
                                     (ways[1], replica_b_path, replica_a_path)):
         label = "Files in %s, not in %s" % (src_path, dst_path)
-        actions[label] = _Action(label, way, "none, %s has them all" % (dst_path,))
+        actions[label] = _Action(label, way, "none, %s has them all" % (dst_path,), changes)
     # A cloud replica's folder can be read anew from Drive, if Drive changed since the cache was made
     refreshes = {"Refresh %s from Google Drive" % (path,): replica
                  for replica, path in ((replica_a, replica_a_path), (replica_b, replica_b_path))
@@ -140,10 +147,11 @@ class _Way(object):
 class _Action(object):
     """A main menu option: the files of a way (interactive_dir_sync), nothing saying that there are
     none, when it can't be picked"""
-    def __init__(self, label, way, nothing):
+    def __init__(self, label, way, nothing, changes=None):
         self.label = label
         self.way = way
         self.nothing = nothing
+        self.changes = changes
 
     def shown_as(self):
         """The label, with how many files it's about, or that they're still being found. With none,
@@ -165,7 +173,7 @@ class _Action(object):
         way = self.way
         sync = interactive_dir_sync.InteractiveDirSync(way.src, way.dst, way.missing,
                                                        way.indexes[way.src], way.indexes[way.dst],
-                                                       way.checked)
+                                                       way.checked, self.changes)
         sync.browse()
         return sync.has_changed
 

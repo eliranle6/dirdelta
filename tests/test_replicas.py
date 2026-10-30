@@ -1,3 +1,4 @@
+import datetime
 import json
 import os
 import shutil
@@ -5,6 +6,7 @@ import tempfile
 import unittest
 from unittest import mock
 
+from dirdelta import replicalog
 from dirdelta import replicas
 
 
@@ -97,7 +99,25 @@ class ReplicasFileTest(unittest.TestCase):
             self.assertEqual(json.load(f), {'favorites': [['/mnt/win', 'cloud/me']],
                                             'history': [['/a', 'cloud/b']],
                                             'sorts': [['cloud/unsorted', 'cloud/me']],
-                                            'recent_dirs': {'cloud/me': ['photos/2026']}})
+                                            'recent_dirs': {'cloud/me': ['photos/2026']},
+                                            'known': {}})
+
+    def test_whats_known_of_a_replica_by_its_identity(self):
+        known = replicas.Replicas()
+        entry = replicalog.Entry(datetime.date(2026, 5, 17), 'removed old money.ods')
+        known.note_seen('uuid:U:/eliran', '/mnt/win/eliran/', entry, datetime.datetime(2026, 10, 30, 9, 5))
+        # The same disk, mounted elsewhere; a log that couldn't be read keeps the entry kept
+        known.note_seen('uuid:U:/eliran', '/media/disk/eliran', None, datetime.datetime(2026, 10, 30, 10, 0))
+        info = known.known['uuid:U:/eliran']
+        self.assertEqual(info['paths'], ['/media/disk/eliran', '/mnt/win/eliran'])
+        self.assertEqual(info['last_entry'], {'date': '2026-05-17', 'text': 'removed old money.ods'})
+        self.assertEqual(info['seen'], '2026-10-30 10:00')
+        self.assertIsNone(info['changed'])
+        self.assertIs(known.info_at('/mnt/win/eliran'), info)
+        self.assertIsNone(known.info_at('/elsewhere'))
+        known.note_changed('uuid:U:/eliran', datetime.datetime(2026, 10, 30, 11, 0))
+        known.note_entry('uuid:U:/eliran', replicalog.Entry(datetime.date(2026, 10, 30), 'copied 2 files'))
+        self.assertEqual((info['changed'], info['last_entry']['date']), ('2026-10-30 11:00', '2026-10-30'))
 
     def test_a_sorted_trees_recent_dirs_the_latest_first_once_and_capped(self):
         known = replicas.Replicas()

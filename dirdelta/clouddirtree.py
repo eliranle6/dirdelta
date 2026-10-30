@@ -241,6 +241,30 @@ class CloudDirTree(dirtree.DirTree):
             body=body, media_body=media, fields=drivecache.FILE_FIELDS).execute(num_retries=NUM_RETRIES)
         return dict(body, **created)
 
+    def write_file(self, relpath, local_path):
+        """Make the file at relpath (in a folder the tree has) the local file's contents: a new
+        version of it, if it's there (keeping its id), else a new file; and note it in the cache.
+        Raises HttpError or OSError if it can't."""
+        is_newly_stale = drivecache.mark_stale(self.fullpath())
+        parent_id = self._cloud_ids[os.path.dirname(relpath)]
+        if self.has_file(relpath):
+            md = driveapi.service().files().update(
+                fileId=self._cloud_ids[relpath], media_body=MediaFileUpload(local_path),
+                fields=drivecache.FILE_FIELDS).execute(num_retries=NUM_RETRIES)
+            md = dict(md, parents=[parent_id])
+        else:
+            md = self._upload(entries.FileEntry(os.path.basename(relpath), relpath, local_path), parent_id)
+            self.add_file_by_relpath(relpath)
+        drivecache.add(md)
+        if is_newly_stale:
+            drivecache.unmark_stale(self.fullpath())
+        self._cloud_ids[relpath] = md['id']
+        if 'size' in md:
+            self._sizes[relpath] = int(md['size'])
+        self._hashes[relpath] = drivecache.hashes(md)
+        if drivecache.modified_time(md) is not None:
+            self._modified[relpath] = drivecache.modified_time(md)
+
     def _uploaded(self, file_entry, future):
         """Add file_entry, whose upload (future, of _upload()) ended, to the tree and the cache.
         Returns whether it was uploaded."""
