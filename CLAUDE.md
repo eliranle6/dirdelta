@@ -46,7 +46,9 @@ replicas (`choose_replicas.py`: each slot browsed from `/` or Drive, or a
 favorite or recent pair from `~/.config/dirdelta/replicas.json`, kept by
 `replicas.py`), then sync mode; one path → picker mode (`dirpick_main.py`,
 which prints the picked path, or `execvp`s the `-x` program on it), two
-paths → sync mode (`dirsync_main.py`), which records the pair in that file;
+paths → sync mode (`dirsync_main.py`), which records the pair in that file
+(each of them, first, checks that the local replicas' volumes are mounted, asking to
+mount one that was mounted before and isn't now: `mounts.py`);
 `--sort INBOX ROOT` (or "Sort an inbox" in the no-path menu) → sorting an
 inbox into a sorted tree (`inbox.py`, with Claude's descriptions and
 recommendations from `ai.py`, through the Claude Agent SDK), kept in that
@@ -79,6 +81,7 @@ time: a replica's, at the start or from the main menu, or one in it, with the fi
 picker's `r`; with a `files.txt.stale` next to it, listing the folders where a
 change dirdelta made to Drive was cut off before it was added to the cache),
 `~/.config/dirdelta/replicas.json` (the history, favorites and sorts),
+`~/.config/dirdelta/mounts.json` (how the replicas' volumes were mounted),
 `~/.cache/dirdelta/ai.json` (what Claude said of files),
 `~/.cache/dirdelta/hashes.json` (local files' hashes) or `secrets/`.
 
@@ -134,7 +137,7 @@ module:
 PYTHONPATH=.:tests .venv/bin/python3 -m unittest test_interactive_dir_sync -v
 ```
 
-Every module has a test file (406 tests, all passing as of 2026-10-30) except
+Every module has a test file (420 tests, all passing as of 2026-10-30) except
 the thin wiring in `main.py`/`dirsync_main.py`, covered only by running the
 app. Shared fakes:
 - `tests/helpers.py`: `scripted_option_picker` / `scripted_tree_picker` /
@@ -156,6 +159,10 @@ app. Shared fakes:
   `dirdelta.replicas.REPLICAS_FILE` to a temp file (`test_replicas`), or
   `replicas.load`/`replicas.save`. A manual run that shouldn't touch it can set
   `HOME` to a scratch dir (but that hides the real Drive cache too).
+- Nothing is mounted, and the real `~/.config/dirdelta/mounts.json` isn't read or
+  written: `tests/helpers.py` points `mounts.MOUNTS_FILE` at a temp file, and
+  `test_mounts` fakes `findmnt`, `lsblk`, `mount` (`subprocess.run`),
+  `os.path.ismount` and `/dev/disk/by-uuid`.
 - Drive is never contacted: `test_clouddirtree` writes a JSON-lines cache to
   a temp file, `test_driveapi` mocks `Credentials`/`build`, and the rest patch
   `driveapi.service()` with a fake (e.g. `test_clouddirtree`'s uploads, downloads

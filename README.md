@@ -66,6 +66,14 @@ Choosing a pair, or both replicas, goes on to the sync menu below, which also ha
 (or "Remove from favorites"). Every sync's pair is kept in `~/.config/dirdelta/replicas.json` (the
 latest first, each pair once, either way around), which you can also edit by hand.
 
+A local replica on a volume of its own (a partition mounted by hand, like `/mnt/win`, or an external
+disk) has its mount remembered in `~/.config/dirdelta/mounts.json`. When it's used again and the
+volume isn't mounted (its mount point would be an empty dir, where every file looks missing),
+dirdelta asks to mount it where it was, by its UUID, showing the command (`sudo mount ...`, or
+`mount TARGET` if `/etc/fstab` has it), or to connect its disk first; Back goes back to the menu. It's mounted
+read-write. A Windows partition that Windows left hibernated (or with Fast Startup) can't be: the
+error says to start Windows and shut it down fully.
+
 Its sections, each under a grey heading: "Sync two replicas" (the two slots and the favorites),
 "Recent syncs", "Sort an inbox into a sorted tree" (a new sort: choose the inbox, then the sorted
 tree), and "Recent inbox sorts".

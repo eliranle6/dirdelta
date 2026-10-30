@@ -31,9 +31,35 @@ Argparse: `dir_a_path`, `dir_b_path` (both optional), `-x/--execute`,
 `find -maxdepth`), `-s/--sort`. No positional path → `choose_replicas.run`, then
 `dirsync_main.run` on what it chose (or `inbox.run`, for a `Sort`); one →
 `dirpick_main.run`; two → `dirsync_main.run`, or with `--sort`, `inbox.run`
-(the first path the inbox, the second the sorted tree). No curses setup: a `picker.PickerError` (treepicker
-missing or failing), `DriveCacheError` or `replicas.ReplicasError` exits
-with its message.
+(the first path the inbox, the second the sorted tree). Before any of them,
+`_ready()` checks that the local paths' volumes are mounted
+(`mounts.ensure_mounted()`; if the user won't mount one, it quits) and remembers
+how they are (`mounts.remember()`). No curses setup: a `picker.PickerError` (treepicker
+missing or failing), `DriveCacheError`, `replicas.ReplicasError` or
+`mounts.MountsError` exits with its message.
+
+### `mounts.py`
+The volumes local replicas are on, in `~/.config/dirdelta/mounts.json`
+(`MOUNTS_FILE`, by mount point; JSON, written whole with `os.replace`), so one
+that isn't mounted now (`/mnt/win`, mounted by hand; an external disk) is found
+before it's scanned: an unmounted mount point is an empty dir on the root
+filesystem, where the diff would say every file is missing and a live Copy
+would fill the root filesystem. `remember(path)` keeps `findmnt --target`'s
+mount (point, device, type, options, UUID, label), unless it's `/` or has no
+UUID (a tmpfs, WSL's drives); a FUSE type (ntfs-3g's `fuseblk`) is kept as
+the device's (`lsblk`: `ntfs`). `unmounted(path)` is the innermost kept mount
+above the path that `os.path.ismount()` says isn't mounted. `ensure_mounted(path)`
+asks, until it's mounted or the user goes back: if the disk isn't connected
+(`/dev/disk/by-uuid/UUID` missing), Try again or Back; else Mount it (the option
+shows the command) or Back. `mount_command()`: `mount TARGET` if fstab has a line
+for it (with `sudo` unless the line has `user`/`users`), else `sudo mount -t TYPE
+-o rw,OPTIONS UUID=... TARGET`: read-write (even if it was read-only), with the
+filesystem's options (none of NTFS's, which are FUSE's own). sudo asks for the password
+on the terminal; a failure is shown (`messages.show`) and asked about again. If
+ntfs-3g refuses (Windows hibernated, or Fast Startup: "unclean file system"),
+it isn't mounted read-only instead: the error screen says to shut Windows down
+fully. Asked even in a dry run (it
+changes the system, not files), never done without asking.
 
 ### `replicas.py` / `choose_replicas.py`
 `replicas.py` keeps the pairs of replicas synced (`history`, the latest
@@ -47,7 +73,8 @@ that can't be read raises `ReplicasError` rather than being overwritten.
 `choose_replicas.run(replicas)` is the menu for a run without paths: two
 slots (Replica A, B), then the favorites, then the recent pairs (the
 history without the favorites), then Quit. A pair is chosen at once, unless
-one of its local dirs is gone (a screen says so, back to the menu; a cloud
+a volume one of its local dirs is on isn't mounted and the user won't mount it
+(`mounts.ensure_mounted()`, back to the menu), or one of its local dirs is gone (a screen says so, back to the menu; a cloud
 one is checked when the sync reads Drive's file list); a slot
 asks Local disk / Google Drive, then picks a dir: under `/` with
 `picker.pick_under_dir(dirs_only=True, lazy=True)` (treepicker reads a dir

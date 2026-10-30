@@ -6,6 +6,7 @@ import tempfile
 from unittest import mock
 
 from dirdelta import hashcache
+from dirdelta import mounts
 from dirdelta import picker
 
 # The tests never keep hashes in the real hash cache (~/.cache/dirdelta/hashes.json): every test
@@ -13,6 +14,11 @@ from dirdelta import picker
 _hash_cache_dir = tempfile.mkdtemp(prefix='dirdelta-test-hashes-')
 hashcache.CACHE_FILE = os.path.join(_hash_cache_dir, 'hashes.json')
 atexit.register(shutil.rmtree, _hash_cache_dir, ignore_errors=True)
+# Nor read or write the real mounts' file (~/.config/dirdelta/mounts.json): the tests that may check
+# replicas' mounts (choose_replicas') import this module
+_mounts_dir = tempfile.mkdtemp(prefix='dirdelta-test-mounts-')
+mounts.MOUNTS_FILE = os.path.join(_mounts_dir, 'mounts.json')
+atexit.register(shutil.rmtree, _mounts_dir, ignore_errors=True)
 
 
 def scripted_option_picker(answers):

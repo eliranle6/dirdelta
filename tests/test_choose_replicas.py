@@ -169,6 +169,22 @@ class ChooseReplicasTest(unittest.TestCase):
         # Back to the menu
         self.assertEqual(len(self.menus), 2)
 
+    def test_a_pair_on_a_volume_not_mounted_is_back_to_the_menu_unless_its_mounted(self):
+        self.known.toggle_favorite('/mnt/win', 'cloud/me')
+        mounted = [False, True]
+        asked = []
+
+        def ensure_mounted(path):
+            asked.append(path)
+            return mounted.pop(0) if path == '/mnt/win' else True
+        with mock.patch('dirdelta.mounts.ensure_mounted', side_effect=ensure_mounted), \
+                mock.patch('os.path.isdir', return_value=True):
+            chosen = self.run_menu(['  Favorite: /mnt/win <-> cloud/me'] * 2)
+        self.assertEqual(chosen, ('/mnt/win', 'cloud/me'))
+        self.assertEqual(len(self.menus), 2)
+        # Going back from the first, the second isn't asked about
+        self.assertEqual(asked, ['/mnt/win', '/mnt/win', 'cloud/me'])
+
 
 if __name__ == '__main__':
     unittest.main()

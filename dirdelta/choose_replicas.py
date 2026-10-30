@@ -8,6 +8,7 @@ import os
 from dirdelta import drivecache
 from dirdelta import dryrun
 from dirdelta import messages
+from dirdelta import mounts
 from dirdelta import paths
 from dirdelta import picker
 from dirdelta import utils
@@ -58,6 +59,8 @@ def run(replicas):
                 return sort
             continue
         if option in sorts:
+            if not _mounted(sorts[option]):
+                continue
             missing = [path for path in sorts[option]
                        if not paths.is_cloud_path(path) and not os.path.isdir(path)]
             if missing:
@@ -67,6 +70,8 @@ def run(replicas):
                 continue
             return sorts[option]
         if option in pairs:
+            if not _mounted(pairs[option]):
+                continue
             # A favorite or recent pair's local dir may be gone since (a cloud one is checked when
             # the sync reads Drive's file list)
             missing = [path for path in pairs[option]
@@ -102,6 +107,12 @@ def _choose_sort(replicas):
     if root is None:
         return None
     return Sort(inbox, root)
+
+
+def _mounted(replica_paths):
+    """Whether the replicas' volumes are mounted (the user is asked to mount one that isn't, see
+    mounts.py); if not, the user goes back to the menu"""
+    return all(mounts.ensure_mounted(path) for path in replica_paths)
 
 
 def known_replicas(replicas):
