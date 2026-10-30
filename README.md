@@ -119,6 +119,9 @@ them, with "Nothing" selected first:
   name you type, to Claude's dir", "Move the N files to..." (pick a dir), "Move the N files, under
   Claude's names, to...", and "Move the file, under a name you type, to...". Then "Copy the N files
   to...", and "Remove the N files" (asked twice).
+- Where "to..." goes: the sorted tree's recent dirs first (the last 10 that files were moved or copied
+  to, kept in `replicas.json`), or "Pick a dir", where `n` makes a new dir in the selected one (its
+  name typed next; `a/b` makes both), made when the files go there.
 
 A move or a copy first shows the tree it makes (each file where it goes, and where it's from beside
 it), to look through (`Enter` goes on, `q` back); then No/Yes. When both are local, or both in

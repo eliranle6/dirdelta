@@ -47,18 +47,23 @@ class InboxSortTest(unittest.TestCase):
             sorter.wait_for_claude()
         return mock.patch.object(Sort, 'ask_in_background', ask_and_wait)
 
-    def sort(self, picks, answers, dirs=(), view=True, is_dry_run=False):
+    def sort(self, picks, answers, dirs=(), view=True, is_dry_run=False, known=None):
         """Sort, the inbox's picker answering picks in turn, the menus answers, the dir picker
         dirs (paths), and the approval's view returning view"""
         picks, dirs = list(picks), list(dirs)
         with helpers.scripted_files_picker(lambda relpaths: picks.pop(0)) as self.pick_files, \
                 helpers.answering_option_picker(answers) as self.pick_option, \
                 mock.patch('dirdelta.picker.pick_under_dir',
-                           side_effect=lambda *_, **__: dirs.pop(0)) as self.pick_under_dir, \
+                           side_effect=lambda *_, **__: self.picked_dir(dirs.pop(0))) as self.pick_under_dir, \
                 mock.patch('dirdelta.picker.view_files', return_value=view) as self.view_files, \
                 mock.patch('dirdelta.dryrun.DRYRUN', is_dry_run), self.synchronously():
-            self.sorter = Sort(self.inbox, self.root)
+            self.sorter = Sort(self.inbox, self.root, known)
             self.sorter.run()
+
+    @staticmethod
+    def picked_dir(picked):
+        """What the dir picker returns for picked: a path (Enter on it), or (a key, the path)"""
+        return picked if isinstance(picked, tuple) else ('', picked)
 
     def exists(self, *parts):
         return os.path.exists(os.path.join(self.tmpdir, *parts))
@@ -418,11 +423,47 @@ class InboxSortTest(unittest.TestCase):
         with self.assertRaises(inbox.InboxError):
             Sort(os.path.join(self.tmpdir, 'nope'), self.root)
 
+    def test_a_new_dir_is_made_in_the_selected_one(self):
+        with mock.patch('dirdelta.messages.ask', return_value='2026/taxes/') as ask:
+            self.sort([['a.txt'], None], ['Move the 1 file to...', YES],
+                      dirs=[('n', os.path.join(self.root, 'docs'))])
+        self.assertIn('n', self.pick_under_dir.call_args.kwargs['keys'])
+        self.assertEqual(ask.call_args.args[0], "A new dir in %s/docs/" % (self.root,))
+        self.assertTrue(self.exists('sorted', 'docs', '2026', 'taxes', 'a.txt'))
+
+    def test_a_new_dirs_name_isnt_a_path_out(self):
+        with mock.patch('dirdelta.messages.ask', return_value='../x'):
+            self.sort([['a.txt'], None], ['Move the 1 file to...'], dirs=[('n', self.root)])
+        self.assertEqual(self.show.call_args.args[0], "Not a dir's name")
+        self.assertTrue(self.exists('inbox', 'a.txt'))
+
+    def test_the_dirs_moved_to_are_offered_first_next_time(self):
+        known = replicas.Replicas()
+        with mock.patch('dirdelta.replicas.save') as save:
+            # The first time, there are none: straight to the dir picker
+            self.sort([['a.txt'], None], ['Move the 1 file to...', YES], dirs=[os.path.join(self.root, 'docs')],
+                      known=known)
+            self.assertEqual(known.dirs_of(self.root), ['docs'])
+            save.assert_called_with(known)
+            # Then the recent ones, before picking one
+            self.sort([['b.jpg'], None], ['Copy the 1 file to...', 'Recent: docs/', YES], known=known)
+            menu = self.pick_option.call_args_list[1]
+            self.assertEqual(menu.args[0], ['Recent: docs/', Sort.PICK_DIR])
+            self.assertIn(self.root, menu.kwargs['header'])
+            self.assertTrue(self.exists('sorted', 'docs', 'b.jpg'))
+            # A new one, or one picked, goes to the top; one not moved to (No) doesn't
+            with mock.patch('dirdelta.messages.ask', return_value='new'):
+                self.sort([['trip/c.jpg'], None], ['Move the 1 file to...', 'Pick a dir', YES],
+                          dirs=[('n', os.path.join(self.root, 'photos'))], known=known)
+                self.sort([['b.jpg'], None], ['Move the 1 file to...', 'Pick a dir', NO],
+                          dirs=[os.path.join(self.root, 'photos')], known=known)
+        self.assertEqual(known.dirs_of(self.root), ['photos/new', 'docs'])
+
     def test_a_dir_in_the_inbox_cant_be_the_destination(self):
         root_with_inbox = self.tmpdir
         sorter = Sort(self.inbox, root_with_inbox)
-        with mock.patch('dirdelta.picker.pick_under_dir', return_value=os.path.join(self.inbox, 'trip')):
-            self.assertIsNone(sorter._pick_dir('Pick'))
+        with mock.patch('dirdelta.picker.pick_under_dir', return_value=('', os.path.join(self.inbox, 'trip'))):
+            self.assertIsNone(sorter._pick_dir('move', '1 file'))
         self.assertEqual(self.show.call_args.args[0], "That's the inbox")
 
     def two_trees(self):

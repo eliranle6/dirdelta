@@ -83,7 +83,10 @@ only when it's shown), or in the whole Drive tree (`cloud`) with
 it returns them. After the pairs: "Sort an inbox" (the inbox, then the
 sorted tree, each chosen as a slot is) and the recent sorts (`sorts`, at
 most `MAX_SORTS`, by their way around: `record_sort()`), which return a
-`choose_replicas.Sort(inbox, root)`. Each kind is a section under a heading
+`choose_replicas.Sort(inbox, root)`. It also keeps each sorted tree's
+recent dirs (`recent_dirs`, by its path: the relpaths files were moved or copied
+to by "Move to...", at most `MAX_RECENT_DIRS`, `record_dir()`/`dirs_of()`),
+for the inbox. Each kind is a section under a heading
 (a `picker.Disabled` option, so it can't be picked; the menu starts on the
 first slot, `pick_option(selected=...)`): Sync two replicas (the slots and the
 favorites), Recent syncs, Sort an inbox, Recent inbox sorts; a section with
@@ -122,8 +125,11 @@ the bottom line says how it went, `_open_note`). Enter (with none picked, the
 selection: `pick_files(enter_picks_selection=True)`, treepicker's
 `--enter-picks-selection`) → `_act()`, the action menu
 (`NOTHING` first): describe, ask where they go, move (to Claude's dir, or a
-picked one: `pick_under_dir(dirs_only, lazy)`, or `pick_from_tree` of the sorted tree
-from the cache; under the file's name, Claude's, or one typed for one file,
+picked one, `_choose_dir()`: the sorted tree's recent dirs first, if it has
+any (`replicas.Replicas.dirs_of()`; the one moved or copied to is recorded,
+`record_dir()`), else `_pick_dir()`: `pick_under_dir(dirs_only, lazy)`, or `pick_from_tree` of the sorted tree
+from the cache, with `keys='n'` (`--expect`): a new dir in the selected one,
+its name typed, `_new_dir()`; under the file's name, Claude's, or one typed for one file,
 `_typed_name()`, `messages.ask()`, starting as Claude's or its own), copy to a
 picked dir, remove (confirmed twice). A move or copy (`_approve()`)
 first shows the tree it makes (`picker.view_files()`, with where each file

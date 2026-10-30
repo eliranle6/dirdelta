@@ -47,18 +47,21 @@ def highlighted(text, color='green'):
 Picked = collections.namedtuple('Picked', ['key', 'selected', 'files'])
 
 
-def pick_from_tree(tree, header='', dirs_only=False, root_name=None):
+def pick_from_tree(tree, header='', dirs_only=False, root_name=None, keys=''):
     """Let the user pick a node of a DirTree (with dirs_only, only of its dirs), its root shown as
     root_name (default: the tree's displayname()). Returns [the picked node's data (entry)], or None
-    if the user quit."""
-    args = ['--typed', '--root', root_name or tree.displayname()] + _header_args(header)
+    if the user quit. With keys (e.g. 'n'), keys that end picking too: it returns (the key, '' for
+    Enter; [the picked or selected node's data]), or None."""
+    args = ['--typed', '--root', root_name or tree.displayname()] + _header_args(header) + _keys_args(keys)
     if dirs_only:
         args.append('--dirs-only')
     picked_paths = _run(args + ['-'], list(_tree_paths(tree)))
     if picked_paths is None:
         return None
+    key, picked_paths = _key_and_selected(keys, picked_paths)
     # The root is printed as '.'; its id is ''
-    return [tree.get_node('' if path == '.' else path).data for path in picked_paths]
+    picked = [tree.get_node('' if path == '.' else path).data for path in picked_paths]
+    return (key, picked) if keys else picked
 
 
 def pick_files(rootpath, relpaths, header='', picked=None, label=None, keys='', selected=None,
@@ -143,19 +146,37 @@ def view_files(rootpath, relpaths, header='', previews=None, label=None):
                 previews=send_previews) is not None
 
 
-def pick_under_dir(dirpath, max_depth=None, dirs_only=False, lazy=False, header=''):
+def pick_under_dir(dirpath, max_depth=None, dirs_only=False, lazy=False, header='', keys=''):
     """Let the user pick a file or dir (with dirs_only, a dir) under the local dir dirpath, scanned
     by treepicker itself: all of it at the start, or with lazy, a dir at a time, as it's shown
-    (for a huge one, like /). Returns the picked one's full path, or None if the user quit."""
+    (for a huge one, like /). Returns the picked one's full path, or None if the user quit. With
+    keys (e.g. 'n'), keys that end picking too: it returns (the key, '' for Enter; the picked or
+    selected one's full path), or None."""
     args = [] if max_depth is None else ['--max-depth', str(max_depth)]
     if dirs_only:
         args.append('--dirs-only')
     if lazy:
         args.append('--lazy')
-    picked = _run(args + _header_args(header) + [dirpath], None)
+    picked = _run(args + _header_args(header) + _keys_args(keys) + [dirpath], None)
     if picked is None:
         return None
-    return dirpath if picked[0] == '.' else os.path.join(dirpath, picked[0])
+    key, picked = _key_and_selected(keys, picked)
+    path = dirpath if picked[0] == '.' else os.path.join(dirpath, picked[0])
+    return (key, path) if keys else path
+
+
+def _keys_args(keys):
+    """A one-node picker's args for keys that end picking too: they're printed first, then the
+    selected node (for Enter, the picked one)"""
+    return ['--expect', keys, '--print-selection'] if keys else []
+
+
+def _key_and_selected(keys, printed):
+    """With keys (see _keys_args()), the key ('' for Enter) and [the selected node's path]; else
+    no key, and printed as it is"""
+    if not keys:
+        return '', printed
+    return printed[0], printed[1:2]
 
 
 def pick_option(options, header='', shown_as=None, label=None, selected=None):

@@ -85,16 +85,30 @@ class ReplicasFileTest(unittest.TestCase):
         known.record('/a', 'cloud/b')
         known.toggle_favorite('/mnt/win', 'cloud/me')
         known.record_sort('cloud/unsorted', 'cloud/me')
+        known.record_dir('cloud/me/', 'photos/2026')
         # Its dir is made
         replicas.save(known)
         loaded = replicas.load()
         self.assertEqual(loaded.history, [('/a', 'cloud/b')])
         self.assertEqual(loaded.favorites, [('/mnt/win', 'cloud/me')])
         self.assertEqual(loaded.sorts, [('cloud/unsorted', 'cloud/me')])
+        self.assertEqual(loaded.dirs_of('cloud/me'), ['photos/2026'])
         with open(self.path) as f:
             self.assertEqual(json.load(f), {'favorites': [['/mnt/win', 'cloud/me']],
                                             'history': [['/a', 'cloud/b']],
-                                            'sorts': [['cloud/unsorted', 'cloud/me']]})
+                                            'sorts': [['cloud/unsorted', 'cloud/me']],
+                                            'recent_dirs': {'cloud/me': ['photos/2026']}})
+
+    def test_a_sorted_trees_recent_dirs_the_latest_first_once_and_capped(self):
+        known = replicas.Replicas()
+        for relpath in ['a', 'b', 'a', '']:
+            known.record_dir('/sorted', relpath)
+        known.record_dir('/other', 'c')
+        self.assertEqual(known.dirs_of('/sorted/'), ['', 'a', 'b'])
+        self.assertEqual(known.dirs_of('/none'), [])
+        for number in range(replicas.MAX_RECENT_DIRS + 1):
+            known.record_dir('/sorted', str(number))
+        self.assertEqual(len(known.dirs_of('/sorted')), replicas.MAX_RECENT_DIRS)
 
     def test_sorts_are_kept_the_latest_first_and_by_their_way_around(self):
         known = replicas.Replicas()

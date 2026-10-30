@@ -7,7 +7,7 @@ refreshing a cloud folder at a time: at the start, from the main menu, or with `
 picker, 2026-10-29; showing where the other replica has a file of the same name, beside the file
 picker, one picker per direction with Copy, Remove and Rename in it, sorting an inbox with
 Claude's help, 2026-10-29; remembering how a replica's volume was mounted and offering to mount
-it, 2026-10-30) are in git history. treepicker's own are in `lib/treepicker/docs/improvement-ideas.md`.
+it, and a new dir and the recent ones for an inbox's "Move to...", 2026-10-30) are in git history. treepicker's own are in `lib/treepicker/docs/improvement-ideas.md`.
 
 Ordered by how easy they are, easiest first (2026-10-30).
 
@@ -40,8 +40,6 @@ Ordered by how easy they are, easiest first (2026-10-30).
    and recommendations, is there (2026-10-29: `inbox.py`, `ai.py`). What's left:
    - The other replicas: a file moved into the sorted tree (`cloud/eliran/...`) could be copied into
      its other replicas too (e.g. `/mnt/win/Users/.../eliran/...`), in the same plan.
-   - "Move to..." picks an existing dir; a new one can only come from Claude's recommendation. The
-     dir picker could take a new dir's name (a key that asks for it).
    - Claude could say a file is junk (a duplicate, a screenshot of nothing), as a recommendation to
      remove it, never acted on without the user.
    - Recommendations per dir: a dir of one trip's photos is one decision, so Claude could be asked

@@ -97,12 +97,20 @@ class InboxSort(object):
     CONFIRM_YES = 'Yes'
     CONFIRM_SURE = 'Yes, remove them'
     REFRESH_KEY = 'r'
+    # The dir picker's key that makes a new dir in the selected one (its name typed next)
+    NEW_DIR_KEY = 'n'
+    # Where files go: a dir picked in the sorted tree, or one of the recent ones (by its relpath in
+    # it: the header names the sorted tree)
+    PICK_DIR = "Pick a dir (or make a new one: n in the picker)"
+    RECENT_DIR = "Recent: %s/"
 
-    def __init__(self, inbox_path, root_path):
+    def __init__(self, inbox_path, root_path, known_replicas=None):
         self.inbox_is_cloud = paths.is_cloud_path(inbox_path)
         self.root_is_cloud = paths.is_cloud_path(root_path)
         self.inbox_path = _normalized(inbox_path)
         self.root_path = _normalized(root_path)
+        # Where the sorted tree's recent dirs are kept (a replicas.Replicas, saved), if anywhere
+        self._known_replicas = known_replicas
         for path in (self.inbox_path, self.root_path):
             if not paths.is_cloud_path(path) and not os.path.isdir(path):
                 raise InboxError("%s is not a directory" % (path,))
@@ -388,8 +396,7 @@ class InboxSort(object):
             plan = [(relpath, _join(os.path.dirname(self._target(relpath)), os.path.basename(relpath)))
                     for relpath in recommended]
         elif action in (self.MOVE_TO, self.COPY_TO, self.MOVE_TO_CLAUDES_NAMES, self.MOVE_TO_TYPED):
-            destination = self._pick_dir("Pick the dir in %s to %s the %s to (Enter picks the selected dir)" %
-                                         (self.root_path, 'copy' if action == self.COPY_TO else 'move', count))
+            destination = self._choose_dir('copy' if action == self.COPY_TO else 'move', count)
             if destination is None:
                 return None
             # Claude's name, for the files it renamed
@@ -402,11 +409,15 @@ class InboxSort(object):
             plan = self._typed_name(plan)
             if plan is None:
                 return None
-        if action in (self.MOVE_TO_CLAUDES_DIR, self.MOVE_TO_CLAUDES_DIR_TYPED, self.MOVE_TO,
-                      self.MOVE_TO_CLAUDES_NAMES, self.MOVE_TO_TYPED):
+        if action in (self.MOVE_TO_CLAUDES_DIR, self.MOVE_TO_CLAUDES_DIR_TYPED):
             return self._approve(self.MOVE_TO, plan)
-        if action == self.COPY_TO:
-            return self._approve(self.COPY_TO, plan)
+        if action in (self.MOVE_TO, self.COPY_TO, self.MOVE_TO_CLAUDES_NAMES, self.MOVE_TO_TYPED):
+            done = self._approve(self.COPY_TO if action == self.COPY_TO else self.MOVE_TO, plan)
+            if done and self._known_replicas is not None:
+                # Offered first next time
+                self._known_replicas.record_dir(self.root_path, destination)
+                replicas.save(self._known_replicas)
+            return done
         if action == self.REMOVE:
             return self._remove(relpaths)
         if action == self.REMOVE_COPIES:
@@ -690,15 +701,61 @@ class InboxSort(object):
 
     # Moving, copying, removing
 
-    def _pick_dir(self, header):
-        """Let the user pick a dir in the sorted tree. Returns its relpath ('' the root), or None."""
+    def _choose_dir(self, verb, count):
+        """Let the user choose the dir in the sorted tree to move or copy (verb) the files (count, e.g.
+        '2 files') to: one of its recent ones, if it has any, or one picked (_pick_dir()). Returns its
+        relpath ('' the root), or None."""
+        recent = self._known_replicas.dirs_of(self.root_path) if self._known_replicas is not None else []
+        if not recent:
+            return self._pick_dir(verb, count)
+        options = {self.RECENT_DIR % (relpath or '.',): relpath for relpath in recent}
+        pick = self.PICK_DIR
+        answer = picker.pick_option(list(options) + [pick], header="Where in %s to %s the %s?" %
+                                    (self.root_path, verb, count), label=LABEL)
+        if answer == pick:
+            return self._pick_dir(verb, count)
+        if answer not in options:
+            return None
+        return self._not_the_inbox(options[answer])
+
+    def _pick_dir(self, verb, count):
+        """Let the user pick a dir in the sorted tree to move or copy (verb) the files (count) to, or
+        make a new one in it (NEW_DIR_KEY, then its name). Returns its relpath ('' the root), or
+        None."""
+        header = ("Pick the dir in %s to %s the %s to (Enter picks the selected dir; %s: a new dir in it)" %
+                  (self.root_path, verb, count, self.NEW_DIR_KEY))
         if self.root_is_cloud:
             root = clouddirtree.factory(self.root_path)
-            picked = picker.pick_from_tree(root, header=header, dirs_only=True, root_name=self.root_path)
-            relpath = picked[0].relpath if picked else None
+            picked = picker.pick_from_tree(root, header=header, dirs_only=True, root_name=self.root_path,
+                                           keys=self.NEW_DIR_KEY)
+            key, relpath = (picked[0], picked[1][0].relpath) if picked else ('', None)
         else:
-            path = picker.pick_under_dir(self.root_path, dirs_only=True, lazy=True, header=header)
-            relpath = None if path is None else _relpath(path, self.root_path)
+            picked = picker.pick_under_dir(self.root_path, dirs_only=True, lazy=True, header=header,
+                                           keys=self.NEW_DIR_KEY)
+            key, relpath = (picked[0], _relpath(picked[1], self.root_path)) if picked else ('', None)
+        if relpath is not None and key == self.NEW_DIR_KEY:
+            relpath = self._new_dir(relpath, verb, count)
+        return self._not_the_inbox(relpath)
+
+    def _new_dir(self, parent, verb, count):
+        """The relpath of a new dir in the sorted tree's dir at parent, its name typed (a/b: one in a
+        new one), to move or copy (verb) the files (count) to; it's made when they go there. None if
+        no name, or one that can't be, was typed."""
+        name = messages.ask("A new dir in %s/" % (_join(self.root_path, parent),),
+                            ["The new dir to %s the %s to, in %s/" % (verb, count, _join(self.root_path, parent)),
+                             "(a/b makes b in a new a). An empty name, or Ctrl-C, goes back."],
+                            "> ", label=dryrun.label())
+        if name is None:
+            return None
+        parts = name.strip('/').split('/')
+        if any(part in ('', '.', '..') for part in parts):
+            messages.show("Not a dir's name", ["%r can't be a new dir's name." % (name,)], dryrun.label(), 'red')
+            return None
+        return _join(parent, *parts)
+
+    def _not_the_inbox(self, relpath):
+        """relpath (a dir in the sorted tree), unless it's the inbox or in it (then it says so, and
+        it's None)"""
         if relpath is not None and self.is_one_tree and _is_at_or_under(_join(self._root_rel, relpath),
                                                                         self._inbox_rel):
             messages.show("That's the inbox", ["Pick a dir of %s that isn't in the inbox." % (self.root_path,)],
@@ -901,7 +958,7 @@ def _normalized(path):
 def run(inbox_path, root_path, known_replicas=None):
     """Sort the inbox at inbox_path into root_path (see InboxSort), with known_replicas (a
     replicas.Replicas, saved) remembering them as a recent sort"""
-    sort = InboxSort(inbox_path, root_path)
+    sort = InboxSort(inbox_path, root_path, known_replicas)
     if known_replicas is not None:
         known_replicas.record_sort(sort.inbox_path, sort.root_path)
         replicas.save(known_replicas)

@@ -150,6 +150,27 @@ class PickerTest(unittest.TestCase):
         self.answer('.')
         self.assertEqual(picker.pick_from_tree(tree), [tree.get_node('').data])
 
+    def test_pick_from_tree_with_keys_says_which_ended_it(self):
+        tree = self.make_tree()
+        self.answer('n|a')
+        self.assertEqual(picker.pick_from_tree(tree, keys='n'), ('n', [tree.get_node('a').data]))
+        args, _ = self.call()
+        self.assertEqual(args[args.index('--expect') + 1], 'n')
+        self.assertIn('--print-selection', args)
+        # Enter: no key, the selected one picked
+        self.answer('|.|.')
+        self.assertEqual(picker.pick_from_tree(tree, keys='n'), ('', [tree.get_node('').data]))
+
+    def test_pick_under_dir_with_keys_says_which_ended_it(self):
+        self.answer('n|a/b')
+        self.assertEqual(picker.pick_under_dir('/r', keys='n'), ('n', '/r/a/b'))
+        self.answer('|.|.')
+        self.assertEqual(picker.pick_under_dir('/r', keys='n'), ('', '/r'))
+        self.answer('a/b')
+        self.assertEqual(picker.pick_under_dir('/r'), '/r/a/b')
+        args, _ = self.call()
+        self.assertNotIn('--expect', args)
+
     def test_pick_files_sends_only_the_files(self):
         # treepicker adds their dirs
         self.answer('b/2.txt')
