@@ -40,13 +40,66 @@ Ordered by how easy they are, easiest first (2026-10-30).
    and recommendations, is there (2026-10-29: `inbox.py`, `ai.py`). What's left:
    - The other replicas: a file moved into the sorted tree (`cloud/eliran/...`) could be copied into
      its other replicas too (e.g. `/mnt/win/Users/.../eliran/...`), in the same plan.
-   - Claude could say a file is junk (a duplicate, a screenshot of nothing), as a recommendation to
-     remove it, never acted on without the user.
-   - Recommendations per dir: a dir of one trip's photos is one decision, so Claude could be asked
-     about the dir (its names and a few of its files) rather than each file.
-   - Claude is asked between pickers, on a progress screen; it could be asked in the background
-     while the picker is shown, its answers coming into the labels and the preview column as the
-     contents check's do.
+   - Junk: files to remove rather than sort, offered as such, never removed without the user. What's
+     there: when Claude says where files go, it may answer `remove`, but `ai.recommend()` keeps that
+     only for the files the contents check found to be copies of the sorted tree's; any other
+     `remove` is dropped (and with no path, the file has no recommendation: "Claude didn't say where
+     it goes"). The kinds of junk:
+     - By its name, with no Claude: `Thumbs.db`, `.DS_Store`, `desktop.ini`, `~$report.docx`,
+       `*.part`, `*.crdownload`, `*.tmp`, empty files; leftovers, like installers (`setup.exe`,
+       `.dmg`, `.msi`) or a `.zip` whose contents are beside it. A short list of rules: offline,
+       free, predictable, and for files Claude wasn't asked about too.
+     - By what Claude says, from what it's given already: accept a `remove` in `ai.recommend()` for
+       junk too, not only copies, with its reason, by the names, sizes and descriptions it has now
+       (no more reading).
+     - Shown: the label `name  [claude: junk? reason]` (`/junk?` finds them all), and the preview
+       in yellow, so it isn't taken for a copy's green: "Claude thinks it's junk: ..." or "Junk by
+       its name: a Windows thumbnails cache". The menu: "Remove 12 of the 40 files that look like
+       junk", apart from "Remove copies" (copies are sure, by their contents; junk is a judgment),
+       confirmed twice with each file's reason listed. `Ctrl-X` opens one to look first. Locally,
+       to the desktop's trash (`gio trash`) rather than for good, so a wrong guess is undone
+       easily; in Drive, to its trash, as now.
+     - Kept in `ai.json` with the description, so it's judged once.
+
+     Keep as an idea, but don't implement (2026-10-30): image analysis for junk, as it may take a
+     lot of tokens. That is: Haiku judging, while it reads a photo to describe it, whether it's a
+     bad one (a pocket shot, a black frame, blurry, a screenshot of nothing), as a `junk` field of
+     the description; and near-duplicates (a burst of shots of one scene, a resized or WhatsApp copy
+     of a photo, `report-v1`...`v3`): grouping files that look like one (dates taken seconds apart,
+     names in a sequence, similar sizes) and asking Claude which to keep.
+   - Recommendations per dir. Claude is asked about each file, but an inbox often has dirs whose
+     files go together (`rome-2024/`, 300 photos; `scans/tax-2025/`, 40 PDFs). Per file, that's 30
+     batches of 10 images read, files of one trip sent to different places (`photos/2024/rome/`,
+     `photos/italy/`) as each batch decides on its own, and 300 recommendations to look through
+     for what's one decision ("this trip goes to `photos/2024/`"). So: ask about the dir, and move
+     it as one.
+     - What Claude is given: the dir's name and file count, its size and types (a count per
+       extension), a few names (the first, the last, a sample), its date range (photos' dates
+       taken, `exif.py`, else modification times), descriptions of 3-5 of its files (read, as
+       now), and the sorted tree's dirs.
+     - What it answers: move it (where: kept or renamed, or merged into an existing dir), split
+       (mixed, e.g. `Downloads/`: back to asking per file), or remove (e.g. all its files are
+       copies of the sorted tree's).
+     - The picker: `Ctrl-I` on a selected dir (with nothing picked) asks about the dir rather than
+       each of its files; the dir's label gets `[claude: Rome trip photos, Oct 2024]` (so `/`
+       finds it), and its preview where it goes, why, and how many of its files are in the sorted
+       tree already.
+     - The menu: "Move the dir rome-2024 (300 files) to Claude's recommendation:
+       photos/2024/rome-trip/", and the other ways a file moves (Claude's dir or a picked one,
+       its name or a typed one) for a dir too.
+     - Moving: locally, one rename; in Drive, one request that changes the folder's parent (it
+       keeps its id; a sync's Rename moves whole dirs this way already); local to Drive or back,
+       its files copied, then the dir removed from the inbox. Into an existing dir, a merge: the
+       approval's tree shows the clashes first.
+     - Kept in `ai.json` by the dir's path, file count and total size, so a dir that changed is
+       asked about again.
+     - Open: which dirs (only those asked about with `Ctrl-I`, to start with, or ones guessed to
+       be one thing, by their names or a tight date range); nested dirs (ask about the top one,
+       Claude answering split when its subdirs differ); a dir with some files already in the
+       sorted tree (move the rest and remove the copies, or leave those to "Remove copies").
+     - Effort: medium. `ai.recommend_dir()` with its own prompt, dir nodes in the inbox's picker
+       (labels, previews, `Ctrl-I`), whole-dir plans in `_approve()`, tests. Drive's folder move
+       and the approval's tree are there.
 
 3. **Know each replica and when it was last updated.** The user keeps a `last_update.txt` at
    a replica's root, a log of changes, newest last, e.g. (`/mnt/win/.../eliran`'s, as of
