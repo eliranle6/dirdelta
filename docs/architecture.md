@@ -145,8 +145,16 @@ without the inbox's files, if it's in it), and the picker runs
 Claude is asked where files go, `check_all()` compares the picked ones. A file
 with the same contents as one of the sorted tree's is a copy (`_copies()`,
 highlighted `SURELY_A_COPY`); Claude is told (`ai.recommend(copies=...)`) and
-may answer `action: 'remove'`, and the copies (by their contents, whatever Claude says) are offered as
+may answer `action: 'remove'` (for junk too, with no copies: what Claude says,
+by the names, sizes and descriptions it's given), and the copies (by their contents, whatever Claude says) are offered as
 "Remove N of the M files that are copies of files in X". After a move or copy, the sorted tree's index has the file.
+Junk (`_junk()`): by its name or size (`junk.find()` at each pick, `_junk_by_name`: system,
+temporary, partly downloaded, empty files, installers, archives unpacked beside them), or a
+`remove` of Claude's for a file with no copies. Shown as `[junk? why]` (`JUNK_BY_NAME`) or
+`[claude: junk? why]` after the name, and `MAYBE_JUNK` (yellow) in the preview; "Remove N of the M
+files that look like junk" (`REMOVE_JUNK`) is `_remove(to_trash=True)`: a local inbox's files go
+to the desktop's trash (`LocalDiskDirTree.trashing()`: `_remove_file()` runs `gio trash`), Drive's
+to its trash as always.
 
 ### `hashcache.py`
 Local files' contents' hashes, in `~/.cache/dirdelta/hashes.json`

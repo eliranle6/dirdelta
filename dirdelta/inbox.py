@@ -8,6 +8,7 @@ one tree that has both (their common dir, or Drive's), so a move is a rename (in
 that keeps the file's id). When one is local and the other in Drive, a move is a copy (an upload or
 a download, as a sync's), then the file's removal from the inbox, once it's there."""
 import collections
+import contextlib
 import functools
 import os
 import posixpath
@@ -25,6 +26,7 @@ from dirdelta import dryrun
 from dirdelta import elsewhere
 from dirdelta import entries
 from dirdelta import interactive_dir_sync
+from dirdelta import junk
 from dirdelta import localdiskdirtree
 from dirdelta import messages
 from dirdelta import paths
@@ -50,6 +52,13 @@ OPENED_SHOWN_FOR = 5
 NAMES_PER_DIR = 3
 # What says a file of the inbox is in the sorted tree already, in its preview: highlighted
 SURELY_A_COPY = picker.highlighted("\u2192 a copy: it may be removed")
+# What says a file looks like junk, in its preview: in yellow, since it's a guess, not a copy's sure
+# green
+MAYBE_JUNK = picker.highlighted("\u2192 junk? it may be removed", 'yellow')
+# What a file that looks like junk is shown as, after its name (and its description): a search
+# (/) for 'junk?' finds them all
+JUNK_BY_NAME = "[junk? %s]"
+JUNK_BY_CLAUDE = "[claude: junk? %s]"
 # What a file being described is shown as, after its name
 LOOKING = "(Claude is looking at it...)"
 # What a file Claude described is shown as, after its name: a search (/) for 'claude:' finds them,
@@ -93,6 +102,7 @@ class InboxSort(object):
     COPY_TO = 'copy to'
     REMOVE = 'remove'
     REMOVE_COPIES = 'remove the copies'
+    REMOVE_JUNK = 'remove the junk'
     CONFIRM_NO = 'No'
     CONFIRM_YES = 'Yes'
     CONFIRM_SURE = 'Yes, remove them'
@@ -174,6 +184,8 @@ class InboxSort(object):
         self._root_index = elsewhere.Index(root_view, excluded=inbox_in_root)
         self._checked = {}
         self._indexing = None
+        # The inbox's files that look like junk by their names and sizes (junk.py): {relpath: why}
+        self._junk_by_name = {}
         # What the bottom line says of opening a file (Ctrl-X), and until when (None: while it's
         # being downloaded)
         self._open_note = None
@@ -215,7 +227,8 @@ class InboxSort(object):
                   "(To pick a file, press Space. When finished, press Enter (with none picked: the "
                   "selected one). Ctrl-I: Claude describes the picked files (or the selected one), and "
                   "says where they go, while you go on. Ctrl-X: open the selected file.%s "
-                  "[claude: ...]: what Claude says it is; / searches it too.)" %
+                  "[claude: ...]: what Claude says it is; [junk? ...]: it may be removed; / searches "
+                  "them too.)" %
                   (self.inbox_path, self.root_path,
                    " %s: read the selected folder anew from Google Drive." % (self.REFRESH_KEY,)
                    if self.inbox_is_cloud else ""))
@@ -227,6 +240,7 @@ class InboxSort(object):
                               dryrun.label())
                 return
             self._load_cached(files)
+            self._junk_by_name = junk.find(files, {relpath: self._size(relpath) for relpath in files})
             self._start_indexing()
             chosen = picker.pick_files(
                 self.inbox_path, files, header=header, picked=picked, label=LABEL,
@@ -258,13 +272,20 @@ class InboxSort(object):
 
     def _shown_as(self, relpaths):
         """{relpath: what the picker shows it as}: its name, and Claude's description, if any (or
-        that Claude's looking at it); and '': the status, what Claude is doing"""
+        that Claude's looking at it), and why it looks like junk, if it does; and '': the status,
+        what Claude is doing"""
         shown = {}
         for relpath in relpaths:
+            tags = []
             if relpath in self._descriptions:
-                shown[relpath] = "%s  %s" % (os.path.basename(relpath), DESCRIBED % (self._descriptions[relpath],))
+                tags.append(DESCRIBED % (self._descriptions[relpath],))
             elif relpath in self._describing:
-                shown[relpath] = "%s  %s" % (os.path.basename(relpath), LOOKING)
+                tags.append(LOOKING)
+            junk_reason = self._junk(relpath)
+            if junk_reason is not None:
+                tags.append((JUNK_BY_NAME if relpath in self._junk_by_name else JUNK_BY_CLAUDE) % (junk_reason,))
+            if tags:
+                shown[relpath] = "%s  %s" % (os.path.basename(relpath), '  '.join(tags))
         describing, placing = len(self._describing), len(self._placing)
         failed = len([relpath for relpath in relpaths if relpath in self._failed])
         busy = ["%s %s" % (what, _files(count))
@@ -303,7 +324,11 @@ class InboxSort(object):
                 lines += ["", "Claude couldn't describe it:"] + _wrapped(self._failed[relpath], "  ")
             lines += self._copies_lines(relpath)
             recommendation = self._recommendations.get(relpath)
+            if relpath in self._junk_by_name:
+                lines += ["", MAYBE_JUNK, "By its name or size, it's:"] + _wrapped(self._junk_by_name[relpath], "  ")
             if recommendation and recommendation.get('action') == 'remove':
+                if self._junk(relpath) is not None and relpath not in self._junk_by_name:
+                    lines += ["", MAYBE_JUNK]
                 lines += ["", "Claude recommends removing it:"] + _wrapped(recommendation.get('reason', ''), "  ")
             elif recommendation:
                 # Relative to the sorted tree, so a long root doesn't hide where in it
@@ -336,6 +361,7 @@ class InboxSort(object):
         # Copies of the sorted tree's files, by their contents (whatever Claude says of them), and the
         # files with candidates there not compared yet
         removable = [relpath for relpath in relpaths if self._copies(relpath)]
+        junky = [relpath for relpath in relpaths if self._junk(relpath) is not None]
         uncompared = [relpath for relpath in relpaths if relpath not in self._checked and self._root_index.is_built()
                       and elsewhere._same_sized(relpath, self._size(relpath), self._root_index)]
         not_yet = " (%d not compared yet: Ctrl-I compares them)" % (len(uncompared),) if uncompared else ""
@@ -369,6 +395,9 @@ class InboxSort(object):
             self.REMOVE_COPIES: ("Remove %s that are copies of files in %s%s" %
                                  (_of(len(removable), len(relpaths)), self.root_path, not_yet),
                                  None if removable else "none of them is a copy of a file there (by its contents)"),
+            self.REMOVE_JUNK: ("Remove %s that look like junk (to %s)" %
+                               (_of(len(junky), len(relpaths)), "Drive's trash" if self.inbox_is_cloud else "the trash"),
+                               None if junky else "none of them looks like junk (by its name, or as Claude says)"),
             self.MOVE_TO: ("Move the %s to... (pick a dir in %s)" % (count, self.root_path), None),
             self.MOVE_TO_CLAUDES_NAMES: ("Move the %s, under Claude's names (%d renamed), to... (pick a dir in %s)" %
                                          (count, len(renamed), self.root_path),
@@ -420,6 +449,9 @@ class InboxSort(object):
             return done
         if action == self.REMOVE:
             return self._remove(relpaths)
+        if action == self.REMOVE_JUNK:
+            return self._remove(junky, ["  %s: %s" % (relpath, self._junk(relpath)) for relpath in junky],
+                                to_trash=True)
         if action == self.REMOVE_COPIES:
             return self._remove(removable, ["  %s: a copy of %s" % (relpath, ', '.join(
                 _join(self.root_path, copy) for copy in self._copies(relpath)[:2]))
@@ -446,6 +478,16 @@ class InboxSort(object):
                           dryrun.label(), 'red')
             return None
         return [(relpath, _join(os.path.dirname(target), name))]
+
+    def _junk(self, relpath):
+        """Why the inbox's file at relpath looks like junk: by its name and size (junk.py), or as
+        Claude says (a recommendation to remove it that isn't for a copy); None if it doesn't"""
+        if relpath in self._junk_by_name:
+            return self._junk_by_name[relpath]
+        recommendation = self._recommendations.get(relpath)
+        if recommendation and recommendation.get('action') == 'remove' and not recommendation.get('copies'):
+            return recommendation.get('reason') or "Claude says so"
+        return None
 
     def _copies(self, relpath):
         """The sorted tree's files (relpaths in it) with the same contents as the inbox's at relpath,
@@ -894,9 +936,10 @@ class InboxSort(object):
                 os.path.basename(relpath), relpath, os.path.join(self._inbox_tree.fullpath(), relpath)))
         return found
 
-    def _remove(self, relpaths, listed=None):
+    def _remove(self, relpaths, listed=None, to_trash=False):
         """Remove the inbox's files at relpaths, once the user confirms twice; listed: the lines that
-        list them (else their relpaths)"""
+        list them (else their relpaths). With to_trash, a local inbox's go to the desktop's trash
+        (Drive's go to its trash anyway), rather than for good."""
         lines = ["Remove %s from %s?" % (_files(len(relpaths)), self.inbox_path)]
         listed = listed or ["  %s" % (relpath,) for relpath in relpaths]
         lines += listed[:interactive_dir_sync.InteractiveDirSync.MAX_FILES_LISTED]
@@ -908,14 +951,16 @@ class InboxSort(object):
                               label=LABEL) != self.CONFIRM_YES:
             return None
         sure = "Are you sure? %s will be removed from %s%s." % (
-            _files(len(relpaths)), self.inbox_path, " (to Drive's trash)" if self.inbox_is_cloud else ", for good")
+            _files(len(relpaths)), self.inbox_path, " (to Drive's trash)" if self.inbox_is_cloud else
+            " (to the trash)" if to_trash else ", for good")
         if picker.pick_option([self.CONFIRM_NO, self.CONFIRM_SURE], header=sure, label=LABEL) != self.CONFIRM_SURE:
             return None
         file_entries = self._entries(self._full(relpath) for relpath in relpaths)
         # Back to the picker once it's done, unless it's stopped (Ctrl-C), or some weren't removed
         with messages.progress_screen("Removing %s from %s%s" % (_files(len(relpaths)), self.inbox_path,
                                                                 " (a dry run)" if dryrun.DRYRUN else ""),
-                                      dryrun.label(), wait=False), self._drive_lock:
+                                      dryrun.label(), wait=False), self._drive_lock, \
+                (self._inbox_tree.trashing() if to_trash and not self.inbox_is_cloud else contextlib.nullcontext()):
             self._inbox_tree.remove_files(file_entries)
         if dryrun.DRYRUN:
             return relpaths

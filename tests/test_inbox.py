@@ -1,6 +1,7 @@
 import json
 import os
 import shutil
+import subprocess
 import tempfile
 import unittest
 from unittest import mock
@@ -132,6 +133,53 @@ class InboxSortTest(unittest.TestCase):
         # Done, so no longer picked
         self.assertEqual(self.pick_files.call_args.kwargs['picked'], [])
 
+    def fake_gio_trash(self):
+        """Patch subprocess.run so gio trash moves the file into self.trash (anything else runs)"""
+        self.trash = os.path.join(self.tmpdir, 'trash')
+        os.makedirs(self.trash)
+        real_run = subprocess.run
+
+        def run(command, *args, **kwargs):
+            if command[:2] == ['gio', 'trash']:
+                shutil.move(command[2], self.trash)
+                return subprocess.CompletedProcess(command, 0, stdout='')
+            return real_run(command, *args, **kwargs)
+        return mock.patch('subprocess.run', side_effect=run)
+
+    def test_junk_by_name_is_shown_and_removed_to_the_trash(self):
+        helpers.make_files(self.inbox, ['Thumbs.db', 'trip/~$plan.docx'])
+        self.sort([None], [])
+        labels = self.pick_files.call_args.kwargs['shown_as']()
+        self.assertEqual(labels['Thumbs.db'], 'Thumbs.db  [junk? a Windows thumbnails cache]')
+        self.assertNotIn('a.txt', labels)
+        preview = self.sent_previews(self.pick_files.call_args)['Thumbs.db']
+        self.assertIn(inbox.MAYBE_JUNK, preview)
+        with self.fake_gio_trash():
+            self.sort([['a.txt', 'Thumbs.db', 'trip/~$plan.docx'], None],
+                      ['Remove 2 of the 3 files that look like junk (to the trash)', YES, SURE])
+        # Listed with why, and asked twice, the second time saying where they go
+        confirm, sure = [call.kwargs['header'] for call in self.pick_option.call_args_list[1:3]]
+        self.assertIn("  Thumbs.db: a Windows thumbnails cache", confirm)
+        self.assertIn("(to the trash)", sure)
+        self.assertEqual(sorted(os.listdir(self.trash)), ['Thumbs.db', '~$plan.docx'])
+        self.assertTrue(self.exists('inbox', 'a.txt'))
+
+    def test_junk_as_claude_says(self):
+        with self.ask_claude({'a.txt': {'description': 'an empty note', 'action': 'remove', 'path': '',
+                                        'reason': 'an empty note'}}):
+            self.sort([['a.txt'], ['a.txt'], None], ['Ask Claude', NOTHING])
+        labels = self.pick_files.call_args.kwargs['shown_as']()
+        self.assertEqual(labels['a.txt'], 'a.txt  [claude: an empty note]  [claude: junk? an empty note]')
+        menu = self.pick_option.call_args.args[0]
+        self.assertIn('Remove the 1 file that look like junk (to the trash)', menu)
+
+    def test_junk_in_a_dry_run_stays(self):
+        helpers.make_files(self.inbox, ['Thumbs.db'])
+        with self.fake_gio_trash() as run:
+            self.sort([['Thumbs.db'], None], ['Remove the 1 file that look like junk', YES, SURE], is_dry_run=True)
+        self.assertTrue(self.exists('inbox', 'Thumbs.db'))
+        self.assertFalse([call for call in run.call_args_list if call.args[0][:1] == ['gio']])
+
     def test_remove_is_asked_twice(self):
         self.sort([['a.txt'], None], ['Remove the 1 file', YES, SURE])
         self.assertFalse(self.exists('inbox', 'a.txt'))
@@ -166,14 +214,15 @@ class InboxSortTest(unittest.TestCase):
         options = self.pick_option.call_args.args[0]
         self.assertEqual(options[0], NOTHING)
         self.assertEqual([option.split(' ')[0] for option in options[1:]],
-                         ['Describe', 'Ask', 'Move', 'Move', 'Move', 'Remove', 'Move', 'Move', 'Move', 'Copy',
-                          'Remove'])
+                         ['Describe', 'Ask', 'Move', 'Move', 'Move', 'Remove', 'Remove', 'Move', 'Move', 'Move',
+                          'Copy', 'Remove'])
         # With nothing recommended yet, those are greyed out
         disabled = self.pick_option.call_args.kwargs['shown_as']()
         self.assertEqual([text.text.split(': ')[-1] for text in disabled.values()],
                          ['none of them has a recommendation to move it yet',
                           'none of them has a recommendation yet', 'it has no recommendation yet',
                           'none of them is a copy of a file there (by its contents)',
+                          'none of them looks like junk (by its name, or as Claude says)',
                           'none of them has a name from Claude'])
 
     def ask_claude(self, answers):

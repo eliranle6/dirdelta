@@ -80,8 +80,9 @@ def recommend(files, cache_key, dirs, root_name, descriptions, copies=None, prog
     where in the sorted tree (root_name, whose dirs are dirs: {relpath: a few of its files' names})
     it belongs, its path relative to its root: a dir (an existing one, or a new one where none
     fits) and a name (its own, or a better one if it says little, or doesn't fit the names in that
-    dir); or 'remove' it, a copy of a file already there (copies: {relpath: the paths in the sorted
-    tree of files with the same contents}; its path is then ''), from the cache or Claude.
+    dir); or 'remove' it (its path then ''): a copy of a file already there (copies: {relpath: the
+    paths in the sorted tree of files with the same contents}, its 'copies'), or junk (no copies:
+    what Claude says, its reason why), from the cache or Claude.
     It goes by the files' names, sizes and descriptions ({relpath: description},
     e.g. describe()'s), so it reads nothing."""
     copies = copies or {}
@@ -203,8 +204,11 @@ def _ask_for_recommendations(files, dirs, root_name, descriptions, copies):
               "theirs, with the file's extension. And the reason, in a few words. Files that go "
               "together (e.g. one trip's photos) should go to one dir. A file said to be in the "
               "sorted tree already is a copy: its action should be 'remove' (with an empty path), "
-              "unless the copy in the tree is in the wrong place, and this one should go elsewhere; "
-              "every other file's action is 'move'.\n\n"
+              "unless the copy in the tree is in the wrong place, and this one should go elsewhere. "
+              "A file that's clearly junk by its name, size and what it is (a temporary or system "
+              "file, an empty one, an unfinished download, a leftover installer) is 'remove' too, its "
+              "reason saying why it's junk; only when that's clear: when in doubt, it's 'move'. Every "
+              "other file's action is 'move'.\n\n"
               "The files (name, size, and what each is):\n%s\n\nThe sorted tree's dirs:\n%s" %
               (root_name, '\n'.join(lines), '\n'.join(listed) or "(none yet)"))
     result = _run_query(prompt, [], _schema(['action', 'path', 'reason'], {'action': ['move', 'remove']}),
@@ -214,7 +218,8 @@ def _ask_for_recommendations(files, dirs, root_name, descriptions, copies):
         relpath = files[number - 1].relpath
         reason = item.get('reason', '').strip()
         known = sorted(copies.get(relpath, []))
-        if item.get('action') == 'remove' and known:
+        if item.get('action') == 'remove':
+            # A copy (known by its contents), or else junk (what Claude says)
             answers[relpath] = {'action': 'remove', 'path': '', 'reason': reason, 'copies': known}
             continue
         path = _clean_path(item.get('path', ''), os.path.basename(relpath))

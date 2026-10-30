@@ -7,7 +7,8 @@ refreshing a cloud folder at a time: at the start, from the main menu, or with `
 picker, 2026-10-29; showing where the other replica has a file of the same name, beside the file
 picker, one picker per direction with Copy, Remove and Rename in it, sorting an inbox with
 Claude's help, 2026-10-29; remembering how a replica's volume was mounted and offering to mount
-it, and a new dir and the recent ones for an inbox's "Move to...", 2026-10-30) are in git history. treepicker's own are in `lib/treepicker/docs/improvement-ideas.md`.
+it, a new dir and the recent ones for an inbox's "Move to...", and an inbox's junk by names,
+sizes and what Claude says, 2026-10-30) are in git history. treepicker's own are in `lib/treepicker/docs/improvement-ideas.md`.
 
 Ordered by how easy they are, easiest first (2026-10-30).
 
@@ -40,32 +41,12 @@ Ordered by how easy they are, easiest first (2026-10-30).
    and recommendations, is there (2026-10-29: `inbox.py`, `ai.py`). What's left:
    - The other replicas: a file moved into the sorted tree (`cloud/eliran/...`) could be copied into
      its other replicas too (e.g. `/mnt/win/Users/.../eliran/...`), in the same plan.
-   - Junk: files to remove rather than sort, offered as such, never removed without the user. What's
-     there: when Claude says where files go, it may answer `remove`, but `ai.recommend()` keeps that
-     only for the files the contents check found to be copies of the sorted tree's; any other
-     `remove` is dropped (and with no path, the file has no recommendation: "Claude didn't say where
-     it goes"). The kinds of junk:
-     - By its name, with no Claude: `Thumbs.db`, `.DS_Store`, `desktop.ini`, `~$report.docx`,
-       `*.part`, `*.crdownload`, `*.tmp`, empty files; leftovers, like installers (`setup.exe`,
-       `.dmg`, `.msi`) or a `.zip` whose contents are beside it. A short list of rules: offline,
-       free, predictable, and for files Claude wasn't asked about too.
-     - By what Claude says, from what it's given already: accept a `remove` in `ai.recommend()` for
-       junk too, not only copies, with its reason, by the names, sizes and descriptions it has now
-       (no more reading).
-     - Shown: the label `name  [claude: junk? reason]` (`/junk?` finds them all), and the preview
-       in yellow, so it isn't taken for a copy's green: "Claude thinks it's junk: ..." or "Junk by
-       its name: a Windows thumbnails cache". The menu: "Remove 12 of the 40 files that look like
-       junk", apart from "Remove copies" (copies are sure, by their contents; junk is a judgment),
-       confirmed twice with each file's reason listed. `Ctrl-X` opens one to look first. Locally,
-       to the desktop's trash (`gio trash`) rather than for good, so a wrong guess is undone
-       easily; in Drive, to its trash, as now.
-     - Kept in `ai.json` with the description, so it's judged once.
-
-     Keep as an idea, but don't implement (2026-10-30): image analysis for junk, as it may take a
-     lot of tokens. That is: Haiku judging, while it reads a photo to describe it, whether it's a
-     bad one (a pocket shot, a black frame, blurry, a screenshot of nothing), as a `junk` field of
-     the description; and near-duplicates (a burst of shots of one scene, a resized or WhatsApp copy
-     of a photo, `report-v1`...`v3`): grouping files that look like one (dates taken seconds apart,
+   - Junk by image analysis. Keep as an idea, but don't implement (2026-10-30): it may take a lot
+     of tokens. Junk by names, sizes and what Claude says of them is there (`junk.py`, 2026-10-30);
+     this would add Haiku judging, while it reads a photo to describe it, whether it's a bad one (a
+     pocket shot, a black frame, blurry, a screenshot of nothing), as a `junk` field of the
+     description; and near-duplicates (a burst of shots of one scene, a resized or WhatsApp copy of
+     a photo, `report-v1`...`v3`): grouping files that look like one (dates taken seconds apart,
      names in a sequence, similar sizes) and asking Claude which to keep.
    - Recommendations per dir. Claude is asked about each file, but an inbox often has dirs whose
      files go together (`rome-2024/`, 300 photos; `scans/tax-2025/`, 40 PDFs). Per file, that's 30

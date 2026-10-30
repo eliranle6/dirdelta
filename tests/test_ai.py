@@ -95,15 +95,18 @@ class AITest(unittest.TestCase):
         # Another sorted tree isn't the same recommendation
         self.assertEqual(ai.cached(self.files(1), self.key, 'cloud/other')[1], {})
 
-    def test_a_copy_may_be_recommended_to_be_removed(self):
+    def test_a_copy_or_junk_may_be_recommended_to_be_removed(self):
         answering = _Answering(lambda prompt: [
             {'number': 1, 'action': 'remove', 'path': '', 'reason': 'a copy'},
-            # Not a copy: removing it isn't Claude's to say, so it's not taken
-            {'number': 2, 'action': 'remove', 'path': '', 'reason': 'junk'}])
+            # Not a copy: junk, as Claude says (no copies)
+            {'number': 2, 'action': 'remove', 'path': '', 'reason': 'an empty file'}])
         with mock.patch('dirdelta.ai._run_query', side_effect=answering):
             found = ai.recommend(self.files(2), self.key, {}, 'root', {}, {'f0.txt': ['docs/f0.txt']})
         self.assertEqual(found, {'f0.txt': {'action': 'remove', 'path': '', 'reason': 'a copy',
-                                            'copies': ['docs/f0.txt']}})
+                                            'copies': ['docs/f0.txt']},
+                                 'f1.txt': {'action': 'remove', 'path': '', 'reason': 'an empty file',
+                                            'copies': []}})
+        self.assertIn("clearly junk", answering.prompts[0][0])
         self.assertIn("1. f0.txt (size 10 bytes); already in the sorted tree, with the same contents, at docs/f0.txt",
                       answering.prompts[0][0])
         self.assertIsNone(ai.recommended_path('f0.txt', found['f0.txt']))

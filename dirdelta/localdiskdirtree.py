@@ -1,4 +1,5 @@
 import collections
+import contextlib
 import errno
 import hashlib
 import os
@@ -50,6 +51,20 @@ class LocalDiskDirTree(dirtree.DirTree):
         self.max_depth = max_depth
         # find's messages about what it couldn't read in the last scan, so the tree may lack
         self.scan_errors = []
+        # Whether removing a file moves it to the desktop's trash (see trashing())
+        self._is_trashing = False
+
+    @contextlib.contextmanager
+    def trashing(self):
+        """Inside, removing a file moves it to the desktop's trash (gio trash), where it can be
+        restored from, rather than removing it for good"""
+        self._is_trashing = True
+        self.REMOVED_TO = " (to the trash)"
+        try:
+            yield
+        finally:
+            self._is_trashing = False
+            del self.REMOVED_TO
 
     def update_from_filesystem(self):
         """Add the dirs and files on disk (hidden ones too), down to max_depth levels below the root."""
@@ -277,7 +292,13 @@ class LocalDiskDirTree(dirtree.DirTree):
 
     def _remove_file(self, file_entry):
         try:
-            os.unlink(file_entry.full_filesystem_path())
+            if self._is_trashing:
+                result = subprocess.run(['gio', 'trash', file_entry.full_filesystem_path()],
+                                        stdout=subprocess.PIPE, stderr=subprocess.STDOUT, universal_newlines=True)
+                if result.returncode != 0:
+                    raise OSError(result.stdout.strip() or "gio trash failed")
+            else:
+                os.unlink(file_entry.full_filesystem_path())
         except OSError as error:
             # Said, and the others go on (it's kept, in the tree too)
             messages.print_line("Remove failed: %s" % (error,), "red")

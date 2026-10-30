@@ -119,6 +119,15 @@ them, with "Nothing" selected first:
   name you type, to Claude's dir", "Move the N files to..." (pick a dir), "Move the N files, under
   Claude's names, to...", and "Move the file, under a name you type, to...". Then "Copy the N files
   to...", and "Remove the N files" (asked twice).
+- Junk: files that look like junk are shown as such, `[junk? a Windows thumbnails cache]` after the
+  name (so `/junk?` finds them all), with a yellow "junk? it may be removed" beside them. By their
+  names and sizes, with no Claude: `Thumbs.db`, `desktop.ini`, `.DS_Store`, `~$` lock files, temporary
+  and partly downloaded files, empty files, installers, and archives whose contents are beside them
+  (`junk.py`). And as Claude says, when it's asked where files go: a clearly junk file it recommends
+  removing, `[claude: junk? ...]`. Nothing is read for it (no images analysed). "Remove N of the M
+  files that look like junk" lists each with why, asks twice, and sends a local file to the
+  desktop's trash (`gio trash`, so it can be restored; not on a tmpfs like `/tmp`, where it's
+  kept and said), a Drive one to Drive's trash.
 - Where "to..." goes: the sorted tree's recent dirs first (the last 10 that files were moved or copied
   to, kept in `replicas.json`), or "Pick a dir", where `n` makes a new dir in the selected one (its
   name typed next; `a/b` makes both), made when the files go there.
