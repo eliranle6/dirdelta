@@ -203,8 +203,9 @@ The menu of a run without paths says when each was last updated (`/mnt/win/elira
 17.05.2026) <-> cloud/eliran`), and "Known replicas: when each was last updated" lists them all, with
 their last entry, when they were last synced and changed by dirdelta, and which disks aren't
 connected now. When you quit a sync that changed files (live: copied, removed or moved), it offers
-an entry for each changed replica, e.g. `30.10.2026 - copied 12 files from cloud/eliran`: added to its
-log, to both replicas' logs (so both say it), edited first, or not (a log is made if there's none).
+an entry for each changed replica, e.g. `30.10.2026 - copied 12 files from cloud/eliran` for the one
+copied into: added to its log (only its: the other's log is of the other's changes), edited first,
+or not (a log is made if there's none).
 An inbox's sort does the same for the inbox and the sorted tree, when you quit it: e.g. `30.10.2026 -
 added 12 files from cloud/unsorted` for the sorted tree, and `moved 12 files to cloud/eliran; removed
 3 files` for the inbox.

@@ -42,6 +42,15 @@ class CloudDirTreeFactoryTest(unittest.TestCase):
                 clouddirtreefactory.factory_interactive('cloud/mein')
             self.assertEqual(self.refresh.call_count, expected_calls, answer)
 
+    def test_nothing_is_the_first_option_and_goes_back(self):
+        self.make_cache()
+        for answer in (clouddirtreefactory.OPTION_NOTHING, None):
+            with mock.patch('dirdelta.picker.pick_option', return_value=answer) as pick_option:
+                self.assertIsNone(clouddirtreefactory.factory_interactive('cloud/mein'))
+            self.assertEqual(pick_option.call_args.args[0], [clouddirtreefactory.OPTION_NOTHING, REFRESH, NO_REFRESH])
+        self.refresh.assert_not_called()
+        clouddirtreefactory.clouddirtree.CloudDirTree.assert_not_called()
+
     def test_returns_cloud_tree_for_the_given_path(self):
         tree = clouddirtreefactory.factory_interactive('cloud/mein')
         self.assertIs(tree, clouddirtreefactory.clouddirtree.CloudDirTree.return_value)

@@ -25,7 +25,11 @@ def run(args):
         dirtree_b = localdiskdirtree.LocalDiskDirTree(args.dir_b_path, True, args.max_depth)
     else:
         dirtree_a = utils.create_dirtree_from_arg(args.dir_a_path, args.max_depth)
+        if dirtree_a is None:
+            return
         dirtree_b = utils.create_dirtree_from_arg(args.dir_b_path, args.max_depth)
+        if dirtree_b is None:
+            return
         warnings = scan_errors_warning(dirtree_a) + scan_errors_warning(dirtree_b)
         if warnings:
             messages.show("Warning: find couldn't read everything", warnings, dryrun.label(), 'red')

@@ -132,8 +132,7 @@ class LogEntriesTest(unittest.TestCase):
         self.changes.note(self.b, 'copied', 2, self.a)
         self.changes.note(self.b, 'removed', 1)
         for patcher in (mock.patch('dirdelta.replicas.save'), mock.patch('dirdelta.messages.show'),
-                        mock.patch('dirdelta.replicalog.identity', side_effect=lambda path: 'id:' + path),
-                        mock.patch('dirdelta.interactive_dir_sync.is_writable', return_value=True)):
+                        mock.patch('dirdelta.replicalog.identity', side_effect=lambda path: 'id:' + path)):
             patcher.start()
             self.addCleanup(patcher.stop)
         self.today = datetime.date.today().strftime('%d.%m.%Y')
@@ -162,11 +161,13 @@ class LogEntriesTest(unittest.TestCase):
         self.assertIsNotNone(info['changed'])
         replicalog.replicas.save.assert_called_with(self.known)
 
-    def test_to_both_replicas_edited_first_one_made(self):
-        self.offer([replicalog.EDIT_ENTRY, "Add it to both"], edited="copied the trip's photos")
-        line = "%s - copied the trip's photos\n" % (self.today,)
-        self.assertTrue(self.log(self.b).endswith(line))
-        self.assertEqual(self.log(self.a), line)
+    def test_edited_first_and_only_its_own_log(self):
+        pick = self.offer([replicalog.EDIT_ENTRY, "Add it to its"], edited="copied the trip's photos")
+        self.assertEqual(pick.call_args.args[0],
+                         [replicalog.NO_ENTRY, "Add it to its last_update.txt (%s)" % (self.b,), replicalog.EDIT_ENTRY])
+        self.assertEqual(self.log(self.b), "1.1.2026 - started\n%s - copied the trip's photos\n" % (self.today,))
+        # The other replica's log isn't of this one's changes
+        self.assertIsNone(self.log(self.a))
 
     def test_none_added_but_its_change_is_known(self):
         self.offer([replicalog.NO_ENTRY])

@@ -77,6 +77,12 @@ class ChooseReplicasTest(unittest.TestCase):
         self.assertEqual(chosen, ('/mnt/win', 'cloud/me/music'))
         self.assertTrue(self.pick_from_tree.call_args.kwargs['dirs_only'])
 
+    def test_nothing_at_the_refresh_question_is_back_to_the_menu(self):
+        with mock.patch('dirdelta.utils.create_dirtree_from_arg', return_value=None):
+            self.assertIsNone(self.run_menu(['  Replica A: ' + NONE, choose_replicas.CLOUD, 'Quit']))
+        self.pick_from_tree.assert_not_called()
+        self.assertEqual(len(self.menus), 3)
+
     def test_drives_top_is_cloud(self):
         tree = dirtree.DirTree('/')
         with mock.patch('dirdelta.utils.create_dirtree_from_arg', return_value=tree):

@@ -81,10 +81,11 @@ class InboxSortTest(unittest.TestCase):
         # Back to the files left
         self.assertEqual(self.pick_files.call_args.args[1], ['b.jpg', 'trip/c.jpg'])
 
-    def test_a_move_goes_back_to_the_picker_unless_some_werent_moved(self):
+    def test_a_move_waits_for_enter_and_says_if_some_werent_moved(self):
         with mock.patch('dirdelta.messages.progress_screen', wraps=inbox.messages.progress_screen) as screen:
             self.sort([['a.txt'], None], ['Move the 1 file to...', YES], dirs=[os.path.join(self.root, 'docs')])
-        self.assertFalse(screen.call_args.kwargs['wait'])
+        # "Press Enter to continue" once it's done
+        self.assertNotIn('wait', screen.call_args.kwargs)
         self.show.assert_not_called()
         # One that's there already is skipped: not moved
         helpers.make_files(self.root, ['docs/b.jpg'])
@@ -224,10 +225,11 @@ class InboxSortTest(unittest.TestCase):
         self.sort([['b.jpg'], None], ['Remove the 1 file', YES, NO])
         self.assertTrue(self.exists('inbox', 'b.jpg'))
 
-    def test_a_removal_goes_back_to_the_picker_unless_some_werent_removed(self):
+    def test_a_removal_waits_for_enter_and_says_if_some_werent_removed(self):
         with mock.patch('dirdelta.messages.progress_screen', wraps=inbox.messages.progress_screen) as screen:
             self.sort([['a.txt'], None], ['Remove the 1 file', YES, SURE])
-        self.assertFalse(screen.call_args.kwargs['wait'])
+        # "Press Enter to continue" once it's done
+        self.assertNotIn('wait', screen.call_args.kwargs)
         self.show.assert_not_called()
         real_unlink = os.unlink
 

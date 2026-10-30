@@ -22,7 +22,6 @@ from dirdelta import clouddirtree
 from dirdelta import downloads
 from dirdelta import drivecache
 from dirdelta import dryrun
-from dirdelta import interactive_dir_sync
 from dirdelta import mounts
 from dirdelta import messages
 from dirdelta import paths
@@ -184,35 +183,31 @@ def note_seen(replicas_and_paths, known_replicas):
         known_replicas.note_seen(identity(path), path, last_entry(text) if text else None, now)
 
 
-# The choices for adding an entry to a changed replica's log (what each does first, the paths last,
+# The choices for adding an entry to a changed replica's log (what each does first, the path last,
 # so a long one doesn't hide it)
 NO_ENTRY = "No"
 ADD_ENTRY = "Add it to its %s (%s)"
-ADD_ENTRY_TO_BOTH = "Add it to both replicas' %s (%s's too)"
 EDIT_ENTRY = "Edit it first"
 
 
 def offer_entries(changes, replicas_and_paths, known_replicas):
-    """After a sync, for each replica it changed (changes, a Changes), offer to add an
-    entry saying what changed to its log (and the other replica's, so both say it), today's: e.g.
-    '30.10.2026 - copied 12 files from cloud/eliran'. replicas_and_paths: [(the replica's tree, its
-    path)], both. Notes in known_replicas (saved) when each was changed, and its log's last entry."""
+    """After a sync or an inbox's sort, for each replica it changed (changes, a Changes: what was
+    copied into it, removed from it, moved in it), offer to add an entry saying so to its log
+    (only its: the other replica's log is of the other's changes), today's: e.g. '30.10.2026 -
+    copied 12 files from cloud/eliran'. replicas_and_paths: [(the replica's tree, whose
+    displayname() changes has it by, its path)]. Notes in known_replicas (a replicas.Replicas,
+    saved) when each was changed, and its log's last entry."""
     today = datetime.date.today()
     by_name = {tree.displayname(): (tree, path) for tree, path in replicas_and_paths}
     for name in changes.paths():
         tree, path = by_name[name]
-        other_tree, other_path = [(other, other_path) for other, other_path in replicas_and_paths
-                                  if other is not tree][0]
         text = changes.summary(name)
         known_replicas.note_changed(identity(path), datetime.datetime.now())
         while True:
             line = entry_line(today, text)
             add = ADD_ENTRY % (LOG_NAME, path)
-            add_both = ADD_ENTRY_TO_BOTH % (LOG_NAME, other_path)
-            options = [NO_ENTRY, add] + ([add_both] if interactive_dir_sync.is_writable(other_tree) else []) + [EDIT_ENTRY]
-            header = ("Add what was done to the log (%s) of %s?\n  %s" %
-                      (LOG_NAME, path, line))
-            answer = picker.pick_option(options, header=header)
+            header = "Add what was done to the log (%s) of %s?\n  %s" % (LOG_NAME, path, line)
+            answer = picker.pick_option([NO_ENTRY, add, EDIT_ENTRY], header=header)
             if answer == EDIT_ENTRY:
                 edited = messages.ask("The entry of %s's %s" % (path, LOG_NAME),
                                       ["What changed in %s (after its date, %s):" % (
@@ -220,24 +215,19 @@ def offer_entries(changes, replicas_and_paths, known_replicas):
                                       "> ", text, dryrun.label())
                 text = edited or text
                 continue
-            if answer in (add, add_both):
-                targets = [(tree, path)] + ([(other_tree, other_path)] if answer == add_both else [])
-                _add_entry(targets, line, Entry(today, text), known_replicas)
+            if answer == add:
+                _add_entry(tree, path, line, Entry(today, text), known_replicas)
             break
     if changes.paths():
         replicas.save(known_replicas)
 
 
-def _add_entry(targets, line, entry, known_replicas):
-    """Add line (an entry) to the logs of targets ([(tree, path)]), each made if it has none"""
-    failed = []
-    for tree, path in targets:
-        try:
-            write(tree, with_entry(read(tree) or '', line))
-        except (OSError, clouddirtree.HttpError) as error:
-            failed.append("%s: %s" % (path, error))
-            continue
-        known_replicas.note_entry(identity(path), entry)
-    if failed:
-        messages.show("Cannot add the entry to %s" % (LOG_NAME,), failed, dryrun.label(), 'red')
+def _add_entry(tree, path, line, entry, known_replicas):
+    """Add line (an entry) to the log of the replica at path (tree), made if it has none"""
+    try:
+        write(tree, with_entry(read(tree) or '', line))
+    except (OSError, clouddirtree.HttpError) as error:
+        messages.show("Cannot add the entry to %s's %s" % (path, LOG_NAME), [str(error)], dryrun.label(), 'red')
+        return
+    known_replicas.note_entry(identity(path), entry)
 

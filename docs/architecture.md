@@ -266,7 +266,10 @@ Cloud state is never queried live per-scan. Instead:
    `drivecache.FILE_LIST_CACHE` (`~/.cache/dirman/files.txt`), prompting
    the user (`picker.pick_option`) to refresh the replica's folder in it if it
    already exists ("Refresh cloud/X from Google Drive"; the prompt says if the
-   cache may be out of date there, see the stale marker below).
+   cache may be out of date there, see the stale marker below), or to continue
+   with the cache, or to do nothing ("Nothing: go back", the first option,
+   selected at first, and `q`): then it's None, and the caller goes back (a
+   sync or picker mode ends, the no-path menu shows again).
 2. `clouddirtree.refresh_cache(folder_path)` (a path in Drive, `/` for all
    of My Drive) reads the folder anew, one request at a time (never in
    parallel, so Drive sees nothing unusual): My Drive's root folder's id
@@ -457,7 +460,7 @@ what they change live in a `replicalog.Changes` (`InteractiveDirSync(changes=...
 copied, removed, moved, added up per replica), and after Quit,
 `replicalog.offer_entries()` offers each changed replica an entry for its log
 (`replicalog.entry_line()`: today's date and `Changes.summary()`): added to its
-log or to both replicas' (`replicalog.write()`: a local file replaced at once, a
+log, only its (`replicalog.write()`: a local file replaced at once, a
 Drive one by `CloudDirTree.write_file()`, a new version of it, or a new file),
 edited first (`messages.ask()`), or not; `note_changed()`/`note_entry()` keep
 when and what. `replicalog.parse()`/`last_entry()` read the log's format

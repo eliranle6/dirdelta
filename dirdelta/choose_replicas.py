@@ -221,6 +221,8 @@ def _choose_replica(name, known=()):
             messages.show("Cannot read Google Drive's file list", str(error).splitlines(),
                           dryrun.label(), 'red')
             return None
+        if tree is None:
+            return None
         picked = picker.pick_from_tree(tree, header=header, dirs_only=True)
         # A cloud tree's paths are Drive's (/mein/music), not cloud paths (cloud/mein/music)
         return paths.join_cloud(picked[0].relpath) if picked else None

@@ -867,9 +867,9 @@ class InboxSort(object):
         keys = {relpath: (self._cache_key(ai.File(relpath, None, sizes[relpath])),
                           self._target_cache_key(target, sizes[relpath]))
                 for relpath, target in plan}
-        # Back to the picker once it's done, unless it's stopped (Ctrl-C), or some weren't done
-        with messages.progress_screen(summary + (" (a dry run)" if dryrun.DRYRUN else ""), dryrun.label(),
-                                      wait=False), self._drive_lock:
+        # Once it's done (or stopped), Enter goes back to the picker, so what was done can be read
+        with messages.progress_screen(summary + (" (a dry run)" if dryrun.DRYRUN else ""),
+                                      dryrun.label()), self._drive_lock:
             if self.is_one_tree:
                 done = (self._inbox_tree.move_files(moves) if action == self.MOVE_TO else
                         self._inbox_tree.copy_files_within(moves))
@@ -970,10 +970,10 @@ class InboxSort(object):
         if picker.pick_option([self.CONFIRM_NO, self.CONFIRM_SURE], header=sure, label=LABEL) != self.CONFIRM_SURE:
             return None
         file_entries = self._entries(self._full(relpath) for relpath in relpaths)
-        # Back to the picker once it's done, unless it's stopped (Ctrl-C), or some weren't removed
+        # Once it's done (or stopped), Enter goes back to the picker, so what was removed can be read
         with messages.progress_screen("Removing %s from %s%s" % (_files(len(relpaths)), self.inbox_path,
                                                                 " (a dry run)" if dryrun.DRYRUN else ""),
-                                      dryrun.label(), wait=False), self._drive_lock, \
+                                      dryrun.label()), self._drive_lock, \
                 (self._inbox_tree.trashing() if to_trash and not self.inbox_is_cloud else contextlib.nullcontext()):
             self._inbox_tree.remove_files(file_entries)
         if dryrun.DRYRUN:
