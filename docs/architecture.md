@@ -117,13 +117,12 @@ it first and keeps what it works out; `elsewhere._same_contents()` compares
 two local files by it when both are kept, else reads them side by side (and
 keeps both hashes when they're the same). Written at most every
 `SAVE_INTERVAL`, and at exit.
-`ai.describe()` asks Claude (Haiku) about `ai.File`s (relpath, a local path
+`ai.describe()` asks Claude about `ai.File`s (relpath, a local path
 to read, size), `BATCH_SIZE` a request, reading them; `ai.recommend()` asks
-Claude (Sonnet) where they go by their names, sizes and descriptions
+Claude where they go by their names, sizes and descriptions
 (`_place()` gets the missing descriptions first), reading nothing (no tools); a batch that fails is asked again a file at a time. Both through the
 Claude Agent
-SDK, descriptions of `DESCRIBE_MODEL` (Haiku) and recommendations of
-`RECOMMEND_MODEL` (Sonnet), each overridable by an env var (`_model()`)
+SDK, both of `MODEL` (Haiku)
 (`_run_query()`: `query()` with tools and allowed tools only `Read`,
 `permission_mode='dontAsk'`, no settings sources, the files' dirs as `cwd` and
 `add_dirs`, and `output_format` a JSON schema of the answers by file number).
@@ -330,8 +329,8 @@ sit alongside it as `scandrive.py`; it's now archived at
 `dirdiff.files_not_in(src_dir, dst_dir, max_depth)` runs `dirdiff -0 SRC DST`,
 returning src's files (relative paths) that dst lacks, and find's errors.
 It scans both dirs in C++ (~1s for two 119k-file dirs, where building their
-Python trees took ~6s). `programs.find(name, env_var)` finds treepicker and
-dirdiff: `$env_var`, next to the running python, `lib/treepicker/build/`, `PATH`.
+Python trees took ~6s). `programs.find(name)` finds treepicker and
+dirdiff: next to the running python, `lib/treepicker/build/`, `PATH`.
 
 ### `interactive_dir_sync.py`
 `InteractiveDirSync(src, dst)`. Its diff (`_missing()`): for two local dirs,
@@ -513,8 +512,8 @@ only for files with candidates. Modification times are `modified_time()`:
 `os.utime` after a download, `modifiedTime` in an upload's body).
 
 ### `picker.py`
-Runs `treepicker` (from github.com/eliranle6/treepicker; `$DIRDELTA_PICKER`, or
-`treepicker` on `PATH`) as a subprocess for each pick, fzf-style: treepicker
+Runs `treepicker` (from github.com/eliranle6/treepicker; found by
+`programs.find()`) as a subprocess for each pick, fzf-style: treepicker
 draws on `/dev/tty`, reads its input on stdin and prints what was picked on
 stdout, all `\0`-separated (`-0`). Exit code 1 means the user quit (→
 `None`); others raise `PickerError`. See `docs/treepicker-integration.md`.

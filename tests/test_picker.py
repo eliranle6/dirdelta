@@ -60,11 +60,13 @@ class PickerTest(unittest.TestCase):
             f.write(FAKE_PICKER)
         os.chmod(self.program, os.stat(self.program).st_mode | stat.S_IEXEC)
         self.log = os.path.join(self.tmpdir, 'log.json')
-        self.env = mock.patch.dict(os.environ, {picker.PROGRAM_ENV_VAR: self.program,
-                                                'FAKE_PICKER_LOG': self.log})
+        self.env = mock.patch.dict(os.environ, {'FAKE_PICKER_LOG': self.log})
         self.env.start()
+        self.find = mock.patch('dirdelta.programs.find', return_value=self.program)
+        self.find.start()
 
     def tearDown(self):
+        self.find.stop()
         self.env.stop()
         shutil.rmtree(self.tmpdir)
 
@@ -311,7 +313,7 @@ class PickerTest(unittest.TestCase):
                 picker.pick_option(['x'])
 
     def test_unrunnable_program_raises(self):
-        os.environ[picker.PROGRAM_ENV_VAR] = os.path.join(self.tmpdir, 'no-such-program')
+        programs.find.return_value = os.path.join(self.tmpdir, 'no-such-program')
         with self.assertRaises(picker.PickerError):
             picker.pick_option(['x'])
 

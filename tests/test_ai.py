@@ -115,16 +115,12 @@ class AITest(unittest.TestCase):
             ai.recommend(self.files(1), self.key, {}, 'root', {}, {'f0.txt': ['docs/f0.txt', 'other/f0.txt']})
         self.assertEqual(len(answering.prompts), 1)
 
-    def test_haiku_describes_and_sonnet_recommends_unless_said_otherwise(self):
+    def test_haiku_describes_and_recommends(self):
         answering = _Answering(lambda prompt: [])
-        with mock.patch('dirdelta.ai._run_query', side_effect=answering), \
-                mock.patch.dict(os.environ, {}, clear=True):
+        with mock.patch('dirdelta.ai._run_query', side_effect=answering):
             ai.describe(self.files(1), self.key)
             ai.recommend(self.files(1), self.key, [], 'root', {})
-        self.assertEqual(answering.models, ['claude-haiku-5-5', 'claude-sonnet-5-5'])
-        env = {ai.MODEL_ENV_VAR: 'both', ai.RECOMMEND_MODEL_ENV_VAR: 'recommending'}
-        with mock.patch.dict(os.environ, env, clear=True):
-            self.assertEqual((ai._model(False), ai._model(True)), ('both', 'recommending'))
+        self.assertEqual(answering.models, ['claude-haiku-5-5', 'claude-haiku-5-5'])
 
     def test_a_recommendation_cached_with_a_dir_only_is_the_files_name_there(self):
         self.assertEqual(ai.recommended_path('in/a.txt', {'destination': 'docs'}), 'docs/a.txt')

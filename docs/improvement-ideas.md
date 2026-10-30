@@ -8,7 +8,42 @@ picker, 2026-10-29; showing where the other replica has a file of the same name,
 picker, one picker per direction with Copy, Remove and Rename in it, sorting an inbox with
 Claude's help, 2026-10-29) are in git history. treepicker's own are in `lib/treepicker/docs/improvement-ideas.md`.
 
-1. **Find moved files better.** What's there (2026-10-29, `elsewhere.py`): each direction's
+Ordered by how easy they are, easiest first (2026-10-30).
+
+1. **Remember how a replica's volume was mounted, and offer to mount it.** A local replica is
+   often on a volume that isn't always mounted: `/mnt/win` is the laptop's Windows partition
+   (as of 2026-10-29 `/dev/sda3`, NTFS via ntfs-3g, label `OS`, UUID `9618289F1828807B`, not in
+   `/etc/fstab`, so mounted by hand), and an external disk comes and goes. Choosing a recent pair
+   or a favorite with such a path while it's unmounted fails at `validate_dir()`, or worse: an
+   unmounted mount point is still there, an empty dir on the root filesystem, so the diff says
+   every file is missing, and a live Copy would fill the root filesystem rather than the volume.
+   - What's kept: when a replica is used, the mount it's under (`findmnt -no
+     TARGET,SOURCE,FSTYPE,OPTIONS,UUID,LABEL --target PATH`): mount point, device, filesystem
+     type, options, UUID, label. In `~/.config/dirdelta/` with the pair (`replicas.json`), or
+     with idea 4's replica records, which identify a local replica by the same UUID. Only for a
+     mount other than `/` (a path on the root filesystem has nothing to remember).
+   - Finding it unmounted: before scanning, the recorded mount point isn't a mount
+     (`os.path.ismount()` is false, or `findmnt --target PATH` now says `/`), whether or not the
+     path exists.
+   - The question, rather than an error: "/mnt/win isn't mounted (last time: /dev/sda3, NTFS,
+     'OS'). Mount it?", with Yes, No (back to the menu) and, if the disk isn't there
+     (`/dev/disk/by-uuid/UUID` missing, so it's unplugged), "Connect it, then try again".
+   - Mounting it, by the UUID (the device name may differ next time), at the same mount point,
+     so the replica's path still holds: `mount TARGET` if fstab has a line for it (`noauto,user`
+     needs no root), else `sudo mount -t TYPE -o OPTIONS UUID=... TARGET` with the recorded
+     options (sudo asks for the password in the terminal, which dirdelta doesn't hold between
+     pickers). `udisksctl mount -b /dev/disk/by-uuid/UUID` needs no sudo (polkit), but mounts
+     at `/media/$USER/LABEL`, another path: the replica's path would then be mapped to it, for
+     this run. Each run is shown before it's run, and its error if it fails.
+   - NTFS: if Windows hibernated, or shut down with Fast Startup on, ntfs-3g won't mount it
+     read-write ("The disk contains an unclean file system"): mounted read-only instead
+     (`-o ro`, said so), the "Read-only" screen already says nothing will be copied into or
+     removed from it.
+   - Where: `choose_replicas` (a recent pair or a favorite) and a run with paths, before the
+     trees are made; picker mode too. Mounting changes the system, not files, so it's asked
+     even in a dry run, and never done without asking.
+
+2. **Find moved files better.** What's there (2026-10-29, `elsewhere.py`): each direction's
    picker shows, beside the selected file, where the other replica may have it: its files of the
    same name, for a big file, of its size with another name, and in Drive, of its contents whatever
    their name and size (by Drive's hashes); likeliest first (the same contents, size, date taken,
@@ -33,7 +68,7 @@ Claude's help, 2026-10-29) are in git history. treepicker's own are in `lib/tree
    compared so far; hashing a whole local replica once (in the background, then kept) would let it
    be looked up by hash as Drive is, finding renamed files (and an inbox's copies) of any size.
 
-2. **Sort an inbox: what's left.** Sorting an inbox into a sorted tree, with Claude's descriptions
+3. **Sort an inbox: what's left.** Sorting an inbox into a sorted tree, with Claude's descriptions
    and recommendations, is there (2026-10-29: `inbox.py`, `ai.py`). What's left:
    - The other replicas: a file moved into the sorted tree (`cloud/eliran/...`) could be copied into
      its other replicas too (e.g. `/mnt/win/Users/.../eliran/...`), in the same plan.
@@ -47,70 +82,7 @@ Claude's help, 2026-10-29) are in git history. treepicker's own are in `lib/tree
      while the picker is shown, its answers coming into the labels and the preview column as the
      contents check's do.
 
-3. **A GUI, with the image beside the tree.** The same flows and keys as the TUI (the menus,
-   the file pickers, `j`/`k`/Space/Enter, search), in a window, with a pane on the right that
-   shows the selected file: an image (or a video's frame, a PDF's first page, a text's start),
-   since a name like `IMG_2041.jpg` says little when deciding what to copy or remove. For a
-   Drive file, its thumbnail (`thumbnailLink`, small, no full download) or the file itself,
-   downloaded on demand and cached.
-   - Where to build it: dirdelta's flows are Python calling `picker.py`, so the GUI could be
-     another implementation of `picker.py`'s functions (`pick_files`, `pick_option`, ...), a
-     window instead of a treepicker run, with the rest unchanged. A Python toolkit (Qt via
-     PySide6 has tree views and image viewing built in; or a local web page served by dirdelta,
-     opened in a browser, which also suits idea 4).
-   - A cheaper first step, in the terminal: treepicker's preview column (`--preview`) showing
-     the image with a terminal graphics protocol (kitty's, sixel, or iTerm2's, via e.g.
-     `chafa`), in terminals that support one. Windows Terminal supports sixel (WSL included).
-
-4. **A dirdelta server, used from a phone.** A daemon on an always-on machine that holds the
-   replicas' state (the Drive cache, scans of local dirs it can reach) and runs the actions
-   (Copy, Remove, idea 2's sorting), with an API that a phone app (or the browser) connects to:
-   the same choices, made remotely, e.g. sorting `cloud/unsorted` from the phone.
-   - The core first: the flows (diff, pick, confirm, act) separated from the terminal, so they
-     can be driven by an API rather than by treepicker runs and `messages` screens (the same
-     separation idea 3 needs, and treepicker's own improvement-ideas mention driving it from
-     somewhere other than the keyboard).
-   - The server: an HTTP API (e.g. FastAPI): list replicas and pairs (`replicas.json`), a pair's
-     diff, a tree's page of entries, an action on picked files, and an action's progress
-     (polled or streamed, since actions take minutes), with the dry run as the default there
-     too. Long actions run in the background and survive the phone disconnecting.
-   - The phone app: a web app (a page served by the daemon, added to the home screen) is the
-     cheapest, over a native one; it shows trees, thumbnails (idea 3) and the confirmations.
-   - Access: it can delete files in Drive and on disk, so it must not be open: reached over a
-     VPN (e.g. Tailscale) rather than the internet, with authentication on top, and the Drive
-     token stays on the server. Which local dirs it can reach is the server's, not the
-     laptop's (`/mnt/win` is the laptop's Windows drive), so the replicas it serves may
-     differ.
-
-5. **One combined diff tree of both replicas, decided per file or dir.** Today's flow is per
-   direction: the main menu offers each way's files ("Files in A, not in B"), and its picker
-   acts on picks (copy, remove, rename), so a decision about a file is spread over the two
-   ways' screens (copy A's new files to B, then remove B's old ones from B, ...). The other way to work, like a sync tool's
-   (Unison, Beyond Compare): one tree of everything that differs, both sides together, each
-   entry marked by where it is (only in A: `A>`, only in B: `<B`), and an action per file or
-   dir, chosen there: copy it to the side that lacks it, remove it from the side that has it,
-   or skip. Then one confirmation of the whole plan ("copy 12 to B, remove 30 from B, copy 3
-   to A"), and it's done in one go.
-   - Better for: deciding about a dir as a whole whichever side it's on, seeing a moved file's
-     two halves together (idea 1: `A> old/x.jpg` and `<B new/x.jpg` side by side, and
-     Rename, done now from one side, with its two halves in one screen), and one plan to
-     review. It's how one thinks of it ("make these two the same, except ..."), rather than a
-     pass per direction.
-   - A default action per entry, so most need no decision: e.g. copy what's only in one
-     side (for a backup-like pair), or per pair (a favorite could keep its default: "B is
-     the backup of A": copy A>, remove <B). Space cycles the actions (copy, remove, skip), a
-     key sets one for a whole dir, and the stats line counts each.
-   - treepicker: each node has one picked state today; this needs a few states per node
-     (shown as a mark and a color, like `X`/`-` now), set by keys, and printed with the node
-     (`copy\tpath`, `remove\tpath`). Both sides' diffs are two dirdiff runs, merged in Python
-     into one `--typed` list with a side for each. A bigger treepicker change than the others,
-     made in its repo.
-   - What stays: the actions themselves (`copy_inner_entries_from_dirtree`, `remove_files`,
-     `move_files`), the progress screen, the dry run, the match indexes. The main menu becomes
-     one "Sync" (plus maybe the current per-direction ones, for the simple cases, e.g. a
-     read-only replica, where only one way makes sense).
-
-6. **Know each replica and when it was last updated.** The user keeps a `last_update.txt` at
+4. **Know each replica and when it was last updated.** The user keeps a `last_update.txt` at
    a replica's root, a log of changes, newest last, e.g. (`/mnt/win/.../eliran`'s, as of
    2026-10-27, also in `cloud/eliran`):
    ```
@@ -142,9 +114,9 @@ Claude's help, 2026-10-29) are in git history. treepicker's own are in `lib/tree
      user writes it this way: a fixed format is cheaper, offline, and predictable. A model
      could still summarize a long log, if ever wanted.
 
-7. **Compare sizes or contents of the files at the same path.** The diff is by path only, so a
+5. **Compare sizes or contents of the files at the same path.** The diff is by path only, so a
    file at the same path on both sides counts as the same, even if one was edited or is a
-   half-copied file, and it's in neither direction's list. (Idea 1 is the other case: a file at
+   half-copied file, and it's in neither direction's list. (Idea 2 is the other case: a file at
    different paths, moved or renamed. Its machinery is there now, and this would reuse it: comparing
    contents, `elsewhere._same_contents()`, two local files side by side or by Drive's hash; Drive's
    SHA-1, SHA-256 and `modifiedTime` in the cache; copies that keep their modification times.) Two
@@ -164,9 +136,24 @@ Claude's help, 2026-10-29) are in git history. treepicker's own are in `lib/tree
    - The result: a third kind of entry besides "only in A" and "only in B": "in both, but
      different" (by size, or by contents), with its own actions: copy A's over B's, or B's
      over A's, comparing their modification times (Drive's `modifiedTime`, in the cache since
-     2026-10-29) to suggest which is newer. This fits idea 5's combined tree.
+     2026-10-29) to suggest which is newer. This fits idea 8's combined tree.
 
-8. **Bring the phone's new photos in, periodically.** The user connects the phone to the laptop
+6. **A GUI, with the image beside the tree.** The same flows and keys as the TUI (the menus,
+   the file pickers, `j`/`k`/Space/Enter, search), in a window, with a pane on the right that
+   shows the selected file: an image (or a video's frame, a PDF's first page, a text's start),
+   since a name like `IMG_2041.jpg` says little when deciding what to copy or remove. For a
+   Drive file, its thumbnail (`thumbnailLink`, small, no full download) or the file itself,
+   downloaded on demand and cached.
+   - Where to build it: dirdelta's flows are Python calling `picker.py`, so the GUI could be
+     another implementation of `picker.py`'s functions (`pick_files`, `pick_option`, ...), a
+     window instead of a treepicker run, with the rest unchanged. A Python toolkit (Qt via
+     PySide6 has tree views and image viewing built in; or a local web page served by dirdelta,
+     opened in a browser, which also suits idea 10).
+   - A cheaper first step, in the terminal: treepicker's preview column (`--preview`) showing
+     the image with a terminal graphics protocol (kitty's, sixel, or iTerm2's, via e.g.
+     `chafa`), in terminals that support one. Windows Terminal supports sixel (WSL included).
+
+7. **Bring the phone's new photos in, periodically.** The user connects the phone to the laptop
    now and then, to copy its new pictures into the laptop's replica (photos are kept in Drive,
    not Google Photos). Today that's a plain sync of two dirs, which doesn't fit well:
    - Reaching the phone: plugged in by USB, an Android phone is MTP, not a disk. GNOME's gvfs
@@ -177,14 +164,14 @@ Claude's help, 2026-10-29) are in git history. treepicker's own are in `lib/tree
      and fetching through `adb`) would hide which is used.
    - Matching by path doesn't work: the phone keeps one flat `DCIM/Camera`, while the laptop's
      replica is sorted into folders (by year, by event), so every photo looks missing. What's
-     already copied is found by name and size anywhere in the destination (or by hash, idea 7),
-     like idea 1's moved files, not by path.
+     already copied is found by name and size anywhere in the destination (or by hash, idea 5),
+     like idea 2's moved files, not by path.
    - Only what's new: remember, per phone (its serial, `adb get-serialno`, or the MTP device's),
      the newest photo time imported last time, and list only what's newer (by the file's
      mtime, or the date in its name: `IMG_20261027_...`, `PXL_20261027_...`). Then the flow is:
      plug in, choose "Import from phone" (or a favorite pair, phone → destination), see the new
-     photos (idea 3's thumbnails help), Enter, done.
-   - Where they go: into an inbox folder (e.g. `photos/unsorted`), to sort later with idea 2,
+     photos (idea 6's thumbnails help), Enter, done.
+   - Where they go: into an inbox folder (e.g. `photos/unsorted`), to sort later with idea 3,
      or straight into a folder by date (`photos/2026/10`, from EXIF's DateTimeOriginal, or the
      name), set once per destination.
    - One way only: never remove from the phone by default. Optionally, once the photos are
@@ -193,7 +180,7 @@ Claude's help, 2026-10-29) are in git history. treepicker's own are in `lib/tree
    - Then to Drive: the laptop's replica goes to `cloud/...` as today, by a sync, or the
      import could copy to both at once.
 
-   Straight from the phone into Drive, with no laptop and no dirdelta server (idea 4):
+   Straight from the phone into Drive, with no laptop and no dirdelta server (idea 10):
    - Before writing an app: apps that already do this exist, e.g. Autosync for Google Drive
      (MetaCtrl) or FolderSync, which keep a phone folder synced (one way, upload only, on
      Wi-Fi) into a Drive folder. The Drive app itself uploads by hand only.
@@ -207,79 +194,79 @@ Claude's help, 2026-10-29) are in git history. treepicker's own are in `lib/tree
      folder they went into (at the start, from the menu, or `r` in the file picker) picks them up, and the laptop's replica gets them by a sync
      from `cloud/...`.
 
-9. **Remember how a replica's volume was mounted, and offer to mount it.** A local replica is
-   often on a volume that isn't always mounted: `/mnt/win` is the laptop's Windows partition
-   (as of 2026-10-29 `/dev/sda3`, NTFS via ntfs-3g, label `OS`, UUID `9618289F1828807B`, not in
-   `/etc/fstab`, so mounted by hand), and an external disk comes and goes. Choosing a recent pair
-   or a favorite with such a path while it's unmounted fails at `validate_dir()`, or worse: an
-   unmounted mount point is still there, an empty dir on the root filesystem, so the diff says
-   every file is missing, and a live Copy would fill the root filesystem rather than the volume.
-   - What's kept: when a replica is used, the mount it's under (`findmnt -no
-     TARGET,SOURCE,FSTYPE,OPTIONS,UUID,LABEL --target PATH`): mount point, device, filesystem
-     type, options, UUID, label. In `~/.config/dirdelta/` with the pair (`replicas.json`), or
-     with idea 6's replica records, which identify a local replica by the same UUID. Only for a
-     mount other than `/` (a path on the root filesystem has nothing to remember).
-   - Finding it unmounted: before scanning, the recorded mount point isn't a mount
-     (`os.path.ismount()` is false, or `findmnt --target PATH` now says `/`), whether or not the
-     path exists.
-   - The question, rather than an error: "/mnt/win isn't mounted (last time: /dev/sda3, NTFS,
-     'OS'). Mount it?", with Yes, No (back to the menu) and, if the disk isn't there
-     (`/dev/disk/by-uuid/UUID` missing, so it's unplugged), "Connect it, then try again".
-   - Mounting it, by the UUID (the device name may differ next time), at the same mount point,
-     so the replica's path still holds: `mount TARGET` if fstab has a line for it (`noauto,user`
-     needs no root), else `sudo mount -t TYPE -o OPTIONS UUID=... TARGET` with the recorded
-     options (sudo asks for the password in the terminal, which dirdelta doesn't hold between
-     pickers). `udisksctl mount -b /dev/disk/by-uuid/UUID` needs no sudo (polkit), but mounts
-     at `/media/$USER/LABEL`, another path: the replica's path would then be mapped to it, for
-     this run. Each run is shown before it's run, and its error if it fails.
-   - NTFS: if Windows hibernated, or shut down with Fast Startup on, ntfs-3g won't mount it
-     read-write ("The disk contains an unclean file system"): mounted read-only instead
-     (`-o ro`, said so), the "Read-only" screen already says nothing will be copied into or
-     removed from it.
-   - Where: `choose_replicas` (a recent pair or a favorite) and a run with paths, before the
-     trees are made; picker mode too. Mounting changes the system, not files, so it's asked
-     even in a dry run, and never done without asking.
+8. **One combined diff tree of both replicas, decided per file or dir.** Today's flow is per
+   direction: the main menu offers each way's files ("Files in A, not in B"), and its picker
+   acts on picks (copy, remove, rename), so a decision about a file is spread over the two
+   ways' screens (copy A's new files to B, then remove B's old ones from B, ...). The other way to work, like a sync tool's
+   (Unison, Beyond Compare): one tree of everything that differs, both sides together, each
+   entry marked by where it is (only in A: `A>`, only in B: `<B`), and an action per file or
+   dir, chosen there: copy it to the side that lacks it, remove it from the side that has it,
+   or skip. Then one confirmation of the whole plan ("copy 12 to B, remove 30 from B, copy 3
+   to A"), and it's done in one go.
+   - Better for: deciding about a dir as a whole whichever side it's on, seeing a moved file's
+     two halves together (idea 2: `A> old/x.jpg` and `<B new/x.jpg` side by side, and
+     Rename, done now from one side, with its two halves in one screen), and one plan to
+     review. It's how one thinks of it ("make these two the same, except ..."), rather than a
+     pass per direction.
+   - A default action per entry, so most need no decision: e.g. copy what's only in one
+     side (for a backup-like pair), or per pair (a favorite could keep its default: "B is
+     the backup of A": copy A>, remove <B). Space cycles the actions (copy, remove, skip), a
+     key sets one for a whole dir, and the stats line counts each.
+   - treepicker: each node has one picked state today; this needs a few states per node
+     (shown as a mark and a color, like `X`/`-` now), set by keys, and printed with the node
+     (`copy\tpath`, `remove\tpath`). Both sides' diffs are two dirdiff runs, merged in Python
+     into one `--typed` list with a side for each. A bigger treepicker change than the others,
+     made in its repo.
+   - What stays: the actions themselves (`copy_inner_entries_from_dirtree`, `remove_files`,
+     `move_files`), the progress screen, the dry run, the match indexes. The main menu becomes
+     one "Sync" (plus maybe the current per-direction ones, for the simple cases, e.g. a
+     read-only replica, where only one way makes sense).
 
-10. **A desktop (or web) app on dirdelta's own libraries.** dirdelta's Python already decides what
-    every screen holds: the main menu's options (with their counts, and which are greyed out),
-    a picker's files and dirs, the preview column's lines, the confirmations, the progress and
-    report lines. Only the drawing is treepicker's and `messages`'. A desktop app (or a web app)
-    could reuse all of that, and draw it with its own widgets: a menu as a list or buttons, a
-    file picker as a tree view with checkboxes, the preview column as a side pane (idea 3's
-    image there too), a confirmation as a dialog with No as the default button, progress as a
-    progress bar.
-    - The split: the screens' contents as plain data (a menu: a title, header lines, its options
-      and which are disabled; a picker: its root, paths, picks, the selection, the previews as
-      they come; a confirmation; a progress screen's lines), handed to a frontend, which shows
-      them and returns the user's answer (the option, the picks, the key). `picker.py` and
-      `messages.py` are already close to that interface: their functions take the contents and
-      return the answer, so the terminal frontend is today's treepicker runs and screens, and a
-      desktop one is another implementation of the same functions, chosen at startup (e.g.
-      `dirdelta --gui`). The flows (`dirsync_main`, `interactive_dir_sync`, `choose_replicas`)
-      stay as they are.
-    - What needs care: the parts that run while a screen is shown, the menu's counts coming in
-      (`shown_as`) and the previews (`send()`), become calls the frontend gets on a thread
-      other than its UI thread, so it must hand them to it (Qt's signals, a web socket's
-      messages); and an action's progress, which now prints, must go to the frontend's
-      progress screen instead.
-    - Which toolkit: Qt (PySide6) for a desktop app, with tree views, dialogs and image views
-      built in; or a local web app (dirdelta serving a page, opened in the browser), which is
-      also the way to idea 4's phone app. Both reuse the same frontend interface.
+9. **A desktop (or web) app on dirdelta's own libraries.** dirdelta's Python already decides what
+   every screen holds: the main menu's options (with their counts, and which are greyed out),
+   a picker's files and dirs, the preview column's lines, the confirmations, the progress and
+   report lines. Only the drawing is treepicker's and `messages`'. A desktop app (or a web app)
+   could reuse all of that, and draw it with its own widgets: a menu as a list or buttons, a
+   file picker as a tree view with checkboxes, the preview column as a side pane (idea 6's
+   image there too), a confirmation as a dialog with No as the default button, progress as a
+   progress bar.
+   - The split: the screens' contents as plain data (a menu: a title, header lines, its options
+     and which are disabled; a picker: its root, paths, picks, the selection, the previews as
+     they come; a confirmation; a progress screen's lines), handed to a frontend, which shows
+     them and returns the user's answer (the option, the picks, the key). `picker.py` and
+     `messages.py` are already close to that interface: their functions take the contents and
+     return the answer, so the terminal frontend is today's treepicker runs and screens, and a
+     desktop one is another implementation of the same functions, chosen at startup (e.g.
+     `dirdelta --gui`). The flows (`dirsync_main`, `interactive_dir_sync`, `choose_replicas`)
+     stay as they are.
+   - What needs care: the parts that run while a screen is shown, the menu's counts coming in
+     (`shown_as`) and the previews (`send()`), become calls the frontend gets on a thread
+     other than its UI thread, so it must hand them to it (Qt's signals, a web socket's
+     messages); and an action's progress, which now prints, must go to the frontend's
+     progress screen instead.
+   - Which toolkit: Qt (PySide6) for a desktop app, with tree views, dialogs and image views
+     built in; or a local web app (dirdelta serving a page, opened in the browser), which is
+     also the way to idea 10's phone app. Both reuse the same frontend interface.
 
-11. **An env file for dirdelta's settings.** Its settings are env vars now (`DIRDELTA_PICKER`,
-    `DIRDELTA_DIRDIFF`, `DIRDELTA_AI_DESCRIBE_MODEL`, `DIRDELTA_AI_RECOMMEND_MODEL`,
-    `DIRDELTA_AI_MODEL`, and `ANTHROPIC_API_KEY` for Claude without the laptop's login), so each
-    must be set in the shell that runs it, or in `bin/sync.sh`. A file would keep them:
-    `~/.config/dirdelta/env` (`NAME=value` lines, `#` comments), read at the start into
-    `os.environ` for the names not set already, so a var set in the shell still wins (and tests,
-    which patch `os.environ`, aren't affected: the file's path patched like `REPLICAS_FILE`).
-    - `DRYRUN` stays out of it (ignored there, with a warning): a file that makes every run live
-      would be easy to forget, and a live run should be asked for each time.
-    - A secret in it (`ANTHROPIC_API_KEY`) asks for care: refuse the file unless only its owner can
-      read it (mode 600), as ssh does with its keys, and never print it, as `secrets/` isn't.
-    - One place for every setting's default and meaning (a module of them, `settings.py`), which
-      `--help` (or a `dirdelta --settings`) could list, with where each value came from (the
-      default, the file, the shell).
+10. **A dirdelta server, used from a phone.** A daemon on an always-on machine that holds the
+    replicas' state (the Drive cache, scans of local dirs it can reach) and runs the actions
+    (Copy, Remove, idea 3's sorting), with an API that a phone app (or the browser) connects to:
+    the same choices, made remotely, e.g. sorting `cloud/unsorted` from the phone.
+    - The core first: the flows (diff, pick, confirm, act) separated from the terminal, so they
+      can be driven by an API rather than by treepicker runs and `messages` screens (the same
+      separation idea 6 needs, and treepicker's own improvement-ideas mention driving it from
+      somewhere other than the keyboard).
+    - The server: an HTTP API (e.g. FastAPI): list replicas and pairs (`replicas.json`), a pair's
+      diff, a tree's page of entries, an action on picked files, and an action's progress
+      (polled or streamed, since actions take minutes), with the dry run as the default there
+      too. Long actions run in the background and survive the phone disconnecting.
+    - The phone app: a web app (a page served by the daemon, added to the home screen) is the
+      cheapest, over a native one; it shows trees, thumbnails (idea 6) and the confirmations.
+    - Access: it can delete files in Drive and on disk, so it must not be open: reached over a
+      VPN (e.g. Tailscale) rather than the internet, with authentication on top, and the Drive
+      token stays on the server. Which local dirs it can reach is the server's, not the
+      laptop's (`/mnt/win` is the laptop's Windows drive), so the replicas it serves may
+      differ.
 
 ## Parked: performance
 

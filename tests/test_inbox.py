@@ -188,7 +188,7 @@ class InboxSortTest(unittest.TestCase):
             self.sort([['a.txt'], None], ['Describe the 1 file'])
         labels = self.pick_files.call_args.kwargs['shown_as']()
         self.assertEqual(labels, {'a.txt': 'a.txt  | a shopping list', '': ''})
-        self.assertEqual(self.queries[0][:2], (['description'], ai.DESCRIBE_MODEL))
+        self.assertEqual(self.queries[0][:2], (['description'], ai.MODEL))
         # Kept: shown on the next run too, without asking
         with mock.patch('dirdelta.ai._run_query', side_effect=AssertionError('asked again')):
             self.sort([None], [])
@@ -221,9 +221,9 @@ class InboxSortTest(unittest.TestCase):
                                              'path': 'photos/trips/2024/beach.jpg', 'reason': 'a trip photo'}}):
             self.sort([['b.jpg', 'trip/c.jpg'], ['b.jpg'], ['b.jpg', 'trip/c.jpg'], None],
                       ['Ask Claude', NOTHING, "Move the 2 files to Claude's recommendations (2 dirs, 1 renamed)", YES])
-        # Described first (Haiku, reading them), then placed by the descriptions (Sonnet)
+        # Described first (reading them), then placed by the descriptions
         self.assertEqual([query[:2] for query in self.queries],
-                         [(['description'], ai.DESCRIBE_MODEL), (['action', 'path', 'reason'], ai.RECOMMEND_MODEL)])
+                         [(['description'], ai.MODEL), (['action', 'path', 'reason'], ai.MODEL)])
         self.assertIn("b.jpg (size 5 bytes): a cat", self.queries[1][2])
         menus = [call.args[0] for call in self.pick_option.call_args_list]
         # One destination: the menu names it

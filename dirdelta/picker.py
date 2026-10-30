@@ -1,8 +1,8 @@
 """dirdelta's pickers: they run the treepicker program, from github.com/eliranle6/treepicker.
 
 Like fzf, treepicker draws on the terminal itself and prints what was picked, so each pick runs it as
-a subprocess (see docs/treepicker-integration.md), found by programs.find() ($DIRDELTA_PICKER, or
-else where make install, make deploy or make build put it, or else on PATH).
+a subprocess (see docs/treepicker-integration.md), found by programs.find() (where make install,
+make deploy or make build put it, or else on PATH).
 """
 import collections
 import functools
@@ -15,7 +15,6 @@ from dirdelta import entries
 from dirdelta import dryrun
 from dirdelta import programs
 
-PROGRAM_ENV_VAR = 'DIRDELTA_PICKER'
 PROGRAM_NAME = 'treepicker'
 
 # treepicker's exit code when the user quit without picking
@@ -430,4 +429,4 @@ def _null_terminated(items):
 
 
 def _find_program():
-    return programs.find(PROGRAM_NAME, PROGRAM_ENV_VAR)
+    return programs.find(PROGRAM_NAME)

@@ -6,14 +6,13 @@ import subprocess
 
 from dirdelta import programs
 
-PROGRAM_ENV_VAR = 'DIRDELTA_DIRDIFF'
 PROGRAM_NAME = 'dirdiff'
 
 
 def files_not_in(src_dir, dst_dir, max_depth=None):
     """The paths (relative to src_dir) of src_dir's files that dst_dir lacks, by path only, and find's
     error messages (paths it couldn't read in either dir)."""
-    command = [programs.find(PROGRAM_NAME, PROGRAM_ENV_VAR), '-0']
+    command = [programs.find(PROGRAM_NAME), '-0']
     if max_depth is not None:
         command += ['--max-depth', str(max_depth)]
     command += [src_dir, dst_dir]

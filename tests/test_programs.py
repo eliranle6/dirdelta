@@ -9,7 +9,7 @@ from dirdelta import programs
 
 
 class FindTest(unittest.TestCase):
-    """Where programs.find() looks for a program (here 'prog', overridden by $TEST_PROG)"""
+    """Where programs.find() looks for a program (here 'prog')"""
 
     def setUp(self):
         self.tmpdir = tempfile.mkdtemp()
@@ -18,8 +18,7 @@ class FindTest(unittest.TestCase):
         self.build_dir = os.path.join(self.tmpdir, 'build')
         for directory in (self.python_dir, self.build_dir):
             os.makedirs(directory)
-        for patcher in (mock.patch.dict(os.environ, {'TEST_PROG': ''}),
-                        mock.patch('sys.executable', os.path.join(self.python_dir, 'python3')),
+        for patcher in (mock.patch('sys.executable', os.path.join(self.python_dir, 'python3')),
                         mock.patch('dirdelta.programs.SOURCE_TREE_BUILD', self.build_dir)):
             patcher.start()
             self.addCleanup(patcher.stop)
@@ -33,20 +32,14 @@ class FindTest(unittest.TestCase):
 
     def find(self, on_path=None):
         with mock.patch('shutil.which', return_value=on_path):
-            return programs.find('prog', 'TEST_PROG')
+            return programs.find('prog')
 
     def test_missing_program_raises(self):
         with self.assertRaises(programs.ProgramError) as context:
             self.find()
         self.assertIn('make build', str(context.exception))
-        self.assertIn('$TEST_PROG', str(context.exception))
 
-    def test_env_var_comes_first(self):
-        self.make_program(self.python_dir)
-        os.environ['TEST_PROG'] = '/some/prog'
-        self.assertEqual(self.find(), '/some/prog')
-
-    def test_next_to_python_comes_next(self):
+    def test_next_to_python_comes_first(self):
         # Where make install and make deploy put it
         expected = self.make_program(self.python_dir)
         self.make_program(self.build_dir)

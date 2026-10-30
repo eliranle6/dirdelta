@@ -12,13 +12,9 @@ class ProgramError(Exception):
     """A program that can't be found, or failed"""
 
 
-def find(name, env_var):
-    """The program: $env_var if set; else next to the Python running dirdelta, where make install
-    and make deploy put it; else the source tree's build (make build), for running from source; else
-    on PATH."""
-    program = os.environ.get(env_var)
-    if program:
-        return program
+def find(name):
+    """The program: next to the Python running dirdelta, where make install and make deploy put it;
+    else the source tree's build (make build), for running from source; else on PATH."""
     # Not resolving sys.executable's links: a venv's python links to the system's
     for candidate in (os.path.join(os.path.dirname(sys.executable), name),
                       os.path.join(SOURCE_TREE_BUILD, name)):
@@ -27,6 +23,6 @@ def find(name, env_var):
     program = shutil.which(name)
     if not program:
         raise ProgramError(
-            '%s was not found. Build it with make build (or install it with make install or make '
-            'deploy), or point $%s at it.' % (name, env_var))
+            '%s was not found. Build it with make build, or install it with make install or make '
+            'deploy.' % name)
     return program

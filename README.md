@@ -34,8 +34,7 @@ make                              # builds treepicker: needs g++ and libncurses-
 dirdelta's pickers and menus are `treepicker`, and it diffs two local dirs with `dirdiff`: C++
 programs from [treepicker](https://github.com/eliranle6/treepicker) (see `docs/treepicker-integration.md`), a
 submodule at `lib/treepicker`. `make` builds them into `lib/treepicker/build/`, where dirdelta finds them
-when run from the source tree. `$DIRDELTA_PICKER` and `$DIRDELTA_DIRDIFF` override which programs it
-runs.
+when run from the source tree.
 
 Development tasks are Makefile targets (`make help` lists them). They use `.venv` automatically
 when it exists, and otherwise whichever `python3` is on your `PATH`, so an already activated venv
@@ -88,7 +87,7 @@ Drive folders; choosing it, the replicas you sync are offered too). The inbox's 
   done in the background: you go on picking, the files say "(Claude is looking at it...)" until
   their descriptions come, and the bottom line says what Claude is doing.
 - "Ask Claude where N files go" (as `Ctrl-I` does, in the background too): their descriptions
-  first (the missing ones), and which are copies (below), then Claude Sonnet is
+  first (the missing ones), and which are copies (below), then Claude is
   given them and the sorted tree's dirs (with a few of the names of the files in each), and
   recommends a path for each file: a dir (an existing one, or a new one) and a name, the file's own
   unless it says little (`IMG_2041.jpg`, `scan001.pdf`) or doesn't fit how that dir's files are
@@ -115,9 +114,8 @@ which runs Claude Code: the laptop's logged-in Claude, or `ANTHROPIC_API_KEY` if
 the picked files itself (text, images, PDFs; a Drive file is downloaded first), with no tool but
 `Read`, so their contents are sent to Anthropic: only when you choose to. What it says is kept in
 `~/.cache/dirdelta/ai.json`, by the file's path and size, so a file is asked about once, and it goes
-with the file when it's moved or copied. Descriptions are asked of
-`claude-haiku-5-5` and recommendations of `claude-sonnet-5-5` (`DIRDELTA_AI_DESCRIBE_MODEL` and
-`DIRDELTA_AI_RECOMMEND_MODEL` change them, `DIRDELTA_AI_MODEL` both).
+with the file when it's moved or copied. Descriptions and
+recommendations are both asked of `claude-haiku-5-5`.
 
 ### Picker mode (one path)
 

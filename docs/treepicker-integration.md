@@ -79,9 +79,8 @@ Like fzf: dirdelta starts `treepicker`, which draws on the terminal itself
 
 treepicker is the `lib/treepicker` submodule, built by `make` (make build) into
 `lib/treepicker/build/treepicker`; `make install` and `make deploy` put a copy
-next to the environment's python. dirdelta runs `$DIRDELTA_PICKER` if set,
-else the first of: treepicker next to the running python, that build,
-treepicker on `PATH`.
+next to the environment's python. dirdelta runs the first of: treepicker
+next to the running python, that build, treepicker on `PATH`.
 
 ## Plan and status
 

@@ -1,6 +1,5 @@
-"""What Claude says of files: a short description of each (DESCRIBE_MODEL, which reads them), and
-where in a sorted tree it belongs (RECOMMEND_MODEL, by their names, sizes and descriptions: it reads
-nothing), for sorting an inbox (see inbox.py). Through the Claude Agent SDK, which runs Claude Code, and so the
+"""What Claude (MODEL) says of files: a short description of each (which reads them), and where in
+a sorted tree it belongs (by their names, sizes and descriptions: it reads nothing), for sorting an inbox (see inbox.py). Through the Claude Agent SDK, which runs Claude Code, and so the
 laptop's logged-in Claude (or ANTHROPIC_API_KEY, if set).
 
 Claude reads the files itself, with its Read tool (text, images, PDFs), and with no other tool: it
@@ -15,14 +14,8 @@ import logging
 import os
 
 
-# The models: a description is a short sentence, so the fastest and cheapest does; a recommendation
-# is a choice among the sorted tree's dirs, which takes more judgment. Each is set by its env var, or
-# both by MODEL_ENV_VAR.
-DESCRIBE_MODEL = 'claude-haiku-5-5'
-RECOMMEND_MODEL = 'claude-sonnet-5-5'
-DESCRIBE_MODEL_ENV_VAR = 'DIRDELTA_AI_DESCRIBE_MODEL'
-RECOMMEND_MODEL_ENV_VAR = 'DIRDELTA_AI_RECOMMEND_MODEL'
-MODEL_ENV_VAR = 'DIRDELTA_AI_MODEL'
+# The model, for descriptions and recommendations both: the fastest and cheapest
+MODEL = 'claude-haiku-5-5'
 CACHE_FILE = os.path.expanduser('~/.cache/dirdelta/ai.json')
 # How many files one request is about
 BATCH_SIZE = 10
@@ -70,7 +63,7 @@ def _schema(fields, enums=None):
 
 def describe(files, cache_key, progress=None):
     """{relpath: description} of files (File), a sentence of at most MAX_DESCRIPTION_WORDS words
-    each, from the cache or Claude (DESCRIBE_MODEL, which reads them), in batches of BATCH_SIZE,
+    each, from the cache or Claude (which reads them), in batches of BATCH_SIZE,
     calling progress(done, count) after each. cache_key(file) is the file's key in the cache.
     Raises AIError if Claude can't be asked."""
     def is_cached(entry):
@@ -88,8 +81,8 @@ def recommend(files, cache_key, dirs, root_name, descriptions, copies=None, prog
     it belongs, its path relative to its root: a dir (an existing one, or a new one where none
     fits) and a name (its own, or a better one if it says little, or doesn't fit the names in that
     dir); or 'remove' it, a copy of a file already there (copies: {relpath: the paths in the sorted
-    tree of files with the same contents}; its path is then ''), from the cache or Claude
-    (RECOMMEND_MODEL). It goes by the files' names, sizes and descriptions ({relpath: description},
+    tree of files with the same contents}; its path is then ''), from the cache or Claude.
+    It goes by the files' names, sizes and descriptions ({relpath: description},
     e.g. describe()'s), so it reads nothing."""
     copies = copies or {}
     def is_cached(entry):
@@ -186,7 +179,7 @@ def _ask_for_descriptions(files):
               (MAX_DESCRIPTION_WORDS, '\n'.join(lines)))
     readable = [os.path.dirname(file.local_path) for file in files if file.local_path is not None]
     result = _run_query(prompt, sorted(set(readable)), _schema(['description']),
-                        max_turns=2 * len(files) + 5, model=_model(False))
+                        max_turns=2 * len(files) + 5, model=MODEL)
     return {files[number - 1].relpath: {'description': _short(item.get('description', ''))}
             for number, item in _numbered(result, files)}
 
@@ -215,7 +208,7 @@ def _ask_for_recommendations(files, dirs, root_name, descriptions, copies):
               "The files (name, size, and what each is):\n%s\n\nThe sorted tree's dirs:\n%s" %
               (root_name, '\n'.join(lines), '\n'.join(listed) or "(none yet)"))
     result = _run_query(prompt, [], _schema(['action', 'path', 'reason'], {'action': ['move', 'remove']}),
-                        max_turns=5, model=_model(True), system_prompt=RECOMMEND_SYSTEM_PROMPT)
+                        max_turns=5, model=MODEL, system_prompt=RECOMMEND_SYSTEM_PROMPT)
     answers = {}
     for number, item in _numbered(result, files):
         relpath = files[number - 1].relpath
@@ -266,13 +259,6 @@ def _clean_path(path, name):
     if extension and not os.path.splitext(parts[-1])[1]:
         parts[-1] += extension
     return '/'.join(parts)
-
-
-def _model(is_recommending):
-    """The model to ask for a recommendation, or else for a description"""
-    if is_recommending:
-        return os.environ.get(RECOMMEND_MODEL_ENV_VAR) or os.environ.get(MODEL_ENV_VAR) or RECOMMEND_MODEL
-    return os.environ.get(DESCRIBE_MODEL_ENV_VAR) or os.environ.get(MODEL_ENV_VAR) or DESCRIBE_MODEL
 
 
 def _run_query(prompt, readable_dirs, schema, max_turns, model, system_prompt=SYSTEM_PROMPT):

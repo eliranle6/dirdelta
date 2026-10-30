@@ -62,12 +62,6 @@ stoppable with Ctrl-C, and ask for confirmation first (Remove twice). A "cloud" 
 first component is literally `cloud` (see `paths.py`).
 
 Env vars that change execution mode:
-- `DIRDELTA_PICKER`, `DIRDELTA_DIRDIFF` — the treepicker and dirdiff programs
-  to run (default, `programs.find()`: the first of the program next to the
-  running python, in `lib/treepicker/build/`, on `PATH`)
-- `DIRDELTA_AI_DESCRIBE_MODEL`, `DIRDELTA_AI_RECOMMEND_MODEL` — the models `ai.py`
-  asks for descriptions (default `claude-haiku-5-5`) and recommendations
-  (default `claude-sonnet-5-5`); `DIRDELTA_AI_MODEL` sets both
 - `DRYRUN=0` — actually change files: Copy, Remove and Rename (`dryrun.py`, used by
   `localdiskdirtree.py`). Every screen shows the mode: "DRY RUN" in green, or
   "LIVE" in red.
@@ -140,7 +134,7 @@ module:
 PYTHONPATH=.:tests .venv/bin/python3 -m unittest test_interactive_dir_sync -v
 ```
 
-Every module has a test file (407 tests, all passing as of 2026-10-29) except
+Every module has a test file (406 tests, all passing as of 2026-10-30) except
 the thin wiring in `main.py`/`dirsync_main.py`, covered only by running the
 app. Shared fakes:
 - `tests/helpers.py`: `scripted_option_picker` / `scripted_tree_picker` /
