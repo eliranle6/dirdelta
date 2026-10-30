@@ -62,7 +62,8 @@ def pick_from_tree(tree, header='', dirs_only=False, root_name=None):
 
 
 def pick_files(rootpath, relpaths, header='', picked=None, label=None, keys='', selected=None,
-               previews=None, on_selection=None, shown_as=None, notify_keys='', on_notify=None):
+               previews=None, on_selection=None, shown_as=None, notify_keys='', on_notify=None,
+               enter_picks_selection=False):
     """Let the user pick some of the files at relpaths (relative to rootpath, each dir's files and
     subdirs together, in the order to show them, as dirdiff lists them). Picking a dir picks the
     files under it. Returns a Picked: the picked ones (of relpaths), in that order, and where the
@@ -70,7 +71,9 @@ def pick_files(rootpath, relpaths, header='', picked=None, label=None, keys='', 
     start picked. label, if given, is (text, color): a label shown after the mode's. keys (e.g.
     'r'): keys that end picking too, for the caller to act on the selected file or dir (the
     Picked's key), with what's picked so far. selected: the relpath of the file or dir to start
-    with selected ('' the root), e.g. the Picked's, to go on where it was.
+    with selected ('' the root), e.g. the Picked's, to go on where it was. With
+    enter_picks_selection, Enter with nothing picked picks the selected file (or a dir's files), as
+    if Space picked it first.
 
     previews, if given, is called on a thread of its own as soon as the picker is shown, with a
     send(found=None, default=None) for what to show beside the tree, in a column on the right:
@@ -95,6 +98,8 @@ def pick_files(rootpath, relpaths, header='', picked=None, label=None, keys='', 
 
     Only the files are sent: treepicker adds their dirs, so no tree is built here."""
     args = ['--typed', '--root', rootpath, '-m', '--print-selection'] + _header_args(header)
+    if enter_picks_selection:
+        args.append('--enter-picks-selection')
     if keys:
         args += ['--expect', keys]
     if selected is not None:

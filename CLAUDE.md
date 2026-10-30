@@ -83,7 +83,8 @@ change dirdelta made to Drive was cut off before it was added to the cache),
 `~/.config/dirdelta/replicas.json` (the history, favorites and sorts),
 `~/.config/dirdelta/mounts.json` (how the replicas' volumes were mounted),
 `~/.cache/dirdelta/ai.json` (what Claude said of files),
-`~/.cache/dirdelta/hashes.json` (local files' hashes) or `secrets/`.
+`~/.cache/dirdelta/hashes.json` (local files' hashes),
+`~/.cache/dirdelta/downloads/` (Drive files downloaded for Claude or to open) or `secrets/`.
 
 ## Structure
 
@@ -137,7 +138,7 @@ module:
 PYTHONPATH=.:tests .venv/bin/python3 -m unittest test_interactive_dir_sync -v
 ```
 
-Every module has a test file (420 tests, all passing as of 2026-10-30) except
+Every module has a test file (431 tests, all passing as of 2026-10-30) except
 the thin wiring in `main.py`/`dirsync_main.py`, covered only by running the
 app. Shared fakes:
 - `tests/helpers.py`: `scripted_option_picker` / `scripted_tree_picker` /
@@ -159,6 +160,9 @@ app. Shared fakes:
   `dirdelta.replicas.REPLICAS_FILE` to a temp file (`test_replicas`), or
   `replicas.load`/`replicas.save`. A manual run that shouldn't touch it can set
   `HOME` to a scratch dir (but that hides the real Drive cache too).
+- Nothing is downloaded into the real `~/.cache/dirdelta/downloads`: `tests/helpers.py`
+  points `downloads.DOWNLOADS_DIR` at a temp dir. `test_inbox` patches `subprocess.Popen`
+  for `Ctrl-X`'s `xdg-open`; a manual run can put a fake `xdg-open` first on `PATH`.
 - Nothing is mounted, and the real `~/.config/dirdelta/mounts.json` isn't read or
   written: `tests/helpers.py` points `mounts.MOUNTS_FILE` at a temp file, and
   `test_mounts` fakes `findmnt`, `lsblk`, `mount` (`subprocess.run`),

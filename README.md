@@ -86,12 +86,17 @@ tree), and "Recent inbox sorts".
 
 An inbox is a dir of files not sorted yet; the sorted tree is where they go (local dirs or Google
 Drive folders; choosing it, the replicas you sync are offered too). The inbox's picker works like a sync's: pick files with `Space`, press
-`Enter`, and choose what to do with them, with "Nothing" selected first:
+`Enter` (with none picked, it picks the selected file, or a dir's files), and choose what to do with
+them, with "Nothing" selected first:
 
 - `Ctrl-I` in the picker, on the picked files (or else the selected file or dir): all of what's
   below, describing them and saying where they go, in the background.
+- `Ctrl-X` in the picker opens the selected file with its program (`xdg-open`), as a double-click
+  would. A Drive file is downloaded first, into `~/.cache/dirdelta/downloads` (also where the files
+  Claude reads are downloaded to), so it's downloaded once (the least recently used go beyond 2 GB).
 - "Describe N files with Claude": a short description of each (at most 10 words, by Claude Haiku, which reads
-  the files), shown after its name in the picker (`a.txt  | a shopping list`), and searchable. It's
+  the files), shown after its name in the picker (`a.txt  [claude: a shopping list]`), and searchable (`/claude:`
+  shows the described ones). It's
   done in the background: you go on picking, the files say "(Claude is looking at it...)" until
   their descriptions come, and the bottom line says what Claude is doing.
 - "Ask Claude where N files go" (as `Ctrl-I` does, in the background too): their descriptions
@@ -107,9 +112,13 @@ Drive folders; choosing it, the replicas you sync are offered too). The inbox's 
   told, and may recommend removing it: "Remove 3 of the 5 files that are copies of files in X" (by their contents, whatever
   Claude says; asked twice).
   Local files' hashes are kept in `~/.cache/dirdelta/hashes.json`, so a file is read once.
-- "Move the N files to Claude's recommendation" (naming the dir, when they all go to one), "Move the N
-  files to..." (pick a dir in the sorted tree), "Copy the N files to...", and "Remove the N files"
-  (asked twice).
+- Moving: to Claude's dir (its recommendation) or to a dir you pick in the sorted tree, under the
+  file's own name, Claude's, or one you type (for one file: it starts as Claude's, or its own, to
+  edit): "Move the N files to Claude's recommendation" (its dir and name; naming the dir, when they
+  all go to one), "Move the N files, keeping their names, to Claude's dirs", "Move the file, under a
+  name you type, to Claude's dir", "Move the N files to..." (pick a dir), "Move the N files, under
+  Claude's names, to...", and "Move the file, under a name you type, to...". Then "Copy the N files
+  to...", and "Remove the N files" (asked twice).
 
 A move or a copy first shows the tree it makes (each file where it goes, and where it's from beside
 it), to look through (`Enter` goes on, `q` back); then No/Yes. When both are local, or both in
@@ -119,7 +128,7 @@ it's there. The inbox is kept, even when it's left empty.
 
 Claude is asked through the Claude Agent SDK (`pip install claude-agent-sdk`, in `requirements.txt`),
 which runs Claude Code: the laptop's logged-in Claude, or `ANTHROPIC_API_KEY` if it's set. Claude reads
-the picked files itself (text, images, PDFs; a Drive file is downloaded first), with no tool but
+the picked files itself (text, images, PDFs; a Drive file is downloaded first, and kept, see `Ctrl-X`), with no tool but
 `Read`, so their contents are sent to Anthropic: only when you choose to. What it says is kept in
 `~/.cache/dirdelta/ai.json`, by the file's path and size, so a file is asked about once, and it goes
 with the file when it's moved or copied. Descriptions and

@@ -161,12 +161,15 @@ class InboxSortTest(unittest.TestCase):
         options = self.pick_option.call_args.args[0]
         self.assertEqual(options[0], NOTHING)
         self.assertEqual([option.split(' ')[0] for option in options[1:]],
-                         ['Describe', 'Ask', 'Move', 'Remove', 'Move', 'Copy', 'Remove'])
+                         ['Describe', 'Ask', 'Move', 'Move', 'Move', 'Remove', 'Move', 'Move', 'Move', 'Copy',
+                          'Remove'])
         # With nothing recommended yet, those are greyed out
         disabled = self.pick_option.call_args.kwargs['shown_as']()
         self.assertEqual([text.text.split(': ')[-1] for text in disabled.values()],
                          ['none of them has a recommendation to move it yet',
-                          'none of them is a copy of a file there (by its contents)'])
+                          'none of them has a recommendation yet', 'it has no recommendation yet',
+                          'none of them is a copy of a file there (by its contents)',
+                          'none of them has a name from Claude'])
 
     def ask_claude(self, answers):
         """Patch ai._run_query to answer with answers ({relpath: {field: value}}) for the files in its
@@ -187,7 +190,7 @@ class InboxSortTest(unittest.TestCase):
             # Described in the background; quitting waits for it
             self.sort([['a.txt'], None], ['Describe the 1 file'])
         labels = self.pick_files.call_args.kwargs['shown_as']()
-        self.assertEqual(labels, {'a.txt': 'a.txt  | a shopping list', '': ''})
+        self.assertEqual(labels, {'a.txt': 'a.txt  [claude: a shopping list]', '': ''})
         self.assertEqual(self.queries[0][:2], (['description'], ai.MODEL))
         # Kept: shown on the next run too, without asking
         with mock.patch('dirdelta.ai._run_query', side_effect=AssertionError('asked again')):
@@ -198,7 +201,7 @@ class InboxSortTest(unittest.TestCase):
         sorter = Sort(self.inbox, self.root)
         sorter._describing = {'b.jpg'}
         shown = sorter._shown_as(['a.txt', 'b.jpg'])
-        self.assertEqual(shown, {'b.jpg': 'b.jpg  | ' + inbox.LOOKING, '': 'Claude: describing 1 file'})
+        self.assertEqual(shown, {'b.jpg': 'b.jpg  ' + inbox.LOOKING, '': 'Claude: describing 1 file'})
         self.assertIn("Claude is looking at it...", sorter._previews(['b.jpg'])['b.jpg'])
 
     def test_ctrl_i_describes_the_picked_files_or_the_selected_ones_in_the_background(self):
@@ -206,7 +209,8 @@ class InboxSortTest(unittest.TestCase):
                               'trip/c.jpg': {'description': 'a beach'}}):
             self.sort([None], [])
             kwargs = self.pick_files.call_args.kwargs
-            self.assertEqual(kwargs['notify_keys'], '\t')
+            self.assertEqual(kwargs['notify_keys'], '\t\x18')
+            self.assertTrue(kwargs['enter_picks_selection'])
             kwargs['on_notify']('\t', 'trip', [])
             self.sorter.wait_for_claude()
             self.assertEqual(self.sorter._descriptions, {'trip/c.jpg': 'a beach'})
@@ -239,6 +243,67 @@ class InboxSortTest(unittest.TestCase):
                                    self.root)[0], {'beach.jpg': 'a beach'})
         self.assertIn("  photos/cats/", self.sent_previews(self.pick_files.call_args_list[1])['b.jpg'])
 
+    def claude_places(self):
+        return self.ask_claude({'a.txt': {'description': 'a list', 'action': 'move', 'path': 'docs/a.txt',
+                                          'reason': 'a document'},
+                                'b.jpg': {'description': 'a cat', 'action': 'move', 'path': 'photos/cats/b.jpg',
+                                          'reason': 'a cat photo'},
+                                'trip/c.jpg': {'description': 'a beach', 'action': 'move',
+                                               'path': 'photos/trips/2024/beach.jpg', 'reason': 'a trip photo'}})
+
+    def test_moved_to_claudes_dirs_keeping_their_names(self):
+        with self.claude_places():
+            self.sort([['b.jpg', 'trip/c.jpg'], ['b.jpg', 'trip/c.jpg'], None],
+                      ['Ask Claude', "Move the 2 files, keeping their names, to Claude's dirs (2)", YES])
+        self.assertTrue(self.exists('sorted', 'photos', 'cats', 'b.jpg'))
+        self.assertTrue(self.exists('sorted', 'photos', 'trips', '2024', 'c.jpg'))
+
+    def test_moved_to_a_picked_dir_under_claudes_names(self):
+        with self.claude_places():
+            self.sort([['a.txt', 'trip/c.jpg'], ['a.txt', 'trip/c.jpg'], None],
+                      ['Ask Claude', "Move the 2 files, under Claude's names (1 renamed), to... (pick a dir in %s)"
+                       % (self.root,), YES], dirs=[os.path.join(self.root, 'photos')])
+        # The one Claude didn't rename keeps its name
+        self.assertTrue(self.exists('sorted', 'photos', 'a.txt'))
+        self.assertTrue(self.exists('sorted', 'photos', 'beach.jpg'))
+
+    def test_a_typed_name_starts_as_claudes(self):
+        with self.claude_places(), mock.patch('dirdelta.messages.ask', return_value='sunset.jpg') as ask:
+            self.sort([['trip/c.jpg'], ['trip/c.jpg'], None],
+                      ['Ask Claude', "Move the file, under a name you type, to Claude's dir, %s/photos/trips/2024/"
+                       % (self.root,), YES])
+        self.assertEqual(ask.call_args.args[3], 'beach.jpg')
+        self.assertIn('[claude: a beach]', ask.call_args.args[1])
+        self.assertTrue(self.exists('sorted', 'photos', 'trips', '2024', 'sunset.jpg'))
+        self.assertFalse(self.exists('inbox', 'trip', 'c.jpg'))
+
+    def test_a_typed_name_in_a_picked_dir(self):
+        with mock.patch('dirdelta.messages.ask', return_value='list.txt') as ask:
+            self.sort([['a.txt'], None], ['Move the file, under a name you type, to...', YES], dirs=[os.path.join(self.root, 'docs')])
+        # Without Claude's, its own
+        self.assertEqual(ask.call_args.args[3], 'a.txt')
+        self.assertTrue(self.exists('sorted', 'docs', 'list.txt'))
+
+    def test_a_typed_name_isnt_a_path_and_is_for_one_file(self):
+        with mock.patch('dirdelta.messages.ask', return_value='../x.txt'):
+            self.sort([['a.txt'], None], ['Move the file, under a name you type, to...'], dirs=[os.path.join(self.root, 'docs')])
+        self.assertEqual(self.show.call_args.args[0], 'Not a name')
+        self.assertTrue(self.exists('inbox', 'a.txt'))
+        self.sort([['a.txt', 'b.jpg'], None], [NOTHING])
+        disabled = [text.text for text in self.pick_option.call_args.kwargs['shown_as']().values()]
+        self.assertIn("Move the file, under a name you type, to... (pick a dir in %s): "
+                      "can't: a name is typed for one file" % (self.root,), disabled)
+
+    def test_ctrl_x_opens_the_selected_file(self):
+        sorter = Sort(self.inbox, self.root)
+        with mock.patch('subprocess.Popen') as popen:
+            sorter._open('trip/c.jpg', ['a.txt', 'b.jpg', 'trip/c.jpg'])
+        self.assertEqual(popen.call_args.args[0], ['xdg-open', os.path.join(self.inbox, 'trip', 'c.jpg')])
+        self.assertTrue(popen.call_args.kwargs['start_new_session'])
+        self.assertEqual(sorter._shown_as([])[''], 'Opened c.jpg')
+        with mock.patch('subprocess.Popen', side_effect=FileNotFoundError('no xdg-open')):
+            sorter._open('a.txt', ['a.txt'])
+        self.assertEqual(sorter._shown_as([])[''], "Couldn't open a.txt: no xdg-open")
     def sent_previews(self, pick_files_call):
         """What a picker's previews sent it first (then the picker is gone)"""
         sent = {}

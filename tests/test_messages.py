@@ -135,6 +135,27 @@ class ProgressScreenTest(unittest.TestCase):
         self.assertIn('\033[7mPress Enter to continue: Nothing to copy', escapes)
         input_mock.assert_called_once_with()
 
+    def test_ask(self):
+        asked = {}
+
+        def screen():
+            asked['answer'] = messages.ask('The name', ['Moving a.txt'], '> ', 'a.txt')
+        with mock.patch('readline.set_startup_hook') as hook:
+            escapes, lines, input_mock = self.run_screen(True, None, screen=screen)
+        # It starts as the default, to edit; then no more
+        self.assertEqual(hook.call_args_list[-1], mock.call())
+        input_mock.assert_called_once_with('> ')
+        self.assertEqual(lines, b'Moving a.txt\n')
+        self.assertIn('\033[7mThe name', escapes)
+        # No Enter to wait for after it
+        self.assertNotIn('Press Enter', escapes)
+        self.assertEqual(asked['answer'], input_mock.return_value.strip.return_value)
+
+    def test_ask_with_no_answer_is_none(self):
+        for answer in ({'return_value': '  '}, {'side_effect': EOFError}, {'side_effect': KeyboardInterrupt}):
+            with mock.patch('builtins.input', **answer), mock.patch('sys.stdout'), mock.patch('sys.stdin'):
+                self.assertIsNone(messages.ask('The name', [], '> ', 'a.txt'))
+
 
 if __name__ == '__main__':
     unittest.main()

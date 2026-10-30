@@ -104,7 +104,7 @@ copied. Either way the inbox and the root are `keep_dirs()` (never removed
 when left empty, never moved or trashed whole). `run()` is a loop like
 `InteractiveDirSync.browse()`: `pick_files` of the inbox's files, with
 Claude's descriptions as their tags (`shown_as`, through `--updates`: "name
-| description", or "(Claude is looking at it...)", and the status, Claude's
+[claude: description]" (`DESCRIBED`), searchable, or "(Claude is looking at it...)", and the status, Claude's
 work, on the bottom line) and its recommendations in the preview column (sent
 again as they change, `_send_previews()`), both kept in `ai.CACHE_FILE` and
 loaded at each pick. Asking Claude is in the background
@@ -112,14 +112,20 @@ loaded at each pick. Asking Claude is in the background
 at a time: `_describe()` the ones without a description, then with place,
 `_place()` them: their contents compared with the sorted tree's (`_compare()`),
 then `ai.recommend()`; its Drive downloads and the screen's Drive changes one
-at a time, `_drive_lock`), from `Ctrl-I` (`pick_files(notify_keys='\t')`,
-treepicker's `--notify`: the picked files, or else the selected file or dir's;
+at a time, `_drive_lock`), from `Ctrl-I` (`pick_files(notify_keys='\t\x18')`,
+treepicker's `--notify`, `_on_key()`: the picked files, or else the selected file or dir's;
 describing and placing) or the menu (Describe: describing only; Ask where:
-both); quitting waits for it (`_finish_describing()`); Enter → `_act()`, the action menu
-(`NOTHING` first): describe, ask where they go, move to the recommendations
-(naming the dir when there's one), move to / copy to a picked dir
-(`pick_under_dir(dirs_only, lazy)`, or `pick_from_tree` of the sorted tree
-from the cache), remove (confirmed twice). A move or copy (`_approve()`)
+both); quitting waits for it (`_finish_describing()`). `Ctrl-X` (`OPEN_KEY`)
+opens the selected file (`open_in_background()`: `xdg-open` in a session of its own,
+a Drive file downloaded first by `_downloaded()`, through `downloads.get()`;
+the bottom line says how it went, `_open_note`). Enter (with none picked, the
+selection: `pick_files(enter_picks_selection=True)`, treepicker's
+`--enter-picks-selection`) → `_act()`, the action menu
+(`NOTHING` first): describe, ask where they go, move (to Claude's dir, or a
+picked one: `pick_under_dir(dirs_only, lazy)`, or `pick_from_tree` of the sorted tree
+from the cache; under the file's name, Claude's, or one typed for one file,
+`_typed_name()`, `messages.ask()`, starting as Claude's or its own), copy to a
+picked dir, remove (confirmed twice). A move or copy (`_approve()`)
 first shows the tree it makes (`picker.view_files()`, with where each file
 is from beside it; files of one name to one dir are refused), then No/Yes,
 then `move_files()` / `copy_files_within()` (local `shutil.copy2`, Drive's
@@ -153,7 +159,11 @@ SDK, both of `MODEL` (Haiku)
 (`_run_query()`: `query()` with tools and allowed tools only `Read`,
 `permission_mode='dontAsk'`, no settings sources, the files' dirs as `cwd` and
 `add_dirs`, and `output_format` a JSON schema of the answers by file number).
-A Drive file is downloaded to a temp dir first (one at a time); one over
+A Drive file is downloaded first (one at a time), into `downloads.py`'s cache
+(`~/.cache/dirdelta/downloads`, `DOWNLOADS_DIR`: a dir per file, by its cloud
+path and size, under its own name, so Claude, let read the files' dirs, reads
+only it; the least recently used go beyond `MAX_BYTES`, 2 GB), kept for
+`Ctrl-X` and the next time; one over
 `MAX_READ_SIZE`, or a Google file, isn't read (Claude goes by its name).
 Recommendations are given the sorted tree's dirs (at most `MAX_DIRS_GIVEN`,
 the shallowest; not the inbox's, if it's in it), each with a few of its

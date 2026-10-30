@@ -12,7 +12,6 @@ import functools
 import os
 import posixpath
 import subprocess
-import tempfile
 import textwrap
 import threading
 import time
@@ -21,6 +20,7 @@ from dirdelta import ai
 from dirdelta import clouddirtree
 from dirdelta import dirtree
 from dirdelta import drivecache
+from dirdelta import downloads
 from dirdelta import dryrun
 from dirdelta import elsewhere
 from dirdelta import entries
@@ -41,12 +41,20 @@ PREVIEWS_INTERVAL = 0.3
 DESCRIBED_WAIT_INTERVAL = 0.2
 # The key that describes the picked files (or the selected one) with Claude, in the background
 DESCRIBE_KEY = '\t'
+# The key that opens the selected file (Ctrl-X) with its program (xdg-open), a Drive one downloaded
+# first (or found downloaded, see downloads.py), in the background
+OPEN_KEY = '\x18'
+# How long the bottom line says a file was opened, in seconds
+OPENED_SHOWN_FOR = 5
 # How many of a dir's file names Claude is given, so it sees how they're named
 NAMES_PER_DIR = 3
 # What says a file of the inbox is in the sorted tree already, in its preview: highlighted
 SURELY_A_COPY = picker.highlighted("\u2192 a copy: it may be removed")
 # What a file being described is shown as, after its name
 LOOKING = "(Claude is looking at it...)"
+# What a file Claude described is shown as, after its name: a search (/) for 'claude:' finds them,
+# and one for a word finds the files Claude said it of
+DESCRIBED = "[claude: %s]"
 
 
 class InboxError(Exception):
@@ -74,8 +82,14 @@ class InboxSort(object):
     NOTHING = "Nothing: back to the files"
     DESCRIBE = 'describe'
     RECOMMEND = 'recommend'
+    # Moving: to Claude's dir, or to a dir the user picks; under the file's name, Claude's, or one
+    # the user types
     MOVE_RECOMMENDED = 'move to the recommendations'
+    MOVE_TO_CLAUDES_DIR = "move to Claude's dirs"
+    MOVE_TO_CLAUDES_DIR_TYPED = "move to Claude's dir, typing its name"
     MOVE_TO = 'move to'
+    MOVE_TO_CLAUDES_NAMES = "move to, under Claude's names"
+    MOVE_TO_TYPED = 'move to, typing its name'
     COPY_TO = 'copy to'
     REMOVE = 'remove'
     REMOVE_COPIES = 'remove the copies'
@@ -152,6 +166,9 @@ class InboxSort(object):
         self._root_index = elsewhere.Index(root_view, excluded=inbox_in_root)
         self._checked = {}
         self._indexing = None
+        # What the bottom line says of opening a file (Ctrl-X), and until when (None: while it's
+        # being downloaded)
+        self._open_note = None
 
     # The inbox's files
 
@@ -187,9 +204,10 @@ class InboxSort(object):
         """Let the user pick some of the inbox's files, then choose what to do with them (_act()),
         and back to the picker, where they were, until they quit, or the inbox is empty"""
         header = ("Files in %s, to sort into %s. Pick some, then choose what to do with them:\n"
-                  "(To pick a file, press Space. When finished, press Enter. Ctrl-I: Claude describes "
-                  "the picked files (or the selected one), and says where they go, while you go on.%s "
-                  "After a '|': what Claude says it is.)" %
+                  "(To pick a file, press Space. When finished, press Enter (with none picked: the "
+                  "selected one). Ctrl-I: Claude describes the picked files (or the selected one), and "
+                  "says where they go, while you go on. Ctrl-X: open the selected file.%s "
+                  "[claude: ...]: what Claude says it is; / searches it too.)" %
                   (self.inbox_path, self.root_path,
                    " %s: read the selected folder anew from Google Drive." % (self.REFRESH_KEY,)
                    if self.inbox_is_cloud else ""))
@@ -207,9 +225,8 @@ class InboxSort(object):
                 keys=self.REFRESH_KEY if self.inbox_is_cloud else '', selected=selected,
                 previews=lambda send, files=files: self._send_previews(files, send),
                 shown_as=lambda files=files: self._shown_as(files),
-                notify_keys=DESCRIBE_KEY,
-                on_notify=lambda key, selected, picked, files=files: self.ask_in_background(
-                    picked or [relpath for relpath in files if _is_at_or_under(relpath, selected)]),
+                notify_keys=DESCRIBE_KEY + OPEN_KEY, enter_picks_selection=True,
+                on_notify=lambda key, selected, picked, files=files: self._on_key(key, selected, picked, files),
                 on_selection=functools.partial(elsewhere.check_contents, files, self._inbox_view,
                                                self._inbox_index, self._root_index, self._checked,
                                                sends_previews=False))
@@ -237,15 +254,19 @@ class InboxSort(object):
         shown = {}
         for relpath in relpaths:
             if relpath in self._descriptions:
-                shown[relpath] = "%s  | %s" % (os.path.basename(relpath), self._descriptions[relpath])
+                shown[relpath] = "%s  %s" % (os.path.basename(relpath), DESCRIBED % (self._descriptions[relpath],))
             elif relpath in self._describing:
-                shown[relpath] = "%s  | %s" % (os.path.basename(relpath), LOOKING)
+                shown[relpath] = "%s  %s" % (os.path.basename(relpath), LOOKING)
         describing, placing = len(self._describing), len(self._placing)
         failed = len([relpath for relpath in relpaths if relpath in self._failed])
         busy = ["%s %s" % (what, _files(count))
                 for what, count in (("describing", describing), ("placing", placing)) if count]
-        shown[''] = ("Claude: " + ', '.join(busy) if busy else
-                     "Claude: couldn't do %s" % (_files(failed),) if failed else '')
+        status = ("Claude: " + ', '.join(busy) if busy else
+                  "Claude: couldn't do %s" % (_files(failed),) if failed else '')
+        note = self._open_note
+        if note is not None and (note[1] is None or time.monotonic() < note[1]):
+            status = note[0] + ("; " + status if status else "")
+        shown[''] = status
         return shown
 
     def _send_previews(self, relpaths, send):
@@ -317,8 +338,12 @@ class InboxSort(object):
         if len(destinations) == 1:
             to = "Claude's recommendation: %s/%s" % (_join(self.root_path, destinations[0]),
                                                     " (%s)" % (renamed_text[2:],) if renamed else "")
+            claudes_dirs = "Claude's dir, %s/" % (_join(self.root_path, destinations[0]),)
         else:
             to = "Claude's recommendations (%d dirs%s)" % (len(destinations), renamed_text)
+            claudes_dirs = "Claude's dirs (%d)" % (len(destinations),)
+        # A name to type is for one file
+        one = "can't: a name is typed for one file" if len(relpaths) > 1 else None
         options = {
             self.DESCRIBE: ("Describe %s with Claude, while you go on (sends it their contents; or Ctrl-I)" %
                             (_of(len(undescribed), len(relpaths)),),
@@ -328,10 +353,20 @@ class InboxSort(object):
                              None if unrecommended else "they all have a recommendation, or are being placed"),
             self.MOVE_RECOMMENDED: ("Move %s to %s" % (_of(len(recommended), len(relpaths)), to),
                                     None if recommended else "none of them has a recommendation to move it yet"),
+            self.MOVE_TO_CLAUDES_DIR: ("Move %s, keeping their names, to %s" %
+                                       (_of(len(recommended), len(relpaths)), claudes_dirs),
+                                       None if recommended else "none of them has a recommendation yet"),
+            self.MOVE_TO_CLAUDES_DIR_TYPED: ("Move the file, under a name you type, to %s" % (claudes_dirs,),
+                                             one or (None if recommended else "it has no recommendation yet")),
             self.REMOVE_COPIES: ("Remove %s that are copies of files in %s%s" %
                                  (_of(len(removable), len(relpaths)), self.root_path, not_yet),
                                  None if removable else "none of them is a copy of a file there (by its contents)"),
             self.MOVE_TO: ("Move the %s to... (pick a dir in %s)" % (count, self.root_path), None),
+            self.MOVE_TO_CLAUDES_NAMES: ("Move the %s, under Claude's names (%d renamed), to... (pick a dir in %s)" %
+                                         (count, len(renamed), self.root_path),
+                                         None if renamed else "none of them has a name from Claude"),
+            self.MOVE_TO_TYPED: ("Move the file, under a name you type, to... (pick a dir in %s)" % (self.root_path,),
+                                 one),
             self.COPY_TO: ("Copy the %s to... (pick a dir in %s)" % (count, self.root_path), None),
             self.REMOVE: ("Remove the %s from %s" % (count, self.inbox_path), None),
         }
@@ -349,13 +384,29 @@ class InboxSort(object):
             return None
         if action == self.MOVE_RECOMMENDED:
             return self._approve(self.MOVE_TO, [(relpath, self._target(relpath)) for relpath in recommended])
-        if action in (self.MOVE_TO, self.COPY_TO):
+        if action in (self.MOVE_TO_CLAUDES_DIR, self.MOVE_TO_CLAUDES_DIR_TYPED):
+            plan = [(relpath, _join(os.path.dirname(self._target(relpath)), os.path.basename(relpath)))
+                    for relpath in recommended]
+        elif action in (self.MOVE_TO, self.COPY_TO, self.MOVE_TO_CLAUDES_NAMES, self.MOVE_TO_TYPED):
             destination = self._pick_dir("Pick the dir in %s to %s the %s to (Enter picks the selected dir)" %
-                                         (self.root_path, 'move' if action == self.MOVE_TO else 'copy', count))
+                                         (self.root_path, 'copy' if action == self.COPY_TO else 'move', count))
             if destination is None:
                 return None
-            return self._approve(action, [(relpath, _join(destination, os.path.basename(relpath)))
-                                          for relpath in relpaths])
+            # Claude's name, for the files it renamed
+            names = {relpath: os.path.basename(self._target(relpath) if relpath in renamed else relpath)
+                     for relpath in relpaths}
+            plan = [(relpath, _join(destination, names[relpath] if action == self.MOVE_TO_CLAUDES_NAMES
+                                    else os.path.basename(relpath)))
+                    for relpath in relpaths]
+        if action in (self.MOVE_TO_CLAUDES_DIR_TYPED, self.MOVE_TO_TYPED):
+            plan = self._typed_name(plan)
+            if plan is None:
+                return None
+        if action in (self.MOVE_TO_CLAUDES_DIR, self.MOVE_TO_CLAUDES_DIR_TYPED, self.MOVE_TO,
+                      self.MOVE_TO_CLAUDES_NAMES, self.MOVE_TO_TYPED):
+            return self._approve(self.MOVE_TO, plan)
+        if action == self.COPY_TO:
+            return self._approve(self.COPY_TO, plan)
         if action == self.REMOVE:
             return self._remove(relpaths)
         if action == self.REMOVE_COPIES:
@@ -363,6 +414,27 @@ class InboxSort(object):
                 _join(self.root_path, copy) for copy in self._copies(relpath)[:2]))
                 for relpath in removable])
         return None
+
+    def _typed_name(self, plan):
+        """plan (one file: [(relpath, its path in the sorted tree)]) with the name the user types for
+        it there, starting as Claude's (or its own); None if they typed none, or one that can't be"""
+        (relpath, target), = plan
+        recommendation = self._recommendations.get(relpath)
+        default = os.path.basename(self._target(relpath) if recommendation and self._target(relpath)
+                                   else relpath)
+        lines = ["Moving %s" % (posixpath.join(self.inbox_path, relpath),),
+                 "to %s/" % (_join(self.root_path, os.path.dirname(target)),)]
+        if relpath in self._descriptions:
+            lines.append(DESCRIBED % (self._descriptions[relpath],))
+        lines += ["", "Its name there (Enter to keep it as it is; an empty one, or Ctrl-C, to go back):"]
+        name = messages.ask("The file's name in %s" % (self.root_path,), lines, "> ", default, dryrun.label())
+        if name is None:
+            return None
+        if '/' in name or name in ('.', '..'):
+            messages.show("Not a name", ["%r can't be a file's name: it's a name, without '/'." % (name,)],
+                          dryrun.label(), 'red')
+            return None
+        return [(relpath, _join(os.path.dirname(target), name))]
 
     def _copies(self, relpath):
         """The sorted tree's files (relpaths in it) with the same contents as the inbox's at relpath,
@@ -452,10 +524,9 @@ class InboxSort(object):
         relpaths = [relpath for relpath in batch if relpath not in self._descriptions]
         try:
             if relpaths:
-                with tempfile.TemporaryDirectory(prefix='dirdelta-ai-') as temp_dir:
-                    with self._drive_lock:
-                        files = self._ai_files(relpaths, temp_dir, is_quiet=True)
-                    found = ai.describe(files, self._cache_key)
+                with self._drive_lock:
+                    files = self._ai_files(relpaths, is_quiet=True)
+                found = ai.describe(files, self._cache_key)
                 self._descriptions.update(found)
                 for relpath in relpaths:
                     if relpath not in found:
@@ -522,10 +593,10 @@ class InboxSort(object):
             messages.show("Claude couldn't finish with %s" % (_files(len(self._failed) - failed_before),),
                           [list(self._failed.values())[-1]], dryrun.label(), 'red')
 
-    def _ai_files(self, relpaths, temp_dir, is_quiet=False):
-        """ai.File of each of the inbox's files at relpaths: a Drive one downloaded into temp_dir
-        first (one at a time), unless it's too big to be read, or a Google file. With is_quiet, it
-        prints nothing (a picker may have the screen)."""
+    def _ai_files(self, relpaths, is_quiet=False):
+        """ai.File of each of the inbox's files at relpaths: a Drive one downloaded first (one at a
+        time; or found downloaded, see downloads.py), unless it's too big to be read, or a Google
+        file. With is_quiet, it prints nothing (a picker may have the screen)."""
         files = []
         for number, relpath in enumerate(relpaths, 1):
             size = self._size(relpath)
@@ -533,13 +604,11 @@ class InboxSort(object):
             if not self.inbox_is_cloud:
                 local_path = os.path.join(self.inbox_path, relpath)
             elif (size or 0) <= ai.MAX_READ_SIZE and self._inbox_tree.cant_fetch(self._full(relpath)) is None:
-                local_path = os.path.join(temp_dir, relpath)
-                os.makedirs(os.path.dirname(local_path), exist_ok=True)
                 if not is_quiet:
                     messages.print_progress("Downloading %d of %d files for Claude: %s" %
                                             (number, len(relpaths), relpath))
                 try:
-                    self._inbox_tree.fetch_file(self._full(relpath), local_path)
+                    local_path = self._downloaded(relpath)
                 except OSError as error:
                     if not is_quiet:
                         messages.print_line("Couldn't download %s (%s): Claude goes by its name" %
@@ -574,6 +643,50 @@ class InboxSort(object):
             if not is_dir and names is not None and len(names) < NAMES_PER_DIR:
                 names.append(os.path.basename(relpath))
         return dirs
+
+    # Opening a file
+
+    def _on_key(self, key, selected, picked, files):
+        """A notify key pressed in the picker of files (on another thread): Ctrl-X opens the
+        selected file, Ctrl-I asks Claude about the picked ones (or the selected one, or a dir's)"""
+        if key == OPEN_KEY:
+            self.open_in_background(selected, files)
+        else:
+            self.ask_in_background(picked or [relpath for relpath in files if _is_at_or_under(relpath, selected)])
+
+    def open_in_background(self, relpath, files):
+        """Open the inbox's file at relpath (of files) with its program (xdg-open), as if
+        double-clicked, on a thread of its own: a Drive one is downloaded first (or found
+        downloaded). The bottom line says how it went."""
+        threading.Thread(target=self._open, args=(relpath, files), daemon=True).start()
+
+    def _open(self, relpath, files):
+        name = os.path.basename(relpath) or self.inbox_path
+        try:
+            if not self.inbox_is_cloud:
+                path = os.path.join(self.inbox_path, relpath)
+            elif relpath not in files:
+                raise OSError("a Google Drive folder can't be opened here")
+            else:
+                reason = self._inbox_tree.cant_fetch(self._full(relpath))
+                if reason is not None:
+                    raise OSError(reason)
+                self._open_note = ("Downloading %s to open it..." % (name,), None)
+                with self._drive_lock:
+                    path = self._downloaded(relpath)
+            # Its own session, so it outlives the picker (and dirdelta), and says nothing on its
+            # screen
+            subprocess.Popen(['xdg-open', path], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                             stderr=subprocess.DEVNULL, start_new_session=True)
+            self._open_note = ("Opened %s" % (name,), time.monotonic() + OPENED_SHOWN_FOR)
+        except OSError as error:
+            self._open_note = ("Couldn't open %s: %s" % (name, error), time.monotonic() + OPENED_SHOWN_FOR)
+
+    def _downloaded(self, relpath):
+        """The local path of the inbox's Drive file at relpath, downloaded unless it was (see
+        downloads.py). Raises OSError if it can't be."""
+        return downloads.get(posixpath.join(self.inbox_path, relpath), self._size(relpath),
+                             lambda local_path: self._inbox_tree.fetch_file(self._full(relpath), local_path))
 
     # Moving, copying, removing
 

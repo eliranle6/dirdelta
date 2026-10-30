@@ -3,6 +3,7 @@ open), and screens, which show lines until Enter is pressed: progress_screen() f
 progress, show() for messages to read before the next picker covers them.
 """
 import contextlib
+import readline
 import shutil
 import sys
 
@@ -53,6 +54,23 @@ def show(title, lines, label=None, color=None):
     with progress_screen(title, label, is_stoppable=False):
         for line in lines:
             print_line(line, color)
+
+
+def ask(title, lines, prompt, default='', label=None):
+    """Ask for a line of text on a screen under title, below lines, starting as default (to edit).
+    Returns it (stripped), or None if the user gave none (empty, or Ctrl-C or Ctrl-D)."""
+    readline.set_startup_hook(lambda: readline.insert_text(default))
+    try:
+        with progress_screen(title, label, is_stoppable=False, wait=False):
+            for line in lines:
+                print_line(line)
+            try:
+                answer = input(prompt)
+            except (EOFError, KeyboardInterrupt):
+                answer = ''
+    finally:
+        readline.set_startup_hook()
+    return answer.strip() or None
 
 
 # A label's look on a terminal, by its color name: bold, black or white on the color

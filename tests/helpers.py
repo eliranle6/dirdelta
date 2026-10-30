@@ -5,6 +5,7 @@ import shutil
 import tempfile
 from unittest import mock
 
+from dirdelta import downloads
 from dirdelta import hashcache
 from dirdelta import mounts
 from dirdelta import picker
@@ -19,6 +20,11 @@ atexit.register(shutil.rmtree, _hash_cache_dir, ignore_errors=True)
 _mounts_dir = tempfile.mkdtemp(prefix='dirdelta-test-mounts-')
 mounts.MOUNTS_FILE = os.path.join(_mounts_dir, 'mounts.json')
 atexit.register(shutil.rmtree, _mounts_dir, ignore_errors=True)
+# Nor download into the real downloads' cache (~/.cache/dirdelta/downloads): test_inbox and
+# test_downloads import this module
+_downloads_dir = tempfile.mkdtemp(prefix='dirdelta-test-downloads-')
+downloads.DOWNLOADS_DIR = os.path.join(_downloads_dir, 'downloads')
+atexit.register(shutil.rmtree, _downloads_dir, ignore_errors=True)
 
 
 def scripted_option_picker(answers):
