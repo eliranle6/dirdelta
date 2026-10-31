@@ -52,10 +52,10 @@ def _run(args):
                 if _ready(chosen.inbox, chosen.root):
                     inbox.run(chosen.inbox, chosen.root, known_replicas)
                 continue
-            args.dir_a_path, args.dir_b_path = chosen
-            if _ready(args.dir_a_path, args.dir_b_path) and dirsync_main.run(args) == dirsync_main.QUIT:
+            # The chosen paths in a copy of args (args itself is left as it was parsed)
+            chosen_args = argparse.Namespace(**dict(vars(args), dir_a_path=chosen[0], dir_b_path=chosen[1]))
+            if _ready(*chosen) and dirsync_main.run(chosen_args) == dirsync_main.QUIT:
                 return None
-            args.dir_a_path = args.dir_b_path = None
     elif args.sort:
         if args.dir_b_path is None:
             sys.exit('dirdelta: --sort takes two paths: the inbox, and the sorted tree')
