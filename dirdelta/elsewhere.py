@@ -682,20 +682,21 @@ def _preview(relpath, src, dst_name, matcher):
     about = [format_size(size)] if size is not None else []
     if date is not None:
         about.append("taken " + date)
-    lines = ["This one: " + ", ".join(about)] if about else []
+    lines = [picker.styled([("This one: ", 'bold'), (", ".join(about), None)])] if about else []
     if modified is not None:
         lines.append("  modified " + _format_time(modified))
     lines += _contents_lines(relpath, dst_name, matcher, matches)
     named = [match for match in matches if not match.is_other_name]
     renamed = [match for match in matches if match.is_other_name]
     sure = sure_match(matches, size, date)
+    # Each part under a title, bold in its color (as an inbox's preview's)
     if named:
-        lines.append("In %s, likeliest first:" % (dst_name,))
+        lines.append(_title("Same name in %s:" % (dst_name,), 'cyan'))
         lines += _matches_lines(named, size, date, modified, sure, SURELY_MOVED)
     else:
-        lines += ["In %s:" % (dst_name,), "  no file of this name"]
+        lines.append(picker.styled([("Same name in %s: " % (dst_name,), 'bold,cyan'), ("none", 'bold,red')]))
     if renamed:
-        lines.append("Of its size, another name:")
+        lines.append(_title("Same size, other name:", 'cyan'))
         lines += _matches_lines(renamed, size, date, modified, sure, SURELY_RENAMED)
     return lines
 
@@ -711,9 +712,9 @@ def _contents_lines(relpath, dst_name, matcher, matches):
     if not own:
         if src_job is None:
             return []
-        return ["  contents not hashed yet (%s)" % (hashing.status_text(src_job),)]
+        return [picker.styled([("  contents not hashed yet (%s)" % (hashing.status_text(src_job),), 'grey')])]
     algorithm = sorted(own)[0] if hashing.ALGORITHM not in own else hashing.ALGORITHM
-    lines = ["  %s %s" % (algorithm.upper().replace('SHA', 'SHA-'), own[algorithm][:16])]
+    lines = [picker.styled([("  %s %s" % (algorithm.upper().replace('SHA', 'SHA-'), own[algorithm][:16]), 'grey')])]
     index = matcher._index
     if not any(match.same_contents for match in matches):
         # Of the other replica's files whose hashes by one of the file's are known
@@ -725,6 +726,11 @@ def _contents_lines(relpath, dst_name, matcher, matches):
             lines.append("  of the %d%% of its files hashed%s" % (
                 int(coverage * 100), " so far" if index.job() is not None else ""))
     return lines
+
+
+def _title(text, color):
+    """A preview's title, bold in color"""
+    return picker.styled([(text, 'bold,' + color)])
 
 
 def _matches_lines(matches, size, date, modified, sure, surely):
@@ -742,7 +748,8 @@ def _matches_lines(matches, size, date, modified, sure, surely):
             lines.append("    with %d of %d of its dir's files" % (match.siblings_found,
                                                                    match.siblings_tried))
         if match.same_contents is not None:
-            lines.append("    the same contents" if match.same_contents else "    other contents")
+            lines.append(picker.styled([("    the same contents", 'green')]) if match.same_contents else
+                         picker.styled([("    other contents", 'red')]))
         if match is sure:
             lines.append(surely)
     if len(matches) > MAX_MATCHES:

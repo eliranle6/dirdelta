@@ -56,7 +56,9 @@ class _Sent(object):
         self.defaults = []
 
     def __call__(self, found=None, default=None):
-        self.previews.update(found or {})
+        # Their text (their styles are picker's: see picker.styled())
+        self.previews.update({relpath: [picker.unstyled(line) for line in lines]
+                              for relpath, lines in (found or {}).items()})
         if default is not None:
             self.defaults.append(default)
 
@@ -72,7 +74,7 @@ class FindPreviewsTest(unittest.TestCase):
         src = _SizedTree('/src', {'a/x.jpg': 10})
         dst = _SizedTree('/dst', {'b/y.jpg': 10})
         self.assertEqual(_previews(['a/x.jpg'], src, dst).previews['a/x.jpg'],
-                         ["This one: 10 B", "In /dst:", "  no file of this name"])
+                         ["This one: 10 B", "Same name in /dst: none"])
 
     def test_the_likeliest_first_by_size(self):
         src = _SizedTree('/src', {'new/x.jpg': 2048})
@@ -80,7 +82,7 @@ class FindPreviewsTest(unittest.TestCase):
                                   'old/2024/other.jpg': 2048})
         self.assertEqual(_previews(['new/x.jpg'], src, dst).previews['new/x.jpg'], [
             "This one: 2.0 KB",
-            "In /dst, likeliest first:",
+            "Same name in /dst:",
             "  old/2024/",
             "    x.jpg  2.0 KB, same size",
             elsewhere.SURELY_MOVED,
@@ -136,7 +138,7 @@ class FindPreviewsTest(unittest.TestCase):
         dst = localdiskdirtree.LocalDiskDirTree(os.path.join(root, 'dst'), True)
         lines = _previews(['x.txt'], src, dst).previews['x.txt']
         self.assertEqual(lines[0], "This one: 9 B")
-        self.assertIn("In %s, likeliest first:" % (dst.displayname(),), lines)
+        self.assertIn("Same name in %s:" % (dst.displayname(),), lines)
         self.assertEqual(lines[lines.index("  moved/") + 1], "    x.txt  15 B")
 
     def test_siblings_in_a_matchs_dir_make_it_likelier(self):
@@ -188,14 +190,14 @@ class RenamedTest(unittest.TestCase):
 
     def test_big_files_of_its_size_are_candidates_too(self):
         lines = self.lines('big.mov')
-        self.assertIn("  no file of this name", lines)
-        section = lines[lines.index("Of its size, another name:"):]
+        self.assertIn("Same name in %s: none" % (self.index._replica.displayname(),) if hasattr(self.index, '_replica') else "Same name in /dst: none", lines)
+        section = lines[lines.index("Same size, other name:"):]
         self.assertEqual(section[1:3], ["  v/", "    clip.mov  64.0 KB, same size"])
         self.assertIn("    other.mov  64.0 KB, same size", section)
         # Not sure until their contents are compared
         self.assertNotIn(elsewhere.SURELY_RENAMED, lines)
         # Small files' sizes are too common
-        self.assertNotIn("Of its size, another name:", self.lines('small.txt'))
+        self.assertNotIn("Same size, other name:", self.lines('small.txt'))
 
     def test_the_same_contents_make_it_surely_renamed_and_drop_the_others(self):
         self.index.build()
@@ -210,7 +212,7 @@ class RenamedTest(unittest.TestCase):
         self.dst._hashes['v/clip.mov'] = 'X'
         self.index.build()
         elsewhere.check_all(['big.mov'], self.src, elsewhere.Index(self.src), self.index, self.checked)
-        self.assertNotIn("Of its size, another name:", self.lines('big.mov'))
+        self.assertNotIn("Same size, other name:", self.lines('big.mov'))
 
     def test_what_may_be_elsewhere_and_whats_left_to_compare(self):
         # dst knows its hashes (as Drive does), so small.txt may be there too, renamed
