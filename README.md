@@ -90,17 +90,26 @@ Drive folders; choosing it, the replicas you sync are offered too). The inbox's 
 them, with "Nothing" selected first:
 
 - `Ctrl-I` in the picker, on the picked files (or else the selected file or dir): all of what's
-  below, describing them and saying where they go, in the background.
-- `Ctrl-X` in the picker opens the picked files (or else the selected one, up to 10) with their
-  programs (`xdg-open`), as a double-click would; so does "Open" in the menu (a sync's picker has
-  both too). A Drive file is downloaded first, into `~/.cache/dirdelta/downloads` (also where the
-  files Claude reads are downloaded to), so it's downloaded once (the least recently used go beyond
-  2 GB). More than one to download is asked about first: `Ctrl-X` asks on the status bar ("Ctrl-X
-  again: download 3 files (29.0 MB) into ...", pressed again within 10 seconds to go ahead, so you
-  stay in the picker), the menu's Open on a screen of its own. Then they're downloaded in the
-  background, one after another: the status bar says how far it got in all ("Downloading to open:
+  below, describing them and saying where they go, in the background. Files Claude was asked
+  about before are asked about anew (and compared with the sorted tree again), since they may have
+  changed; so does the menu's "Ask Claude where" (marked `[Ctrl-I]`).
+- `Ctrl-X` in the picker opens the selected file (or dir) with its program (`xdg-open`), as a
+  double-click would; "Open" in the menu opens the picked files (up to 10), and has no key (a
+  sync's picker has both too). A Drive file is downloaded first, into
+  `~/.cache/dirdelta/downloads` (also where the files Claude reads are downloaded to), so it's
+  downloaded once (the least recently used go beyond 2 GB). More than one to download is asked
+  about first, on a screen of its own. Then they're downloaded in the background, one after another: the status bar says how far it got in all ("Downloading to open:
   2 of 3 files, 55% (16.0 MB of 29.0 MB)"), and each file in a tag after its name: `[↓ waiting]`,
   `[↓ 35%]`, `[↓ opened]` (or `[↓ failed]`).
+- `cc` in the picker renames the selected file or dir (a dir with all in it), as vim's `cc`: its
+  new name is typed, starting as its own (what Claude said of it goes with it). The same in a
+  sync's pickers, and in the dir picker of where files go (the sorted tree's dirs, but the inbox's).
+  In that dir picker, `n` makes a new dir in the selected one, and `o`/`O` (as vim's) one beside
+  it; the files go there.
+- "Move N files to another dir in the inbox": a dir of the inbox picked (with `n`, `o`/`O` and `cc`
+  too), and what's known of them goes with them.
+- In every picker of several files, `V` picks a range (as vim's visual line mode), and Esc
+  (`Ctrl-[`) unpicks: the range being picked, or else, without a search to drop, all.
 - "Describe N files with Claude": a short description of each (at most 10 words, by Claude Haiku, which reads
   the files), shown after its name in the picker (`a.txt  [claude: a shopping list]`), and searchable (`/claude:`
   shows the described ones). It's
@@ -189,8 +198,8 @@ surely the file. `Enter` then asks what to do with the picked files, with
 "Nothing" selected first: copy them to B, remove them from A, or, for the ones whose match in B is
 surely them, rename: move B's match to the file's path, or the file to the match's (greyed out
 when it can't be done); and what the picker's keys do, so they're all in the menu too: open them
-with their programs (as `Ctrl-X` does, see "Sorting an inbox"), and, with a cloud
-replica, read the selected folder anew from Drive (`r`). A confirmation follows, with No selected (a removal asks a second time,
+with their programs (`Ctrl-X` opens the selected one, see "Sorting an inbox"), and, with a cloud
+replica, read the selected folder anew from Drive (`Ctrl-R`). A confirmation follows, with No selected (a removal asks a second time,
 "Are you sure?", also with No selected): No takes you back to the picker, with the same files
 picked; Yes goes ahead. Its progress fills the screen under a top line saying what's being done
 (and over a status bar saying whether it's working, done or stopped, and a row of the keys);
@@ -198,7 +207,7 @@ picked; Yes goes ahead. Its progress fills the screen under a top line saying wh
 stopped, `Enter` goes back to the picker, where you were, without the files done; `q` goes back
 to the main menu. With a cloud replica, the menu also has "Refresh cloud/X from Google
 Drive", which reads that folder anew from Drive (as the refresh offered at the start does), for when
-it changed outside dirdelta, and in the file picker `r` reads just the selected folder anew. Unless
+it changed outside dirdelta, and in the file picker `Ctrl-R` reads just the selected folder anew. Unless
 `DRYRUN=0` is set, both are dry
 runs: they change nothing on disk (not even the dirs copied files would go into), and say what they
 would have done. Every screen says which it is, at the start of its status bar (its bottom line but

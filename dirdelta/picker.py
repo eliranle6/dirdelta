@@ -108,6 +108,33 @@ def styled(parts):
     return ''.join('%s%s%s%s' % (STYLE_MARK, style or '', STYLE_MARK, text) for text, style in parts if text)
 
 
+def grouped(groups):
+    """A menu's options of groups (lists of options, e.g. of similar actions), with a blank line
+    between each two (the empty groups left out): (the options, {blank line: how it's shown, a
+    Skipped, for shown_as}). The blank lines are spaces, a number of them each, so each is an option
+    of its own."""
+    options, blanks = [], {}
+    for group in groups:
+        if not group:
+            continue
+        if options:
+            blank = ' ' * (len(blanks) + 1)
+            options.append(blank)
+            blanks[blank] = Skipped('')
+        options += list(group)
+    return options, blanks
+
+
+def shortcut_prefixes(labels, shortcuts):
+    """{label: what a menu's option is shown after}: its key's name in brackets, bold (shortcuts:
+    {label: the key's name, e.g. 'Ctrl-X'}, for the options a picker's key does too), or as many
+    spaces, so the options' texts line up; all '' when none has a key"""
+    width = max([display_width(key) + 3 for key in shortcuts.values()] or [0])
+    return {label: (styled([("[%s]" % (shortcuts[label],), 'bold'), (" " * (width - display_width(shortcuts[label]) - 2), None)])
+                    if label in shortcuts else " " * width)
+            for label in labels}
+
+
 def unstyled(text):
     """text (styled()'s) without its styles"""
     return re.sub('%s[^%s]*%s' % ((STYLE_MARK,) * 3), '', text)
@@ -125,27 +152,28 @@ def display_width(text):
 Picked = collections.namedtuple('Picked', ['key', 'selected', 'files'])
 
 
-def pick_from_tree(tree, header='', dirs_only=False, root_name=None, keys='', key_hints=()):
+def pick_from_tree(tree, header='', dirs_only=False, root_name=None, keys='', key_hints=(), twice_keys=''):
     """Let the user pick a node of a DirTree (with dirs_only, only of its dirs), its root shown as
     root_name (default: the tree's displayname()). Returns [the picked node's data (entry)], or None
     if the user quit. With keys (e.g. 'n'), keys that end picking too: it returns (the key, '' for
-    Enter; [the picked or selected node's data]), or None."""
-    args = (['--typed', '--root', root_name or tree.displayname()] + _header_args(header) + _keys_args(keys) +
-            _help_args(key_hints, ()))
+    Enter; [the picked or selected node's data]), or None. twice_keys: keys that do so when pressed
+    twice in a row (e.g. 'c' for vim's cc), returned doubled ('cc')."""
+    args = (['--typed', '--root', root_name or tree.displayname()] + _header_args(header) +
+            _keys_args(keys, twice_keys) + _help_args(key_hints, ()))
     if dirs_only:
         args.append('--dirs-only')
     picked_paths = _run(args + ['-'], list(_tree_paths(tree)))
     if picked_paths is None:
         return None
-    key, picked_paths = _key_and_selected(keys, picked_paths)
+    key, picked_paths = _key_and_selected(keys, picked_paths, twice_keys)
     # The root is printed as '.'; its id is ''
     picked = [tree.get_node('' if path == '.' else path).data for path in picked_paths]
-    return (key, picked) if keys else picked
+    return (key, picked) if keys or twice_keys else picked
 
 
 def pick_files(rootpath, relpaths, header='', picked=None, label=None, keys='', selected=None,
                previews=None, on_selection=None, shown_as=None, notify_keys='', on_notify=None,
-               enter_picks_selection=False, key_hints=(), help_lines=()):
+               enter_picks_selection=False, key_hints=(), help_lines=(), twice_keys=''):
     """Let the user pick some of the files at relpaths (relative to rootpath, each dir's files and
     subdirs together, in the order to show them, as dirdiff lists them). Picking a dir picks the
     files under it. Returns a Picked: the picked ones (of relpaths), in that order, and where the
@@ -189,6 +217,9 @@ def pick_files(rootpath, relpaths, header='', picked=None, label=None, keys='', 
         args.append('--enter-picks-selection')
     if keys:
         args += ['--expect', keys]
+    if twice_keys:
+        # Ending it when pressed twice in a row, e.g. cc (see pick_from_tree())
+        args += ['--expect-twice', twice_keys]
     if selected is not None:
         args += ['--select', selected or '.']
     with tempfile.NamedTemporaryFile('wb', prefix='dirdelta-picked-') as picked_file:
@@ -207,9 +238,9 @@ def pick_files(rootpath, relpaths, header='', picked=None, label=None, keys='', 
     if picked_paths is None:
         return None
     key = ''
-    if keys:
+    if keys or twice_keys:
         # The key that ended it first (none for Enter)
-        key, picked_paths = picked_paths[0], picked_paths[1:]
+        key, picked_paths = _twice(picked_paths[0], twice_keys), picked_paths[1:]
     # Then the selected node
     selected, picked_paths = picked_paths[0], picked_paths[1:]
     # What's picked includes the dirs whose files all are
@@ -231,37 +262,47 @@ def view_files(rootpath, relpaths, header='', previews=None, label=None, shown_a
                 previews=send_previews, on_selection=on_selection) is not None
 
 
-def pick_under_dir(dirpath, max_depth=None, dirs_only=False, lazy=False, header='', keys='', key_hints=()):
+def pick_under_dir(dirpath, max_depth=None, dirs_only=False, lazy=False, header='', keys='', key_hints=(),
+                   twice_keys=''):
     """Let the user pick a file or dir (with dirs_only, a dir) under the local dir dirpath, scanned
     by treepicker itself: all of it at the start, or with lazy, a dir at a time, as it's shown
     (for a huge one, like /). Returns the picked one's full path, or None if the user quit. With
     keys (e.g. 'n'), keys that end picking too: it returns (the key, '' for Enter; the picked or
-    selected one's full path), or None."""
+    selected one's full path), or None. twice_keys: as pick_from_tree()'s."""
     args = [] if max_depth is None else ['--max-depth', str(max_depth)]
     if dirs_only:
         args.append('--dirs-only')
     if lazy:
         args.append('--lazy')
-    picked = _run(args + _header_args(header) + _keys_args(keys) + _help_args(key_hints, ()) + [dirpath], None)
+    picked = _run(args + _header_args(header) + _keys_args(keys, twice_keys) + _help_args(key_hints, ()) +
+                  [dirpath], None)
     if picked is None:
         return None
-    key, picked = _key_and_selected(keys, picked)
+    key, picked = _key_and_selected(keys, picked, twice_keys)
     path = dirpath if picked[0] == '.' else os.path.join(dirpath, picked[0])
-    return (key, path) if keys else path
+    return (key, path) if keys or twice_keys else path
 
 
-def _keys_args(keys):
-    """A one-node picker's args for keys that end picking too: they're printed first, then the
-    selected node (for Enter, the picked one)"""
-    return ['--expect', keys, '--print-selection'] if keys else []
+def _keys_args(keys, twice_keys=''):
+    """A one-node picker's args for keys that end picking too (and twice_keys, pressed twice):
+    they're printed first, then the selected node (for Enter, the picked one)"""
+    if not keys and not twice_keys:
+        return []
+    return ((['--expect', keys] if keys else []) + (['--expect-twice', twice_keys] if twice_keys else []) +
+            ['--print-selection'])
 
 
-def _key_and_selected(keys, printed):
-    """With keys (see _keys_args()), the key ('' for Enter) and [the selected node's path]; else
-    no key, and printed as it is"""
-    if not keys:
+def _key_and_selected(keys, printed, twice_keys=''):
+    """With keys (see _keys_args()), the key ('' for Enter; a twice_keys' doubled) and [the
+    selected node's path]; else no key, and printed as it is"""
+    if not keys and not twice_keys:
         return '', printed
-    return printed[0], printed[1:2]
+    return _twice(printed[0], twice_keys), printed[1:2]
+
+
+def _twice(key, twice_keys):
+    """The key treepicker printed, doubled if it's one of twice_keys (pressed twice: 'cc')"""
+    return key * 2 if key and key in twice_keys else key
 
 
 def pick_option(options, header='', shown_as=None, label=None, selected=None, title=None, key_hints=(),

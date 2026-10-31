@@ -258,6 +258,21 @@ class PickerTest(unittest.TestCase):
         args, _ = self.call()
         self.assertEqual(args[args.index('--expect') + 1], 'r')
 
+    def test_a_key_pressed_twice_comes_doubled(self):
+        # cc
+        self.answer('c|b/sub|b/2.txt')
+        self.assertEqual(picker.pick_files('/r', ['a/1.txt', 'b/2.txt'], keys='r', twice_keys='c'),
+                         picker.Picked('cc', 'b/sub', ['b/2.txt']))
+        args, _ = self.call()
+        self.assertEqual(args[args.index('--expect-twice') + 1], 'c')
+        self.answer('c|a/b')
+        self.assertEqual(picker.pick_under_dir('/r', keys='n', twice_keys='c'), ('cc', '/r/a/b'))
+        self.answer('c|a/b')
+        self.assertEqual(picker.pick_under_dir('/r', twice_keys='c'), ('cc', '/r/a/b'))
+        args, _ = self.call()
+        self.assertEqual(args[args.index('--expect-twice') + 1], 'c')
+        self.assertNotIn('--expect', args)
+
     def test_pick_files_with_keys_ended_by_enter_returns_the_picks(self):
         self.answer('|a|a/1.txt')
         self.assertEqual(picker.pick_files('/r', ['a/1.txt', 'b/2.txt'], keys='r'),
@@ -480,6 +495,23 @@ class UpdateLineTest(unittest.TestCase):
         # A heading: skipped when moving
         self.assertEqual(picker._update('a', picker.Skipped('A')), 'a\tA\tskipped')
         self.assertEqual(picker._update('a', picker.Colored('A', 'red')), 'a\tA\tcolor=red')
+
+
+class GroupedTest(unittest.TestCase):
+    def test_a_blank_line_between_groups(self):
+        options, blanks = picker.grouped([['a'], [], ['b', 'c'], ['d']])
+        self.assertEqual(options, ['a', ' ', 'b', 'c', '  ', 'd'])
+        self.assertEqual(blanks, {' ': picker.Skipped(''), '  ': picker.Skipped('')})
+
+
+class ShortcutPrefixesTest(unittest.TestCase):
+    def test_the_keys_in_a_column_and_spaces_for_the_others(self):
+        prefixes = picker.shortcut_prefixes(['a', 'b', 'c'], {'a': 'Ctrl-X', 'c': 'r'})
+        self.assertEqual({label: picker.unstyled(text) for label, text in prefixes.items()},
+                         {'a': '[Ctrl-X] ', 'b': ' ' * 9, 'c': '[r]      '})
+        self.assertEqual(prefixes['a'], picker.styled([('[Ctrl-X]', 'bold'), (' ', None)]))
+        # None has a key: nothing before them
+        self.assertEqual(picker.shortcut_prefixes(['a'], {}), {'a': ''})
 
 
 class StyledTest(unittest.TestCase):

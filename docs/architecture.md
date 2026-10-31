@@ -120,18 +120,30 @@ then `ai.recommend()`; its Drive downloads and the screen's Drive changes one
 at a time, `_drive_lock`), from `Ctrl-I` (`pick_files(notify_keys='\t\x18')`,
 treepicker's `--notify`, `_on_key()`: the picked files, or else the selected file or dir's;
 describing and placing) or the menu (Describe: describing only; Ask where:
-both); quitting waits for it (`_finish_describing()`). `Ctrl-X` (`OPEN_KEY`, `opening.KEY`)
-opens the picked files, or else the selected one (`Opener.press()`, an `opening.Opener`: `xdg-open`
+both). `Ctrl-I` and Ask where ask anew about the files asked about before (`ask_in_background(anew=True)`,
+`_forget()`: what Claude said, and the contents compared, are dropped, and `ai.describe()`/`recommend()`
+skip their cache entries, `anew=`); quitting waits for it (`_finish_describing()`). `Ctrl-X` (`OPEN_KEY`, `opening.KEY`)
+opens the selected file (`Opener.press([selected])`; the picked ones only from the menu's Open,
+which has no key; an `opening.Opener`: `xdg-open`
 in a session of its own, a queue of them on a thread of its own, a Drive file downloaded first,
 through `downloads.get()` and `fetch_file(progress=...)`, which asks Drive for
-`PROGRESS_CHUNK_SIZE` at a time; more than one to download asked about first, on the status
-bar, by `press()`: a second `Ctrl-X` on the same files within `CONFIRM_FOR` goes ahead). The
+`PROGRESS_CHUNK_SIZE` at a time). `cc` (`renaming.KEY`, treepicker's `--expect-twice`,
+`pick_files(twice_keys=)`) renames the selected file or dir (`renaming.rename()`, `_rename_selected()`:
+what's known of its files goes with them, Claude's cache too, `ai.carry()`); so does a sync's
+picker's (`InteractiveDirSync._rename_selected()`, which diffs anew), and the dir picker's of
+where files go (`_rename_sorted_dir()`, through the sorted tree's own tree). That dir picker
+(`_pick_dir()`, the sorted tree's or, `in_inbox`, the inbox's for "Move ... to another dir in the
+inbox", `_move_in_inbox()`) makes a new dir in the selected one (`n`) or beside it (`o`/`O`,
+`SIBLING_DIR_KEYS`); what's known of files moved in the inbox goes with them (`_carry()`). The
 status bar says how far the downloads got (`Opener.status_parts()`), and each file in a tag after
 its name (`Opener.tags()`, added by `opening.with_tags()` to `_shown_as()`'s, or a sync's
 `hashes_screen.Marks`'s); a sync's picker has it too. The menu's Open asks on a screen of its
 own (`opening.confirm()`). Every key that acts on the selection is in
 the action menu too (at its end): Open (the picked files, at most `opening.MAX_OPENED`), and for a
-Drive inbox "Read ... anew from Google Drive" (`r`'s; `_act()` returns `REFRESH_KEY` for it). Enter (with none picked, the
+Drive inbox "Read ... anew from Google Drive" (`Ctrl-R`'s; `_act()` returns `REFRESH_KEY` for it). Each
+option a key does is shown after it, in a column (`[Ctrl-I] Ask Claude ...`: `SHORTCUTS`,
+`picker.shortcut_prefixes()`), and in the inbox's menu the words saying where the files go, and the
+destination's parts, are in their sources' colors, as the brackets below the menu (`_option_text()`). Enter (with none picked, the
 selection: `pick_files(enter_picks_selection=True)`, treepicker's
 `--enter-picks-selection`) → `_act()`, the action menu
 (`NOTHING` first): describe, ask where they go, move (to Claude's dir, or a
@@ -145,7 +157,7 @@ picked dir, remove (confirmed twice). A move or copy (`_approve()`)
 first shows the tree it makes (`picker.view_files()`, with where each file
 is from beside it; files of one name to one dir are refused), then No/Yes,
 then `move_files()` / `copy_files_within()` (local `shutil.copy2`, Drive's
-`files().copy`) on a progress screen. `r` refreshes the selected Drive
+`files().copy`) on a progress screen. `Ctrl-R` refreshes the selected Drive
 folder, as a sync's does. Copies: the inbox and the sorted tree are each a
 replica of its own too (`_inbox_view`, and a view of the sorted tree, with
 their `elsewhere.Index`es, the sorted tree's built in the background and
@@ -427,7 +439,7 @@ loops around these (progress lines, dry run, Ctrl-C, the report) are
 `DirTree`'s `copy_inner_entries_from_dirtree()` and `remove_files()`, shared
 with `LocalDiskDirTree`. A file that fails is said in red, and the rest go on.
 The same refresh is the main menu's "Refresh cloud/X from Google Drive"
-(all of the replica) and the file picker's `r` key (the selected folder, or
+(all of the replica) and the file picker's `Ctrl-R` key (the selected folder, or
 the folder of the selected file: `CloudDirTree.refresh_from_drive(relpath)`,
 which goes up to the closest folder the tree has, e.g. for a dir only the
 other replica has), which then rebuilds the tree from the cache.
@@ -487,7 +499,7 @@ took ~2.5s; the picker now opens 0.2s after the diff).
   moved, `cant_move()`); then what the picker's keys do on the selection, so
   each is in the menu too: Open (`opening.Opener`, the picked files, as
   `Ctrl-X`, a `--notify` key, does: see `inbox.py` above), and with a cloud replica Read
-  anew from Drive (`r`'s: `_act()` returns `REFRESH_KEY`, and `browse()`
+  anew from Drive (`Ctrl-R`'s: `_act()` returns `REFRESH_KEY`, and `browse()`
   does what the key does) → its confirmation (`pick_option(['No', 'Yes'])`, No
   first; a removal a second time, "Are you sure?", `[No, CONFIRM_SURE]`) → act
   (on the progress screen) → back to the picker where it was (the selection,
@@ -499,7 +511,7 @@ took ~2.5s; the picker now opens 0.2s after the diff).
   src's, a moved one moved; the Drive cache is updated by the tree itself (a
   line per upload, trash and move). `has_changed` says whether anything did
   change (a live action, or a refresh), for the main menu. With a replica
-  that's Drive's, the file picker's `r` (`REFRESH_KEY`, `pick_files(keys='r')`)
+  that's Drive's, the file picker's `Ctrl-R` (`REFRESH_KEY`, `pick_files(keys='\x12')`)
   reads the selected folder anew from Drive, in each of the two that's
   Drive's (`refresh_replica(replica, relpath)`), drops its `Index` (built
   again when next needed), diffs them again (the trees as they are, not the

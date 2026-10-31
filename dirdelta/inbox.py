@@ -12,6 +12,7 @@ import contextlib
 import functools
 import os
 import posixpath
+import re
 import shutil
 import subprocess
 import textwrap
@@ -36,6 +37,7 @@ from dirdelta import opening
 from dirdelta import paths
 from dirdelta import picker
 from dirdelta import replicalog
+from dirdelta import renaming
 from dirdelta import replicas
 
 # The label of the inbox's screens, so they're told from a sync's
@@ -72,6 +74,8 @@ CLAUDE_STYLE = 'magenta'
 # The titles of what Claude says, in the preview column
 DESCRIPTION_TITLE = "Description (ai):"
 DESTINATION_TITLE = "Dest. path recommendation (ai):"
+# The title of whether the sorted tree has the file already (by its contents)
+IN_SORTED_TREE_TITLE = "Is in replica dir:"
 
 
 # What an option of the action menu does to the files, and its color: its text's, and its label's
@@ -86,6 +90,7 @@ VERB_COLORS = {ASK: 'magenta', MOVE: 'blue', COPY: 'cyan', REMOVE: 'red', OPEN: 
 # A part of a destination's path: where it comes from, and its bracket's color and names (the
 # first that fits), e.g. [Claude's dir] (Claude's in magenta, as its options' color)
 SORTED_TREE = ((None), ("sorted tree", "tree"))
+THE_INBOX = (None, ("the inbox", "inbox"))
 CLAUDES_DIR = ('magenta', ("Claude's dir", "Claude's", "Claude"))
 CLAUDES_NAME = ('magenta', ("Claude's name", "Claude's", "Claude"))
 YOUR_DIR = ('yellow', ("your pick", "yours"))
@@ -122,6 +127,9 @@ class InboxSort(object):
     READ_ANEW = 'read anew'
     DESCRIBE = 'describe'
     RECOMMEND = 'recommend'
+    # The picker's keys that do an option of the menu, shown before it
+    # (Ctrl-X opens the selected one, not the picked ones: Open has no key)
+    SHORTCUTS = {RECOMMEND: 'Ctrl-I', READ_ANEW: 'Ctrl-R'}
     # Moving: to Claude's dir, or to a dir the user picks; under the file's name, Claude's, or one
     # the user types
     MOVE_RECOMMENDED = 'move to the recommendations'
@@ -130,6 +138,8 @@ class InboxSort(object):
     MOVE_TO = 'move to'
     MOVE_TO_CLAUDES_NAMES = "move to, under Claude's names"
     MOVE_TO_TYPED = 'move to, typing its name'
+    # To another dir of the inbox
+    MOVE_IN_INBOX = 'move in the inbox'
     COPY_TO = 'copy to'
     REMOVE = 'remove'
     REMOVE_COPIES = 'remove the copies'
@@ -137,9 +147,14 @@ class InboxSort(object):
     CONFIRM_NO = 'No'
     CONFIRM_YES = 'Yes'
     CONFIRM_SURE = 'Yes, remove them'
-    REFRESH_KEY = 'r'
+    # Ctrl-R
+    REFRESH_KEY = '\x12'
+    REFRESH_KEY_NAME = 'Ctrl-R'
     # The dir picker's key that makes a new dir in the selected one (its name typed next)
     NEW_DIR_KEY = 'n'
+    # The dir picker's keys that make a new dir beside the selected one, as vim's o and O (a dir
+    # on disk has no order: both are in its dir)
+    SIBLING_DIR_KEYS = 'oO'
     # Where files go: a dir picked in the sorted tree, or one of the recent ones (by its relpath in
     # it: the header names the sorted tree)
     PICK_DIR = "Pick a dir (or make a new one: n in the picker)"
@@ -204,6 +219,8 @@ class InboxSort(object):
         self._worker = None
         self._state_lock = threading.Lock()
         self._failed = {}
+        # The queued files to ask about anew (Ctrl-I on ones asked before), whatever Claude's cache has
+        self._anew = set()
         # Drive is asked one request at a time: the describer's downloads and the screen's changes
         self._drive_lock = threading.Lock()
         # As a sync looks for a file where the other replica has it (elsewhere.py), the inbox's files
@@ -261,8 +278,9 @@ class InboxSort(object):
                   (self.inbox_path, self.root_path))
         keys = (self.REFRESH_KEY if self.inbox_is_cloud else '') + hashes_screen.KEY
         key_hints = ([('Enter', 'what to do (none picked: the selected one)'),
-                      ('Ctrl-I', 'Claude: describe, and say where they go'), opening.KEY_HINT] +
-                     ([(self.REFRESH_KEY, 'read the folder anew from Drive')] if self.inbox_is_cloud else []) +
+                      ('Ctrl-I', 'Claude: describe, and say where they go'), opening.KEY_HINT,
+                      renaming.KEY_HINT] +
+                     ([(self.REFRESH_KEY_NAME, 'read the folder anew from Drive')] if self.inbox_is_cloud else []) +
                      [hashes_screen.KEY_HINT])
         help_lines = (["Tags after a file's name (/ searches them too):",
                        "  [claude: ...]            what Claude says it is",
@@ -283,7 +301,7 @@ class InboxSort(object):
                 keys=keys, selected=selected, key_hints=key_hints, help_lines=help_lines,
                 previews=lambda send, files=files: self._send_previews(files, send),
                 shown_as=lambda files=files: self._shown_as(files),
-                notify_keys=DESCRIBE_KEY + OPEN_KEY, enter_picks_selection=True,
+                notify_keys=DESCRIBE_KEY + OPEN_KEY, enter_picks_selection=True, twice_keys=renaming.KEY,
                 on_notify=lambda key, selected, picked, files=files: self._on_key(key, selected, picked, files),
                 on_selection=functools.partial(elsewhere.check_contents, files, self._inbox_view,
                                                self._inbox_index, self._root_index, self._checked,
@@ -295,6 +313,11 @@ class InboxSort(object):
             if chosen.key == hashes_screen.KEY:
                 hashes_screen.dashboard(self._views(), self._known_replicas)
                 picked = chosen.files
+                continue
+            if chosen.key == renaming.PRESSED:
+                moved = self._rename_selected(selected)
+                picked = [moved.get(relpath, relpath) for relpath in chosen.files]
+                selected = moved.get(selected, selected)
                 continue
             if chosen.key == self.REFRESH_KEY:
                 with self._drive_lock:
@@ -316,7 +339,43 @@ class InboxSort(object):
                 job.scan_in_background()
             picked = [relpath for relpath in chosen.files if relpath not in done]
             left = [relpath for relpath in self._inbox_files()]
-            selected = _shown(selected, left)
+            selected = _shown(selected, left, files)
+
+    def _rename_selected(self, selected):
+        """cc: rename the inbox's file or dir at selected (see renaming.py), what's known of its
+        files going with them. Returns {relpath: new relpath} of it and its files (none, if it
+        wasn't renamed, or in a dry run)."""
+        if not selected:
+            messages.show("Can't rename it", ["That's the inbox: rename a file or dir in it."], dryrun.label())
+            return {}
+        with self._drive_lock:
+            renamed = renaming.rename(self._inbox_tree, self._full(selected), LABEL)
+        if renamed is None or dryrun.DRYRUN:
+            return {}
+        new_full, moves = renamed
+        moved = {_relpath_in(relpath, self._inbox_rel): _relpath_in(new, self._inbox_rel) for relpath, new in moves}
+        self._carry(moved)
+        moved[selected] = _relpath_in(new_full, self._inbox_rel)
+        return moved
+
+    def _carry(self, moved):
+        """After the inbox's files moved within it (moved: {relpath: new relpath}), what's known of
+        each goes with it: what Claude said (in its cache too), the contents compared, its hash"""
+        with self._state_lock:
+            for relpath, new in moved.items():
+                for known in (self._descriptions, self._recommendations, self._failed, self._checked,
+                              self._junk_by_name):
+                    if relpath in known:
+                        known[new] = known.pop(relpath)
+                self._inbox_index.move(relpath, new)
+        # What Claude said of each, in its cache, under its new path (the same size)
+        sizes = {new: self._size(new) for new in moved.values()}
+        ai.carry({self._cache_key(ai.File(relpath, None, sizes[new])): self._cache_key(ai.File(new, None, sizes[new]))
+                  for relpath, new in moved.items()})
+        self.changes.note(self.inbox_path, 'moved', len(moved))
+        # Its hashes are kept under the new paths: the jobs list them there
+        for job in self._jobs():
+            job.scan_in_background()
 
     def _views(self):
         """The inbox's and the sorted tree's trees, each on its own"""
@@ -413,7 +472,8 @@ class InboxSort(object):
                 lines += _wrapped(target if is_renamed else "%s/" % (os.path.dirname(target) or '.',), "  ")
                 if is_renamed:
                     lines.append(_grey("  (renamed)"))
-                lines += _wrapped(recommendation.get('reason', ''), "  ")
+                # Why, apart from where
+                lines += [""] + _wrapped(recommendation.get('reason', ''), "  ")
             elif relpath in self._placing:
                 lines += ["", _title(DESTINATION_TITLE, CLAUDE_STYLE), _grey("  Claude is working it out...")]
             elif relpath in self._failed and relpath in self._descriptions:
@@ -436,8 +496,10 @@ class InboxSort(object):
         count = _files(len(relpaths))
         undescribed = [relpath for relpath in relpaths
                        if relpath not in self._descriptions and relpath not in self._describing]
-        unrecommended = [relpath for relpath in relpaths
-                         if relpath not in self._recommendations and relpath not in self._placing]
+        # The ones Claude may be asked where they go: all but the ones it's being asked of now (the
+        # ones it placed, or couldn't, asked anew)
+        askable = [relpath for relpath in relpaths if relpath not in self._placing]
+        asked_before = [relpath for relpath in askable if relpath in self._recommendations or relpath in self._failed]
         recommended = [relpath for relpath in relpaths
                        if relpath in self._recommendations and self._target(relpath) is not None]
         # Copies of the sorted tree's files, by their contents (whatever Claude says of them), and the
@@ -461,6 +523,7 @@ class InboxSort(object):
                         ("<Claude's names, %d renamed>" % (len(renamed),), CLAUDES_NAME))
         own_name = (name, OWN_NAME) if is_one else ("<their own names>", OWN_NAME)
         your_dir = ("<a dir you pick>/", YOUR_DIR)
+        inbox_root = (self.inbox_path.rstrip('/') + '/', THE_INBOX)
         typed = ("<a name you type>", YOUR_NAME)
         it = "it" if is_one else _of(len(recommended), len(relpaths))
         they = "it" if is_one else "the %s" % (count,)
@@ -468,12 +531,16 @@ class InboxSort(object):
         # them (the path's parts). The ones that can't be done aren't offered, nor one that does the
         # same as another (Claude's dir under the file's own name, when Claude keeps the name).
         options = collections.OrderedDict([
-            (self.DESCRIBE, ("Describe %s with Claude, while you go on (sends it their contents; or Ctrl-I)" %
+            (self.DESCRIBE, ("Describe %s with Claude, while you go on (sends it their contents)" %
                              ("it" if is_one else _of(len(undescribed), len(relpaths)),),
                              None if undescribed else "described", ASK, [])),
-            (self.RECOMMEND, ("Ask Claude where %s go%s in %s, while you go on (or Ctrl-I)" %
-                              ("it" if is_one else _of(len(unrecommended), len(relpaths)), "es" if is_one else "",
-                               self.root_path), None if unrecommended else "placed", ASK, [])),
+            # As Ctrl-I: the ones Claude placed already are asked about anew (they may have changed)
+            (self.RECOMMEND, ("Ask Claude where %s go%s in %s, while you go on%s" %
+                              ("it" if is_one else _of(len(askable), len(relpaths)), "es" if is_one else "",
+                               self.root_path, (" (anew: %s before)" % ("asked" if is_one else
+                                                                        "%d asked" % (len(asked_before),)))
+                               if asked_before else ""),
+                              None if askable else "being asked", ASK, [])),
             (self.MOVE_RECOMMENDED, ("Move %s to Claude's recommendation: %s" %
                                      (it, ''.join(text for text, _ in [root, claudes_dir, claudes_name]))
                                      if is_one or len(destinations) == 1 else
@@ -500,6 +567,9 @@ class InboxSort(object):
             (self.MOVE_TO_TYPED, ("Move it to a dir you pick, under a name you type: %s" %
                                   (''.join(text for text, _ in [root, your_dir, typed]),),
                                   None if is_one else "not one file", MOVE, [root, your_dir, typed])),
+            (self.MOVE_IN_INBOX, ("Move %s to another dir in the inbox, a dir you pick: %s" %
+                                  (they, ''.join(text for text, _ in [inbox_root, your_dir, own_name])),
+                                  None, MOVE, [inbox_root, your_dir, own_name])),
             (self.COPY_TO, ("Copy %s to a dir you pick (keeping %s in the inbox): %s" %
                             (they, "it" if is_one else "them", ''.join(text for text, _ in [root, your_dir, own_name])),
                             None, COPY, [root, your_dir, own_name])),
@@ -518,15 +588,27 @@ class InboxSort(object):
                            "the same as removing the copies" if len(removable) == len(relpaths) else
                            "the same as removing the junk" if self.inbox_is_cloud and len(junky) == len(relpaths) else
                            None, REMOVE, [])),
-            (self.OPEN, ("Open %s with %s program%s (or Ctrl-X)" %
+            (self.OPEN, ("Open %s with %s program%s" %
                          (they, "its" if is_one else "their", "" if is_one else "s"),
                          None if len(relpaths) <= opening.MAX_OPENED else "too many", OPEN, [])),
-            (self.READ_ANEW, ("Read %s/ anew from Google Drive (or r)" % (_join(self.inbox_path, folder),),
+            (self.READ_ANEW, ("Read %s/ anew from Google Drive" % (_join(self.inbox_path, folder),),
                               None if self.inbox_is_cloud else "not Drive's", READ, [])),
         ])
         options = collections.OrderedDict((action, option) for action, option in options.items() if option[1] is None)
-        labels = [self.NOTHING] + [label for label, _, _, _ in options.values()]
-        colors = {label: picker.Colored(label, VERB_COLORS[verb]) for label, _, verb, _ in options.values()}
+        # Similar actions together, a blank line between each kind (opening and reading anew, the
+        # picker's keys, together)
+        kinds = [(ASK,), (MOVE,), (COPY,), (REMOVE,), (OPEN, READ)]
+        labels, blanks = picker.grouped([[self.NOTHING]] + [
+            [label for label, _, verb, _ in options.values() if verb in kind] for kind in kinds])
+        # Each in its verb's color, the parts saying where the files go in their sources' (as the
+        # brackets below the menu), after its key, if a picker's key does it too
+        prefixes = picker.shortcut_prefixes([self.NOTHING] + [label for label, _, _, _ in options.values()],
+                                            {label: self.SHORTCUTS[action] for action, (label, _, _, _) in options.items()
+                                             if action in self.SHORTCUTS})
+        colors = {label: prefixes[label] + _option_text(label, VERB_COLORS[verb], parts)
+                  for label, _, verb, parts in options.values()}
+        colors[self.NOTHING] = prefixes[self.NOTHING] + self.NOTHING
+        colors.update(blanks)
         lines = {label: self._destination_lines(verb, parts, relpaths, removable if action == self.REMOVE_COPIES else
                                                 junky if action == self.REMOVE_JUNK else
                                                 [(folder or '.') + '/'] if action == self.READ_ANEW else relpaths)
@@ -546,8 +628,11 @@ class InboxSort(object):
             self.describe_in_background(undescribed)
             return None
         if action == self.RECOMMEND:
-            self.ask_in_background(unrecommended)
+            self.ask_in_background(askable, anew=True)
             return None
+        if action == self.MOVE_IN_INBOX:
+            destination = self._pick_dir('move', count, in_inbox=True)
+            return None if destination is None else self._move_in_inbox(relpaths, destination)
         if action == self.MOVE_RECOMMENDED:
             return self._approve(self.MOVE_TO, [(relpath, self._target(relpath)) for relpath in recommended])
         if action in (self.MOVE_TO_CLAUDES_DIR, self.MOVE_TO_CLAUDES_DIR_TYPED):
@@ -653,19 +738,21 @@ class InboxSort(object):
         """A preview's lines of what the sorted tree has of the inbox's file at relpath: its copies,
         or that it has none, or its candidates (to compare when it's selected)"""
         copies = self._copies(relpath)
+        title = (IN_SORTED_TREE_TITLE + " ", 'bold,' + CLAUDE_STYLE)
         if copies:
-            return (["", _title("Already exists! in:", 'green')] +
+            return (["", picker.styled([title, ("Yes", 'bold,green')])] +
                     [line for copy in copies[:3] for line in _wrapped_path(_join(self.root_path, copy), "    ")] +
                     [SURELY_A_COPY])
         if relpath in self._checked:
-            return ["", picker.styled([("Not in the sorted tree", 'bold'), (" (contents compared)", 'grey')])]
+            return ["", picker.styled([title, ("No", 'bold,red'), (" (contents compared)", 'grey')])]
         if not self._root_index.is_built():
-            return ["", _grey("Looking through the sorted tree...")]
+            return ["", picker.styled([title]), _grey("  Looking through the sorted tree...")]
         candidates = elsewhere._same_sized(relpath, self._size(relpath), self._root_index)
         if candidates:
-            return ["", _grey("%s of its size in the sorted tree:" % (_files(len(candidates)),)),
-                    _grey("compared when it's selected")]
-        return []
+            return ["", picker.styled([title]), _grey("  %s of its size there:" % (_files(len(candidates)),)),
+                    _grey("  compared when it's selected")]
+        # None of its size (nor of its hash) there
+        return ["", picker.styled([title, ("No", 'bold,red')])]
 
     def _start_indexing(self):
         """List the sorted tree's files (its index), in the background, once"""
@@ -686,13 +773,18 @@ class InboxSort(object):
         """Have Claude describe the files at relpaths (see ask_in_background())"""
         self.ask_in_background(relpaths, False)
 
-    def ask_in_background(self, relpaths, place=True):
+    def ask_in_background(self, relpaths, place=True, anew=False):
         """Have Claude describe the files at relpaths that have no description, and with place, say
         where they go (what Enter's "Ask Claude where" did, and Ctrl-I does): their contents are
         compared with the sorted tree's files first, so Claude knows which are copies. On a thread
-        of its own, a batch at a time, while the user goes on: each picker shows them as they come."""
+        of its own, a batch at a time, while the user goes on: each picker shows them as they come.
+        With anew (Ctrl-I's), the ones asked about before are asked again, and compared again, since
+        they (or the sorted tree) may have changed: what Claude said of them, here and in its cache,
+        is dropped (but for the ones being asked about now)."""
         with self._state_lock:
             for relpath in relpaths:
+                if anew and relpath not in self._queued:
+                    self._forget(relpath)
                 needs_description = relpath not in self._descriptions
                 needs_place = place and relpath not in self._recommendations
                 if not (needs_description or needs_place):
@@ -709,6 +801,17 @@ class InboxSort(object):
             if self._queue and self._worker is None:
                 self._worker = threading.Thread(target=self._ask_queued, daemon=True)
                 self._worker.start()
+
+    def _forget(self, relpath):
+        """Drop what's known of the inbox's file at relpath, to ask Claude about it anew (with the
+        state lock)"""
+        if (relpath in self._descriptions or relpath in self._recommendations or relpath in self._failed or
+                relpath in self._checked):
+            self._anew.add(relpath)
+        self._descriptions.pop(relpath, None)
+        self._recommendations.pop(relpath, None)
+        self._failed.pop(relpath, None)
+        self._checked.pop(relpath, None)
 
     def _ask_queued(self):
         """Ask Claude about the queued files, a batch at a time, until there are none (on the
@@ -727,6 +830,7 @@ class InboxSort(object):
                     self._describing.difference_update(batch)
                     self._placing.difference_update(batch)
                     self._queued.difference_update(batch)
+                    self._anew.difference_update(batch)
 
     def _describe(self, batch):
         """Have Claude describe the files of batch that have no description (on the worker's thread)"""
@@ -735,7 +839,7 @@ class InboxSort(object):
             if relpaths:
                 with self._drive_lock:
                     files = self._ai_files(relpaths, is_quiet=True)
-                found = ai.describe(files, self._cache_key)
+                found = ai.describe(files, self._cache_key, anew=self._anew & set(relpaths))
                 self._descriptions.update(found)
                 for relpath in relpaths:
                     if relpath not in found:
@@ -757,7 +861,8 @@ class InboxSort(object):
             self._compare(relpaths)
             files = [ai.File(relpath, None, self._size(relpath)) for relpath in relpaths]
             found = ai.recommend(files, self._cache_key, self._root_dirs(), self.root_path, self._descriptions,
-                                 {relpath: self._copies(relpath) for relpath in relpaths})
+                                 {relpath: self._copies(relpath) for relpath in relpaths},
+                                 anew=self._anew & set(relpaths))
             self._recommendations.update(found)
             for relpath in relpaths:
                 if relpath not in found:
@@ -857,13 +962,14 @@ class InboxSort(object):
 
     def _on_key(self, key, selected, picked, files):
         """A notify key pressed in the picker of files (on another thread): Ctrl-X opens the
-        picked files (or the selected one; more than one to download asked about first, see
-        opening.Opener.press()), Ctrl-I asks Claude about the picked ones (or the selected one, or
+        selected file (not the picked ones: the menu's Open does, see opening.confirm()), Ctrl-I asks Claude about the picked ones (or the selected one, or
         a dir's)"""
         if key == OPEN_KEY:
-            self._opener.press(picked or [selected], files)
+            # The selected one only (the picked ones: the menu's Open, which downloads them first)
+            self._opener.press([selected], files)
         else:
-            self.ask_in_background(picked or [relpath for relpath in files if _is_at_or_under(relpath, selected)])
+            self.ask_in_background(picked or [relpath for relpath in files if _is_at_or_under(relpath, selected)],
+                                   anew=True)
 
     def open_in_background(self, relpaths, files):
         """Open the inbox's files at relpaths (of files; the rest are dirs) with their programs, on
@@ -895,31 +1001,69 @@ class InboxSort(object):
             return None
         return self._not_the_inbox(options[answer])
 
-    def _pick_dir(self, verb, count):
-        """Let the user pick a dir in the sorted tree to move or copy (verb) the files (count) to, or
-        make a new one in it (NEW_DIR_KEY, then its name). Returns its relpath ('' the root), or
-        None."""
-        header = "Pick the dir in %s to %s the %s to." % (self.root_path, verb, count)
-        key_hints = [('Enter', 'this dir'), (self.NEW_DIR_KEY, 'a new dir in it')]
-        if self.root_is_cloud:
-            root = clouddirtree.factory(self.root_path)
-            picked = picker.pick_from_tree(root, header=header, dirs_only=True, root_name=self.root_path,
-                                           keys=self.NEW_DIR_KEY, key_hints=key_hints)
-            key, relpath = (picked[0], picked[1][0].relpath) if picked else ('', None)
-        else:
-            picked = picker.pick_under_dir(self.root_path, dirs_only=True, lazy=True, header=header,
-                                           keys=self.NEW_DIR_KEY, key_hints=key_hints)
-            key, relpath = (picked[0], _relpath(picked[1], self.root_path)) if picked else ('', None)
+    def _pick_dir(self, verb, count, in_inbox=False):
+        """Let the user pick a dir in the sorted tree (with in_inbox, in the inbox) to move or copy
+        (verb) the files (count) to, or make a new one: in the selected one (NEW_DIR_KEY), or beside
+        it (o or O, as vim's), then its name; cc renames the selected one. Returns its relpath (''
+        the root), or None."""
+        base, is_cloud = (self.inbox_path, self.inbox_is_cloud) if in_inbox else (self.root_path, self.root_is_cloud)
+        header = "Pick the dir in %s to %s the %s to." % (base, verb, count)
+        keys = self.NEW_DIR_KEY + self.SIBLING_DIR_KEYS
+        key_hints = [('Enter', 'this dir'), (self.NEW_DIR_KEY, 'a new dir in it'), ('o/O', 'a new dir beside it'),
+                     renaming.KEY_HINT]
+        while True:
+            if is_cloud:
+                root = clouddirtree.factory(base)
+                picked = picker.pick_from_tree(root, header=header, dirs_only=True, root_name=base,
+                                               keys=keys, key_hints=key_hints, twice_keys=renaming.KEY)
+                key, relpath = (picked[0], picked[1][0].relpath) if picked else ('', None)
+            else:
+                picked = picker.pick_under_dir(base, dirs_only=True, lazy=True, header=header,
+                                               keys=keys, key_hints=key_hints, twice_keys=renaming.KEY)
+                key, relpath = (picked[0], _relpath(picked[1], base)) if picked else ('', None)
+            if relpath is None or key != renaming.PRESSED:
+                break
+            if in_inbox:
+                self._rename_selected(relpath)
+            else:
+                self._rename_sorted_dir(relpath)
         if relpath is not None and key == self.NEW_DIR_KEY:
-            relpath = self._new_dir(relpath, verb, count)
-        return self._not_the_inbox(relpath)
+            relpath = self._new_dir(relpath, verb, count, base)
+        elif relpath is not None and key and key in self.SIBLING_DIR_KEYS:
+            # Beside it: in its dir (beside the root, there's none: in it)
+            relpath = self._new_dir(posixpath.dirname(relpath), verb, count, base)
+        return relpath if in_inbox else self._not_the_inbox(relpath)
 
-    def _new_dir(self, parent, verb, count):
-        """The relpath of a new dir in the sorted tree's dir at parent, its name typed (a/b: one in a
-        new one), to move or copy (verb) the files (count) to; it's made when they go there. None if
-        no name, or one that can't be, was typed."""
-        name = messages.ask("A new dir in %s/" % (_join(self.root_path, parent),),
-                            ["The new dir to %s the %s to, in %s/" % (verb, count, _join(self.root_path, parent)),
+    def _rename_sorted_dir(self, relpath):
+        """cc in the dir picker: rename the sorted tree's dir at relpath (see renaming.py), but the
+        inbox's, or one it's in"""
+        if self.is_one_tree and _is_at_or_under(self._inbox_rel, _join(self._root_rel, relpath)):
+            messages.show("Can't rename it", ["The inbox is in %s/: rename another dir." % (_join(self.root_path, relpath),)],
+                          dryrun.label())
+            return
+        # The sorted tree's own tree (the inbox's too, if it's in it), so later moves find the dir
+        with self._drive_lock:
+            renamed = renaming.rename(self._root_tree, _join(self._root_rel, relpath), LABEL)
+        if renamed is None or dryrun.DRYRUN:
+            return
+        _, moves = renamed
+        for full, new_full in moves:
+            self._root_index.move(_relpath_in(full, self._root_rel), _relpath_in(new_full, self._root_rel))
+        if self.root_is_cloud and self._root_view is not self._root_tree:
+            # Its view (another tree of the same Drive folder) is read anew, and its files listed again
+            self._root_view = _tree(self.root_path)
+            self._root_index = elsewhere.Index(self._root_view, excluded=self._root_index._excluded)
+            self._indexing = None
+            self._start_indexing()
+        self.changes.note(self.root_path, 'moved', len(moves))
+
+    def _new_dir(self, parent, verb, count, base=None):
+        """The relpath of a new dir in the sorted tree's (or base's, the inbox's) dir at parent, its
+        name typed (a/b: one in a new one), to move or copy (verb) the files (count) to; it's made
+        when they go there. None if no name, or one that can't be, was typed."""
+        base = base or self.root_path
+        name = messages.ask("A new dir in %s/" % (_join(base, parent),),
+                            ["The new dir to %s the %s to, in %s/" % (verb, count, _join(base, parent)),
                              "(a/b makes b in a new a). An empty name, or Ctrl-C, goes back."],
                             "> ", label=dryrun.label())
         if name is None:
@@ -999,6 +1143,7 @@ class InboxSort(object):
                           self._target_cache_key(target, sizes[relpath]))
                 for relpath, target in plan}
         # Once it's done (or stopped), Enter goes back to the picker, so what was done can be read
+        done = None
         with messages.progress_screen(summary + (" (a dry run)" if dryrun.DRYRUN else ""),
                                       dryrun.label()), self._drive_lock:
             if self.is_one_tree:
@@ -1008,6 +1153,11 @@ class InboxSort(object):
                 done = self._transfer(moves, action == self.MOVE_TO)
         if dryrun.DRYRUN:
             return [relpath for relpath, _ in plan]
+        if done is None:
+            # Stopped (Ctrl-C) before it said: the ones in the sorted tree now (and, moved, out of
+            # the inbox; one copied but not removed yet is still the inbox's)
+            done = [(relpath, new_relpath) for relpath, new_relpath in moves if self._root_tree.has_file(new_relpath)
+                    and (action != self.MOVE_TO or not self._inbox_tree.has_file(relpath))]
         done_sources = {relpath for relpath, _ in done}
         done = [relpath for relpath, _ in plan if self._full(relpath) in done_sources]
         # What Claude said of each goes with it, to its new path
@@ -1026,6 +1176,44 @@ class InboxSort(object):
         if not_done:
             self._say_not_done("moved" if action == self.MOVE_TO else "copied", not_done, len(plan))
         return done
+
+    def _move_in_inbox(self, relpaths, destination):
+        """Move the inbox's files at relpaths to its dir at destination (a relpath in it), under their
+        own names, once the user confirms; what's known of them goes with them. Returns the ones
+        moved (in a dry run, the ones it would move), or None if none were."""
+        plan = [(relpath, _join(destination, posixpath.basename(relpath))) for relpath in relpaths
+                if posixpath.dirname(relpath) != destination]
+        there = [target for _, target in plan if self._inbox_tree._exists(self._full(target))]
+        if not plan or there:
+            messages.show("Can't move them there",
+                          ["%s/ has them already." % (_join(self.inbox_path, destination),)] if not plan else
+                          ["%s/ has a file or dir of the same name already:" % (_join(self.inbox_path, destination),)] +
+                          ["  " + target for target in there[:interactive_dir_sync.InteractiveDirSync.MAX_FILES_LISTED]],
+                          dryrun.label(), 'red')
+            return None
+        lines = ["Move %s to %s/?" % (_files(len(plan)), _join(self.inbox_path, destination))]
+        lines += ["  " + relpath for relpath, _ in plan[:interactive_dir_sync.InteractiveDirSync.MAX_FILES_LISTED]]
+        if len(plan) > interactive_dir_sync.InteractiveDirSync.MAX_FILES_LISTED:
+            lines.append("  (and %d more)" % (len(plan) - interactive_dir_sync.InteractiveDirSync.MAX_FILES_LISTED,))
+        if dryrun.DRYRUN:
+            lines.append("(A dry run: nothing on disk will change. DRYRUN=0 changes files.)")
+        if picker.pick_option([self.CONFIRM_NO, self.CONFIRM_YES], header='\n'.join(lines), title="Sure?",
+                              label=LABEL) != self.CONFIRM_YES:
+            return None
+        # Stopped (Ctrl-C) before move_files() says (it says how far it got, if it's stopped in it)
+        done = []
+        with messages.progress_screen("Moving %s in %s%s" % (_files(len(plan)), self.inbox_path,
+                                                             " (a dry run)" if dryrun.DRYRUN else ""),
+                                      dryrun.label()), self._drive_lock:
+            done = self._inbox_tree.move_files([(self._full(relpath), self._full(target)) for relpath, target in plan])
+        if dryrun.DRYRUN:
+            return [relpath for relpath, _ in plan]
+        moved = {_relpath_in(relpath, self._inbox_rel): _relpath_in(new, self._inbox_rel) for relpath, new in done}
+        self._carry(moved)
+        not_done = [relpath for relpath, _ in plan if relpath not in moved]
+        if not_done:
+            self._say_not_done("moved", not_done, len(plan))
+        return list(moved) or None
 
     def _say_not_done(self, what, relpaths, count):
         """Show that the inbox's files at relpaths (of count) weren't moved, copied or removed (what)"""
@@ -1184,6 +1372,27 @@ def _bracket(names, width):
     return '[' + inside + ' ' * (width - 2 - len(inside)) + ']'
 
 
+# The phrases of the action menu's options that say where the files go, each in its source's color
+# (as the brackets below the menu: see CLAUDES_DIR), the longest first
+_PHRASE_COLORS = [("Claude's recommendations", CLAUDES_DIR[0]), ("Claude's recommendation", CLAUDES_DIR[0]),
+                  ("under Claude's names", CLAUDES_NAME[0]), ("under Claude's name", CLAUDES_NAME[0]),
+                  ("Claude's dir", CLAUDES_DIR[0]), ("a dir you pick", YOUR_DIR[0]),
+                  ("under a name you type", YOUR_NAME[0]), ("keeping its name", OWN_NAME[0]),
+                  ("keeping their name", OWN_NAME[0])]
+
+
+def _option_text(label, color, parts=()):
+    """An action menu option's label as it's shown, in styled parts: in color, but the phrases
+    saying where the files go (_PHRASE_COLORS) and the destination's parts at its end (parts:
+    [(text, (color, names))], see SORTED_TREE) in their sources' colors (the sorted tree's plain)"""
+    joined = ''.join(text for text, _ in parts)
+    head, ending = (label[:-len(joined)], list(parts)) if joined and label.endswith(joined) else (label, [])
+    pattern = '(%s)' % ('|'.join(re.escape(phrase) for phrase, _ in _PHRASE_COLORS),)
+    phrase_colors = dict(_PHRASE_COLORS)
+    pieces = [(piece, phrase_colors.get(piece, color)) for piece in re.split(pattern, head)]
+    return picker.styled(pieces + [(text, source_color) for text, (source_color, _) in ending])
+
+
 def _title(text, color):
     """A preview's title, bold in color"""
     return picker.styled([(text, 'bold,' + color)])
@@ -1218,6 +1427,7 @@ def _is_at_or_under(relpath, dirpath):
     return not dirpath or relpath == dirpath or relpath.startswith(dirpath + '/')
 
 
-def _shown(relpath, files):
-    """relpath, or the closest dir above it that the picker of files still shows ('' the root)"""
-    return interactive_dir_sync._shown(relpath or '', files)
+def _shown(relpath, files, before=None):
+    """relpath, or the closest one to it the picker of files still shows (see
+    interactive_dir_sync._shown(): before, the files shown before)"""
+    return interactive_dir_sync._shown(relpath or '', files, before)

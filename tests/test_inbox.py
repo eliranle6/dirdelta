@@ -44,8 +44,8 @@ class InboxSortTest(unittest.TestCase):
         """Patch InboxSort.ask_in_background to wait for what it asks Claude, so a test sees it done"""
         ask = Sort.ask_in_background
 
-        def ask_and_wait(sorter, relpaths, place=True):
-            ask(sorter, relpaths, place)
+        def ask_and_wait(sorter, relpaths, place=True, anew=False):
+            ask(sorter, relpaths, place, anew)
             sorter.wait_for_claude()
         return mock.patch.object(Sort, 'ask_in_background', ask_and_wait)
 
@@ -69,6 +69,45 @@ class InboxSortTest(unittest.TestCase):
 
     def exists(self, *parts):
         return os.path.exists(os.path.join(self.tmpdir, *parts))
+
+    def test_a_move_stopped_with_ctrl_c_says_what_was_left(self):
+        # Stopped while transferring, before it said what it did: what's there now is what was done
+        def stopped(*_, **__):
+            raise KeyboardInterrupt()
+        with mock.patch.object(Sort, '_transfer', side_effect=stopped), \
+                mock.patch('dirdelta.localdiskdirtree.LocalDiskDirTree.move_files', side_effect=stopped):
+            self.sort([['a.txt'], None], ['Move it to a dir you pick', YES], dirs=[os.path.join(self.root, 'docs')],
+                      is_dry_run=False)
+        self.assertTrue(self.exists('inbox', 'a.txt'))
+        self.assertEqual(self.show.call_args.args[0], 'Not all were moved')
+
+    def test_o_makes_a_new_dir_beside_the_selected_one(self):
+        with mock.patch('dirdelta.messages.ask', return_value='letters'):
+            self.sort([['a.txt'], None], ['Move it to a dir you pick', YES],
+                      dirs=[('o', os.path.join(self.root, 'docs'))], is_dry_run=False)
+        # In docs/'s dir, the root, not in docs/
+        self.assertTrue(self.exists('sorted', 'letters', 'a.txt'))
+        keys = self.pick_under_dir.call_args.kwargs['keys']
+        self.assertIn('o', keys)
+        self.assertIn('O', keys)
+
+    def test_files_are_moved_to_another_dir_of_the_inbox(self):
+        with mock.patch('dirdelta.messages.ask', return_value='lists'):
+            self.sort([['a.txt'], None], ['Move it to another dir in the inbox', YES],
+                      dirs=[('n', self.inbox)], is_dry_run=False)
+        self.assertTrue(self.exists('inbox', 'lists', 'a.txt'))
+        self.assertFalse(self.exists('inbox', 'a.txt'))
+        # Picked from the inbox's dirs
+        self.assertEqual(self.pick_under_dir.call_args.args[0], self.inbox)
+
+    def test_whats_known_goes_with_a_file_moved_in_the_inbox(self):
+        sorter = Sort(self.inbox, self.root)
+        sorter._descriptions['a.txt'] = 'a list'
+        with helpers.answering_option_picker([YES]), mock.patch('dirdelta.dryrun.DRYRUN', False):
+            self.assertEqual(sorter._move_in_inbox(['a.txt'], 'trip'), ['a.txt'])
+        self.assertEqual(sorter._descriptions, {'trip/a.txt': 'a list'})
+        # Already there: nothing to move
+        self.assertIsNone(sorter._move_in_inbox(['trip/a.txt'], 'trip'))
 
     def test_move_to_a_picked_dir(self):
         self.sort([['a.txt'], None], ['Move it to a dir you pick', YES], dirs=[os.path.join(self.root, 'docs')])
@@ -255,24 +294,41 @@ class InboxSortTest(unittest.TestCase):
 
     def test_the_menu_starts_with_nothing(self):
         self.sort([['a.txt'], None], [NOTHING])
-        options = self.pick_option.call_args.args[0]
+        # Each kind of action apart, after a blank line (skipped when moving)
+        with_blanks = self.pick_option.call_args.args[0]
+        self.assertEqual([option.split(' ')[0] if option.strip() else '' for option in with_blanks],
+                         ['Nothing:', '', 'Describe', 'Ask', '', 'Move', 'Move', 'Move', '', 'Copy', '', 'Remove', '', 'Open'])
+        self.assertTrue(all(self.pick_option.call_args.kwargs['shown_as']()[blank] == picker.Skipped('')
+                            for blank in with_blanks if not blank.strip()))
+        options = [option for option in with_blanks if option.strip()]
         self.assertEqual(options[0], NOTHING)
         # With nothing recommended yet, and no copies or junk, only what can be done is offered
         self.assertEqual(options[1:], [
-            "Describe it with Claude, while you go on (sends it their contents; or Ctrl-I)",
-            "Ask Claude where it goes in %s, while you go on (or Ctrl-I)" % (self.root,),
+            "Describe it with Claude, while you go on (sends it their contents)",
+            "Ask Claude where it goes in %s, while you go on" % (self.root,),
             "Move it to a dir you pick: %s/<a dir you pick>/a.txt" % (self.root,),
             "Move it to a dir you pick, under a name you type: %s/<a dir you pick>/<a name you type>" % (self.root,),
+            "Move it to another dir in the inbox, a dir you pick: %s/<a dir you pick>/a.txt" % (self.inbox,),
             "Copy it to a dir you pick (keeping it in the inbox): %s/<a dir you pick>/a.txt" % (self.root,),
             "Remove it from %s" % (self.inbox,),
             # What the picker's keys do on it (a local inbox isn't read from Drive)
-            "Open it with its program (or Ctrl-X)"])
+            "Open it with its program"])
         # One file: its name in the header
         self.assertEqual(self.pick_option.call_args.kwargs['header'], "a.txt, in %s: what to do with it?" % (self.inbox,))
-        # Each colored by what it does
-        colors = self.pick_option.call_args.kwargs['shown_as']()
-        self.assertEqual([colors[option].color for option in options[1:]],
-                         ['magenta', 'magenta', 'blue', 'blue', 'cyan', 'red', 'green'])
+        # Each colored by what it does, and where the files go in their sources' colors, after
+        # the picker's key that does it, if one does
+        shown = self.pick_option.call_args.kwargs['shown_as']()
+        self.assertEqual([picker.unstyled(shown[option])[:9] for option in options],
+                         [' ' * 9, ' ' * 9, '[Ctrl-I] '] + [' ' * 9] * 6)
+        self.assertEqual(shown[options[2]], picker.styled([('[Ctrl-I]', 'bold'), (' ', None), (options[2], 'magenta')]))
+        self.assertEqual(shown[options[3]], ' ' * 9 + picker.styled([
+            ("Move it to ", 'blue'), ("a dir you pick", 'yellow'), (": ", 'blue'), (self.root + '/', None),
+            ("<a dir you pick>/", 'yellow'), ("a.txt", 'green')]))
+        self.assertEqual(shown[options[4]], ' ' * 9 + picker.styled([
+            ("Move it to ", 'blue'), ("a dir you pick", 'yellow'), (", ", 'blue'), ("under a name you type", 'yellow'),
+            (": ", 'blue'), (self.root + '/', None), ("<a dir you pick>/", 'yellow'), ("<a name you type>", 'yellow')]))
+        self.assertTrue(shown[options[6]].startswith(' ' * 9 + picker.styled([
+            ("Copy it to ", 'cyan'), ("a dir you pick", 'yellow'), (" (keeping it in the inbox): ", 'cyan')])))
         # And below the menu, what it does and where to, and where each part of the path is from
         lines = self.pick_option.call_args.kwargs['previews_below'][options[3]]
         self.assertEqual(lines[0], picker.segments([(" MOVE ", 'blue'), (" ", None), (self.root + '/', None),
@@ -350,6 +406,35 @@ class InboxSortTest(unittest.TestCase):
             self.sorter.wait_for_claude()
         self.assertEqual(sorted(self.sorter._descriptions), ['a.txt', 'trip/c.jpg'])
 
+    def test_ctrl_i_asks_anew_about_files_claude_described_and_placed_before(self):
+        answers = {'a.txt': {'description': 'a list', 'action': 'move', 'path': 'docs/a.txt', 'reason': 'a doc'}}
+        with self.ask_claude(answers):
+            self.sort([None], [])
+            on_notify = self.pick_files.call_args.kwargs['on_notify']
+            on_notify('\t', 'a.txt', [])
+            self.sorter.wait_for_claude()
+            self.assertEqual(len(self.queries), 2)
+            # It changed since: asked again, not from the cache
+            answers['a.txt'] = {'description': 'a shopping list', 'action': 'move', 'path': 'lists/a.txt',
+                                'reason': 'a list'}
+            on_notify('\t', 'a.txt', [])
+            self.sorter.wait_for_claude()
+        self.assertEqual(len(self.queries), 4)
+        self.assertEqual(self.sorter._descriptions['a.txt'], 'a shopping list')
+        self.assertEqual(self.sorter._target('a.txt'), 'lists/a.txt')
+        self.assertEqual(self.sorter._anew, set())
+        # And kept so next time
+        self.assertEqual(ai.describe([ai.File('a.txt', None, self.sorter._size('a.txt'))], self.sorter._cache_key),
+                         {'a.txt': 'a shopping list'})
+
+    def test_the_menus_ask_claude_where_asks_anew_too(self):
+        with self.ask_claude({'a.txt': {'description': 'a list', 'action': 'move', 'path': 'docs/a.txt',
+                                        'reason': 'a doc'}}):
+            self.sort([['a.txt'], ['a.txt'], None], ['Ask Claude', 'Ask Claude where it goes', NOTHING])
+        self.assertIn("Ask Claude where it goes in %s, while you go on (anew: asked before)" % (self.root,),
+                      self.pick_option.call_args_list[1].args[0])
+        self.assertEqual(len(self.queries), 4)
+
     def test_recommendations_are_shown_and_moved_to(self):
         with self.ask_claude({'b.jpg': {'description': 'a cat', 'action': 'move', 'path': 'photos/cats/b.jpg',
                                         'reason': 'a cat photo'},
@@ -407,6 +492,30 @@ class InboxSortTest(unittest.TestCase):
         self.assertTrue(self.exists('sorted', 'photos', 'trips', '2024', 'sunset.jpg'))
         self.assertFalse(self.exists('inbox', 'trip', 'c.jpg'))
 
+    def test_cc_renames_the_selected_file_what_claude_said_going_with_it(self):
+        self.sorter = None
+        with mock.patch('dirdelta.messages.ask', return_value='list.txt'), mock.patch('dirdelta.dryrun.DRYRUN', False):
+            sorter = Sort(self.inbox, self.root)
+            sorter._descriptions['a.txt'] = 'a list'
+            moved = sorter._rename_selected('a.txt')
+        self.assertEqual(moved, {'a.txt': 'list.txt'})
+        self.assertTrue(self.exists('inbox', 'list.txt'))
+        self.assertEqual(sorter._descriptions, {'list.txt': 'a list'})
+
+    def test_cc_in_the_picker_shows_it_again_on_the_renamed_one(self):
+        with mock.patch('dirdelta.messages.ask', return_value='beach'):
+            self.sort([picker.Picked(inbox.renaming.PRESSED, 'trip', []), None], [], is_dry_run=False)
+        self.assertTrue(self.exists('inbox', 'beach', 'c.jpg'))
+        self.assertEqual(self.pick_files.call_args.kwargs['selected'], 'beach')
+        self.assertEqual(self.pick_files.call_args.kwargs['twice_keys'], 'c')
+
+    def test_cc_in_the_dir_picker_renames_a_sorted_dir_then_picks_again(self):
+        with mock.patch('dirdelta.messages.ask', return_value='documents'):
+            self.sort([['a.txt'], None], ['Move it to a dir you pick', YES],
+                      dirs=[(inbox.renaming.PRESSED, os.path.join(self.root, 'docs')), os.path.join(self.root, 'documents')])
+        self.assertTrue(self.exists('sorted', 'documents', 'old.txt'))
+        self.assertTrue(self.exists('sorted', 'documents', 'a.txt'))
+
     def test_a_typed_name_in_a_picked_dir(self):
         with mock.patch('dirdelta.messages.ask', return_value='list.txt') as ask:
             self.sort([['a.txt'], None], ['Move it to a dir you pick, under a name you type', YES], dirs=[os.path.join(self.root, 'docs')])
@@ -423,14 +532,14 @@ class InboxSortTest(unittest.TestCase):
         # A name is typed for one file: not offered for two
         self.assertFalse(any("a name you type" in option for option in self.pick_option.call_args.args[0]))
 
-    def test_ctrl_x_opens_the_picked_files_or_the_selected_one(self):
+    def test_ctrl_x_opens_the_selected_one_not_the_picked_ones(self):
         with mock.patch('dirdelta.opening.Opener.open_in_background') as open_in_background:
             self.sort([None], [])
             files = ['a.txt', 'b.jpg', 'trip/c.jpg']
             self.pick_files.call_args.kwargs['on_notify']('\x18', 'trip/c.jpg', ['a.txt', 'b.jpg'])
             self.pick_files.call_args.kwargs['on_notify']('\x18', 'trip/c.jpg', [])
-        self.assertEqual(open_in_background.call_args_list, [mock.call(['a.txt', 'b.jpg'], files),
-                                                             mock.call(['trip/c.jpg'], files)])
+        # The picked ones are opened from the menu's Open
+        self.assertEqual(open_in_background.call_args_list, [mock.call(['trip/c.jpg'], files)] * 2)
 
     def test_what_opening_says_is_on_the_bottom_line(self):
         sorter = Sort(self.inbox, self.root)
@@ -471,7 +580,7 @@ class InboxSortTest(unittest.TestCase):
         # As r does: its folder is the one read (see CloudDirTree.refresh_from_drive())
         refresh.assert_called_once_with(sorter._inbox_tree, 'in/trip/c.jpg')
         options = pick_option.call_args.args[0]
-        self.assertEqual(options[-1], 'Read cloud/me/in/trip/ anew from Google Drive (or r)')
+        self.assertEqual(options[-1], 'Read cloud/me/in/trip/ anew from Google Drive')
         # Back to the picker, as it was
         self.assertEqual(pick_files.call_args.kwargs['picked'], ['trip/c.jpg'])
         self.assertEqual(pick_files.call_args.kwargs['selected'], 'trip/c.jpg')
@@ -517,12 +626,26 @@ class InboxSortTest(unittest.TestCase):
         sorter._compare(['old.txt', 'a.txt'])
         self.assertEqual(sorter._copies('old.txt'), ['docs/old.txt'])
         lines = sorter._previews(['old.txt'])['old.txt']
-        title = lines.index(picker.styled([("Already exists! in:", 'bold,green')]))
+        title = lines.index(picker.styled([(inbox.IN_SORTED_TREE_TITLE + " ", 'bold,magenta'), ("Yes", 'bold,green')]))
         self.assertEqual(''.join(line.strip() for line in lines[title + 1:lines.index(inbox.SURELY_A_COPY)]),
                          os.path.join(self.root, 'docs', 'old.txt'))
         self.assertIn(inbox.SURELY_A_COPY, lines)
         # Its hash is kept, for next time
         self.assertIsNotNone(inbox.elsewhere.hashcache.get(os.path.join(self.inbox, 'old.txt'), 'sha1'))
+
+    def test_a_file_the_sorted_tree_hasnt_says_no(self):
+        sorter = Sort(self.inbox, self.root)
+        sorter._compare(['a.txt'])
+        lines = sorter._previews(['a.txt'])['a.txt']
+        self.assertTrue(any(line.startswith(picker.styled([(inbox.IN_SORTED_TREE_TITLE + " ", 'bold,magenta'),
+                                                           ("No", 'bold,red')])) for line in lines))
+
+    def test_claudes_reason_is_apart_from_the_path(self):
+        sorter = Sort(self.inbox, self.root)
+        sorter._recommendations['a.txt'] = {'action': 'move', 'path': 'docs/a.txt', 'reason': 'a doc'}
+        lines = sorter._previews(['a.txt'])['a.txt']
+        title = lines.index(picker.styled([(inbox.DESTINATION_TITLE, 'bold,magenta')]))
+        self.assertEqual(lines[title + 1:title + 4], ["  docs/", "", "  a doc"])
 
     def test_copies_found_by_contents_can_be_removed_without_claude(self):
         self.copy_in_the_inbox()
@@ -537,7 +660,8 @@ class InboxSortTest(unittest.TestCase):
         self.assertEqual(option, "Remove 1 of the 3 files: copies of files in %s (1 not compared yet: "
                                  "Ctrl-I compares them)" % (self.root,))
         # Offered, as a removal
-        self.assertEqual(pick_option.call_args.kwargs['shown_as']()[option], picker.Colored(option, 'red'))
+        self.assertEqual(picker.unstyled(pick_option.call_args.kwargs['shown_as']()[option]).lstrip(), option)
+        self.assertEqual(pick_option.call_args.kwargs['shown_as']()[option], ' ' * 9 + picker.styled([(option, 'red')]))
 
     def test_a_copys_plain_removal_isnt_offered_as_well(self):
         # Removing it from the inbox would do what removing the copy does

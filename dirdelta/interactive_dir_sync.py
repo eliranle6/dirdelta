@@ -17,6 +17,7 @@ from dirdelta import localdiskdirtree
 from dirdelta import messages
 from dirdelta import opening
 from dirdelta import picker
+from dirdelta import renaming
 
 
 # The relpaths of the files in a dir that another lacks (see find_missing()), and the lines of a
@@ -91,6 +92,9 @@ class InteractiveDirSync(object):
     # its folder anew from Drive (r)
     OPEN = 'open'
     READ_ANEW = 'read anew'
+    # The picker's keys that do an option of the menu, shown before it
+    # (Ctrl-X opens the selected one, not the picked ones: Open has no key)
+    SHORTCUTS = {READ_ANEW: 'Ctrl-R'}
     # The label of each action's confirmation, so what it's for shows at a glance (magenta, not
     # red: red is LIVE's)
     LABELS = {COPY: ('COPY', 'blue'), REMOVE: ('REMOVE', 'magenta'),
@@ -106,7 +110,9 @@ class InteractiveDirSync(object):
     # How many of the picked files the confirmation lists
     MAX_FILES_LISTED = 5
     # The file picker's key that reads the selected folder anew from Drive, when a replica is Drive's
-    REFRESH_KEY = 'r'
+    # Ctrl-R
+    REFRESH_KEY = '\x12'
+    REFRESH_KEY_NAME = 'Ctrl-R'
 
     def __init__(self, src, dst, missing=None, src_index=None, dst_index=None, checked=None, changes=None):
         """missing: a future (concurrent.futures.Future) of find_missing(src, dst), e.g. found in
@@ -143,8 +149,8 @@ class InteractiveDirSync(object):
         header = ("Files in %s, which are not in %s. Pick some, then choose what to do with them." %
                   (self._src.displayname(), self._dst.displayname()))
         keys = (self.REFRESH_KEY if clouds else '') + hashes_screen.KEY
-        key_hints = ([('Enter', 'choose what to do'), opening.KEY_HINT] +
-                     ([(self.REFRESH_KEY, 'read the folder anew from Drive')] if clouds else []) +
+        key_hints = ([('Enter', 'choose what to do'), opening.KEY_HINT, renaming.KEY_HINT] +
+                     ([(self.REFRESH_KEY_NAME, 'read the folder anew from Drive')] if clouds else []) +
                      [hashes_screen.KEY_HINT])
         picked, selected = [], None
         while True:
@@ -154,6 +160,7 @@ class InteractiveDirSync(object):
                 src_job.first(missing)
             marks = hashes_screen.Marks(src_job, missing, jobs, extra=self._opener.status_parts) if jobs else None
             files = set(missing)
+            shown_before = missing
 
             def shown_as(marks=marks, src_job=src_job):
                 """The hashing tags (Marks), and the downloads' to open the files (opening.py)"""
@@ -164,8 +171,9 @@ class InteractiveDirSync(object):
                 chosen = picker.pick_files(
                     self._src.displayname(), missing, header=header, picked=picked,
                     keys=keys, selected=selected, key_hints=key_hints,
-                    shown_as=shown_as, notify_keys=opening.KEY,
-                    on_notify=lambda key, selected, picked: self._opener.press(picked or [selected], files),
+                    shown_as=shown_as, notify_keys=opening.KEY, twice_keys=renaming.KEY,
+                    # Ctrl-X opens the selected one (the picked ones: the menu's Open)
+                    on_notify=lambda key, selected, picked: self._opener.press([selected], files),
                     help_lines=hashes_screen.HELP_LINES if jobs else (),
                     previews=functools.partial(elsewhere.find_previews, missing, self._src, self.dst_index,
                                                checked=self.checked, src_index=self.src_index),
@@ -182,6 +190,22 @@ class InteractiveDirSync(object):
                 picked = chosen.files
                 continue
             key = chosen.key
+            if key == renaming.PRESSED:
+                picked = chosen.files
+                renamed = self._rename_selected(selected)
+                if renamed is None:
+                    continue
+                new_relpath, moves = renamed
+                missing = self._missing()
+                if not missing:
+                    self._say_nothing()
+                    return
+                moved = dict(moves)
+                still_missing = set(missing)
+                picked = [moved.get(relpath, relpath) for relpath in chosen.files
+                          if moved.get(relpath, relpath) in still_missing]
+                selected = _shown(new_relpath, missing)
+                continue
             if not key:
                 done = self._act(chosen.files, selected)
                 if done == self.REFRESH_KEY:
@@ -211,7 +235,26 @@ class InteractiveDirSync(object):
             still_missing = set(missing)
             done = set(done)
             picked = [relpath for relpath in chosen.files if relpath in still_missing and relpath not in done]
-            selected = _shown(selected, missing)
+            selected = _shown(selected, missing, shown_before)
+
+    def _rename_selected(self, selected):
+        """cc: rename src's file or dir at selected (see renaming.py). Returns (its new relpath, the
+        files' moves), once it's renamed (then src is diffed anew), or None (as in a dry run)."""
+        renamed = renaming.rename(self._src, selected)
+        if renamed is None or dryrun.DRYRUN:
+            return None
+        new_relpath, moves = renamed
+        for relpath, new in moves:
+            self.src_index.move(relpath, new)
+            # Compared under its old path
+            self.checked.pop(relpath, None)
+        self._note(self._src, 'moved', len(moves))
+        self.has_changed = True
+        self._missing_future = None
+        # Its hashes are kept under the new paths: the job lists them there
+        for job in hashes_screen.jobs_of([self._src]):
+            job.scan_in_background()
+        return new_relpath, moves
 
     def _index_of(self, replica):
         return self.src_index if replica is self._src else self.dst_index
@@ -267,21 +310,31 @@ class InteractiveDirSync(object):
                                  (_files(nr_renamed_in_src), src_name),
                                  self._cant_rename(self._src, nr_renamed_in_src)),
         }
-        options[self.OPEN] = ("Open %s with %s program%s (or Ctrl-X)" %
+        options[self.OPEN] = ("Open %s with %s program%s" %
                               ("it" if len(relpaths) == 1 else "the " + count,
                                "its" if len(relpaths) == 1 else "their", "" if len(relpaths) == 1 else "s"),
                               None if len(relpaths) <= opening.MAX_OPENED else
                               "can't: more than %d at once" % (opening.MAX_OPENED,))
         if clouds:
-            options[self.READ_ANEW] = ("Read %s anew from Google Drive (or r)" %
+            options[self.READ_ANEW] = ("Read %s anew from Google Drive" %
                                        (' and '.join(os.path.join(replica.displayname(), folder).rstrip('/') + '/'
                                                      for replica in clouds),), None)
-        disabled = {label: picker.Disabled("%s: %s" % (label, reason))
-                    for label, reason in options.values() if reason is not None}
+        # After its key, if a picker's key does it too
+        prefixes = picker.shortcut_prefixes([self.NOTHING] + [label for label, _ in options.values()],
+                                            {label: self.SHORTCUTS[action] for action, (label, _) in options.items()
+                                             if action in self.SHORTCUTS})
+        disabled = {label: prefixes[label] + label if reason is None else
+                    picker.Disabled(picker.unstyled(prefixes[label]) + "%s: %s" % (label, reason))
+                    for label, reason in options.values()}
+        disabled[self.NOTHING] = prefixes[self.NOTHING] + self.NOTHING
+        # Similar actions together, a blank line between each kind
+        kinds = [[self.COPY], [self.REMOVE], [self.RENAME_IN_DST, self.RENAME_IN_SRC], [self.OPEN, self.READ_ANEW]]
+        labels, blanks = picker.grouped([[self.NOTHING]] + [[options[action][0] for action in kind if action in options]
+                                                             for kind in kinds])
+        disabled.update(blanks)
         header = ("%s picked in %s, which %s lacks. What to do with them?" %
                   (count, src_name, dst_name))
-        answer = picker.pick_option([self.NOTHING] + [label for label, _ in options.values()],
-                                    header=header, shown_as=lambda: disabled, title="What to do")
+        answer = picker.pick_option(labels, header=header, shown_as=lambda: disabled, title="What to do")
         action = next((action for action, (label, _) in options.items() if label == answer), None)
         if action is None:
             return None
@@ -398,6 +451,8 @@ class InteractiveDirSync(object):
         title = "Moving %s in %s" % (_files(len(moves)), replica.displayname())
         if dryrun.DRYRUN:
             title += " (a dry run)"
+        # Stopped (Ctrl-C) before move_files() says (it says how far it got, if it's stopped in it)
+        done = []
         with messages.progress_screen(title, dryrun.label()):
             done = replica.move_files(moves)
         if dryrun.DRYRUN:
@@ -448,12 +503,41 @@ class InteractiveDirSync(object):
         self._src.remove_files(files)
 
 
-def _shown(relpath, missing):
-    """relpath (a picker's selection), or the closest dir above it that the picker of missing (files)
-    still shows ('' the root), if it's gone"""
+def _shown(relpath, missing, before=None):
+    """relpath (a picker's selection), if the picker of missing (files) still shows it; else the
+    closest file to where it was among before (the files shown then, in their order): the next
+    one still shown, or the one before, whichever is in a closer dir (the next, of two as close); or
+    else the closest dir above it still shown ('' the root)"""
+    if before and not _is_shown(relpath, missing):
+        prefix = relpath + '/' if relpath else ''
+        # Where it was: its place, or a dir's first file's
+        place = next((index for index, path in enumerate(before) if path == relpath or path.startswith(prefix)), None)
+        if place is not None:
+            left = set(missing)
+            after = next((path for path in before[place:] if path in left), None)
+            earlier = next((path for path in reversed(before[:place]) if path in left), None)
+            found = [path for path in (after, earlier) if path is not None]
+            if found:
+                return max(found, key=lambda path: _common_depth(path, relpath) * 2 + (path == after))
     while relpath:
         prefix = relpath + '/'
         if any(path == relpath or path.startswith(prefix) for path in missing):
             return relpath
         relpath = os.path.dirname(relpath)
     return relpath
+
+
+def _is_shown(relpath, missing):
+    """Whether the picker of missing (files) shows relpath: one of them, or a dir of some"""
+    prefix = relpath + '/'
+    return not relpath or any(path == relpath or path.startswith(prefix) for path in missing)
+
+
+def _common_depth(relpath, other):
+    """How many dirs the two relpaths are both in"""
+    depth = 0
+    for part, other_part in zip(relpath.split('/')[:-1], other.split('/')[:-1]):
+        if part != other_part:
+            break
+        depth += 1
+    return depth

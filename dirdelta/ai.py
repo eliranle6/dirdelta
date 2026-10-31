@@ -61,21 +61,22 @@ def _schema(fields, enums=None):
     return {"type": "object", "properties": {"files": {"type": "array", "items": item}}, "required": ["files"]}
 
 
-def describe(files, cache_key, progress=None):
+def describe(files, cache_key, progress=None, anew=()):
     """{relpath: description} of files (File), a sentence of at most MAX_DESCRIPTION_WORDS words
     each, from the cache or Claude (which reads them), in batches of BATCH_SIZE,
-    calling progress(done, count) after each. cache_key(file) is the file's key in the cache.
-    Raises AIError if Claude can't be asked."""
+    calling progress(done, count) after each. cache_key(file) is the file's key in the cache; the
+    files at anew (relpaths) are asked about again, whatever it has. Raises AIError if Claude can't
+    be asked."""
     def is_cached(entry):
         return entry.get('description') and {'description': entry['description']}
 
     def keep(entry, answer):
         entry['description'] = answer['description']
-    found = _ask(files, cache_key, is_cached, keep, _ask_for_descriptions, progress)
+    found = _ask(files, cache_key, is_cached, keep, _ask_for_descriptions, progress, anew)
     return {relpath: answer['description'] for relpath, answer in found.items()}
 
 
-def recommend(files, cache_key, dirs, root_name, descriptions, copies=None, progress=None):
+def recommend(files, cache_key, dirs, root_name, descriptions, copies=None, progress=None, anew=()):
     """{relpath: {'action', 'path', 'reason'}} of files (File): what to do with each, 'move' it to
     where in the sorted tree (root_name, whose dirs are dirs: {relpath: a few of its files' names})
     it belongs, its path relative to its root: a dir (an existing one, or a new one where none
@@ -84,7 +85,7 @@ def recommend(files, cache_key, dirs, root_name, descriptions, copies=None, prog
     paths in the sorted tree of files with the same contents}, its 'copies'), or junk (no copies:
     what Claude says, its reason why), from the cache or Claude.
     It goes by the files' names, sizes and descriptions ({relpath: description},
-    e.g. describe()'s), so it reads nothing."""
+    e.g. describe()'s), so it reads nothing. The files at anew are asked about again, as describe()'s."""
     copies = copies or {}
     def is_cached(entry):
         recommendation = entry.get('recommendations', {}).get(root_name)
@@ -96,7 +97,7 @@ def recommend(files, cache_key, dirs, root_name, descriptions, copies=None, prog
     def keep(entry, answer):
         entry.setdefault('recommendations', {})[root_name] = answer
     return _ask(files, cache_key, is_cached, keep,
-                lambda batch: _ask_for_recommendations(batch, dirs, root_name, descriptions, copies), progress)
+                lambda batch: _ask_for_recommendations(batch, dirs, root_name, descriptions, copies), progress, anew)
 
 
 def cached(files, cache_key, root_name):
@@ -114,14 +115,16 @@ def cached(files, cache_key, root_name):
     return descriptions, recommendations
 
 
-def _ask(files, cache_key, is_cached, keep, ask, progress):
-    """{relpath: answer} of files: is_cached(entry) of each one's cache entry, or else ask(batch)
-    of the others (BATCH_SIZE at a time) for {relpath: answer}, each kept by keep(entry, answer)"""
+def _ask(files, cache_key, is_cached, keep, ask, progress, anew=()):
+    """{relpath: answer} of files: is_cached(entry) of each one's cache entry (but the ones at anew,
+    relpaths), or else ask(batch) of the others (BATCH_SIZE at a time) for {relpath: answer}, each
+    kept by keep(entry, answer)"""
     cache = _load_cache()
     found = {}
     needed = []
     for file in files:
-        answer = is_cached(dict(cache.get(cache_key(file), {}), _relpath=file.relpath))
+        answer = (None if file.relpath in anew else
+                  is_cached(dict(cache.get(cache_key(file), {}), _relpath=file.relpath)))
         if answer:
             found[file.relpath] = answer
         else:

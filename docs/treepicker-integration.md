@@ -60,6 +60,9 @@ Like fzf: dirdelta starts `treepicker`, which draws on the terminal itself
   the tags after a file's name (hashing's, Claude's in magenta, junk in yellow, downloads) and the
   inbox's preview titles. treepicker searches the text without the marks, and shows a node's
   styles only while it isn't selected, picked, greyed or a search's match.
+- V picks a range, as vim's visual line mode (with `-m`): moving picks every line from where V was
+  pressed to the selection, a dir with what's under it; V, Space or Enter keep it, Esc unpicks it. Esc (Ctrl-[) without a range or a search unpicks all.
+  A picked node's styled parts keep their styles (its plain ones, its name, are red).
 - While a search filters the tree, Space on a dir picks only the matches under it.
 - The inbox's picker: Enter with nothing picked picks the selected node, as Space would
   (`--enter-picks-selection`, `pick_files(enter_picks_selection=True)`).
@@ -67,7 +70,7 @@ Like fzf: dirdelta starts `treepicker`, which draws on the terminal itself
   after `--expect`'s key), so after an action dirdelta shows it again where it
   was (`--select`).
 - A key that ends the file picker for dirdelta to act on the selected node
-  (`r`: read the selected folder anew from Drive): `--expect r`. Then the
+  (`Ctrl-R`: read the selected folder anew from Drive): `--expect` with Ctrl-R (a control key: `--expect` takes those too, but treepicker's own). Then the
   output starts with the key pressed (or an empty item for Enter) and, after
   a key, the selected node's path, then the picks so far, so dirdelta runs it
   again with `--picked` and `--select`.

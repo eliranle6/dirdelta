@@ -65,9 +65,9 @@ class InteractiveDirSyncTest(unittest.TestCase):
         with open(os.path.join(self.dst_root, 'sub/b.txt')) as f:
             self.assertEqual(f.read(), 'sub/b.txt')
         self.assertFalse(self._exists(self.dst_root, 'sub/c.txt'))
-        # Back where it was (the dir, as the file's gone), with the file left, nothing picked
+        # Back where it was (on the next file, as the file's gone), with the file left, nothing picked
         self.assertEqual(self._offered()[1], (['sub/c.txt'], []))
-        self.assertEqual(self.pick_files.call_args.kwargs['selected'], 'sub')
+        self.assertEqual(self.pick_files.call_args.kwargs['selected'], 'sub/c.txt')
         self.assertTrue(self.sync.has_changed)
         self.assertIn('Copy complete: copied 1 of 1 files to %s' % (self.dst_root,), self.messages)
 
@@ -155,8 +155,9 @@ class InteractiveDirSyncTest(unittest.TestCase):
             self._browse([picker.Picked('', 'sub/c.txt', ['sub/b.txt']), None], [NOTHING])
         options = self.pick_option.call_args_list[0].args[0]
         self.assertEqual(options[0], NOTHING)
+        # Each kind apart, after a blank line
         self.assertEqual([option.split(' ')[0] for option in options[1:]],
-                         ['Copy', 'Remove', 'Rename', 'Rename', 'Open'])
+                         ['', 'Copy', '', 'Remove', '', 'Rename', 'Rename', '', 'Open'])
         self.assertEqual(self._offered()[1], (['sub/b.txt', 'sub/c.txt'], ['sub/b.txt']))
         self.assertEqual(self.pick_files.call_args.kwargs['selected'], 'sub/c.txt')
 
@@ -169,8 +170,8 @@ class InteractiveDirSyncTest(unittest.TestCase):
             kwargs['on_notify']('\x18', 'sub/c.txt', [])
             kwargs['on_notify']('\x18', 'sub/c.txt', ['sub/b.txt', 'sub/c.txt'])
         files = {'sub/b.txt', 'sub/c.txt'}
-        self.assertEqual(open_in_background.call_args_list, [mock.call(['sub/c.txt'], files),
-                                                             mock.call(['sub/b.txt', 'sub/c.txt'], files)])
+        # Not the picked ones: the menu's Open opens them
+        self.assertEqual(open_in_background.call_args_list, [mock.call(['sub/c.txt'], files)] * 2)
 
     def test_what_opening_says_is_on_the_bottom_line(self):
         self._browse([None], [])
@@ -205,9 +206,9 @@ class InteractiveDirSyncTest(unittest.TestCase):
         self.assertEqual(self.pick_option.call_args.kwargs['label'], ('COPY', 'blue'))
 
     def disabled(self):
-        """The action menu's disabled options' texts"""
+        """The action menu's disabled options' texts (after the shortcuts' column)"""
         shown = self.pick_option.call_args_list[0].kwargs['shown_as']()
-        return [text.text for text in shown.values()]
+        return [text.text.lstrip() for text in shown.values() if isinstance(text, picker.Disabled)]
 
     def test_what_cant_be_done_is_greyed_out(self):
         # A read-only dst, and nothing has a match in it to rename
@@ -222,6 +223,16 @@ class InteractiveDirSyncTest(unittest.TestCase):
                                    "these may be there, moved or renamed" % (self.src_root,))
         self.assertEqual(texts[2], "Rename the files matching 0 of these to these paths, in %s: can't: "
                                    "it's read-only" % (self.dst_root,))
+
+    def test_cc_renames_the_selected_file_and_diffs_anew(self):
+        with mock.patch('dirdelta.messages.ask', return_value='a.txt'), mock.patch('dirdelta.dryrun.DRYRUN', False):
+            # sub/b.txt renamed to a.txt there: still missing (dst has a.txt, not sub/a.txt)
+            self._browse([picker.Picked('cc', 'sub/b.txt', ['sub/b.txt']), None], [])
+        self.assertTrue(self._exists(self.src_root, 'sub/a.txt'))
+        kwargs = self.pick_files.call_args.kwargs
+        self.assertEqual(self.pick_files.call_args.args[1], ['sub/a.txt', 'sub/c.txt'])
+        self.assertEqual(kwargs['selected'], 'sub/a.txt')
+        self.assertEqual(kwargs['picked'], ['sub/a.txt'])
 
     def test_two_cloud_replicas_cant_copy(self):
         src = clouddirtree.CloudDirTree('cloud/a')
@@ -408,15 +419,15 @@ class RefreshKeyTest(unittest.TestCase):
             # Since the cache was made, a/2.mp3 went from Drive
             tree.remove_node('a/2.mp3')
         calls = self.browse(self.cloud, self.local,
-                            [picker.Picked('r', 'a', ['a/1.mp3', 'a/2.mp3']), None], refresh)
+                            [picker.Picked(Sync.REFRESH_KEY, 'a', ['a/1.mp3', 'a/2.mp3']), None], refresh)
         self.refresh.assert_called_once_with(self.cloud, 'a')
         self.assertTrue(self.sync.has_changed)
         self.assertEqual(self.sync.checked, {})
         # Its files by name are listed again, when they're next needed
         self.assertFalse(self.sync.src_index.is_built())
         # And the replicas dashboard's
-        self.assertEqual(calls[0].kwargs['keys'], 'r#')
-        self.assertIn(('r', 'read the folder anew from Drive'), calls[0].kwargs['key_hints'])
+        self.assertEqual(calls[0].kwargs['keys'], Sync.REFRESH_KEY + '#')
+        self.assertIn(('Ctrl-R', 'read the folder anew from Drive'), calls[0].kwargs['key_hints'])
         self.assertIsNone(calls[0].kwargs['selected'])
         # What's still missing, what's still picked of it, where it was
         self.assertEqual(calls[1].args[1], ['a/1.mp3', 'b/3.mp3'])
@@ -428,7 +439,7 @@ class RefreshKeyTest(unittest.TestCase):
             calls = self.browse(self.cloud, self.local,
                                 [picker.Picked('', 'a/2.mp3', ['a/1.mp3']), None])
         self.refresh.assert_called_once_with(self.cloud, 'a/2.mp3')
-        self.assertEqual(pick_option.call_args.args[0][-1], 'Read cloud/mein/a/ anew from Google Drive (or r)')
+        self.assertEqual(pick_option.call_args.args[0][-1], 'Read cloud/mein/a/ anew from Google Drive')
         self.assertTrue(self.sync.has_changed)
         self.assertEqual(calls[1].kwargs['picked'], ['a/1.mp3'])
         self.assertEqual(calls[1].kwargs['selected'], 'a/2.mp3')
@@ -442,7 +453,7 @@ class RefreshKeyTest(unittest.TestCase):
 
     def test_the_other_replica_is_refreshed_when_its_drives(self):
         self.local.add_file_by_relpath('x/new.mp3')
-        self.browse(self.local, self.cloud, [picker.Picked('r', 'x/new.mp3', []), None])
+        self.browse(self.local, self.cloud, [picker.Picked(Sync.REFRESH_KEY, 'x/new.mp3', []), None])
         self.refresh.assert_called_once_with(self.cloud, 'x/new.mp3')
 
     def test_without_a_drive_replica_theres_no_key(self):
@@ -457,13 +468,13 @@ class RefreshKeyTest(unittest.TestCase):
         def refresh(tree, relpath):
             for relpath in ('a/1.mp3', 'a/2.mp3', 'b/3.mp3'):
                 tree.remove_node(relpath)
-        calls = self.browse(self.cloud, self.local, [picker.Picked('r', '', [])], refresh)
+        calls = self.browse(self.cloud, self.local, [picker.Picked(Sync.REFRESH_KEY, '', [])], refresh)
         self.assertEqual(len(calls), 1)
         self.assertEqual(self.show.call_args.args[0], 'Nothing to do')
 
     def test_a_failed_refresh_says_why_and_picks_again(self):
         calls = self.browse(self.cloud, self.local,
-                            [picker.Picked('r', 'a', ['b/3.mp3']), None], OSError('no network'))
+                            [picker.Picked(Sync.REFRESH_KEY, 'a', ['b/3.mp3']), None], OSError('no network'))
         title, lines = self.show.call_args.args[:2]
         self.assertEqual(title, 'Refresh cloud/mein/a from Google Drive')
         self.assertEqual(lines, ["Couldn't refresh it: no network"])
@@ -478,6 +489,21 @@ class ShownTest(unittest.TestCase):
         self.assertEqual(interactive_dir_sync._shown('a/b', missing), 'a/b')
         self.assertEqual(interactive_dir_sync._shown('a/d/3', missing), 'a')
         self.assertEqual(interactive_dir_sync._shown('z', missing), '')
+
+    def test_a_gone_one_is_followed_by_the_closest_file_left(self):
+        before = ['a/1', 'a/2', 'a/3', 'b/4', 'c/5']
+        shown = interactive_dir_sync._shown
+        # The next one
+        self.assertEqual(shown('a/2', ['a/1', 'a/3', 'b/4'], before), 'a/3')
+        # The one before, in its dir, rather than the next, in another
+        self.assertEqual(shown('a/3', ['a/1', 'b/4'], before), 'a/1')
+        # The last: the one before
+        self.assertEqual(shown('c/5', ['a/1', 'b/4'], before), 'b/4')
+        # A dir that's gone: from its first file's place
+        self.assertEqual(shown('b', ['a/1', 'c/5'], before), 'c/5')
+        # None left near: the closest dir
+        self.assertEqual(shown('a/2', [], before), '')
+
 
 
 if __name__ == '__main__':
