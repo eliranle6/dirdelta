@@ -123,7 +123,7 @@ class MountsTest(unittest.TestCase):
         self.answers['mount'] = lambda command: self.mounted.add('/mnt/win') or (0, '')
         with helpers.answering_option_picker([mounts.MOUNT]) as pick:
             self.assertTrue(mounts.ensure_mounted('/mnt/win/x'))
-        self.assertIn("/mnt/win isn't mounted (last time: /dev/sda3, ntfs, 'OS')", pick.call_args[1]['header'])
+        self.assertIn("Mount it? (/mnt/win)\n\nIt isn't mounted (last time: /dev/sda3, ntfs, 'OS')", pick.call_args[1]['header'])
         self.assertEqual(pick.call_args[0][0][0],
                          'Mount it (runs: sudo mount -t ntfs -o rw UUID=9618289F1828807B /mnt/win)')
         # Not NTFS's FUSE options

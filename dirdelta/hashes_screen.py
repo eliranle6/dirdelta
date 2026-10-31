@@ -93,7 +93,9 @@ def offer(jobs):
             left.append((job, progress))
     if not left:
         return True
-    lines = ["Hash the files? Hashes find a file by its contents: moved or renamed (any size), or a copy.",
+    # A brief question first, then why, below it
+    lines = ["Hash the files? (%s)" % (", ".join(paths.short_names([job.root for job, _ in left]).values()),), "",
+             "Hashes find a file by its contents: moved or renamed (any size), or a copy.",
              "Each file is read once, and its hash kept for next time. Not hashed yet:"]
     for job, progress in left:
         # The path last, so a long one doesn't hide the rest
