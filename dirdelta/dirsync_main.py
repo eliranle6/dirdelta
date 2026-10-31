@@ -44,7 +44,8 @@ def run(args):
     replicas.save(known_replicas)
     # The local replicas' files' hashes, which find a file by its contents: hashed in the
     # background, if the user wants
-    hashes_screen.offer(hashes_screen.prepare([dirtree_a, dirtree_b]))
+    if not hashes_screen.offer(hashes_screen.prepare([dirtree_a, dirtree_b])):
+        return
     changes = replicalog.Changes()
     _sync(dirtree_a, dirtree_b, args.dir_a_path, args.dir_b_path, known_replicas, changes)
     replicalog.offer_entries(changes, trees, known_replicas)

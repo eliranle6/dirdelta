@@ -83,13 +83,15 @@ class Job(object):
 
     # Scanning
 
-    def scan(self):
-        """List its files, and tell which are hashed already (from the hash cache); the rest are
-        left to hash. Again after its files changed (e.g. copied into it): the hashed ones are kept."""
+    def scan(self, listed=None):
+        """List its files (or take listed, {relpath: (size, mtime_ns)}, e.g. its tree's scan's),
+        and tell which are hashed already (from the hash cache); the rest are left to hash. Again
+        after its files changed (e.g. copied into it): the hashed ones are kept."""
         with self._lock:
             self._is_scanning = True
         try:
-            listed = _list_files(self.root, self.max_depth)
+            if listed is None:
+                listed = _list_files(self.root, self.max_depth)
         except OSError as error:
             with self._lock:
                 self.error = str(error)
@@ -466,11 +468,11 @@ def _list_files(root, max_depth=None):
         if not item:
             continue
         size, mtime, relpath = item.split(b' ', 2)
-        found[os.fsdecode(relpath)] = (int(size), _nanoseconds(mtime.decode('ascii')))
+        found[os.fsdecode(relpath)] = (int(size), nanoseconds(mtime.decode('ascii')))
     return found
 
 
-def _nanoseconds(timestamp):
+def nanoseconds(timestamp):
     """find's %T@ (seconds, e.g. '1698765432.1234567890') in nanoseconds, as os.stat()'s st_mtime_ns"""
     seconds, _, fraction = timestamp.partition('.')
     if seconds.startswith('-'):

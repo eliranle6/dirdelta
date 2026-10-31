@@ -9,7 +9,7 @@ from dirdelta import picker
 # The refresh question's options: the first, selected at first, does nothing
 OPTION_NOTHING = 'Nothing: go back'
 OPTION_REFRESH = 'Refresh %s from Google Drive'
-OPTION_NO_REFRESH = 'Continue with the cloud files list cache'
+OPTION_NO_REFRESH = 'Not now: go on with the cloud files list cache'
 
 
 def factory_interactive(rootpath):
@@ -28,7 +28,8 @@ def factory_interactive(rootpath):
 
 def _ask_whether_to_refresh(rootpath):
     """The user's answer (one of the options), or None if they quit"""
-    options = [OPTION_NOTHING, OPTION_REFRESH % (rootpath,), OPTION_NO_REFRESH]
+    # Nothing first (selected at first), then going on without refreshing
+    options = [OPTION_NOTHING, OPTION_NO_REFRESH, OPTION_REFRESH % (rootpath,)]
     header = ''
     stale = [path for path in drivecache.stale_paths()
              if _overlap(path, paths.path_in_cloud(rootpath))]

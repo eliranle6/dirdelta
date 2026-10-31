@@ -163,10 +163,10 @@ class ListFilesTest(unittest.TestCase):
         self.assertEqual(found['a/b c'], (stat.st_size, stat.st_mtime_ns))
 
     def test_finds_seconds_in_nanoseconds(self):
-        self.assertEqual(hashing._nanoseconds('1698765432.1234567890'), 1698765432123456789)
-        self.assertEqual(hashing._nanoseconds('1698765432.5'), 1698765432500000000)
-        self.assertEqual(hashing._nanoseconds('1698765432'), 1698765432000000000)
-        self.assertEqual(hashing._nanoseconds('-1.5'), -1500000000)
+        self.assertEqual(hashing.nanoseconds('1698765432.1234567890'), 1698765432123456789)
+        self.assertEqual(hashing.nanoseconds('1698765432.5'), 1698765432500000000)
+        self.assertEqual(hashing.nanoseconds('1698765432'), 1698765432000000000)
+        self.assertEqual(hashing.nanoseconds('-1.5'), -1500000000)
 
 
 def _progress(**fields):

@@ -23,9 +23,10 @@ KEY = '#'
 KEY_HELP = ("%s: hashing (pause, resume, which files); %s hashed, %s being hashed, %s not yet." %
             (KEY, hashing.HASHED_MARK, hashing.HASHING_MARK, hashing.NOT_HASHED_MARK))
 
+NOTHING = "Nothing: go back"
+NOT_NOW = "Not now: go on, matching files by their names and sizes (%s in the file pickers starts it)" % (KEY,)
 HASH_AND_WAIT = "Hash them now, and wait (recommended; Ctrl-C goes on, hashing in the background)"
 HASH_IN_BACKGROUND = "Hash them in the background, and go on"
-NOT_NOW = "Not now: match files by their names and sizes (%s in the file pickers starts it)" % (KEY,)
 # How often the wait's progress line changes, in seconds
 WAIT_INTERVAL = 0.5
 
@@ -47,8 +48,12 @@ def prepare(replicas):
             continue
         job = hashing.job(replica.fullpath(), replica.max_depth)
         if job.progress().state == hashing.NOT_SCANNED:
-            messages.print_line("Looking for the hashes of %s's files..." % (job.root,))
-            job.scan()
+            if replica.file_stamps is not None:
+                # Listed by the replica's scan already
+                job.scan(replica.file_stamps)
+            else:
+                messages.print_line("Listing the files of %s, to find their hashes..." % (job.root,))
+                job.scan()
         if job not in jobs:
             jobs.append(job)
     return jobs
@@ -66,8 +71,9 @@ def jobs_of(replicas):
 
 def offer(jobs):
     """Ask whether to hash the files of the jobs' replicas that aren't all hashed (and aren't being
-    hashed): now, waiting for it (recommended), in the background, or not now. The ones all hashed
-    are started (so files that come later are hashed too)."""
+    hashed): nothing (going back), not now, now, waiting for it (recommended), or in the background.
+    The ones all hashed are started (so files that come later are hashed too). Returns whether to
+    go on (False: the user chose nothing, or quit)."""
     left = []
     for job in jobs:
         progress = job.progress()
@@ -76,7 +82,7 @@ def offer(jobs):
         elif not job.is_started() and progress.state != hashing.NOT_SCANNED:
             left.append((job, progress))
     if not left:
-        return
+        return True
     lines = ["Hash the files? Hashes find a file by its contents: moved or renamed (any size), or a copy.",
              "Each file is read once, and its hash kept for next time. Not hashed yet:"]
     for job, progress in left:
@@ -87,12 +93,16 @@ def offer(jobs):
             job.root))
     lines += ["Waiting for it before comparing is recommended. Until it's done, files are matched",
               "by their names and sizes, and compared when selected."]
-    answer = picker.pick_option([HASH_AND_WAIT, HASH_IN_BACKGROUND, NOT_NOW], header='\n'.join(lines))
+    answer = picker.pick_option([NOTHING, NOT_NOW, HASH_AND_WAIT, HASH_IN_BACKGROUND],
+                                header='\n'.join(lines))
+    if answer in (None, NOTHING):
+        return False
     if answer in (HASH_AND_WAIT, HASH_IN_BACKGROUND):
         for job, _ in left:
             job.start()
     if answer == HASH_AND_WAIT:
         wait([job for job, _ in left])
+    return True
 
 
 def total(jobs):

@@ -11,6 +11,7 @@ from dirdelta import dryrun
 from dirdelta import entries
 from dirdelta import exif
 from dirdelta import hashcache
+from dirdelta import hashing
 from dirdelta import messages
 
 
@@ -51,6 +52,9 @@ class LocalDiskDirTree(dirtree.DirTree):
         self.max_depth = max_depth
         # find's messages about what it couldn't read in the last scan, so the tree may lack
         self.scan_errors = []
+        # {relpath: (size, mtime_ns)} of its files, as of the last scan (None: not scanned), so
+        # its hashing job needn't list them again (hashing.Job.scan())
+        self.file_stamps = None
         # Whether removing a file moves it to the desktop's trash (see trashing())
         self._is_trashing = False
 
@@ -70,21 +74,28 @@ class LocalDiskDirTree(dirtree.DirTree):
         """Add the dirs and files on disk (hidden ones too), down to max_depth levels below the root."""
         if not self._silent:
             messages.print_line("Scanning directory %s..." % (self._rootpath,))
-        # One find for both files and dirs, each entry its type letter and path, ending with '\0'
-        # (paths may hold newlines). Other types (e.g. symlinks) are skipped.
+        # One find for both files and dirs, each entry its type letter, size, modification time and
+        # path, ending with '\0' (paths may hold newlines). Other types (e.g. symlinks) are skipped.
         command = ["find", self._rootpath, "-mindepth", "1"]
         if self.max_depth is not None:
             command += ["-maxdepth", str(self.max_depth)]
-        command += ["-printf", "%y %p\\0"]
+        command += ["-printf", "%y %s %T@ %p\\0"]
         result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         self.scan_errors = result.stderr.decode('utf-8', 'surrogateescape').splitlines()
+        stamps = {}
+        prefix_length = len(self._rootpath.rstrip('/')) + 1
         for entry in result.stdout.split(b'\0'):
+            if not entry:
+                continue
+            kind, size, mtime, path = entry.split(b' ', 3)
             # Names needn't be valid UTF-8: decoded like Python decodes paths
-            kind, path = entry[:1], os.fsdecode(entry[2:])
+            path = os.fsdecode(path)
             if kind == b'f':
                 self.add_file_by_fullpath(path)
+                stamps[path[prefix_length:]] = (int(size), hashing.nanoseconds(mtime.decode('ascii')))
             elif kind == b'd':
                 self.create_dir_node_from_fullpath_if_not_exists(path)
+        self.file_stamps = stamps
 
     def file_size(self, relpath):
         try:

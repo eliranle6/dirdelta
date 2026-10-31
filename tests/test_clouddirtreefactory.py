@@ -8,7 +8,7 @@ from dirdelta import clouddirtreefactory
 import helpers
 
 REFRESH = 'Refresh cloud/mein from Google Drive'
-NO_REFRESH = 'Continue with the cloud files list cache'
+NO_REFRESH = clouddirtreefactory.OPTION_NO_REFRESH
 
 
 class CloudDirTreeFactoryTest(unittest.TestCase):
@@ -47,7 +47,7 @@ class CloudDirTreeFactoryTest(unittest.TestCase):
         for answer in (clouddirtreefactory.OPTION_NOTHING, None):
             with mock.patch('dirdelta.picker.pick_option', return_value=answer) as pick_option:
                 self.assertIsNone(clouddirtreefactory.factory_interactive('cloud/mein'))
-            self.assertEqual(pick_option.call_args.args[0], [clouddirtreefactory.OPTION_NOTHING, REFRESH, NO_REFRESH])
+            self.assertEqual(pick_option.call_args.args[0], [clouddirtreefactory.OPTION_NOTHING, NO_REFRESH, REFRESH])
         self.refresh.assert_not_called()
         clouddirtreefactory.clouddirtree.CloudDirTree.assert_not_called()
 

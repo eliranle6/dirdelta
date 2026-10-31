@@ -651,10 +651,16 @@ class InboxSortTest(unittest.TestCase):
     def test_run_offers_to_hash_the_local_ones_first(self):
         order = []
         with mock.patch('dirdelta.hashes_screen.offer', side_effect=lambda jobs: order.append(
-                    sorted(job.root for job in jobs))), \
+                    sorted(job.root for job in jobs)) or True), \
                 mock.patch.object(Sort, 'run', side_effect=lambda: order.append('run')):
             inbox.run(self.inbox, self.root)
         self.assertEqual(order, [sorted([os.path.realpath(self.inbox), os.path.realpath(self.root)]), 'run'])
+
+    def test_nothing_at_the_hashing_question_goes_back_without_sorting(self):
+        with mock.patch('dirdelta.hashes_screen.offer', return_value=False), \
+                mock.patch.object(Sort, 'run') as run:
+            inbox.run(self.inbox, self.root)
+        run.assert_not_called()
 
 
 if __name__ == '__main__':

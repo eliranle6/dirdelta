@@ -296,8 +296,8 @@ class InboxSort(object):
 
     def prepare_hashing(self):
         """Look for the hashes of the local inbox's and sorted tree's files, and offer to hash the
-        rest (see hashes_screen.offer())"""
-        hashes_screen.offer(hashes_screen.prepare(self._views()))
+        rest (see hashes_screen.offer()). Returns whether to go on."""
+        return hashes_screen.offer(hashes_screen.prepare(self._views()))
 
     def _shown_as(self, relpaths):
         """{relpath: what the picker shows it as}: its name (after its mark, hashed or not, if the
@@ -1061,7 +1061,8 @@ def run(inbox_path, root_path, known_replicas=None):
         known_replicas.record_sort(sort.inbox_path, sort.root_path)
         replicalog.note_seen(sort.log_trees(), known_replicas)
         replicas.save(known_replicas)
-    sort.prepare_hashing()
+    if not sort.prepare_hashing():
+        return
     sort.run()
     if known_replicas is not None:
         replicalog.offer_entries(sort.changes, sort.log_trees(), known_replicas)
