@@ -11,6 +11,8 @@ from dirdelta import dirtree
 from dirdelta import elsewhere
 from dirdelta import entries
 from dirdelta import dryrun
+from dirdelta import hashes_screen
+from dirdelta import hashing
 from dirdelta import localdiskdirtree
 from dirdelta import messages
 from dirdelta import picker
@@ -130,23 +132,38 @@ class InteractiveDirSync(object):
             return
         clouds = [replica for replica in (self._src, self._dst)
                   if isinstance(replica, clouddirtree.CloudDirTree)]
+        jobs = hashes_screen.jobs_of([self._src, self._dst])
         header = ("Files in %s, which are not in %s. Pick some, then choose what to do with them:\n"
-                  "(To pick a file, press Space. When finished, press Enter.%s)" %
+                  "(To pick a file, press Space. When finished, press Enter.%s%s)" %
                   (self._src.displayname(), self._dst.displayname(),
                    " %s: read the selected folder anew from Google Drive." % (self.REFRESH_KEY,)
-                   if clouds else ""))
+                   if clouds else "", " " + hashes_screen.KEY_HELP if jobs else ""))
+        keys = (self.REFRESH_KEY if clouds else '') + (hashes_screen.KEY if jobs else '')
         picked, selected = [], None
         while True:
-            chosen = picker.pick_files(
-                self._src.displayname(), missing, header=header, picked=picked,
-                keys=self.REFRESH_KEY if clouds else '', selected=selected,
-                previews=functools.partial(elsewhere.find_previews, missing, self._src, self.dst_index,
-                                           checked=self.checked),
-                on_selection=functools.partial(elsewhere.check_contents, missing, self._src,
-                                               self.src_index, self.dst_index, self.checked))
+            src_job = hashing.job_for(self._src.fullpath()) if is_local(self._src) else None
+            if src_job is not None:
+                # The files shown first: they're the ones to compare
+                src_job.first(missing)
+            marks = hashes_screen.Marks(src_job, missing, jobs) if jobs else None
+            try:
+                chosen = picker.pick_files(
+                    self._src.displayname(), missing, header=header, picked=picked,
+                    keys=keys, selected=selected, shown_as=marks,
+                    previews=functools.partial(elsewhere.find_previews, missing, self._src, self.dst_index,
+                                               checked=self.checked, src_index=self.src_index),
+                    on_selection=functools.partial(elsewhere.check_contents, missing, self._src,
+                                                   self.src_index, self.dst_index, self.checked))
+            finally:
+                if marks is not None:
+                    marks.close()
             if chosen is None:
                 return
             selected = chosen.selected
+            if chosen.key == hashes_screen.KEY:
+                hashes_screen.dashboard_of([self._src, self._dst])
+                picked = chosen.files
+                continue
             if chosen.key == self.REFRESH_KEY:
                 done = []
                 for replica in clouds:
@@ -202,7 +219,8 @@ class InteractiveDirSync(object):
         if not self.dst_index.is_built():
             messages.print_line("Looking for files of the same names in %s..." % (self._dst.displayname(),))
         # The ones that may be in dst, moved or renamed: their contents are compared before a Rename
-        may_be_there = elsewhere.may_be_elsewhere(relpaths, self._src, self.dst_index, self.checked)
+        may_be_there = elsewhere.may_be_elsewhere(relpaths, self._src, self.dst_index, self.checked,
+                                                  self.src_index)
         nr_renamed_in_src = sum(1 for relpath in may_be_there if self._src.cant_move(relpath) is None)
         src_name, dst_name = self._src.displayname(), self._dst.displayname()
         count = _files(len(relpaths))
@@ -297,7 +315,7 @@ class InteractiveDirSync(object):
                     messages.print_line("Compared %s" % (_files(len(to_compare)),))
             if is_stopped:
                 return None
-        renames = elsewhere.sure_matches(relpaths, self._src, self.dst_index, self.checked)
+        renames = elsewhere.sure_matches(relpaths, self._src, self.dst_index, self.checked, self.src_index)
         # Moving dst's matches to the picked files' paths, or the picked files to the matches'
         if action == self.RENAME_IN_DST:
             moves = [(match, relpath) for relpath, match in renames.items() if self._dst.cant_move(match) is None]

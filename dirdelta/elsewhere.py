@@ -16,10 +16,13 @@ contents never is, and one with another name is dropped then."""
 import collections
 import hashlib
 import os
+import threading
 import time
 
 from dirdelta import dirtree
 from dirdelta import hashcache
+from dirdelta import hashing
+from dirdelta import localdiskdirtree
 from dirdelta import picker
 
 # How many of a name's files in the other replica a preview lists (a common name, like README.md,
@@ -52,23 +55,36 @@ class Index(object):
     """A replica's files by name (and the big ones by size), built once (in the background, by
     find_previews(), or by sure_matches()), and then kept up to date as files are copied into the
     replica, removed from it or moved in it (add(), remove(), move()), rather than built again; or
-    built again after the replica is read anew (invalidate())."""
+    built again after the replica is read anew (invalidate()).
+
+    Its files by their contents' hashes too, the ones known without reading the files: Drive's (once
+    built), and a local replica's that its hashing job (hashing.py) has hashed, which come as they're
+    hashed (built or not)."""
 
     def __init__(self, replica, excluded=None):
         """excluded: a dir (relpath) of the replica whose files aren't in it (e.g. an inbox in a
         sorted tree, whose files would be their own matches)"""
         self.replica = replica
         self._excluded = excluded
-        # {name: {relpath: size}}, the names in each dir, {size: relpaths} of the big ones
-        # (RENAMED_MIN_SIZE), and {(algorithm, hash): relpaths} of the files whose hashes are known
-        # without reading them (Drive's), once built
+        # {name: {relpath: size}}, the names in each dir, and {size: relpaths} of the big ones
+        # (RENAMED_MIN_SIZE), once built
         self._by_name = None
         self._names_by_dir = None
         self._by_size = None
-        self._by_hash = None
+        # {(algorithm, hash): relpaths} of the files whose hashes are known without reading them
+        self._by_hash = collections.defaultdict(set)
         # Dates taken read so far, and contents' hashes ({algorithm: hex}), by relpath
         self._dates_taken = {}
         self._hashes = {}
+        # A local replica's hashing job, once there's one, and what it hashed that isn't in yet
+        # (it's sent from its threads); and the relpaths whose hashes came since take_new()
+        self._job = None
+        self._lock = threading.Lock()
+        self._pending = []
+        self._new = set()
+        # How many files it has (once built), and the ones with a hash known, by algorithm
+        self._nr_files = 0
+        self._hashed = collections.defaultdict(set)
 
     def is_built(self):
         return self._by_name is not None
@@ -85,17 +101,19 @@ class Index(object):
                 by_name[name] = files
         names_by_dir = collections.defaultdict(set)
         by_size = collections.defaultdict(set)
-        by_hash = collections.defaultdict(set)
+        known = {}
         for name, files in by_name.items():
             for relpath, size in files.items():
                 names_by_dir[os.path.dirname(relpath)].add(name)
                 if size is not None and size >= RENAMED_MIN_SIZE:
                     by_size[size].add(relpath)
                 for algorithm in self.replica.known_hashes(relpath):
-                    value = self.replica.content_hash(relpath, algorithm)
-                    by_hash[algorithm, value].add(relpath)
-                    self._hashes.setdefault(relpath, {})[algorithm] = value
-        self._names_by_dir, self._by_size, self._by_hash = names_by_dir, by_size, by_hash
+                    known.setdefault(relpath, {})[algorithm] = self.replica.content_hash(relpath, algorithm)
+        with self._lock:
+            for relpath, hashes in known.items():
+                self._add_hashes(relpath, hashes)
+        self._names_by_dir, self._by_size = names_by_dir, by_size
+        self._nr_files = sum(len(files) for files in by_name.values())
         # Last: is_built() says it is once all is
         self._by_name = by_name
 
@@ -104,9 +122,85 @@ class Index(object):
                                                relpath.startswith(self._excluded + '/'))
 
     def invalidate(self):
-        self._by_name = self._names_by_dir = self._by_size = self._by_hash = None
-        self._dates_taken = {}
-        self._hashes = {}
+        with self._lock:
+            self._by_name = self._names_by_dir = self._by_size = None
+            self._by_hash = collections.defaultdict(set)
+            self._hashed = collections.defaultdict(set)
+            self._dates_taken = {}
+            self._hashes = {}
+            self._pending = []
+            # Its job's hashes are still known
+            if self._job is not None:
+                for relpath, hashes in self._job.hashes().items():
+                    self._add_hashes(relpath, hashes)
+
+    # The hashes known without reading the files
+
+    def _take_hashes(self):
+        """Take in what its hashing job hashed since (subscribing to it, once there's one)"""
+        if self._job is None and isinstance(self.replica, localdiskdirtree.LocalDiskDirTree):
+            job = hashing.job_for(self.replica.fullpath())
+            if job is not None:
+                with self._lock:
+                    if self._job is None:
+                        self._job = job
+                        for relpath, hashes in job.subscribe(self._on_hashed).items():
+                            self._add_hashes(relpath, hashes)
+        if self._pending:
+            with self._lock:
+                pending, self._pending = self._pending, []
+                for relpath, hashes in pending:
+                    self._add_hashes(relpath, hashes)
+
+    def _on_hashed(self, relpath, hashes):
+        """Its job hashed a file (on the job's thread)"""
+        with self._lock:
+            self._pending.append((relpath, hashes))
+
+    def _add_hashes(self, relpath, hashes):
+        """With the lock held"""
+        if self._is_excluded(relpath):
+            return
+        known = self._hashes.setdefault(relpath, {})
+        for algorithm, value in hashes.items():
+            if value is None:
+                continue
+            if known.get(algorithm) not in (None, value):
+                self._by_hash.get((algorithm, known[algorithm]), set()).discard(relpath)
+            self._hashed[algorithm].add(relpath)
+            known[algorithm] = value
+            self._by_hash[algorithm, value].add(relpath)
+        self._new.add(relpath)
+
+    def job(self):
+        """Its replica's hashing job, if it's local and has one, else None"""
+        self._take_hashes()
+        return self._job
+
+    def known(self, relpath):
+        """{algorithm: hash} of the file's contents known without reading it"""
+        self._take_hashes()
+        found = self._hashes.setdefault(relpath, {})
+        for algorithm in self.replica.known_hashes(relpath):
+            if algorithm not in found:
+                # Kept, as content_hashes() keeps what it works out
+                found[algorithm] = self.replica.content_hash(relpath, algorithm)
+        return {algorithm: value for algorithm, value in found.items() if value is not None}
+
+    def hash_coverage(self, algorithm):
+        """How much of its files (0 to 1) have their hashes by algorithm known (without reading
+        them), or None if it isn't built"""
+        if not self.is_built():
+            return None
+        self._take_hashes()
+        return min(1, len(self._hashed[algorithm]) / self._nr_files) if self._nr_files else 1
+
+    def take_new(self):
+        """The relpaths of the files whose hashes came (or were worked out) since it was last called"""
+        self._take_hashes()
+        with self._lock:
+            new, self._new = self._new, set()
+        return new
 
     def files_named(self, name):
         """{relpath: size} of the files with the name"""
@@ -117,14 +211,16 @@ class Index(object):
         return self._by_size.get(size, set())
 
     def hash_algorithms(self):
-        """The algorithms of the hashes known of its files without reading them (Drive's), the
-        fastest to work out first"""
-        known = {algorithm for algorithm, _ in self._by_hash}
+        """The algorithms of the hashes known of its files without reading them (Drive's, or its
+        hashing job's), the fastest to work out first"""
+        self._take_hashes()
+        known = {algorithm for algorithm, _ in list(self._by_hash)}
         return [algorithm for algorithm in _HASH_PREFERENCE if algorithm in known]
 
     def files_hashed(self, algorithm, value):
         """The relpaths of the files whose contents' hash by algorithm is value (of the ones known)"""
-        return self._by_hash.get((algorithm, value), set())
+        self._take_hashes()
+        return set(self._by_hash.get((algorithm, value), set()))
 
     def names_in(self, dirpath):
         return self._names_by_dir.get(dirpath, set())
@@ -153,34 +249,38 @@ class Index(object):
         """A file is at relpath now (unless it isn't built yet, when there's nothing to change)"""
         if self.is_built() and not self._is_excluded(relpath):
             name = os.path.basename(relpath)
+            if relpath not in self._by_name.get(name, {}):
+                self._nr_files += 1
             self._by_name.setdefault(name, {})[relpath] = size
             self._names_by_dir[os.path.dirname(relpath)].add(name)
             if size is not None and size >= RENAMED_MIN_SIZE:
                 self._by_size[size].add(relpath)
-            for algorithm in self.replica.known_hashes(relpath):
-                self._by_hash[algorithm, self.replica.content_hash(relpath, algorithm)].add(relpath)
+            hashes = {algorithm: self.replica.content_hash(relpath, algorithm)
+                      for algorithm in self.replica.known_hashes(relpath)}
+            with self._lock:
+                self._add_hashes(relpath, hashes)
 
     def remove(self, relpath):
         if self.is_built():
             name = os.path.basename(relpath)
             files = self._by_name.get(name, {})
+            if relpath in files:
+                self._nr_files -= 1
             size = files.pop(relpath, None)
             if not files:
                 self._by_name.pop(name, None)
             self._names_by_dir.get(os.path.dirname(relpath), set()).discard(name)
             self._by_size.get(size, set()).discard(relpath)
+        with self._lock:
             for algorithm, value in self._hashes.get(relpath, {}).items():
                 self._by_hash.get((algorithm, value), set()).discard(relpath)
-            for relpaths in self._by_hash.values():
-                relpaths.discard(relpath)
+                self._hashed[algorithm].discard(relpath)
+            self._hashes.pop(relpath, None)
         self._dates_taken.pop(relpath, None)
-        self._hashes.pop(relpath, None)
 
     def move(self, relpath, new_relpath):
         # The same file, with the same contents
         hashes = self._hashes.get(relpath)
-        known = ({key for key, relpaths in self._by_hash.items() if relpath in relpaths}
-                 if self.is_built() else set())
         if self.is_built():
             size = self.files_named(os.path.basename(relpath)).get(relpath)
             self.remove(relpath)
@@ -188,9 +288,8 @@ class Index(object):
         else:
             self.remove(relpath)
         if hashes:
-            self._hashes[new_relpath] = hashes
-        for key in known:
-            self._by_hash[key].add(new_relpath)
+            with self._lock:
+                self._add_hashes(new_relpath, hashes)
 
 
 def _same_sized(relpath, size, index):
@@ -207,14 +306,34 @@ def _same_sized(relpath, size, index):
     return found
 
 
+def known_same(relpath, src_index, index, candidates=()):
+    """{relpath in index: whether its contents are the same} as src_index's file at relpath, by the
+    hashes known of both without reading them (see Index.known()): the ones of index with the
+    file's hash, whatever their names and sizes, and of candidates (relpaths in index), the ones
+    with another hash by the same algorithm"""
+    own = src_index.known(relpath)
+    found = {}
+    for algorithm, value in own.items():
+        found.update((match_relpath, True) for match_relpath in index.files_hashed(algorithm, value))
+    for match_relpath in candidates:
+        if match_relpath in found:
+            continue
+        other = index.known(match_relpath)
+        if any(algorithm in other and other[algorithm] != value for algorithm, value in own.items()):
+            found[match_relpath] = False
+    return found
+
+
 class _Matcher(object):
     """Finds the candidates of src's missing files at relpaths in the other replica's index"""
 
-    def __init__(self, relpaths, src, index, checked=None):
+    def __init__(self, relpaths, src, index, checked=None, src_index=None):
         """checked: {relpath: {candidate relpath: whether its contents are the same}} of the files
-        whose contents were compared (check_contents())"""
+        whose contents were compared (check_contents()). src_index: src's Index, whose hashes known
+        without reading (its hashing job's, or Drive's) tell the contents too (known_same())."""
         self._src = src
         self._index = index
+        self.src_index = src_index
         self._checked = checked if checked is not None else {}
         # A few of each dir's missing files' names, to look for in a match's dir (one more than
         # tried, as the file itself is one of them)
@@ -229,6 +348,17 @@ class _Matcher(object):
         # src's dates taken read so far, by relpath
         self._dates_taken = {}
 
+    def compared(self, relpath, same_sized=None):
+        """{candidate relpath: whether its contents are the same} as the file's, as compared, or as
+        the hashes known of both say"""
+        checked = dict(self._checked.get(relpath, {}))
+        if self.src_index is not None:
+            if same_sized is None:
+                same_sized = _same_sized(relpath, self._src.file_size(relpath), self._index)
+            for match_relpath, is_same in known_same(relpath, self.src_index, self._index, same_sized).items():
+                checked.setdefault(match_relpath, is_same)
+        return checked
+
     def date_taken(self, relpath):
         """src's file's date taken (read once)"""
         if relpath not in self._dates_taken:
@@ -240,9 +370,9 @@ class _Matcher(object):
         dirpath, name = os.path.split(relpath)
         size = self._src.file_size(relpath)
         candidates = dict(self._index.files_named(name))
-        renamed = {match_relpath for match_relpath, is_other_name
-                   in _same_sized(relpath, size, self._index).items() if is_other_name}
-        checked = self._checked.get(relpath, {})
+        same_sized = _same_sized(relpath, size, self._index)
+        renamed = {match_relpath for match_relpath, is_other_name in same_sized.items() if is_other_name}
+        checked = self.compared(relpath, same_sized)
         # And the ones of other names (any size) found by the file's hash
         renamed |= {match_relpath for match_relpath, is_same in checked.items()
                     if is_same and os.path.basename(match_relpath) != name}
@@ -310,11 +440,11 @@ def sure_match(matches, size, date):
     return None
 
 
-def sure_matches(relpaths, src, index, checked=None):
+def sure_matches(relpaths, src, index, checked=None, src_index=None):
     """{relpath: the relpath of its sure match (see sure_match())} of src's missing files at relpaths
-    that have one in index (built if it isn't); checked: as _Matcher's"""
+    that have one in index (built if it isn't); checked, src_index: as _Matcher's"""
     index.build()
-    matcher = _Matcher(relpaths, src, index, checked)
+    matcher = _Matcher(relpaths, src, index, checked, src_index)
     found = {}
     for relpath in relpaths:
         matches = matcher.matches(relpath)
@@ -325,29 +455,39 @@ def sure_matches(relpaths, src, index, checked=None):
     return found
 
 
-def may_be_elsewhere(relpaths, src, index, checked=None):
+def may_be_elsewhere(relpaths, src, index, checked=None, src_index=None):
     """Of src's missing files at relpaths, the ones that may be in index (built if it isn't), moved
     or renamed: with a sure match by what's known now, or whose contents weren't compared yet with
     their candidates of their size, or with what index knows by hash (check_all() then says)"""
     checked = checked if checked is not None else {}
-    sure = sure_matches(relpaths, src, index, checked)
+    sure = sure_matches(relpaths, src, index, checked, src_index)
     return [relpath for relpath in relpaths
             if relpath in sure or relpath in to_check([relpath], src, index, checked)]
 
 
-def find_previews(relpaths, src, index, send, checked=None):
+# How often find_previews() looks for files hashed meanwhile, whose previews change, in seconds
+HASHED_INTERVAL = 1
+
+
+def find_previews(relpaths, src, index, send, checked=None, src_index=None):
     """Find, for each of src's files at relpaths (which the other replica, index's, lacks at those
     paths), where the other replica may have it, and send() them (picker.pick_files()'s previews)
     as they're found (see _preview()). Until a file's are sent, the picker shows how far it's got:
-    building the index (if it isn't), then matching. Lets picker.PickerClosed go up, once the
-    picker is gone. checked: as _Matcher's."""
+    building the index (if it isn't), then matching. Then, while either replica is being hashed
+    (hashing.py), send again the previews of the files that it changes: the ones hashed, and the
+    ones of the hash of a file of index's hashed. Lets picker.PickerClosed go up, once the picker is
+    gone. checked, src_index: as _Matcher's."""
     dst_name = index.replica.displayname()
     title = ["Looking for files of the same", "names in %s..." % (dst_name,)]
     is_due = _Throttle(SEND_INTERVAL)
     send(default=title + ["Listing its files"])
     try:
         index.build(lambda count: is_due() and send(default=title + ["Listed %d of its files" % (count,)]))
-        matcher = _Matcher(relpaths, src, index, checked)
+        matcher = _Matcher(relpaths, src, index, checked, src_index)
+        if src_index is not None:
+            # What's hashed from now on changes the previews (what was is in them)
+            src_index.take_new()
+        index.take_new()
         found = {}
         for i, relpath in enumerate(relpaths):
             found[relpath] = _preview(relpath, src, dst_name, matcher)
@@ -359,6 +499,25 @@ def find_previews(relpaths, src, index, send, checked=None):
         return
     # Dirs show nothing
     send(found, default=[])
+    if src_index is None or (src_index.job() is None and index.job() is None):
+        return
+    missing = set(relpaths)
+    # src's missing files by their hashes known (to find the ones of index's files hashed)
+    by_hash = collections.defaultdict(set)
+    for relpath in relpaths:
+        for key in src_index.known(relpath).items():
+            by_hash[key].add(relpath)
+    while True:
+        time.sleep(HASHED_INTERVAL)
+        changed = src_index.take_new() & missing
+        for relpath in changed:
+            for key in src_index.known(relpath).items():
+                by_hash[key].add(relpath)
+        for match_relpath in index.take_new():
+            for key in index.known(match_relpath).items():
+                changed |= by_hash.get(key, set())
+        # Sent even with nothing to send: it raises PickerClosed once the picker is gone
+        send({relpath: _preview(relpath, src, dst_name, matcher) for relpath in changed})
 
 
 # How often check_contents() looks whether the index is built, while it waits for it, in seconds
@@ -388,7 +547,7 @@ def check_contents(relpaths, src, src_index, index, checked, selection, send, se
         relpath, pending = pending, None
         if relpath not in missing:
             continue
-        matcher = matcher or _Matcher(relpaths, src, index, checked)
+        matcher = matcher or _Matcher(relpaths, src, index, checked, src_index)
         candidates = _same_sized(relpath, src.file_size(relpath), index)
         if relpath in checked or not (candidates or index.hash_algorithms()):
             send({relpath: _preview(relpath, src, dst_name, matcher)})
@@ -526,6 +685,7 @@ def _preview(relpath, src, dst_name, matcher):
     lines = ["This one: " + ", ".join(about)] if about else []
     if modified is not None:
         lines.append("  modified " + _format_time(modified))
+    lines += _contents_lines(relpath, dst_name, matcher, matches)
     named = [match for match in matches if not match.is_other_name]
     renamed = [match for match in matches if match.is_other_name]
     sure = sure_match(matches, size, date)
@@ -537,6 +697,33 @@ def _preview(relpath, src, dst_name, matcher):
     if renamed:
         lines.append("Of its size, another name:")
         lines += _matches_lines(renamed, size, date, modified, sure, SURELY_RENAMED)
+    return lines
+
+
+def _contents_lines(relpath, dst_name, matcher, matches):
+    """A preview's lines of what's known of the file's contents by hashes (see hashing.py): its
+    hash, or that it isn't hashed yet; and if no file of the other replica has its contents (of the
+    ones hashed, if it isn't all hashed)"""
+    if matcher.src_index is None:
+        return []
+    own = matcher.src_index.known(relpath)
+    src_job = matcher.src_index.job()
+    if not own:
+        if src_job is None:
+            return []
+        return ["  contents not hashed yet (%s)" % (hashing.status_text(src_job),)]
+    algorithm = sorted(own)[0] if hashing.ALGORITHM not in own else hashing.ALGORITHM
+    lines = ["  %s %s" % (algorithm.upper().replace('SHA', 'SHA-'), own[algorithm][:16])]
+    index = matcher._index
+    if not any(match.same_contents for match in matches):
+        # Of the other replica's files whose hashes by one of the file's are known
+        coverage = max([index.hash_coverage(algorithm) or 0 for algorithm in own])
+        if coverage >= 1:
+            lines.append("  no file in %s has its contents" % (dst_name,))
+        elif coverage > 0:
+            lines.append("  no file in %s has its contents," % (dst_name,))
+            lines.append("  of the %d%% of its files hashed%s" % (
+                int(coverage * 100), " so far" if index.job() is not None else ""))
     return lines
 
 

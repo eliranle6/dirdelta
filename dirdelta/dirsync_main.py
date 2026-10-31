@@ -5,6 +5,8 @@ import time
 from dirdelta import clouddirtree
 from dirdelta import dryrun
 from dirdelta import elsewhere
+from dirdelta import hashes_screen
+from dirdelta import hashing
 from dirdelta import interactive_dir_sync
 from dirdelta import localdiskdirtree
 from dirdelta import messages
@@ -40,6 +42,9 @@ def run(args):
     trees = [(dirtree_a, args.dir_a_path), (dirtree_b, args.dir_b_path)]
     replicalog.note_seen(trees, known_replicas)
     replicas.save(known_replicas)
+    # The local replicas' files' hashes, which find a file by its contents: hashed in the
+    # background, if the user wants
+    hashes_screen.offer(hashes_screen.prepare([dirtree_a, dirtree_b]))
     changes = replicalog.Changes()
     _sync(dirtree_a, dirtree_b, args.dir_a_path, args.dir_b_path, known_replicas, changes)
     replicalog.offer_entries(changes, trees, known_replicas)
@@ -57,6 +62,7 @@ def _sync(replica_a, replica_b, replica_a_path, replica_b_path, known_replicas=N
     QUIT = "Quit"
     ADD_FAVORITE = "Add to favorites"
     REMOVE_FAVORITE = "Remove from favorites"
+    HASHES = "Hashes of the files"
     read_only = _read_only_lines(replica_a, replica_a_path) + _read_only_lines(replica_b, replica_b_path)
     if read_only:
         messages.show("Read-only", read_only, dryrun.label())
@@ -77,6 +83,16 @@ def _sync(replica_a, replica_b, replica_a_path, replica_b_path, known_replicas=N
                  if isinstance(replica, clouddirtree.CloudDirTree)}
     for way in ways:
         way.find_missing()
+    jobs = hashes_screen.jobs_of([replica_a, replica_b])
+    hash_options = [HASHES] if jobs else []
+
+    def shown_as():
+        shown = {label: action.shown_as() for label, action in actions.items()}
+        if jobs:
+            shown[HASHES] = "%s: %s (pause, resume, which files)" % (
+                HASHES, "; ".join(hashing.status_text(job) for job in jobs))
+            shown[''] = hashes_screen.picker_status([replica_a, replica_b])
+        return shown
 
     # Present sync options until user quits
     while True:
@@ -84,11 +100,13 @@ def _sync(replica_a, replica_b, replica_a_path, replica_b_path, known_replicas=N
         if known_replicas is not None:
             is_favorite = known_replicas.is_favorite(replica_a_path, replica_b_path)
             favorite_options = [REMOVE_FAVORITE if is_favorite else ADD_FAVORITE]
-        option = picker.pick_option(list(actions) + list(refreshes) + favorite_options + [QUIT],
-                                    shown_as=lambda: {label: action.shown_as()
-                                                      for label, action in actions.items()})
+        option = picker.pick_option(list(actions) + list(refreshes) + hash_options + favorite_options + [QUIT],
+                                    shown_as=shown_as)
         if option in (None, QUIT):
             break
+        if option == HASHES:
+            hashes_screen.dashboard_of([replica_a, replica_b])
+            continue
         if option in (ADD_FAVORITE, REMOVE_FAVORITE):
             known_replicas.toggle_favorite(replica_a_path, replica_b_path)
             replicas.save(known_replicas)
@@ -111,6 +129,9 @@ def _sync(replica_a, replica_b, replica_a_path, replica_b_path, known_replicas=N
         if actions[option].run():
             for way in ways:
                 way.find_missing()
+            # Files copied into a local replica (or moved in it) are hashed too
+            for job in jobs:
+                job.scan_in_background()
 
 
 def _files(count):

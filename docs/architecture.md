@@ -162,13 +162,46 @@ to the desktop's trash (`LocalDiskDirTree.trashing()`: `_remove_file()` runs `gi
 to its trash as always.
 
 ### `hashcache.py`
-Local files' contents' hashes, in `~/.cache/dirdelta/hashes.json`
-(`CACHE_FILE`), by path, with the size and mtime (ns) they were of: a hash of
-a file changed since isn't given. `LocalDiskDirTree.content_hashes()` reads
+Local files' contents' hashes, in `~/.cache/dirdelta/hashes.sqlite`
+(`CACHE_FILE`, SQLite in WAL mode: a table `files(path, size, mtime_ns,
+hashes)`, the hashes as JSON), by path, with the size and mtime (ns) they were
+of: a hash of a file changed since isn't given. `LocalDiskDirTree.content_hashes()` reads
 it first and keeps what it works out; `elsewhere._same_contents()` compares
 two local files by it when both are kept, else reads them side by side (and
-keeps both hashes when they're the same). Written at most every
-`SAVE_INTERVAL`, and at exit.
+keeps both hashes when they're the same). `known_under(dir)` gives a dir's in
+one query (a job's scan checks them against find's sizes and times); `move()`
+keeps them when dirdelta moves a file or dir, and a local copy gets its
+source's. Committed at most every `SAVE_INTERVAL` (a timer), and at exit:
+SQLite rather than JSON, so hashing a whole replica doesn't rewrite a big file
+again and again.
+
+### `hashing.py`, `hashes_screen.py`
+`hashing.Job(root)`: a local replica's hashing. `scan()` lists its files (one
+`find -type f -printf '%s %T@ %P'`) and takes the ones the hash cache has with
+the same size and mtime as hashed; `start()`/`pause()`; `first(relpaths)` puts
+files ahead (a sync's picker puts the files it shows). One `_Pool` of
+`nr_workers()` threads (physical cores − 1) serves all jobs in turn; a job on a
+spinning disk (`is_rotational()`) uses one at a time. Each worker lowers its
+own CPU (nice 19) and I/O (idle, `ioprio_set`) priority, reads a file in
+`READ_SIZE` chunks (pausing between them), checks it didn't change while read,
+drops it from the page cache, and puts its SHA-1 in the hash cache; then tells
+the job's subscribers (`subscribe()`: `elsewhere.Index`, `hashes_screen.Marks`).
+`progress()` (a `Progress`: files, bytes, current files, rate over
+`RATE_WINDOW`, failures), `percent()` (of bytes), `color()` (red < 34%,
+orange < 67%, yellow, green when done), `status_text()`, `mark()` (●, ◐, ○).
+Jobs are kept by root (`job()`, `job_for()`), for the whole run.
+
+`hashes_screen.prepare(replicas)` scans the local replicas' jobs; `offer(jobs)`
+asks whether to hash what's left (now and wait, `wait()`, a progress screen
+that Ctrl-C leaves while it goes on; in the background; or not now), and starts
+the jobs all hashed already, so later files are hashed too. `dashboard(jobs,
+clouds)`: a menu, live through `shown_as`, of each job's bar, state, current
+file, failures, Pause/Resume, its files (`view_files()`: a tree of them with
+their marks, the selected one's hash beside it) and a new scan; and each cloud
+replica's Drive hashes (how many have SHA-1, SHA-256). `Marks`: a picker's
+`shown_as` that puts each file's mark before its name (only the changed ones
+after the first time) and the jobs' statuses on the bottom line
+(`picker.status()`: treepicker's colored status labels).
 `ai.describe()` asks Claude about `ai.File`s (relpath, a local path
 to read, size), `BATCH_SIZE` a request, reading them; `ai.recommend()` asks
 Claude where they go by their names, sizes and descriptions
@@ -533,7 +566,10 @@ it (`InteractiveDirSync.LABELS`: COPY in blue, REMOVE in magenta).
 ### `elsewhere.py`, `exif.py`
 `Index(replica)`: a replica's files by name (`{name: {relpath: size}}`, the
 names in each dir, the big ones by size, `RENAMED_MIN_SIZE`, and those whose
-hashes are known without reading them, Drive's, by hash), built once
+hashes are known without reading them, by hash: Drive's, once built, and a
+local replica's hashing job's, which come as they're hashed: `_take_hashes()`
+subscribes to the job once there's one, `take_new()` says which came,
+`hash_coverage()` how much of it has them), built once
 from its `files_by_name(progress)` and then kept up to date by `add()`,
 `remove()` and `move()` as files are copied, removed and moved (or dropped
 with `invalidate()` after a refresh); it also keeps the dates taken and the
@@ -545,8 +581,9 @@ dirdiff), read as it goes; each calls `progress(count)` now and then.
 
 A missing file's candidates (`_Matcher.matches()`) are the index's files of
 its name, for a big file, all of its size with other names, and once its
-contents are compared, the ones the index has by its hash (any name and
-size); ranked (`_unlikeliness()`) by: the same contents, the same name, the
+contents are compared, or its hash is known without reading it (`known_same()`,
+with the src's `Index`: its job's hashes or Drive's), the ones the index has by
+its hash (any name and size); ranked (`_unlikeliness()`) by: the same contents, the same name, the
 same size, the same date taken, the most of its siblings in the candidate's
 dir (a few of its dir's missing files, `SIBLINGS_TRIED`, looked up once per
 pair of dirs), the same modification time (within `SAME_TIME`), then the

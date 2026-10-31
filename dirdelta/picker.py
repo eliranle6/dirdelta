@@ -42,6 +42,12 @@ def highlighted(text, color='green'):
     return '%s%s%s%s' % (HIGHLIGHT_MARK, color, HIGHLIGHT_MARK, text)
 
 
+def status(parts):
+    """A status for shown_as's '' (see pick_files()) of several labels, each in its color: parts is
+    [(text, color)] (a --label-color, or 'orange'); the empty ones are left out"""
+    return ''.join('%s%s%s%s' % (HIGHLIGHT_MARK, color, HIGHLIGHT_MARK, text) for text, color in parts if text)
+
+
 # What pick_files() returns: the key that ended picking ('' for Enter), the selected node's relpath
 # ('' for the root), to show it again there, and the files picked
 Picked = collections.namedtuple('Picked', ['key', 'selected', 'files'])
@@ -134,16 +140,16 @@ def pick_files(rootpath, relpaths, header='', picked=None, label=None, keys='', 
                   [path for path in picked_paths if path in files])
 
 
-def view_files(rootpath, relpaths, header='', previews=None, label=None):
+def view_files(rootpath, relpaths, header='', previews=None, label=None, shown_as=None, on_selection=None):
     """Show the files at relpaths (relative to rootpath, as pick_files() takes them), e.g. what an
     action will make, with previews ({relpath: lines}) beside them, to look through. Returns
-    whether the user pressed Enter (rather than quit)."""
+    whether the user pressed Enter (rather than quit). shown_as, on_selection: as pick_files()'s."""
     args = ['--typed', '--root', rootpath] + _header_args(header)
     send_previews = None
     if previews:
         send_previews = lambda send: send(previews, default=[])
-    return _run(args + ['-'], ('f ' + relpath for relpath in relpaths), label=label,
-                previews=send_previews) is not None
+    return _run(args + ['-'], ('f ' + relpath for relpath in relpaths), shown_as=shown_as, label=label,
+                previews=send_previews, on_selection=on_selection) is not None
 
 
 def pick_under_dir(dirpath, max_depth=None, dirs_only=False, lazy=False, header='', keys=''):

@@ -265,6 +265,9 @@ class LocalDiskDirTree(dirtree.DirTree):
         except OSError as error:
             messages.print_line("Move failed: %s" % (error,), "red")
             return False
+        # Its files' hashes, under their new paths (between filesystems, a copy may have other times,
+        # and then they're hashed again)
+        hashcache.move(path, new_path)
         self._move_subtree(dirpath, new_dirpath)
         # The dirs it was in, if it leaves them empty, as a removal does
         self._remove_emptied_dirs([entries.FileEntry(os.path.basename(dirpath), dirpath, path)])
@@ -282,6 +285,7 @@ class LocalDiskDirTree(dirtree.DirTree):
         except OSError as error:
             messages.print_line("Move failed: %s" % (error,), "red")
             return False
+        hashcache.move(path, new_path)
         # The tree may not have it, if it wasn't scanned (see dirdiff.py)
         if relpath in self:
             self.remove_node(relpath)
@@ -330,6 +334,10 @@ class LocalDiskDirTree(dirtree.DirTree):
     def _copy_local_file_to_tree_with_path(self, src, dst):
         # copy2: with its modification time, rather than the copy's
         shutil.copy2(src, dst)
+        # The copy's hashes are the file's, if they're known (so it isn't read again to hash it)
+        hashes = hashcache.get_all(src)
+        if hashes:
+            hashcache.put(dst, hashes)
 
 
 def _rename(path, new_path):

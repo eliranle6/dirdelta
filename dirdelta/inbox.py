@@ -25,6 +25,8 @@ from dirdelta import downloads
 from dirdelta import dryrun
 from dirdelta import elsewhere
 from dirdelta import entries
+from dirdelta import hashes_screen
+from dirdelta import hashing
 from dirdelta import interactive_dir_sync
 from dirdelta import junk
 from dirdelta import localdiskdirtree
@@ -182,6 +184,7 @@ class InboxSort(object):
         # the inbox's files, if it's in it. checked: the files compared, as a sync's.
         self._inbox_view = self._inbox_tree if not self.is_one_tree else _tree(self.inbox_path)
         root_view = self._root_tree if not self.is_one_tree else _tree(self.root_path)
+        self._root_view = root_view
         inbox_in_root = (_relpath_in(self._inbox_rel, self._root_rel)
                          if self.is_one_tree and _is_at_or_under(self._inbox_rel, self._root_rel) else None)
         self._inbox_index = elsewhere.Index(self._inbox_view)
@@ -232,10 +235,12 @@ class InboxSort(object):
                   "selected one). Ctrl-I: Claude describes the picked files (or the selected one), and "
                   "says where they go, while you go on. Ctrl-X: open the selected file.%s "
                   "[claude: ...]: what Claude says it is; [junk? ...]: it may be removed; / searches "
-                  "them too.)" %
+                  "them too.%s)" %
                   (self.inbox_path, self.root_path,
                    " %s: read the selected folder anew from Google Drive." % (self.REFRESH_KEY,)
-                   if self.inbox_is_cloud else ""))
+                   if self.inbox_is_cloud else "",
+                   " " + hashes_screen.KEY_HELP if self._jobs() else ""))
+        keys = (self.REFRESH_KEY if self.inbox_is_cloud else '') + (hashes_screen.KEY if self._jobs() else '')
         picked, selected = [], None
         while True:
             files = self._inbox_files()
@@ -248,7 +253,7 @@ class InboxSort(object):
             self._start_indexing()
             chosen = picker.pick_files(
                 self.inbox_path, files, header=header, picked=picked, label=LABEL,
-                keys=self.REFRESH_KEY if self.inbox_is_cloud else '', selected=selected,
+                keys=keys, selected=selected,
                 previews=lambda send, files=files: self._send_previews(files, send),
                 shown_as=lambda files=files: self._shown_as(files),
                 notify_keys=DESCRIBE_KEY + OPEN_KEY, enter_picks_selection=True,
@@ -260,6 +265,10 @@ class InboxSort(object):
                 self._finish_describing()
                 return
             selected = chosen.selected
+            if chosen.key == hashes_screen.KEY:
+                hashes_screen.dashboard_of(self._views())
+                picked = chosen.files
+                continue
             if chosen.key == self.REFRESH_KEY:
                 with self._drive_lock:
                     interactive_dir_sync.refresh_replica(self._inbox_tree, self._full(selected))
@@ -270,15 +279,33 @@ class InboxSort(object):
                 picked = chosen.files
                 continue
             done = set(done)
+            # Files moved into a local sorted tree (or out of a local inbox) are hashed there too
+            for job in self._jobs():
+                job.scan_in_background()
             picked = [relpath for relpath in chosen.files if relpath not in done]
             left = [relpath for relpath in self._inbox_files()]
             selected = _shown(selected, left)
 
+    def _views(self):
+        """The inbox's and the sorted tree's trees, each on its own"""
+        return [self._inbox_view, self._root_view]
+
+    def _jobs(self):
+        """The hashing jobs of the inbox and the sorted tree, the local ones (see hashing.py)"""
+        return hashes_screen.jobs_of(self._views())
+
+    def prepare_hashing(self):
+        """Look for the hashes of the local inbox's and sorted tree's files, and offer to hash the
+        rest (see hashes_screen.offer())"""
+        hashes_screen.offer(hashes_screen.prepare(self._views()))
+
     def _shown_as(self, relpaths):
-        """{relpath: what the picker shows it as}: its name, and Claude's description, if any (or
-        that Claude's looking at it), and why it looks like junk, if it does; and '': the status,
-        what Claude is doing"""
+        """{relpath: what the picker shows it as}: its name (after its mark, hashed or not, if the
+        inbox is being hashed), and Claude's description, if any (or that Claude's looking at it),
+        and why it looks like junk, if it does; and '': the status, how far hashing got and what
+        Claude is doing"""
         shown = {}
+        job = hashing.job_for(self.inbox_path) if not self.inbox_is_cloud else None
         for relpath in relpaths:
             tags = []
             if relpath in self._descriptions:
@@ -288,8 +315,13 @@ class InboxSort(object):
             junk_reason = self._junk(relpath)
             if junk_reason is not None:
                 tags.append((JUNK_BY_NAME if relpath in self._junk_by_name else JUNK_BY_CLAUDE) % (junk_reason,))
+            name = os.path.basename(relpath)
+            if job is not None:
+                name = "%s %s" % (hashing.mark(job, relpath), name)
             if tags:
-                shown[relpath] = "%s  %s" % (os.path.basename(relpath), '  '.join(tags))
+                shown[relpath] = "%s  %s" % (name, '  '.join(tags))
+            elif job is not None:
+                shown[relpath] = name
         describing, placing = len(self._describing), len(self._placing)
         failed = len([relpath for relpath in relpaths if relpath in self._failed])
         busy = ["%s %s" % (what, _files(count))
@@ -299,7 +331,8 @@ class InboxSort(object):
         note = self._open_note
         if note is not None and (note[1] is None or time.monotonic() < note[1]):
             status = note[0] + ("; " + status if status else "")
-        shown[''] = status
+        shown[''] = (hashes_screen.picker_status(self._views(), [(status, 'yellow')]) if self._jobs() else
+                     status)
         return shown
 
     def _send_previews(self, relpaths, send):
@@ -495,8 +528,11 @@ class InboxSort(object):
 
     def _copies(self, relpath):
         """The sorted tree's files (relpaths in it) with the same contents as the inbox's at relpath,
-        of the ones compared"""
-        return sorted(match for match, is_same in self._checked.get(relpath, {}).items() if is_same)
+        of the ones compared, and the ones of its hash, if it's known (see elsewhere.known_same())"""
+        copies = {match for match, is_same in self._checked.get(relpath, {}).items() if is_same}
+        copies |= {match for match, is_same in elsewhere.known_same(relpath, self._inbox_index,
+                                                                    self._root_index).items() if is_same}
+        return sorted(copies)
 
     def _copies_lines(self, relpath):
         """A preview's lines of what the sorted tree has of the inbox's file at relpath: its copies,
@@ -1025,6 +1061,7 @@ def run(inbox_path, root_path, known_replicas=None):
         known_replicas.record_sort(sort.inbox_path, sort.root_path)
         replicalog.note_seen(sort.log_trees(), known_replicas)
         replicas.save(known_replicas)
+    sort.prepare_hashing()
     sort.run()
     if known_replicas is not None:
         replicalog.offer_entries(sort.changes, sort.log_trees(), known_replicas)

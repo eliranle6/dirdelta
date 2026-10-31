@@ -406,5 +406,11 @@ class PickerTest(unittest.TestCase):
         self.assertEqual(items, ['f ' + name])
 
 
+class StatusTest(unittest.TestCase):
+    def test_labels_each_in_its_color(self):
+        self.assertEqual(picker.status([("a: hashed", 'green'), ("", 'red'), ("b: 40% hashed", 'orange')]),
+                         "\x01green\x01a: hashed\x01orange\x01b: 40% hashed")
+
+
 if __name__ == '__main__':
     unittest.main()

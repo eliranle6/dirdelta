@@ -11,6 +11,33 @@ from dirdelta import localdiskdirtree
 import helpers
 
 
+class KeptHashesTest(unittest.TestCase):
+    """A file's hash in the hash cache is kept when dirdelta moves it, or copies it locally"""
+    def setUp(self):
+        self.root = os.path.realpath(tempfile.mkdtemp(prefix='dirdelta-localdiskdirtree-'))
+        self.addCleanup(shutil.rmtree, self.root)
+        helpers.make_files(self.root, ['d/x', 'y'])
+        self.tree = localdiskdirtree.LocalDiskDirTree(self.root, True)
+        for relpath in ('d/x', 'y'):
+            self.tree.content_hash(relpath, 'sha1')
+        patcher = mock.patch('dirdelta.messages.print_line')
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def test_a_moved_file_and_dir(self):
+        self.assertTrue(self.tree._move_file('y', 'e/y2'))
+        self.assertTrue(self.tree._move_dir('d', 'f'))
+        self.assertEqual(localdiskdirtree.hashcache.get(os.path.join(self.root, 'e', 'y2'), 'sha1'),
+                         hashlib.sha1(b'y').hexdigest())
+        self.assertEqual(localdiskdirtree.hashcache.get(os.path.join(self.root, 'f', 'x'), 'sha1'),
+                         hashlib.sha1(b'd/x').hexdigest())
+
+    def test_a_local_copy(self):
+        self.assertTrue(self.tree._copy_within('y', 'copy'))
+        self.assertEqual(localdiskdirtree.hashcache.get(os.path.join(self.root, 'copy'), 'sha1'),
+                         hashlib.sha1(b'y').hexdigest())
+
+
 class LocalDiskDirTreeTest(unittest.TestCase):
     def setUp(self):
         self.src_root = tempfile.mkdtemp(prefix='dirstuff-localdiskdirtree-src-')

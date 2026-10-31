@@ -9,7 +9,7 @@ picker, one picker per direction with Copy, Remove and Rename in it, sorting an 
 Claude's help, 2026-10-29; remembering how a replica's volume was mounted and offering to mount
 it, a new dir and the recent ones for an inbox's "Move to...", an inbox's junk by names,
 sizes and what Claude says, and each replica's last_update.txt (read, shown, and written after a
-sync), 2026-10-30) are in git history. treepicker's own are in `lib/treepicker/docs/improvement-ideas.md`.
+sync), 2026-10-30; hashing whole local replicas in the background, 2026-10-31) are in git history. treepicker's own are in `lib/treepicker/docs/improvement-ideas.md`.
 
 Ordered by how easy they are, easiest first (2026-10-30).
 
@@ -22,18 +22,19 @@ Ordered by how easy they are, easiest first (2026-10-30).
    SHA-1 or SHA-256), and a Rename compares all the picked files' first, so it moves only what's
    surely the file, and a whole dir as one where it can. Copies keep their modification times.
 
+   Local replicas are hashed whole, in the background (2026-10-31, `hashing.py`), so a renamed
+   file of any size is found by hash once both are hashed (by the name and size heuristics until
+   then).
+
    Current limits:
-   1.1 In a local replica, a renamed file is found only if it's 64 KB or more (`RENAMED_MIN_SIZE`:
-       smaller sizes are too common); in Drive, any size, by hash, but only for the files whose
-       contents are compared (the selected one, or the picked ones before a Rename).
+   1.1 A Drive file whose cache line is from before 2026-10-29 has only SHA-256 (4,840 of 21,131
+       files, 2026-10-31), so a local file (hashed by SHA-1) is found there by hash only once its
+       folder is read anew from Drive (or when it's compared, which reads it for SHA-256).
+       Hashing whole replicas isn't offered in picker mode, nor from the start menu.
    1.2 Files copied before 2026-10-29 have the time of their copy as their modification time, so
        theirs say little.
    1.3 Some photos have no date taken: CR3 and RAF raws (not TIFF files). HEIF's and the TIFF raws'
        reading was tested only on files built by the tests, not on a camera's or phone's.
-
-   Idea: local files' hashes are kept now (`hashcache.py`, 2026-10-29), but only of the files
-   compared so far; hashing a whole local replica once (in the background, then kept) would let it
-   be looked up by hash as Drive is, finding renamed files (and an inbox's copies) of any size.
 
 2. **Sort an inbox: what's left.** Sorting an inbox into a sorted tree, with Claude's descriptions
    and recommendations, is there (2026-10-29: `inbox.py`, `ai.py`). What's left:

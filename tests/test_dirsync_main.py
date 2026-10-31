@@ -8,6 +8,7 @@ from dirdelta import clouddirtree
 from dirdelta import dirsync_main
 from dirdelta import dirtree
 from dirdelta import elsewhere
+from dirdelta import hashing
 from dirdelta import interactive_dir_sync
 from dirdelta import localdiskdirtree
 from dirdelta import picker
@@ -80,6 +81,24 @@ class MainMenuTest(unittest.TestCase):
         for b in (localdiskdirtree.LocalDiskDirTree('/b', silent=True), dirtree.DirTree('cloud/b')):
             a = localdiskdirtree.LocalDiskDirTree('/a', silent=True)
             self.assertEqual(self.options(a, b), ['Files in /a, not in /b', 'Files in /b, not in /a', 'Quit'])
+
+    def test_a_hashed_replicas_hashes_are_an_option_and_on_the_bottom_line(self):
+        a = localdiskdirtree.LocalDiskDirTree('/a', silent=True)
+        b = dirtree.DirTree('cloud/b')
+        job = hashing.Job('/a')
+        answers = ['Hashes of the files', 'Quit']
+        shown = []
+
+        def pick_option(options, shown_as):
+            shown.append(shown_as())
+            return answers.pop(0)
+        with mock.patch('dirdelta.hashing._jobs', {'/a': job}), \
+                mock.patch('dirdelta.picker.pick_option', side_effect=pick_option), \
+                mock.patch('dirdelta.hashes_screen.dashboard') as dashboard:
+            dirsync_main._sync(a, b, '/a', '/b')
+        dashboard.assert_called_once_with([job], [])
+        self.assertIn("a: listing its files...", shown[0]['Hashes of the files'])
+        self.assertIn("a: listing its files...", shown[0][''])
 
     def test_a_cloud_replica_can_be_refreshed_from_drive(self):
         a = localdiskdirtree.LocalDiskDirTree('/a', silent=True)

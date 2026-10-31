@@ -7,6 +7,7 @@ from unittest import mock
 
 from dirdelta import dirtree
 from dirdelta import elsewhere
+from dirdelta import hashing
 from dirdelta import localdiskdirtree
 from dirdelta import picker
 import helpers
@@ -20,6 +21,8 @@ class _SizedTree(dirtree.DirTree):
         self._dates = dates or {}
         self._hashes = hashes or {}
         self._times = times or {}
+        # The files whose hashes aren't known without working them out (unlike Drive's)
+        self.slow = set()
         self.dates_read = []
         self.hashed = []
         for relpath in sizes:
@@ -40,7 +43,7 @@ class _SizedTree(dirtree.DirTree):
         return self._hashes.get(relpath) if algorithm == 'sha256' else None
 
     def known_hashes(self, relpath):
-        return ('sha256',) if self._hashes.get(relpath) else ()
+        return ('sha256',) if self._hashes.get(relpath) and relpath not in self.slow else ()
 
     def modified_time(self, relpath):
         return self._times.get(relpath)
@@ -371,7 +374,9 @@ class CheckContentsTest(unittest.TestCase):
         # The ones of its size are compared, and its hash looked up in dst's
         self.assertEqual(self.checked, {'x': {'a/x': True, 'b/x': False}})
         lines = self.sent.previews['x']
-        self.assertEqual(lines[2:], ["  a/", "    x  5 B, same size", "    with 0 of 1 of its dir's files",
+        # Its hash, known without reading it (as Drive's are)
+        self.assertEqual(lines[1], "  SHA-256 H")
+        self.assertEqual(lines[3:], ["  a/", "    x  5 B, same size", "    with 0 of 1 of its dir's files",
                                      "    the same contents", elsewhere.SURELY_MOVED])
 
     def test_it_says_its_comparing_meanwhile(self):
@@ -405,7 +410,8 @@ class CheckContentsTest(unittest.TestCase):
         self.assertEqual(sorted(self.sent.previews), ['d/z', 'x'])
 
     def test_moving_on_stops_it_and_goes_on_where_the_selection_is(self):
-        # While x is hashed, the selection moves to y
+        # While x is hashed (it takes a while: it isn't known), the selection moves to y
+        self.src.slow.add('x')
         self.check(['x', 'y'], at=lambda relpath: relpath == 'y')
         self.assertNotIn('x', self.checked)
         self.assertIn('y', self.checked)
@@ -485,6 +491,114 @@ class FormatSizeTest(unittest.TestCase):
         self.assertEqual(elsewhere.format_size(1536), "1.5 KB")
         self.assertEqual(elsewhere.format_size(3 * 1024 ** 2), "3.0 MB")
         self.assertEqual(elsewhere.format_size(5 * 1024 ** 4), "5120.0 GB")
+
+
+
+class HashedReplicasTest(unittest.TestCase):
+    """Two local replicas hashed by their jobs (hashing.py): src's small.txt is dst's renamed.dat,
+    too small to be a candidate by its size"""
+    def setUp(self):
+        self.root = os.path.realpath(tempfile.mkdtemp(prefix='dirdelta-elsewhere-hashed-'))
+        self.addCleanup(shutil.rmtree, self.root)
+        for relpath, contents in (('src/small.txt', 'same'), ('src/other.txt', 'mine'),
+                                  ('dst/d/renamed.dat', 'same'), ('dst/d/other.txt', 'xxxx')):
+            path = os.path.join(self.root, relpath)
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            with open(path, 'w') as f:
+                f.write(contents)
+        self.src = localdiskdirtree.LocalDiskDirTree(os.path.join(self.root, 'src'), True)
+        self.dst = localdiskdirtree.LocalDiskDirTree(os.path.join(self.root, 'dst'), True)
+        self.jobs = {}
+        for name in ('src', 'dst'):
+            job = hashing.job(os.path.join(self.root, name))
+            self.addCleanup(hashing._jobs.pop, job.root, None)
+            self.jobs[name] = job
+        self.src_index, self.dst_index = elsewhere.Index(self.src), elsewhere.Index(self.dst)
+
+    def hash(self, *names):
+        """The replicas hashed, as their jobs would (here, at once)"""
+        for name in names:
+            job = self.jobs[name]
+            job.scan()
+            # Started, without the pool's workers
+            job._is_started = True
+            for relpath in job.files():
+                job._hash(relpath) if job._take(relpath) else None
+
+    def test_a_renamed_file_of_any_size_is_found_by_its_hash(self):
+        self.hash('src', 'dst')
+        self.dst_index.build()
+        self.assertEqual(elsewhere.known_same('small.txt', self.src_index, self.dst_index),
+                         {'d/renamed.dat': True})
+        self.assertEqual(elsewhere.sure_matches(['small.txt'], self.src, self.dst_index, {}, self.src_index),
+                         {'small.txt': 'd/renamed.dat'})
+        # Without the jobs' hashes it's only a file too small to say
+        self.assertEqual(elsewhere.sure_matches(['small.txt'], self.src, elsewhere.Index(self.dst), {}), {})
+
+    def test_other_contents_by_the_hashes_known(self):
+        self.hash('src', 'dst')
+        self.dst_index.build()
+        self.assertEqual(elsewhere.known_same('other.txt', self.src_index, self.dst_index, ['d/other.txt']),
+                         {'d/other.txt': False})
+
+    def test_hashes_come_into_the_index_as_theyre_hashed(self):
+        self.jobs['dst'].scan()
+        self.dst_index.build()
+        self.assertEqual(self.dst_index.hash_algorithms(), [])
+        self.assertEqual(self.dst_index.hash_coverage('sha1'), 0)
+        self.jobs['dst'].subscribe(lambda relpath, hashes: None)
+        self.hash('dst')
+        self.assertEqual(self.dst_index.hash_algorithms(), ['sha1'])
+        self.assertEqual(self.dst_index.files_hashed('sha1', hashlib.sha1(b'same').hexdigest()),
+                         {'d/renamed.dat'})
+        self.assertEqual(self.dst_index.hash_coverage('sha1'), 1)
+        self.assertEqual(self.dst_index.take_new(), {'d/renamed.dat', 'd/other.txt'})
+        self.assertEqual(self.dst_index.take_new(), set())
+
+    def test_an_excluded_dirs_hashes_arent_in(self):
+        index = elsewhere.Index(self.dst, excluded='d')
+        self.hash('dst')
+        self.assertEqual(index.hash_algorithms(), [])
+
+    def test_its_preview_says_its_hash_or_that_it_isnt_hashed_yet(self):
+        self.jobs['src'].scan()
+        self.hash('dst')
+        sent = _Sent()
+        # Then it'd go on sending them as files are hashed, until the picker is gone
+        with mock.patch('dirdelta.elsewhere.time.sleep', side_effect=picker.PickerClosed), \
+                self.assertRaises(picker.PickerClosed):
+            elsewhere.find_previews(['small.txt'], self.src, self.dst_index, sent,
+                                    src_index=elsewhere.Index(self.src))
+        self.assertIn("  contents not hashed yet (src: 0% hashed (not hashing))", sent.previews['small.txt'])
+        self.hash('src')
+        sent = _Sent()
+        with mock.patch('dirdelta.elsewhere.time.sleep', side_effect=picker.PickerClosed):
+            with self.assertRaises(picker.PickerClosed):
+                elsewhere.find_previews(['other.txt'], self.src, self.dst_index, sent, src_index=self.src_index)
+        lines = sent.previews['other.txt']
+        self.assertIn("  SHA-1 " + hashlib.sha1(b'mine').hexdigest()[:16], lines)
+        self.assertIn("  no file in %s has its contents" % (self.dst.displayname(),), lines)
+
+    def test_previews_are_sent_again_as_files_are_hashed(self):
+        self.jobs['src'].scan()
+        self.jobs['dst'].scan()
+        sends = []
+        hashed = []
+
+        def sleep(seconds):
+            # Meanwhile, the jobs hash their files; then the picker is gone
+            if hashed:
+                raise picker.PickerClosed()
+            hashed.append(True)
+            self.hash('src', 'dst')
+        with mock.patch('dirdelta.elsewhere.time.sleep', side_effect=sleep), \
+                self.assertRaises(picker.PickerClosed):
+            elsewhere.find_previews(['small.txt', 'other.txt'], self.src, self.dst_index,
+                                    lambda found=None, default=None: sends.append(dict(found or {})),
+                                    src_index=self.src_index)
+        again = sends[-1]
+        self.assertEqual(sorted(again), ['other.txt', 'small.txt'])
+        self.assertIn(elsewhere.SURELY_RENAMED, again['small.txt'])
 
 
 if __name__ == '__main__':

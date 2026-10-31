@@ -205,7 +205,7 @@ class InboxSortTest(unittest.TestCase):
                 mock.patch('dirdelta.picker.view_files', return_value=True), \
                 mock.patch('dirdelta.replicas.save'), mock.patch('dirdelta.dryrun.DRYRUN', False), \
                 mock.patch('dirdelta.replicalog.identity', side_effect=lambda path: 'id:' + path), \
-                self.synchronously():
+                mock.patch.object(Sort, 'prepare_hashing'), self.synchronously():
             inbox.run(self.inbox, self.root, known)
         # Seen at the start, and its log's last entry is the one added since
         self.assertIsNotNone(known.known['id:' + self.root]['seen'])
@@ -457,6 +457,27 @@ class InboxSortTest(unittest.TestCase):
                                  "Ctrl-I compares them)" % (self.root,))
         self.assertNotIn(option, pick_option.call_args.kwargs['shown_as']())
 
+    def test_a_renamed_copy_is_found_by_the_hashes_of_both_with_nothing_compared(self):
+        # a.txt's contents, under another name, in the sorted tree
+        helpers.make_files(self.root, ['docs/renamed'])
+        with open(os.path.join(self.root, 'docs', 'renamed'), 'w') as f:
+            f.write('a.txt')
+        sorter = Sort(self.inbox, self.root)
+        for path in (self.inbox, self.root):
+            job = inbox.hashing.job(path)
+            self.addCleanup(inbox.hashing._jobs.pop, job.root, None)
+            job.scan()
+            job._is_started = True
+            for relpath in job.files():
+                if job._take(relpath):
+                    job._hash(relpath)
+        self.assertEqual(sorter._copies('a.txt'), ['docs/renamed'])
+        self.assertEqual(sorter._checked, {})
+        # Marked as hashed in the picker, with how far each got on the bottom line
+        shown = sorter._shown_as(['a.txt'])
+        self.assertEqual(shown['a.txt'], inbox.hashing.HASHED_MARK + ' a.txt')
+        self.assertIn('inbox: hashed', shown[''])
+
     def test_claude_is_told_of_copies_and_its_removals_are_offered(self):
         self.copy_in_the_inbox()
         with self.ask_claude({'old.txt': {'description': 'an old note', 'action': 'remove', 'path': '',
@@ -622,10 +643,18 @@ class InboxSortTest(unittest.TestCase):
     def test_run_records_the_sort(self):
         known = replicas.Replicas()
         with mock.patch('dirdelta.replicas.save') as save, \
-                mock.patch.object(Sort, 'run'):
+                mock.patch.object(Sort, 'run'), mock.patch.object(Sort, 'prepare_hashing'):
             inbox.run(self.inbox, self.root, known)
         self.assertEqual(known.sorts, [(self.inbox, self.root)])
         save.assert_called_once_with(known)
+
+    def test_run_offers_to_hash_the_local_ones_first(self):
+        order = []
+        with mock.patch('dirdelta.hashes_screen.offer', side_effect=lambda jobs: order.append(
+                    sorted(job.root for job in jobs))), \
+                mock.patch.object(Sort, 'run', side_effect=lambda: order.append('run')):
+            inbox.run(self.inbox, self.root)
+        self.assertEqual(order, [sorted([os.path.realpath(self.inbox), os.path.realpath(self.root)]), 'run'])
 
 
 if __name__ == '__main__':

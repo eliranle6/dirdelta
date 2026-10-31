@@ -53,6 +53,13 @@ mount one that was mounted before and isn't now: `mounts.py`);
 inbox into a sorted tree (`inbox.py`, with Claude's descriptions and
 recommendations from `ai.py`, through the Claude Agent SDK), kept in that
 file's `sorts`.
+Before a sync or an inbox's sort, each local replica's files are listed and the
+ones not hashed yet are offered for hashing (`hashing.py`, `hashes_screen.py`):
+a pool of threads (one fewer than the physical cores) reads them in the
+background, at the lowest priority, into the hash cache, so a file is found by
+its contents (SHA-1, as Drive's) whatever its name and size. `#` in the file
+pickers (and "Hashes of the files" in the sync's menu) shows how far it got,
+pauses and resumes it.
 dirdelta doesn't use curses itself: each pick is a `treepicker` run, which
 has the terminal while it's open, and
 what's to be read in between (warnings, "Nothing to copy", an action's
@@ -83,7 +90,8 @@ change dirdelta made to Drive was cut off before it was added to the cache),
 `~/.config/dirdelta/replicas.json` (the history, favorites and sorts, each sorted tree's recent dirs, and what's known of each replica: its `last_update.txt`'s last entry),
 `~/.config/dirdelta/mounts.json` (how the replicas' volumes were mounted),
 `~/.cache/dirdelta/ai.json` (what Claude said of files),
-`~/.cache/dirdelta/hashes.json` (local files' hashes),
+`~/.cache/dirdelta/hashes.sqlite` (local files' hashes; a `hashes.json` next to it is the old
+format's, unused since 2026-10-31),
 `~/.cache/dirdelta/downloads/` (Drive files downloaded for Claude or to open) or `secrets/`.
 
 ## Structure
@@ -138,7 +146,7 @@ module:
 PYTHONPATH=.:tests .venv/bin/python3 -m unittest test_interactive_dir_sync -v
 ```
 
-Every module has a test file (469 tests, all passing as of 2026-10-30) except
+Every module has a test file (529 tests, all passing as of 2026-10-31) except
 the thin wiring in `main.py`/`dirsync_main.py`, covered only by running the
 app. Shared fakes:
 - `tests/helpers.py`: `scripted_option_picker` / `scripted_tree_picker` /
@@ -150,7 +158,10 @@ app. Shared fakes:
   the repo.
 - The real hash cache isn't written: `tests/helpers.py` points
   `hashcache.CACHE_FILE` at a temp file when it's imported, and every test
-  module that hashes files imports it.
+  module that hashes files imports it. Hashing jobs (`hashing.py`) are made
+  with `hashing.Job(...)` directly, or `hashing.job()` with a cleanup that pops
+  it from `hashing._jobs`; tests that hash without the pool's threads set
+  `job._is_started` and call `job._take()`/`job._hash()` themselves.
 - Claude is never asked in the tests: `test_ai` patches `ai._run_query` or the
   SDK's `query`, and `test_inbox` patches `ai._run_query`; `ai.CACHE_FILE` goes
   to a temp file. A manual run with a scratch `HOME` can't reach Claude Code's

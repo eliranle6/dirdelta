@@ -43,7 +43,9 @@ Like fzf: dirdelta starts `treepicker`, which draws on the terminal itself
   the selection and the picks (`KEY\0SELECTED\0PICKED...\0\0`) for `pick_files(on_notify=...)`:
   the inbox's `Ctrl-I` (Tab), which describes files in the background, and `Ctrl-X`, which opens
   the selected file. And an `--updates` line
-  with an empty path is a status, shown as a yellow label ("Claude: describing 2 files").
+  with an empty path is a status, shown as a yellow label ("Claude: describing 2 files"); or, as
+  `picker.status()` makes it, several labels each in its color (`\x01COLOR\x01TEXT...`; colors
+  include orange), e.g. each replica's hashing ("photos: 63% hashed" in orange).
 - While a search filters the tree, Space on a dir picks only the matches under it.
 - The inbox's picker: Enter with nothing picked picks the selected node, as Space would
   (`--enter-picks-selection`, `pick_files(enter_picks_selection=True)`).

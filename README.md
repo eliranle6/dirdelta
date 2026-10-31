@@ -111,7 +111,7 @@ them, with "Nothing" selected first:
   contents as one in the sorted tree says so, highlighted ("a copy: it may be removed"), Claude is
   told, and may recommend removing it: "Remove 3 of the 5 files that are copies of files in X" (by their contents, whatever
   Claude says; asked twice).
-  Local files' hashes are kept in `~/.cache/dirdelta/hashes.json`, so a file is read once.
+  Local files' hashes are kept in `~/.cache/dirdelta/hashes.sqlite`, so a file is read once.
 - Moving: to Claude's dir (its recommendation) or to a dir you pick in the sorted tree, under the
   file's own name, Claude's, or one you type (for one file: it starts as Claude's, or its own, to
   edit): "Move the N files to Claude's recommendation" (its dir and name; naming the dir, when they
