@@ -53,6 +53,9 @@ def run(replicas):
         slots = {slot_label(name, path): index for index, (name, path) in enumerate(zip('AB', chosen))}
         favorites = {favorite_label(*pair, known=replicas): pair for pair in replicas.favorites}
         recent = {recent_label(*pair, known=replicas): pair for pair in replicas.recent()}
+        # How fresh each is, in colors (see styled_pair())
+        pair_texts = {label: styled_pair(label, pair[0], pair[1], replicas)
+                      for label, pair in list(favorites.items()) + list(recent.items())}
         pairs = dict(favorites, **recent)
         sorts = {sort_label(*sort): Sort(*sort) for sort in replicas.sorts}
         sections = [(SYNC_SECTION, list(slots) + list(favorites)), (RECENT_SYNCS_SECTION, list(recent)),
@@ -66,6 +69,7 @@ def run(replicas):
         options.append(blank_line(len(options)))
         headings = {option: picker.Skipped(option)
                     for option in [heading for heading, _ in sections] + [option for option in options if not option.strip()]}
+        headings.update(pair_texts)
         option = picker.pick_option(options + [QUIT],
                                     header='Choose the two replicas to sync, or an inbox to sort',
                                     shown_as=lambda: headings, selected=options[1])
@@ -188,6 +192,56 @@ def _time(iso_time):
     return ('%s %s' % (_date(date), hours)).strip()
 
 
+# The colors of how fresh what's known is (when a replica was last synced, Drive's file list last
+# read): today, this week, before
+FRESH, RECENT, OLD = 'green', 'yellow', 'red'
+# What's before a pair's path in the menu: when it was last synced, in its freshness's color, and
+# for a Drive one, when Drive's file list was last read
+SYNCED_MARK = '\u25cf'
+CACHE_MARK = '\u2601'
+
+
+def freshness(when):
+    """The color of how long ago when (a datetime, or 'YYYY-MM-DD HH:MM' as replicas.json keeps
+    times) was: FRESH today, RECENT this week, OLD before; None if it's not known"""
+    if not when:
+        return None
+    if isinstance(when, str):
+        try:
+            when = datetime.datetime.strptime(when[:16], '%Y-%m-%d %H:%M')
+        except ValueError:
+            return None
+    today = datetime.date.today()
+    if when.date() >= today:
+        return FRESH
+    return RECENT if when.date() > today - datetime.timedelta(days=7) else OLD
+
+
+def cache_time():
+    """When Drive's file list was last read (its cache last written), or None"""
+    try:
+        return datetime.datetime.fromtimestamp(os.path.getmtime(drivecache.FILE_LIST_CACHE))
+    except OSError:
+        return None
+
+
+def styled_pair(label, path_a, path_b, known):
+    """A pair's menu label (label, ending with pair_label()'s) as it's shown: each path after a mark
+    in the color of when it was last synced (grey: never, as far as known), and a Drive one's after
+    one in the color of when Drive's file list was read"""
+    def marks(path):
+        info = known.info_at(path) if known is not None else None
+        parts = [(SYNCED_MARK + " ", freshness((info or {}).get('seen')) or 'grey')]
+        if paths.is_cloud_path(path):
+            parts.append((CACHE_MARK + " ", freshness(cache_time()) or 'grey'))
+        return parts
+    pair = pair_label(path_a, path_b, known)
+    head = label[:len(label) - len(pair)] if label.endswith(pair) else label
+    a_text = '%s%s' % (path_a, _updated(known, path_a))
+    return picker.styled([(head, None)] + marks(path_a) + [(a_text + " <-> ", None)] + marks(path_b) +
+                         [(pair[len(a_text) + 5:], None)])
+
+
 def known_paths(replicas):
     """The paths of the replicas known (replicas', a Replicas), each at the path it was last seen at,
     the latest updated first"""
@@ -197,9 +251,10 @@ def known_paths(replicas):
             for identity, info in sorted(replicas.known.items(), key=lambda item: last_date(item[1]), reverse=True)]
 
 
-def known_lines(info):
+def known_lines(info, styled=False):
     """The lines of what's known of a replica (its info, see replicas.Replicas.known): its log's
-    last entry, and when it was last synced and changed"""
+    last entry, and when it was last synced and changed (with styled, when it was synced in its
+    freshness's color, see freshness())"""
     lines = []
     entry = info.get('last_entry')
     if entry:
@@ -208,12 +263,17 @@ def known_lines(info):
                                                 ' - ' + text[0] if text[0] else '',
                                                 ' (+%d more line%s)' % (len(text) - 1, 's' if len(text) > 2 else '')
                                                 if len(text) > 1 else ''))
-    else:
-        lines.append('  Last update: (no %s)' % (replicalog.LOG_NAME,))
+    # (None said without a log: dirdelta keeps none)
     synced = ['synced %s' % (_time(info['seen']),)] if info.get('seen') else []
     synced += ['changed by dirdelta %s' % (_time(info['changed']),)] if info.get('changed') else []
     if synced:
-        lines.append('  ' + '; '.join(synced).capitalize())
+        line = '  ' + '; '.join(synced).capitalize()
+        if styled and info.get('seen'):
+            first = '  Synced %s' % (_time(info['seen']),)
+            line = picker.styled([('  ', None), (SYNCED_MARK + ' ', freshness(info['seen'])),
+                                  (first[2:], freshness(info['seen'])),
+                                  (line[len(first):], None)])
+        lines.append(line)
     return lines
 
 

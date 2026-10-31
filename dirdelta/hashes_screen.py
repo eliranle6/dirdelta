@@ -203,43 +203,86 @@ def dashboard(replica_trees=(), known=None, other_paths=()):
             known = None
     items = [(tree.displayname(), tree) for tree in replica_trees]
     items += [(path, None) for path in other_paths if path not in dict(items)]
+    # The replicas, then the inboxes (files waiting to be sorted, not replicas), each under a heading
+    inboxes = {inbox for inbox, _ in known.sorts} if known is not None else set()
+    roots = {root for _, root in known.sorts} if known is not None else set()
+    items = ([item for item in items if item[0] not in inboxes or item[0] in roots] +
+             [item for item in items if item[0] in inboxes and item[0] not in roots])
+    inbox_names = {name for name, _ in items if name in inboxes and name not in roots}
     jobs = list(_jobs_by_name(items).values())
     names = paths.short_names([name for name, _ in items])
     options, shown = [], {}
-    for name, tree in items:
-        job = _job_of(name, tree)
-        options += [_HEADING % (name,), _INFO % (name,)]
-        shown[_HEADING % (name,)] = picker.Skipped(_HEADING % ("%s: %s" % (names[name], name)
-                                                                if names[name] != name else name,))
-        info = known.info_at(name) if known is not None else None
-        known_lines = choose_replicas.known_lines(info) if info else ["  Never synced before"]
-        if info and not paths.is_cloud_path(name) and not replicalog.is_disk_connected(
-                next((identity for identity, other in known.known.items() if other is info), '')):
-            known_lines.append("  Its disk isn't connected now")
-        for number, line in enumerate(known_lines):
-            options.append(_KNOWN % ("%d %s" % (number, name),))
-            shown[options[-1]] = picker.Skipped(line)
-        if job is not None:
-            options += [_BAR % (name,), _STATE % (name,), _TOGGLE % (name,), _FILES % (name,), _RESCAN % (name,)]
-        elif isinstance(tree, clouddirtree.CloudDirTree):
-            nr_files, size, first, note = _drive_lines(tree)
-            shown[_INFO % (name,)] = picker.Skipped("  %s, %s%s" % (_files(nr_files), elsewhere.format_size(size),
-                                                                      _cache_age()))
-            options += [_DRIVE % (name,), _DRIVE_NOTE % (name,)]
-            shown[_DRIVE % (name,)] = picker.Skipped(first)
-            shown[_DRIVE_NOTE % (name,)] = picker.Skipped(note)
-        elif paths.is_cloud_path(name):
-            shown[_INFO % (name,)] = picker.Skipped("  In Google Drive: its files and Drive's hashes are "
-                                                     "counted when it's synced or sorted")
-        else:
-            kept = hashcache.count_under(os.path.realpath(name))
-            shown[_INFO % (name,)] = picker.Skipped(
-                "  Hashes kept of %s (as of when they were hashed); how many are left is counted when it's "
-                "synced or sorted" % (_files(kept),))
+    sections = [(REPLICAS_HEADING, [item for item in items if item[0] not in inbox_names]),
+                (INBOXES_HEADING, [item for item in items if item[0] in inbox_names])]
+    blank = 0
+    def add_blank():
+        nonlocal blank
+        blank += 1
+        options.append(' ' * blank)
+        shown[options[-1]] = picker.Skipped('')
+    # A heading for each only when there are both
+    has_headings = all(section for _, section in sections)
+    for heading, section in sections:
+        if section and has_headings:
+            if options:
+                add_blank()
+            options.append(heading)
+            shown[heading] = picker.Skipped(picker.styled([(heading, 'bold,blue' if heading == REPLICAS_HEADING else 'bold,magenta')]))
+        for item in section:
+            if options and options[-1] != heading:
+                # Each replica apart
+                add_blank()
+            _add_replica(item, options, shown, known, names)
+    _finish_dashboard(items, options, shown, names, jobs)
+
+
+REPLICAS_HEADING = '\u2550\u2550 Replicas \u2550\u2550'
+INBOXES_HEADING = '\u2550\u2550 Inboxes (files waiting to be sorted) \u2550\u2550'
+
+
+def _add_replica(item, options, shown, known, names):
+    """The dashboard's options of a replica (item: (name, tree or None))"""
+    name, tree = item
+    job = _job_of(name, tree)
+    options += [_HEADING % (name,), _INFO % (name,)]
+    shown[_HEADING % (name,)] = picker.Skipped(_HEADING % ("%s: %s" % (names[name], name)
+                                                            if names[name] != name else name,))
+    info = known.info_at(name) if known is not None else None
+    known_lines = choose_replicas.known_lines(info, styled=True) if info else ["  Never synced before"]
+    if info and not paths.is_cloud_path(name) and not replicalog.is_disk_connected(
+            next((identity for identity, other in known.known.items() if other is info), '')):
+        known_lines.append("  Its disk isn't connected now")
+    for number, line in enumerate(known_lines):
+        options.append(_KNOWN % ("%d %s" % (number, name),))
+        shown[options[-1]] = picker.Skipped(line)
+    if job is not None:
+        options += [_BAR % (name,), _STATE % (name,), _TOGGLE % (name,), _FILES % (name,), _RESCAN % (name,)]
+    elif isinstance(tree, clouddirtree.CloudDirTree):
+        nr_files, size, first, note = _drive_lines(tree)
+        # When Drive's file list was read, in its freshness's color
+        shown[_INFO % (name,)] = picker.Skipped(picker.styled([
+            ("  %s, %s" % (_files(nr_files), elsewhere.format_size(size)), None),
+            (_cache_age(), choose_replicas.freshness(choose_replicas.cache_time()))]))
+        options += [_DRIVE % (name,), _DRIVE_NOTE % (name,)]
+        shown[_DRIVE % (name,)] = picker.Skipped(first)
+        shown[_DRIVE_NOTE % (name,)] = picker.Skipped(note)
+    elif paths.is_cloud_path(name):
+        shown[_INFO % (name,)] = picker.Skipped("  In Google Drive: its files and Drive's hashes are "
+                                                 "counted when it's synced or sorted")
+    else:
+        kept = hashcache.count_under(os.path.realpath(name))
+        shown[_INFO % (name,)] = picker.Skipped(
+            "  Hashes kept of %s (as of when they were hashed); how many are left is counted when it's "
+            "synced or sorted" % (_files(kept),))
+
+
+
+def _finish_dashboard(items, options, shown, names, jobs):
+    """Show the dashboard of options (see dashboard()), until Back"""
     options.append(BACK)
-    header = ("What's known of each replica, and the hashes of its files. A local one's are worked out "
-              "here (SHA-1, as Drive's), each file read once, at the lowest priority, and kept in %s." %
-              (hashcache.CACHE_FILE,))
+    header = ("Replicas: when synced, and their files' hashes\n\n"
+              "A local one's hashes are worked out here (SHA-1, as Drive's), each file read once, at the lowest "
+              "priority, and kept in %s." % (hashcache.CACHE_FILE,))
 
     def shown_now():
         now = dict(shown, **_jobs_shown(items, names))

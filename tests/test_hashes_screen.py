@@ -180,7 +180,7 @@ class DashboardTest(unittest.TestCase):
         self.dashboard(job, [hashes_screen.BACK])
         shown = self.shown
         self.assertEqual(shown[hashes_screen._INFO % ('/photos',)].text, "  10 files, 2.0 KB")
-        self.assertIn("  Synced 30.10.2026 09:05", [option.text for option in shown.values()
+        self.assertIn("  ● Synced 30.10.2026 09:05", [picker.unstyled(option.text) for option in shown.values()
                                                    if isinstance(option, (picker.Disabled, picker.Skipped))])
         self.assertIn("Hashes: [", shown[hashes_screen._BAR % ('/photos',)].text)
         self.assertIn("50%  4 of 10 files", shown[hashes_screen._BAR % ('/photos',)].text)
