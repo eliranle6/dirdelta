@@ -177,7 +177,7 @@ One "segments" format, one producer and one parser. (A JSON-lines protocol over 
 instead of `--updates`/`--preview`/`--selection`/`--notify-fd` + two temp files would be
 cleaner still, but it's an L change on both sides for little user-visible gain.)
 
-## 21. C++: two scanners in PathTree (M, low-moderate)
+## 21. C++: two scanners in PathTree (M, low-moderate) — find waited for by its pid, from PATH (2026-11-01); one scanner not done
 `update_from_filesystem` fork/execs a hard-coded `/usr/bin/find`, sends stderr to a tmpfile,
 then `wait(nullptr)`, which reaps *any* child rather than find's pid; `load_children` (lazy)
 uses `std::filesystem::directory_iterator`. One `std::filesystem` scan would drop the subprocess
