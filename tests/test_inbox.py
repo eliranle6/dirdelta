@@ -259,13 +259,15 @@ class InboxSortTest(unittest.TestCase):
             "Move it to a dir you pick: %s/<a dir you pick>/a.txt" % (self.root,),
             "Move it to a dir you pick, under a name you type: %s/<a dir you pick>/<a name you type>" % (self.root,),
             "Copy it to a dir you pick (keeping it in the inbox): %s/<a dir you pick>/a.txt" % (self.root,),
-            "Remove it from %s" % (self.inbox,)])
+            "Remove it from %s" % (self.inbox,),
+            # What the picker's keys do on it (a local inbox isn't read from Drive)
+            "Open it with its program (or Ctrl-X: the selected one)"])
         # One file: its name in the header
         self.assertEqual(self.pick_option.call_args.kwargs['header'], "a.txt, in %s: what to do with it?" % (self.inbox,))
         # Each colored by what it does
         colors = self.pick_option.call_args.kwargs['shown_as']()
         self.assertEqual([colors[option].color for option in options[1:]],
-                         ['magenta', 'magenta', 'blue', 'blue', 'cyan', 'red'])
+                         ['magenta', 'magenta', 'blue', 'blue', 'cyan', 'red', 'green'])
         # And below the menu, what it does and where to, and where each part of the path is from
         lines = self.pick_option.call_args.kwargs['previews_below'][options[3]]
         self.assertEqual(lines[0], picker.segments([(" MOVE ", 'blue'), (" ", None), (self.root + '/', None),
@@ -412,15 +414,56 @@ class InboxSortTest(unittest.TestCase):
         self.assertFalse(any("a name you type" in option for option in self.pick_option.call_args.args[0]))
 
     def test_ctrl_x_opens_the_selected_file(self):
+        with mock.patch('dirdelta.opening.Opener.open_in_background') as open_in_background:
+            self.sort([None], [])
+            files = ['a.txt', 'b.jpg', 'trip/c.jpg']
+            self.pick_files.call_args.kwargs['on_notify']('\x18', 'trip/c.jpg', ['a.txt'])
+        open_in_background.assert_called_once_with(['trip/c.jpg'], files)
+
+    def test_what_opening_says_is_on_the_bottom_line(self):
         sorter = Sort(self.inbox, self.root)
-        with mock.patch('subprocess.Popen') as popen:
-            sorter._open('trip/c.jpg', ['a.txt', 'b.jpg', 'trip/c.jpg'])
+        with mock.patch('dirdelta.opening.subprocess.Popen') as popen:
+            sorter._opener.open(['trip/c.jpg'], ['trip/c.jpg'])
         self.assertEqual(popen.call_args.args[0], ['xdg-open', os.path.join(self.inbox, 'trip', 'c.jpg')])
-        self.assertTrue(popen.call_args.kwargs['start_new_session'])
         self.assertEqual(sorter._shown_as([])[''], 'Opened c.jpg')
-        with mock.patch('subprocess.Popen', side_effect=FileNotFoundError('no xdg-open')):
-            sorter._open('a.txt', ['a.txt'])
-        self.assertEqual(sorter._shown_as([])[''], "Couldn't open a.txt: no xdg-open")
+
+    def test_open_in_the_menu_opens_the_picked_files(self):
+        with mock.patch('dirdelta.opening.Opener.open_in_background') as open_in_background:
+            self.sort([['a.txt', 'b.jpg'], None], ['Open the 2 files with their programs'])
+        open_in_background.assert_called_once_with(['a.txt', 'b.jpg'], ['a.txt', 'b.jpg'])
+        # Picked as they were
+        self.assertEqual(self.pick_files.call_args.kwargs['picked'], ['a.txt', 'b.jpg'])
+
+    def test_too_many_to_open_arent_offered_to(self):
+        with mock.patch('dirdelta.opening.MAX_OPENED', 2):
+            self.sort([['a.txt', 'b.jpg', 'trip/c.jpg'], None], [NOTHING])
+        self.assertFalse(any(option.startswith('Open') for option in self.pick_option.call_args.args[0]))
+
+    def test_read_anew_in_the_menu_of_a_drive_inbox_reads_the_selected_folder(self):
+        cache = os.path.join(self.tmpdir, 'files.txt')
+        with open(cache, 'w') as f:
+            f.write(json.dumps({'myDriveRootId': 'ROOT'}) + '\n')
+            for cloud_id, name, parent in (('me', 'me', 'ROOT'), ('in', 'in', 'me'), ('trip', 'trip', 'in'),
+                                           ('sorted', 'sorted', 'me')):
+                f.write(json.dumps({'id': cloud_id, 'name': name, 'parents': [parent],
+                                    'mimeType': 'application/vnd.google-apps.folder'}) + '\n')
+            f.write(json.dumps({'id': 'c', 'name': 'c.jpg', 'parents': ['trip'], 'size': '3',
+                                'mimeType': 'image/jpeg'}) + '\n')
+        picks = [picker.Picked('', 'trip/c.jpg', ['trip/c.jpg']), None]
+        with mock.patch('dirdelta.drivecache.FILE_LIST_CACHE', cache), \
+                helpers.scripted_files_picker(lambda relpaths: picks.pop(0)) as pick_files, \
+                helpers.answering_option_picker(['Read cloud/me/in/trip/ anew from Google Drive']) as pick_option, \
+                mock.patch('dirdelta.interactive_dir_sync.refresh_replica') as refresh:
+            sorter = Sort('cloud/me/in', 'cloud/me/sorted')
+            sorter.run()
+        # As r does: its folder is the one read (see CloudDirTree.refresh_from_drive())
+        refresh.assert_called_once_with(sorter._inbox_tree, 'in/trip/c.jpg')
+        options = pick_option.call_args.args[0]
+        self.assertEqual(options[-1], 'Read cloud/me/in/trip/ anew from Google Drive (or r)')
+        # Back to the picker, as it was
+        self.assertEqual(pick_files.call_args.kwargs['picked'], ['trip/c.jpg'])
+        self.assertEqual(pick_files.call_args.kwargs['selected'], 'trip/c.jpg')
+
     def sent_previews(self, pick_files_call):
         """What a picker's previews sent it first (then the picker is gone)"""
         sent = {}

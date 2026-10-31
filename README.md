@@ -76,7 +76,7 @@ error says to start Windows and shut it down fully.
 
 Its sections, each under a grey heading: "Sync two replicas" (the two slots and the favorites),
 "Recent syncs", "Sort an inbox into a sorted tree" (a new sort: choose the inbox, then the sorted
-tree), and "Recent inbox sorts".
+tree), and "Recent inbox sorts", with a blank line between them (and before Quit).
 
 ### Sorting an inbox
 
@@ -92,7 +92,7 @@ them, with "Nothing" selected first:
 - `Ctrl-I` in the picker, on the picked files (or else the selected file or dir): all of what's
   below, describing them and saying where they go, in the background.
 - `Ctrl-X` in the picker opens the selected file with its program (`xdg-open`), as a double-click
-  would. A Drive file is downloaded first, into `~/.cache/dirdelta/downloads` (also where the files
+  would (and "Open" in the menu opens the picked ones, up to 10; a sync's picker has both too). A Drive file is downloaded first, into `~/.cache/dirdelta/downloads` (also where the files
   Claude reads are downloaded to), so it's downloaded once (the least recently used go beyond 2 GB).
 - "Describe N files with Claude": a short description of each (at most 10 words, by Claude Haiku, which reads
   the files), shown after its name in the picker (`a.txt  [claude: a shopping list]`), and searchable (`/claude:`
@@ -181,7 +181,9 @@ column). A Rename compares the contents of all the picked files first, so it mov
 surely the file. `Enter` then asks what to do with the picked files, with
 "Nothing" selected first: copy them to B, remove them from A, or, for the ones whose match in B is
 surely them, rename: move B's match to the file's path, or the file to the match's (greyed out
-when it can't be done). A confirmation follows, with No selected (a removal asks a second time,
+when it can't be done); and what the picker's keys do, so they're all in the menu too: open them
+with their programs (`Ctrl-X` opens the selected one, see "Sorting an inbox"), and, with a cloud
+replica, read the selected folder anew from Drive (`r`). A confirmation follows, with No selected (a removal asks a second time,
 "Are you sure?", also with No selected): No takes you back to the picker, with the same files
 picked; Yes goes ahead. Its progress fills the screen under a top line saying what's being done
 (and over a status bar saying whether it's working, done or stopped, and a row of the keys);

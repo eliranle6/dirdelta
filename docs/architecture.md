@@ -90,7 +90,9 @@ for the inbox. Each kind is a section under a heading
 (a `picker.Disabled` option, so it can't be picked; the menu starts on the
 first slot, `pick_option(selected=...)`): Sync two replicas (the slots and the
 favorites), Recent syncs, Sort an inbox, Recent inbox sorts; a section with
-nothing in it has no heading. Choosing the sorted tree offers the
+nothing in it has no heading. A blank line (also a `picker.Disabled` option: spaces, a different
+number of them each, `blank_line()`, so each is an option of its own) comes between sections, and
+before Quit. Choosing the sorted tree offers the
 replicas the user knows first (`known_replicas()`: the favorites', the
 recent pairs', the recent sorts' trees).
 
@@ -118,10 +120,12 @@ then `ai.recommend()`; its Drive downloads and the screen's Drive changes one
 at a time, `_drive_lock`), from `Ctrl-I` (`pick_files(notify_keys='\t\x18')`,
 treepicker's `--notify`, `_on_key()`: the picked files, or else the selected file or dir's;
 describing and placing) or the menu (Describe: describing only; Ask where:
-both); quitting waits for it (`_finish_describing()`). `Ctrl-X` (`OPEN_KEY`)
-opens the selected file (`open_in_background()`: `xdg-open` in a session of its own,
-a Drive file downloaded first by `_downloaded()`, through `downloads.get()`;
-the bottom line says how it went, `_open_note`). Enter (with none picked, the
+both); quitting waits for it (`_finish_describing()`). `Ctrl-X` (`OPEN_KEY`, `opening.KEY`)
+opens the selected file (`open_in_background()`, an `opening.Opener`: `xdg-open` in a session of
+its own, a Drive file downloaded first, through `downloads.get()`; the bottom line says how it
+went, `Opener.status()`); a sync's picker has it too. Every key that acts on the selection is in
+the action menu too (at its end): Open (the picked files, at most `opening.MAX_OPENED`), and for a
+Drive inbox "Read ... anew from Google Drive" (`r`'s; `_act()` returns `REFRESH_KEY` for it). Enter (with none picked, the
 selection: `pick_files(enter_picks_selection=True)`, treepicker's
 `--enter-picks-selection`) → `_act()`, the action menu
 (`NOTHING` first): describe, ask where they go, move (to Claude's dir, or a
@@ -474,7 +478,11 @@ took ~2.5s; the picker now opens 0.2s after the diff).
   into a read-only dir or within Drive (`can_copy()`), Remove or Rename in a
   read-only one (`is_writable()`), Rename for picks with no sure match
   (`elsewhere.sure_matches()`; a Google file or a `___DUP__` one can't be
-  moved, `cant_move()`) → its confirmation (`pick_option(['No', 'Yes'])`, No
+  moved, `cant_move()`); then what the picker's keys do on the selection, so
+  each is in the menu too: Open (`opening.Opener`, the picked files; `Ctrl-X`
+  opens the selected one, a `--notify` key), and with a cloud replica Read
+  anew from Drive (`r`'s: `_act()` returns `REFRESH_KEY`, and `browse()`
+  does what the key does) → its confirmation (`pick_option(['No', 'Yes'])`, No
   first; a removal a second time, "Are you sure?", `[No, CONFIRM_SURE]`) → act
   (on the progress screen) → back to the picker where it was (the selection,
   or the closest dir still shown, `_shown()`), the diff found again after a

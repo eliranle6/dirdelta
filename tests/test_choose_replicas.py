@@ -22,13 +22,16 @@ class ChooseReplicasTest(unittest.TestCase):
         self.addCleanup(patcher.stop)
         self.known = replicas.Replicas()
         self.menus = []
+        self.raw_menus = []
 
     def run_menu(self, answers, dir_picks=(), tree_picks=()):
         """Run it, answering each menu with the next of answers, and each local and cloud dir pick
         with the next of dir_picks and tree_picks"""
         answers, dir_picks, tree_picks = list(answers), list(dir_picks), list(tree_picks)
         def pick_option(options, header='', **kwargs):
-            self.menus.append(options)
+            # Without the blank lines between the sections (see test_blank_lines_between_the_sections)
+            self.raw_menus.append(options)
+            self.menus.append([option for option in options if option.strip()])
             self.kwargs = kwargs
             return answers.pop(0)
         with mock.patch('dirdelta.picker.pick_option', side_effect=pick_option), \
@@ -45,12 +48,25 @@ class ChooseReplicasTest(unittest.TestCase):
 
     def test_the_headings_cant_be_picked_and_the_first_slot_is_selected(self):
         self.run_menu(['Quit'])
-        self.assertEqual(sorted(self.kwargs['shown_as']()),
+        self.assertEqual(sorted(option for option in self.kwargs['shown_as']() if option.strip()),
                          sorted([SYNC_SECTION, choose_replicas.RECENT_SYNCS_SECTION, SORT_SECTION,
                                  choose_replicas.RECENT_SORTS_SECTION, choose_replicas.REPLICAS_SECTION]))
         self.assertTrue(all(isinstance(shown, choose_replicas.picker.Disabled)
                             for shown in self.kwargs['shown_as']().values()))
         self.assertEqual(self.kwargs['selected'], '  Replica A: ' + NONE)
+
+    def test_blank_lines_between_the_sections(self):
+        self.known.record('/a', '/b')
+        self.run_menu(['Quit'])
+        menu = self.raw_menus[0]
+        blanks = [option for option in menu if not option.strip()]
+        self.assertEqual(menu, [SYNC_SECTION, '  Replica A: ' + NONE, '  Replica B: ' + NONE, blanks[0],
+                                choose_replicas.RECENT_SYNCS_SECTION, '  /a <-> /b', blanks[1],
+                                SORT_SECTION, SORT, blanks[2], 'Quit'])
+        # Each its own option, and none can be picked
+        self.assertEqual(len(set(blanks)), 3)
+        shown = self.kwargs['shown_as']()
+        self.assertTrue(all(isinstance(shown[blank], choose_replicas.picker.Disabled) for blank in blanks))
 
     def test_two_local_dirs(self):
         chosen = self.run_menu(['  Replica A: ' + NONE, 'Local disk',

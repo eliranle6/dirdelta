@@ -38,6 +38,12 @@ LOCAL_ROOT = '/'
 CLOUD_ROOT = 'cloud'
 
 
+def blank_line(number):
+    """A blank line of the menu, between its sections (shown in grey, so it can't be picked):
+    spaces, number of them and one, so each is an option of its own"""
+    return ' ' * (number + 1)
+
+
 def run(replicas):
     """Let the user choose two replicas, from replicas' (a Replicas) favorites and history or each
     on its own. Returns their paths (a, b); or a Sort, if they chose an inbox to sort (a new one, or
@@ -52,8 +58,14 @@ def run(replicas):
         sections = [(SYNC_SECTION, list(slots) + list(favorites)), (RECENT_SYNCS_SECTION, list(recent)),
                     (SORT_SECTION, [SORT]), (RECENT_SORTS_SECTION, list(sorts)),
                     (REPLICAS_SECTION, [KNOWN_LIST] if replicas.known else [])]
-        options = [option for heading, section in sections if section for option in [heading] + section]
-        headings = {heading: picker.Disabled(heading) for heading, _ in sections}
+        options = []
+        for heading, section in sections:
+            if section:
+                options += ([blank_line(len(options))] if options else []) + [heading] + section
+        # Quit apart from the last section too
+        options.append(blank_line(len(options)))
+        headings = {option: picker.Disabled(option)
+                    for option in [heading for heading, _ in sections] + [option for option in options if not option.strip()]}
         option = picker.pick_option(options + [QUIT],
                                     header='Choose the two replicas to sync, or an inbox to sort',
                                     shown_as=lambda: headings, selected=options[1])

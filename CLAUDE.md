@@ -150,7 +150,7 @@ module:
 PYTHONPATH=.:tests .venv/bin/python3 -m unittest test_interactive_dir_sync -v
 ```
 
-Every module has a test file (542 tests, all passing as of 2026-10-31) except
+Every module has a test file (557 tests, all passing as of 2026-10-31) except
 the thin wiring in `main.py`/`dirsync_main.py`, covered only by running the
 app. Shared fakes:
 - `tests/helpers.py`: `scripted_option_picker` / `scripted_tree_picker` /
@@ -176,8 +176,8 @@ app. Shared fakes:
   `replicas.load`/`replicas.save`. A manual run that shouldn't touch it can set
   `HOME` to a scratch dir (but that hides the real Drive cache too).
 - Nothing is downloaded into the real `~/.cache/dirdelta/downloads`: `tests/helpers.py`
-  points `downloads.DOWNLOADS_DIR` at a temp dir. `test_inbox` patches `subprocess.Popen`
-  for `Ctrl-X`'s `xdg-open`; a manual run can put a fake `xdg-open` first on `PATH`.
+  points `downloads.DOWNLOADS_DIR` at a temp dir. `test_opening` patches `subprocess.Popen`
+  for `Ctrl-X`'s `xdg-open` (`test_inbox` and `test_interactive_dir_sync` patch `Opener.open_in_background`); a manual run can put a fake `xdg-open` first on `PATH`.
 - Nothing is mounted, and the real `~/.config/dirdelta/mounts.json` isn't read or
   written: `tests/helpers.py` points `mounts.MOUNTS_FILE` at a temp file, and
   `test_mounts` fakes `findmnt`, `lsblk`, `mount` (`subprocess.run`),

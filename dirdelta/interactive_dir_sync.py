@@ -15,6 +15,7 @@ from dirdelta import hashes_screen
 from dirdelta import hashing
 from dirdelta import localdiskdirtree
 from dirdelta import messages
+from dirdelta import opening
 from dirdelta import picker
 
 
@@ -86,6 +87,10 @@ class InteractiveDirSync(object):
     # theirs
     RENAME_IN_DST = 'rename in dst'
     RENAME_IN_SRC = 'rename in src'
+    # What the picker's keys do on the selected file, in the menu too: opening it (Ctrl-X), reading
+    # its folder anew from Drive (r)
+    OPEN = 'open'
+    READ_ANEW = 'read anew'
     # The label of each action's confirmation, so what it's for shows at a glance (magenta, not
     # red: red is LIVE's)
     LABELS = {COPY: ('COPY', 'blue'), REMOVE: ('REMOVE', 'magenta'),
@@ -121,6 +126,8 @@ class InteractiveDirSync(object):
         # Whether the replicas' files changed here (copied, removed, moved, or read anew from
         # Drive), so what each lacks may have
         self.has_changed = False
+        # Opens src's files (Ctrl-X, or Open in the action menu)
+        self._opener = opening.Opener(src)
 
     def browse(self):
         """Let the user pick some of the files of src that dst lacks, then choose what to do with
@@ -136,7 +143,7 @@ class InteractiveDirSync(object):
         header = ("Files in %s, which are not in %s. Pick some, then choose what to do with them." %
                   (self._src.displayname(), self._dst.displayname()))
         keys = (self.REFRESH_KEY if clouds else '') + hashes_screen.KEY
-        key_hints = ([('Enter', 'choose what to do')] +
+        key_hints = ([('Enter', 'choose what to do'), opening.KEY_HINT] +
                      ([(self.REFRESH_KEY, 'read the folder anew from Drive')] if clouds else []) +
                      [hashes_screen.KEY_HINT])
         picked, selected = [], None
@@ -145,11 +152,15 @@ class InteractiveDirSync(object):
             if src_job is not None:
                 # The files shown first: they're the ones to compare
                 src_job.first(missing)
-            marks = hashes_screen.Marks(src_job, missing, jobs) if jobs else None
+            marks = hashes_screen.Marks(src_job, missing, jobs, extra=self._opener.status_parts) if jobs else None
+            files = set(missing)
             try:
                 chosen = picker.pick_files(
                     self._src.displayname(), missing, header=header, picked=picked,
-                    keys=keys, selected=selected, shown_as=marks, key_hints=key_hints,
+                    keys=keys, selected=selected, key_hints=key_hints,
+                    shown_as=marks or (lambda: {'': picker.status(self._opener.status_parts())}),
+                    notify_keys=opening.KEY,
+                    on_notify=lambda key, selected, picked: self._opener.open_in_background([selected], files),
                     help_lines=hashes_screen.HELP_LINES if jobs else (),
                     previews=functools.partial(elsewhere.find_previews, missing, self._src, self.dst_index,
                                                checked=self.checked, src_index=self.src_index),
@@ -165,7 +176,12 @@ class InteractiveDirSync(object):
                 hashes_screen.dashboard([self._src, self._dst])
                 picked = chosen.files
                 continue
-            if chosen.key == self.REFRESH_KEY:
+            key = chosen.key
+            if not key:
+                done = self._act(chosen.files, selected)
+                if done == self.REFRESH_KEY:
+                    key = self.REFRESH_KEY
+            if key == self.REFRESH_KEY:
                 done = []
                 for replica in clouds:
                     if refresh_replica(replica, selected):
@@ -175,7 +191,6 @@ class InteractiveDirSync(object):
                         self.checked.clear()
                 is_changed = self.has_changed
             else:
-                done = self._act(chosen.files)
                 if done is None:
                     picked = chosen.files
                     continue
@@ -213,10 +228,16 @@ class InteractiveDirSync(object):
                           'red')
         return missing.relpaths
 
-    def _act(self, relpaths):
+    def _act(self, relpaths, selected=None):
         """Let the user choose what to do with the picked files at relpaths, and do it once they
         confirm. Returns the ones done (in a dry run, the ones it would have done), or None if the
-        user chose nothing (or didn't confirm)."""
+        user chose nothing (or didn't confirm, or opened them); or REFRESH_KEY to read the folder of
+        selected (the picker's selection, a file or a dir; by default the first file) anew from
+        Drive, as the key does."""
+        if selected is None:
+            selected = relpaths[0]
+        clouds = [replica for replica in (self._src, self._dst) if isinstance(replica, clouddirtree.CloudDirTree)]
+        folder = os.path.dirname(selected) if self._src.has_file(selected) else selected
         if not self.dst_index.is_built():
             messages.print_line("Looking for files of the same names in %s..." % (self._dst.displayname(),))
         # The ones that may be in dst, moved or renamed: their contents are compared before a Rename
@@ -241,6 +262,15 @@ class InteractiveDirSync(object):
                                  (_files(nr_renamed_in_src), src_name),
                                  self._cant_rename(self._src, nr_renamed_in_src)),
         }
+        options[self.OPEN] = ("Open %s with %s program%s (or Ctrl-X: the selected one)" %
+                              ("it" if len(relpaths) == 1 else "the " + count,
+                               "its" if len(relpaths) == 1 else "their", "" if len(relpaths) == 1 else "s"),
+                              None if len(relpaths) <= opening.MAX_OPENED else
+                              "can't: more than %d at once" % (opening.MAX_OPENED,))
+        if clouds:
+            options[self.READ_ANEW] = ("Read %s anew from Google Drive (or r)" %
+                                       (' and '.join(os.path.join(replica.displayname(), folder).rstrip('/') + '/'
+                                                     for replica in clouds),), None)
         disabled = {label: picker.Disabled("%s: %s" % (label, reason))
                     for label, reason in options.values() if reason is not None}
         header = ("%s picked in %s, which %s lacks. What to do with them?" %
@@ -250,6 +280,11 @@ class InteractiveDirSync(object):
         action = next((action for action, (label, _) in options.items() if label == answer), None)
         if action is None:
             return None
+        if action == self.OPEN:
+            self._opener.open_in_background(relpaths, relpaths)
+            return None
+        if action == self.READ_ANEW:
+            return self.REFRESH_KEY
         if action in (self.RENAME_IN_DST, self.RENAME_IN_SRC):
             moves = self._renames(action, may_be_there)
             return None if moves is None else self._rename(action, moves)

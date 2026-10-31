@@ -41,8 +41,8 @@ Like fzf: dirdelta starts `treepicker`, which draws on the terminal itself
   through the same `--preview` pipe as the previews' thread.
 - Keys that don't end the picker: `--notify KEYS` with `--notify-fd FD`, each writing the key,
   the selection and the picks (`KEY\0SELECTED\0PICKED...\0\0`) for `pick_files(on_notify=...)`:
-  the inbox's `Ctrl-I` (Tab), which describes files in the background, and `Ctrl-X`, which opens
-  the selected file. And an `--updates` line
+  the inbox's `Ctrl-I` (Tab), which describes files in the background, and `Ctrl-X` (the inbox's
+  and a sync's), which opens the selected file (`opening.py`). And an `--updates` line
   with an empty path is a status, shown as a yellow label ("Claude: describing 2 files"); or, as
   `picker.status()` makes it, several labels each in its color (`\x01COLOR\x01TEXT...`; colors
   include orange), e.g. each replica's hashing ("photos: 63% hashed" in orange).

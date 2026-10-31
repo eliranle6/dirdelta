@@ -156,9 +156,33 @@ class InteractiveDirSyncTest(unittest.TestCase):
         options = self.pick_option.call_args_list[0].args[0]
         self.assertEqual(options[0], NOTHING)
         self.assertEqual([option.split(' ')[0] for option in options[1:]],
-                         ['Copy', 'Remove', 'Rename', 'Rename'])
+                         ['Copy', 'Remove', 'Rename', 'Rename', 'Open'])
         self.assertEqual(self._offered()[1], (['sub/b.txt', 'sub/c.txt'], ['sub/b.txt']))
         self.assertEqual(self.pick_files.call_args.kwargs['selected'], 'sub/c.txt')
+
+    def test_ctrl_x_opens_the_selected_file(self):
+        with mock.patch('dirdelta.opening.Opener.open_in_background') as open_in_background:
+            self._browse([None], [])
+            kwargs = self.pick_files.call_args.kwargs
+            self.assertEqual(kwargs['notify_keys'], '\x18')
+            self.assertIn(('Ctrl-X', 'open'), kwargs['key_hints'])
+            kwargs['on_notify']('\x18', 'sub/c.txt', ['sub/b.txt'])
+        open_in_background.assert_called_once_with(['sub/c.txt'], {'sub/b.txt', 'sub/c.txt'})
+
+    def test_what_opening_says_is_on_the_bottom_line(self):
+        self._browse([None], [])
+        shown_as = self.pick_files.call_args.kwargs['shown_as']
+        with mock.patch('dirdelta.opening.subprocess.Popen') as popen:
+            self.sync._opener.open(['sub/b.txt'], ['sub/b.txt'])
+        self.assertEqual(popen.call_args.args[0], ['xdg-open', os.path.join(self.src_root, 'sub', 'b.txt')])
+        self.assertIn('Opened b.txt', shown_as()[''])
+
+    def test_open_in_the_menu_opens_the_picked_files_and_goes_back_to_them(self):
+        with mock.patch('dirdelta.opening.Opener.open_in_background') as open_in_background:
+            self._browse([picker.Picked('', 'sub', ['sub/b.txt', 'sub/c.txt']), None],
+                         ['Open the 2 files with their programs'])
+        open_in_background.assert_called_once_with(['sub/b.txt', 'sub/c.txt'], ['sub/b.txt', 'sub/c.txt'])
+        self.assertEqual(self._offered()[1], (['sub/b.txt', 'sub/c.txt'], ['sub/b.txt', 'sub/c.txt']))
 
     def test_quitting_the_menu_or_a_confirmation_is_nothing(self):
         for answers in ([None], ['Copy', None], ['Copy', NO]):
@@ -395,6 +419,23 @@ class RefreshKeyTest(unittest.TestCase):
         self.assertEqual(calls[1].args[1], ['a/1.mp3', 'b/3.mp3'])
         self.assertEqual(calls[1].kwargs['picked'], ['a/1.mp3'])
         self.assertEqual(calls[1].kwargs['selected'], 'a')
+
+    def test_read_anew_in_the_menu_refreshes_the_selected_files_folder(self):
+        with helpers.answering_option_picker(['Read cloud/mein/a/ anew from Google Drive']) as pick_option:
+            calls = self.browse(self.cloud, self.local,
+                                [picker.Picked('', 'a/2.mp3', ['a/1.mp3']), None])
+        self.refresh.assert_called_once_with(self.cloud, 'a/2.mp3')
+        self.assertEqual(pick_option.call_args.args[0][-1], 'Read cloud/mein/a/ anew from Google Drive (or r)')
+        self.assertTrue(self.sync.has_changed)
+        self.assertEqual(calls[1].kwargs['picked'], ['a/1.mp3'])
+        self.assertEqual(calls[1].kwargs['selected'], 'a/2.mp3')
+
+    def test_read_anew_isnt_offered_without_drive(self):
+        local = dirtree.DirTree('/other')
+        local.add_file_by_relpath('x.mp3')
+        with helpers.answering_option_picker([NOTHING]) as pick_option:
+            self.browse(local, self.local, [picker.Picked('', 'x.mp3', ['x.mp3']), None])
+        self.assertFalse(any(option.startswith('Read') for option in pick_option.call_args.args[0]))
 
     def test_the_other_replica_is_refreshed_when_its_drives(self):
         self.local.add_file_by_relpath('x/new.mp3')

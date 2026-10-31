@@ -32,6 +32,7 @@ from dirdelta import interactive_dir_sync
 from dirdelta import junk
 from dirdelta import localdiskdirtree
 from dirdelta import messages
+from dirdelta import opening
 from dirdelta import paths
 from dirdelta import picker
 from dirdelta import replicalog
@@ -47,11 +48,8 @@ PREVIEWS_INTERVAL = 0.3
 DESCRIBED_WAIT_INTERVAL = 0.2
 # The key that describes the picked files (or the selected one) with Claude, in the background
 DESCRIBE_KEY = '\t'
-# The key that opens the selected file (Ctrl-X) with its program (xdg-open), a Drive one downloaded
-# first (or found downloaded, see downloads.py), in the background
-OPEN_KEY = '\x18'
-# How long the bottom line says a file was opened, in seconds
-OPENED_SHOWN_FOR = 5
+# The key that opens the selected file (Ctrl-X) with its program (see opening.py)
+OPEN_KEY = opening.KEY
 # How many of a dir's file names Claude is given, so it sees how they're named
 NAMES_PER_DIR = 3
 # What says a file of the inbox is in the sorted tree already, in its preview: highlighted
@@ -76,7 +74,9 @@ ASK = 'claude'
 MOVE = 'move'
 COPY = 'copy'
 REMOVE = 'remove'
-VERB_COLORS = {ASK: 'magenta', MOVE: 'blue', COPY: 'cyan', REMOVE: 'red'}
+OPEN = 'open'
+READ = 'read'
+VERB_COLORS = {ASK: 'magenta', MOVE: 'blue', COPY: 'cyan', REMOVE: 'red', OPEN: 'green', READ: 'yellow'}
 # A part of a destination's path: where it comes from, and its bracket's color and names (the
 # first that fits), e.g. [Claude's dir] (Claude's in magenta, as its options' color)
 SORTED_TREE = ((None), ("sorted tree", "tree"))
@@ -110,6 +110,10 @@ def _join(*relpaths):
 class InboxSort(object):
     """The inbox at inbox_path and the sorted tree at root_path (local dirs, or cloud paths)"""
     NOTHING = "Nothing: back to the files"
+    # What the picker's keys do on the selected file, in the menu too: opening it (Ctrl-X), reading
+    # its folder anew from Drive (r)
+    OPEN = 'open'
+    READ_ANEW = 'read anew'
     DESCRIBE = 'describe'
     RECOMMEND = 'recommend'
     # Moving: to Claude's dir, or to a dir the user picks; under the file's name, Claude's, or one
@@ -211,9 +215,8 @@ class InboxSort(object):
         self._indexing = None
         # The inbox's files that look like junk by their names and sizes (junk.py): {relpath: why}
         self._junk_by_name = {}
-        # What the bottom line says of opening a file (Ctrl-X), and until when (None: while it's
-        # being downloaded)
-        self._open_note = None
+        # Opens the inbox's files (Ctrl-X, or Open in the action menu)
+        self._opener = opening.Opener(self._inbox_tree, self._inbox_rel, self._drive_lock)
 
     # The inbox's files
 
@@ -292,7 +295,12 @@ class InboxSort(object):
                     interactive_dir_sync.refresh_replica(self._inbox_tree, self._full(selected))
                 picked = chosen.files
                 continue
-            done = self._act(chosen.files)
+            done = self._act(chosen.files, selected)
+            if done == self.REFRESH_KEY:
+                with self._drive_lock:
+                    interactive_dir_sync.refresh_replica(self._inbox_tree, self._full(selected))
+                picked = chosen.files
+                continue
             if done is None:
                 picked = chosen.files
                 continue
@@ -343,9 +351,9 @@ class InboxSort(object):
                 for what, count in (("describing", describing), ("placing", placing)) if count]
         status = ("Claude: " + ', '.join(busy) if busy else
                   "Claude: couldn't do %s" % (_files(failed),) if failed else '')
-        note = self._open_note
-        if note is not None and (note[1] is None or time.monotonic() < note[1]):
-            status = note[0] + ("; " + status if status else "")
+        note = self._opener.status()
+        if note:
+            status = note + ("; " + status if status else "")
         shown[''] = (hashes_screen.picker_status(self._views(), [(status, 'yellow')]) if self._jobs() else
                      status)
         return shown
@@ -399,10 +407,16 @@ class InboxSort(object):
             previews[relpath] = lines
         return previews
 
-    def _act(self, relpaths):
+    def _act(self, relpaths, selected=None):
         """Let the user choose what to do with the picked files at relpaths, and do it once they
         confirm. Returns the ones done (moved, copied, removed; in a dry run, the ones it would have
-        done), or None if none were (or Claude was asked: nothing moved)."""
+        done), or None if none were (or Claude was asked, or they were opened: nothing moved); or
+        REFRESH_KEY to read the folder of selected (the picker's selection: a file, or a dir; by
+        default the first file's) anew from Drive, as the key does."""
+        if selected is None:
+            selected = relpaths[0]
+        node = self._inbox_tree.get_node(self._full(selected))
+        folder = selected if node is None or isinstance(node.data, entries.DirEntry) else posixpath.dirname(selected)
         count = _files(len(relpaths))
         undescribed = [relpath for relpath in relpaths
                        if relpath not in self._descriptions and relpath not in self._describing]
@@ -483,18 +497,29 @@ class InboxSort(object):
                                  "Drive's trash" if self.inbox_is_cloud else "the trash"),
                                 None if junky else "not junk", REMOVE, [])),
             (self.REMOVE, ("Remove %s from %s" % (they, self.inbox_path), None, REMOVE, [])),
+            (self.OPEN, ("Open %s with %s program%s (or Ctrl-X: the selected one)" %
+                         (they, "its" if is_one else "their", "" if is_one else "s"),
+                         None if len(relpaths) <= opening.MAX_OPENED else "too many", OPEN, [])),
+            (self.READ_ANEW, ("Read %s/ anew from Google Drive (or r)" % (_join(self.inbox_path, folder),),
+                              None if self.inbox_is_cloud else "not Drive's", READ, [])),
         ])
         options = collections.OrderedDict((action, option) for action, option in options.items() if option[1] is None)
         labels = [self.NOTHING] + [label for label, _, _, _ in options.values()]
         colors = {label: picker.Colored(label, VERB_COLORS[verb]) for label, _, verb, _ in options.values()}
         lines = {label: self._destination_lines(verb, parts, relpaths, removable if action == self.REMOVE_COPIES else
-                                                junky if action == self.REMOVE_JUNK else relpaths)
+                                                junky if action == self.REMOVE_JUNK else
+                                                [(folder or '.') + '/'] if action == self.READ_ANEW else relpaths)
                  for action, (label, _, verb, parts) in options.items()}
         header = ("%s, in %s: what to do with it?" % (name, posixpath.dirname(posixpath.join(self.inbox_path, relpaths[0])))
                   if is_one else "%s picked in %s. What to do with them?" % (count, self.inbox_path))
         answer = picker.pick_option(labels, header=header, title="What to do", shown_as=lambda: colors, label=LABEL,
                                     previews_below=lines)
         action = next((action for action, (label, _, _, _) in options.items() if label == answer), None)
+        if action == self.OPEN:
+            self.open_in_background(relpaths, relpaths)
+            return None
+        if action == self.READ_ANEW:
+            return self.REFRESH_KEY
         if action == self.DESCRIBE:
             self.describe_in_background(undescribed)
             return None
@@ -550,7 +575,10 @@ class InboxSort(object):
             what = (os.path.basename(acted_on[0]) if len(acted_on) == 1 else _files(len(acted_on)))
             text = {ASK: " Claude, about %s, while you go on" % (what,),
                     REMOVE: " %s, from %s%s" % (what, self.inbox_path,
-                                                " (to the trash)" if verb == REMOVE and not self.inbox_is_cloud else "")}
+                                                " (to the trash)" if verb == REMOVE and not self.inbox_is_cloud else ""),
+                    OPEN: " %s, with %s program%s" % (what, "its" if len(acted_on) == 1 else "their",
+                                                      "" if len(acted_on) == 1 else "s"),
+                    READ: " %s, in %s, anew from Google Drive" % (acted_on[0], self.inbox_path)}
             return [picker.segments([(verb_label, VERB_COLORS[verb]), (text.get(verb, ''), None)])]
         parts = _fitting(parts, shutil.get_terminal_size().columns - 1 - picker.display_width(verb_label) - 1)
         path_line = picker.segments([(verb_label, VERB_COLORS[verb]), (" ", None)] +
@@ -808,37 +836,14 @@ class InboxSort(object):
         """A notify key pressed in the picker of files (on another thread): Ctrl-X opens the
         selected file, Ctrl-I asks Claude about the picked ones (or the selected one, or a dir's)"""
         if key == OPEN_KEY:
-            self.open_in_background(selected, files)
+            self.open_in_background([selected], files)
         else:
             self.ask_in_background(picked or [relpath for relpath in files if _is_at_or_under(relpath, selected)])
 
-    def open_in_background(self, relpath, files):
-        """Open the inbox's file at relpath (of files) with its program (xdg-open), as if
-        double-clicked, on a thread of its own: a Drive one is downloaded first (or found
-        downloaded). The bottom line says how it went."""
-        threading.Thread(target=self._open, args=(relpath, files), daemon=True).start()
-
-    def _open(self, relpath, files):
-        name = os.path.basename(relpath) or self.inbox_path
-        try:
-            if not self.inbox_is_cloud:
-                path = os.path.join(self.inbox_path, relpath)
-            elif relpath not in files:
-                raise OSError("a Google Drive folder can't be opened here")
-            else:
-                reason = self._inbox_tree.cant_fetch(self._full(relpath))
-                if reason is not None:
-                    raise OSError(reason)
-                self._open_note = ("Downloading %s to open it..." % (name,), None)
-                with self._drive_lock:
-                    path = self._downloaded(relpath)
-            # Its own session, so it outlives the picker (and dirdelta), and says nothing on its
-            # screen
-            subprocess.Popen(['xdg-open', path], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
-                             stderr=subprocess.DEVNULL, start_new_session=True)
-            self._open_note = ("Opened %s" % (name,), time.monotonic() + OPENED_SHOWN_FOR)
-        except OSError as error:
-            self._open_note = ("Couldn't open %s: %s" % (name, error), time.monotonic() + OPENED_SHOWN_FOR)
+    def open_in_background(self, relpaths, files):
+        """Open the inbox's files at relpaths (of files; the rest are dirs) with their programs, on
+        a thread of its own (see opening.Opener). The bottom line says how it went."""
+        return self._opener.open_in_background(relpaths, files)
 
     def _downloaded(self, relpath):
         """The local path of the inbox's Drive file at relpath, downloaded unless it was (see
