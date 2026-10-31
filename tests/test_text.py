@@ -11,5 +11,11 @@ class FilesTest(unittest.TestCase):
         self.assertEqual(text.files(17427, grouped=True), "17,427 files")
 
 
+class ListedTest(unittest.TestCase):
+    def test_cut_short_saying_how_many_more(self):
+        self.assertEqual(text.listed(['a', 'b', 'c'], 2), ['a', 'b', '  (and 1 more)'])
+        self.assertEqual(text.listed(['a', 'b'], 2), ['a', 'b'])
+
+
 if __name__ == '__main__':
     unittest.main()

@@ -1254,9 +1254,7 @@ class InboxSort(object):
                           dryrun.label(), 'red')
             return None
         lines = ["Move %s to %s/?" % (_files(len(plan)), _join(self.inbox_path, destination))]
-        lines += ["  " + relpath for relpath, _ in plan[:interactive_dir_sync.InteractiveDirSync.MAX_FILES_LISTED]]
-        if len(plan) > interactive_dir_sync.InteractiveDirSync.MAX_FILES_LISTED:
-            lines.append("  (and %d more)" % (len(plan) - interactive_dir_sync.InteractiveDirSync.MAX_FILES_LISTED,))
+        lines += text.listed(["  " + relpath for relpath, _ in plan], interactive_dir_sync.InteractiveDirSync.MAX_FILES_LISTED)
         if dryrun.DRYRUN:
             lines.append(dryrun.NOTE)
         if picker.pick_option([self.CONFIRM_NO, self.CONFIRM_YES], header='\n'.join(lines), title="Sure?",
@@ -1282,9 +1280,7 @@ class InboxSort(object):
         messages.show("Not all were %s" % (what,),
                       ["%d of the %s couldn't be %s (they're still in %s):" % (
                           len(relpaths), _files(count), what, self.inbox_path)] +
-                      ["  " + relpath for relpath in relpaths[:interactive_dir_sync.InteractiveDirSync.MAX_FILES_LISTED]] +
-                      (["  (and %d more)" % (len(relpaths) - interactive_dir_sync.InteractiveDirSync.MAX_FILES_LISTED,)]
-                       if len(relpaths) > interactive_dir_sync.InteractiveDirSync.MAX_FILES_LISTED else []),
+                      text.listed(["  " + relpath for relpath in relpaths], interactive_dir_sync.InteractiveDirSync.MAX_FILES_LISTED),
                       dryrun.label(), 'red')
 
     def _target_cache_key(self, target, size):
@@ -1338,9 +1334,7 @@ class InboxSort(object):
         (Drive's go to its trash anyway), rather than for good."""
         lines = ["Remove %s from %s?" % (_files(len(relpaths)), self.inbox_path)]
         listed = listed or ["  %s" % (relpath,) for relpath in relpaths]
-        lines += listed[:interactive_dir_sync.InteractiveDirSync.MAX_FILES_LISTED]
-        if len(relpaths) > interactive_dir_sync.InteractiveDirSync.MAX_FILES_LISTED:
-            lines.append("  (and %d more)" % (len(relpaths) - interactive_dir_sync.InteractiveDirSync.MAX_FILES_LISTED,))
+        lines += text.listed(listed, interactive_dir_sync.InteractiveDirSync.MAX_FILES_LISTED)
         if dryrun.DRYRUN:
             lines.append(dryrun.NOTE)
         if picker.pick_option([self.CONFIRM_NO, self.CONFIRM_YES], header='\n'.join(lines), title="Sure?",

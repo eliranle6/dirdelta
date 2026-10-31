@@ -470,9 +470,7 @@ class InteractiveDirSync(object):
         listed = (["  %s/ -> %s/ (a dir, with its %s, moved as one)" % (dirpath, new_dirpath, _files(len(its_moves)))
                    for dirpath, new_dirpath, its_moves in dir_moves] +
                   ["  %s -> %s" % move for move in file_moves])
-        lines += listed[:self.MAX_FILES_LISTED]
-        if len(listed) > self.MAX_FILES_LISTED:
-            lines.append("  (and %d more)" % (len(listed) - self.MAX_FILES_LISTED,))
+        lines += text.listed(listed, self.MAX_FILES_LISTED)
         if dryrun.DRYRUN:
             lines.append(dryrun.NOTE)
         answer = picker.pick_option([self.CONFIRM_NO, self.CONFIRM_YES], header='\n'.join(lines),
@@ -505,9 +503,7 @@ class InteractiveDirSync(object):
                                                    self._dst.displayname())
         else:
             question = "Remove %s from %s?" % (_files(len(relpaths)), self._src.displayname())
-        lines = [question] + ["  %s" % (relpath,) for relpath in relpaths[:self.MAX_FILES_LISTED]]
-        if len(relpaths) > self.MAX_FILES_LISTED:
-            lines.append("  (and %d more)" % (len(relpaths) - self.MAX_FILES_LISTED,))
+        lines = [question] + text.listed(["  %s" % (relpath,) for relpath in relpaths], self.MAX_FILES_LISTED)
         lines += (self._src.copy_notes(relpaths) if action == self.COPY else
                   self._src.removal_notes(relpaths))
         if dryrun.DRYRUN:

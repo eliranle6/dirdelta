@@ -1,4 +1,4 @@
-"""Small texts said everywhere, said one way: counts of files"""
+"""Small texts said everywhere, said one way: counts of files, and lists cut short"""
 
 
 def files(count, grouped=False):
@@ -6,3 +6,12 @@ def files(count, grouped=False):
     if count == 1:
         return "1 file"
     return ("{:,} files" if grouped else "{} files").format(count)
+
+
+# How many of a list's lines a screen shows, at most (see listed())
+MAX_LISTED = 10
+
+
+def listed(lines, most=MAX_LISTED):
+    """The first most of lines (e.g. one a file), then '  (and N more)' for the rest, if any"""
+    return list(lines[:most]) + (["  (and %d more)" % (len(lines) - most,)] if len(lines) > most else [])
