@@ -24,7 +24,7 @@ Let `pick_option` accept `(id, label)` items (strings still allowed) plus a `Sep
 item type, and return the id. treepicker already separates node id from tag (`--updates`
 id→text), so it's mostly Python. Removes a class of "rename a label, break a branch" bugs.
 
-## 2. Five `_is_at_or_under` variants, with different semantics (S, high value)
+## 2. Five `_is_at_or_under` variants, with different semantics (S, high value) — fixed 2026-11-01 (`paths.is_at_or_under()`; the inline copies are left)
 `dirtree._is_at_or_under`, `drivecache._is_at_or_under`, `inbox._is_at_or_under`,
 `clouddirtree._is_under`, `clouddirtreefactory._overlap` (+ inline copies in `mounts.unmounted`,
 `elsewhere.Index._is_excluded`, `interactive_dir_sync._shown`). They differ: inbox's returns True

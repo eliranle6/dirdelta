@@ -1485,8 +1485,8 @@ def _relpath_in(relpath, dirpath):
     return relpath[len(dirpath) + 1:] if dirpath else relpath
 
 
-def _is_at_or_under(relpath, dirpath):
-    return not dirpath or relpath == dirpath or relpath.startswith(dirpath + '/')
+# One answer for all (see paths.is_at_or_under()): the root has all
+_is_at_or_under = paths.is_at_or_under
 
 
 def _shown(relpath, files, before=None):

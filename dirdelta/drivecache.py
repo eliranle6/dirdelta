@@ -13,6 +13,7 @@ import os
 import posixpath
 
 from dirdelta import exif
+from dirdelta import paths
 
 FILE_LIST_CACHE = os.path.expanduser('~/.cache/dirman/files.txt')
 
@@ -265,8 +266,8 @@ def count_under(folder_path):
         return None
 
 
-def _is_at_or_under(path, folder_path):
-    return path == folder_path or path.startswith(folder_path.rstrip('/') + '/')
+# One answer for all (see paths.is_at_or_under()): the root has all
+_is_at_or_under = paths.is_at_or_under
 
 
 def _name_problems(folder_path, children):

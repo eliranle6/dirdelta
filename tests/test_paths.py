@@ -23,5 +23,17 @@ class PathsTest(unittest.TestCase):
         self.assertEqual(paths.path_in_cloud('cloud'), '/')
 
 
+
+class IsAtOrUnderTest(unittest.TestCase):
+    def test_relpaths_and_absolute_paths_the_root_having_all(self):
+        self.assertTrue(paths.is_at_or_under('a/b', 'a'))
+        self.assertTrue(paths.is_at_or_under('a', 'a'))
+        self.assertFalse(paths.is_at_or_under('ab', 'a'))
+        self.assertTrue(paths.is_at_or_under('a/b', ''))
+        self.assertTrue(paths.is_at_or_under('/x/y', '/x/'))
+        self.assertTrue(paths.is_at_or_under('/x', '/'))
+        self.assertFalse(paths.is_at_or_under('/xy', '/x'))
+
+
 if __name__ == '__main__':
     unittest.main()

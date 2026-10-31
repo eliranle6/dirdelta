@@ -36,3 +36,10 @@ def short_names(replica_paths):
             count += 1
         names[path] = '/'.join(parts[-count:]) or '/'
     return names
+
+
+def is_at_or_under(path, dirpath):
+    """Whether path is dirpath or under it: relpaths in a tree (the root '': all are), or absolute
+    paths (the root '/'); a '/' ending dirpath doesn't matter"""
+    dirpath = dirpath.rstrip('/')
+    return not dirpath or path == dirpath or path.startswith(dirpath + '/')

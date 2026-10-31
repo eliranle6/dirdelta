@@ -6,6 +6,7 @@ import treelib
 from dirdelta import dryrun
 from dirdelta import entries
 from dirdelta import messages
+from dirdelta import paths
 
 
 class HashStopped(Exception):
@@ -449,5 +450,5 @@ class DirTree(object):
         return node
 
 
-def _is_at_or_under(relpath, dirpath):
-    return relpath == dirpath or relpath.startswith(dirpath + '/')
+# One answer for all (see paths.is_at_or_under()): the root has all
+_is_at_or_under = paths.is_at_or_under
