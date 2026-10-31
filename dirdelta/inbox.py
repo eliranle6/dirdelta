@@ -1194,7 +1194,7 @@ class InboxSort(object):
                 "and removed" if action == self.MOVE_TO else "", "" if action == self.MOVE_TO else "kept in",
                 " (to Drive's trash)" if self.inbox_is_cloud and action == self.MOVE_TO else ""))
         if dryrun.DRYRUN:
-            lines.append("(A dry run: nothing on disk will change. DRYRUN=0 changes files.)")
+            lines.append(dryrun.NOTE)
         if picker.pick_option([self.CONFIRM_NO, self.CONFIRM_YES], header='\n'.join(lines), title="Sure?",
                               label=LABEL) != self.CONFIRM_YES:
             return None
@@ -1258,7 +1258,7 @@ class InboxSort(object):
         if len(plan) > interactive_dir_sync.InteractiveDirSync.MAX_FILES_LISTED:
             lines.append("  (and %d more)" % (len(plan) - interactive_dir_sync.InteractiveDirSync.MAX_FILES_LISTED,))
         if dryrun.DRYRUN:
-            lines.append("(A dry run: nothing on disk will change. DRYRUN=0 changes files.)")
+            lines.append(dryrun.NOTE)
         if picker.pick_option([self.CONFIRM_NO, self.CONFIRM_YES], header='\n'.join(lines), title="Sure?",
                               label=LABEL) != self.CONFIRM_YES:
             return None
@@ -1342,7 +1342,7 @@ class InboxSort(object):
         if len(relpaths) > interactive_dir_sync.InteractiveDirSync.MAX_FILES_LISTED:
             lines.append("  (and %d more)" % (len(relpaths) - interactive_dir_sync.InteractiveDirSync.MAX_FILES_LISTED,))
         if dryrun.DRYRUN:
-            lines.append("(A dry run: nothing on disk will change. DRYRUN=0 changes files.)")
+            lines.append(dryrun.NOTE)
         if picker.pick_option([self.CONFIRM_NO, self.CONFIRM_YES], header='\n'.join(lines), title="Sure?",
                               label=LABEL) != self.CONFIRM_YES:
             return None

@@ -474,7 +474,7 @@ class InteractiveDirSync(object):
         if len(listed) > self.MAX_FILES_LISTED:
             lines.append("  (and %d more)" % (len(listed) - self.MAX_FILES_LISTED,))
         if dryrun.DRYRUN:
-            lines.append("(A dry run: nothing on disk will change. DRYRUN=0 changes files.)")
+            lines.append(dryrun.NOTE)
         answer = picker.pick_option([self.CONFIRM_NO, self.CONFIRM_YES], header='\n'.join(lines),
                                     label=self.LABELS[action], title="Sure?")
         if answer != self.CONFIRM_YES:
@@ -511,7 +511,7 @@ class InteractiveDirSync(object):
         lines += (self._src.copy_notes(relpaths) if action == self.COPY else
                   self._src.removal_notes(relpaths))
         if dryrun.DRYRUN:
-            lines.append("(A dry run: nothing on disk will change. DRYRUN=0 changes files.)")
+            lines.append(dryrun.NOTE)
         answer = picker.pick_option([self.CONFIRM_NO, self.CONFIRM_YES], header='\n'.join(lines),
                                     label=self.LABELS[action], title="Sure?")
         if answer != self.CONFIRM_YES:

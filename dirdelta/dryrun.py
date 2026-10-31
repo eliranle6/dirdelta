@@ -5,6 +5,9 @@ import os
 # Read at each use (rather than imported by value), so tests can patch it
 DRYRUN = os.environ.get("DRYRUN") != "0"
 
+# What a confirmation says in a dry run, after what it asks
+NOTE = "(A dry run: nothing on disk will change. DRYRUN=0 changes files.)"
+
 
 def label():
     """The mode's label for the screens, and its color: green for a dry run, red for a live one."""
