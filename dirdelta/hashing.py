@@ -480,17 +480,21 @@ def nanoseconds(timestamp):
     return int(seconds) * 10 ** 9 + int((fraction + '000000000')[:9])
 
 
-# What a file is shown as in a picker, before its name: hashed, being hashed, or not yet
-HASHED_MARK = '●'
-HASHING_MARK = '◐'
-NOT_HASHED_MARK = '○'
+# What a file is shown as in a picker, after its name (a search, e.g. /not hashed, finds them):
+# hashed, being hashed now, not yet, or couldn't be (unreadable, or changing while read)
+HASHED_TAG = "[\u25cf hashed]"
+HASHING_TAG = "[\u25d0 hashing now]"
+NOT_HASHED_TAG = "[\u25cb not hashed yet]"
+FAILED_TAG = "[\u2715 couldn't be hashed]"
 
 
-def mark(job, relpath):
-    """The mark of the job's file at relpath (see HASHED_MARK)"""
+def tag(job, relpath):
+    """The tag of the job's file at relpath (see HASHED_TAG)"""
     if job.hash_of(relpath) is not None:
-        return HASHED_MARK
-    return HASHING_MARK if job.is_being_hashed(relpath) else NOT_HASHED_MARK
+        return HASHED_TAG
+    if job.is_being_hashed(relpath):
+        return HASHING_TAG
+    return FAILED_TAG if relpath in job._failed else NOT_HASHED_TAG
 
 
 def percent(progress):

@@ -188,7 +188,8 @@ drops it from the page cache, and puts its SHA-1 in the hash cache; then tells
 the job's subscribers (`subscribe()`: `elsewhere.Index`, `hashes_screen.Marks`).
 `progress()` (a `Progress`: files, bytes, current files, rate over
 `RATE_WINDOW`, failures), `percent()` (of bytes), `color()` (red < 34%,
-orange < 67%, yellow, green when done), `status_text()`, `mark()` (●, ◐, ○).
+orange < 67%, yellow, green when done), `status_text()`, `tag()` (`[● hashed]`, `[◐ hashing now]`, `[○ not hashed yet]`,
+`[✕ couldn't be hashed]`, after a file's name in the pickers).
 Jobs are kept by root (`job()`, `job_for()`), for the whole run.
 
 `hashes_screen.prepare(replicas)` scans the local replicas' jobs; `offer(jobs)`
@@ -197,9 +198,9 @@ that Ctrl-C leaves while it goes on; in the background; or not now), and starts
 the jobs all hashed already, so later files are hashed too. `dashboard(jobs,
 clouds)`: a menu, live through `shown_as`, of each job's bar, state, current
 file, failures, Pause/Resume, its files (`view_files()`: a tree of them with
-their marks, the selected one's hash beside it) and a new scan; and each cloud
+their tags, the selected one's hash beside it) and a new scan; and each cloud
 replica's Drive hashes (how many have SHA-1, SHA-256). `Marks`: a picker's
-`shown_as` that puts each file's mark before its name (only the changed ones
+`shown_as` that puts each file's tag after its name (only the changed ones
 after the first time) and the jobs' statuses on the bottom line
 (`picker.status()`: treepicker's colored status labels).
 `ai.describe()` asks Claude about `ai.File`s (relpath, a local path

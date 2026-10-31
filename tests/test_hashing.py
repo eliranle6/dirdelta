@@ -207,12 +207,14 @@ class StatusTest(unittest.TestCase):
         self.assertEqual([hashing.format_duration(seconds) for seconds in (45, 720, 12000)],
                          ["45 s", "12 min", "3 h 20 min"])
 
-    def test_the_marks(self):
+    def test_the_tags(self):
         job = hashing.Job('/photos')
         job._hashes['a'] = 'H'
         job._current.add('b')
-        self.assertEqual([hashing.mark(job, relpath) for relpath in ('a', 'b', 'c')],
-                         [hashing.HASHED_MARK, hashing.HASHING_MARK, hashing.NOT_HASHED_MARK])
+        job._failed.add('d')
+        self.assertEqual([hashing.tag(job, relpath) for relpath in ('a', 'b', 'c', 'd')],
+                         ["[\u25cf hashed]", "[\u25d0 hashing now]", "[\u25cb not hashed yet]",
+                          "[\u2715 couldn't be hashed]"])
 
 
 class MachineTest(unittest.TestCase):

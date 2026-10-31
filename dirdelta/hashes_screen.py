@@ -20,8 +20,7 @@ from dirdelta import picker
 # The file pickers' key that shows the dashboard
 KEY = '#'
 # What the file pickers' headers say of it
-KEY_HELP = ("%s: hashing (pause, resume, which files); %s hashed, %s being hashed, %s not yet." %
-            (KEY, hashing.HASHED_MARK, hashing.HASHING_MARK, hashing.NOT_HASHED_MARK))
+KEY_HELP = "%s: hashing (pause, resume, which files)." % (KEY,)
 
 NOTHING = "Nothing: go back"
 NOT_NOW = "Not now: go on, matching files by their names and sizes (%s in the file pickers starts it)" % (KEY,)
@@ -241,8 +240,7 @@ def _jobs_shown(jobs):
             shown[_TOGGLE % (root,)] = "  Pause hashing %s" % (job.name(),)
         else:
             shown[_TOGGLE % (root,)] = "  %s hashing %s" % ("Resume" if progress.is_paused else "Start", job.name())
-        shown[_FILES % (root,)] = "  See its files: %s hashed, %s being hashed, %s not yet" % (
-            hashing.HASHED_MARK, hashing.HASHING_MARK, hashing.NOT_HASHED_MARK)
+        shown[_FILES % (root,)] = "  See its files: which are hashed, and which not yet"
         shown[_RESCAN % (root,)] = "  Look for new or changed files in it (after changes outside dirdelta)"
     return shown
 
@@ -290,9 +288,8 @@ def view_files(job):
         messages.show("No files", ["%s has no files (as of its last listing)." % (job.root,)], dryrun.label())
         return
     marks = Marks(job, relpaths, [job])
-    header = ("%s's files: %s hashed, %s being hashed, %s not yet (as they're hashed). / searches the marks "
-              "too, e.g. /%s for the ones left." % (job.root, hashing.HASHED_MARK, hashing.HASHING_MARK,
-                                                     hashing.NOT_HASHED_MARK, hashing.NOT_HASHED_MARK))
+    header = ("%s's files, hashed or not, as they're hashed. / searches their tags too, e.g. /not hashed "
+              "for the ones left." % (job.root,))
     try:
         picker.view_files(job.root, relpaths, header=header, shown_as=marks,
                           on_selection=lambda selection, send: _send_hash_previews(job, selection, send))
@@ -324,7 +321,7 @@ def _send_hash_previews(job, selection, send):
 
 class Marks(object):
     """A picker's shown_as (see picker.pick_files()) of a job's files (relpaths, of its replica's):
-    each file's name after its mark (hashed, being hashed, not yet; see hashing.mark()), as it
+    each file's name with its tag (hashed, being hashed, not yet; see hashing.tag()), as it
     changes; and the status, a label of each of status_jobs (see hashing.status_parts()), and then
     extra() (more parts, [(text, color)]), if given. close() it once the picker is gone."""
 
@@ -362,7 +359,7 @@ class Marks(object):
             changed = set(self._relpaths) if changed is None else changed | current | self._current
             self._current = current
             for relpath in changed:
-                shown[relpath] = "%s %s" % (hashing.mark(self._job, relpath), os.path.basename(relpath))
+                shown[relpath] = "%s  %s" % (os.path.basename(relpath), hashing.tag(self._job, relpath))
         shown[''] = picker.status(hashing.status_parts(self._status_jobs) + (self._extra() if self._extra else []))
         return shown
 

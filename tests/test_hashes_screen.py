@@ -205,13 +205,13 @@ class MarksTest(unittest.TestCase):
         marks = hashes_screen.Marks(self.job, ['a/x', 'z'], [self.job])
         first = marks()
         self.assertEqual({relpath: shown for relpath, shown in first.items() if relpath},
-                         {'a/x': hashing.NOT_HASHED_MARK + ' x', 'z': hashing.NOT_HASHED_MARK + ' z'})
+                         {'a/x': 'x  ' + hashing.NOT_HASHED_TAG, 'z': 'z  ' + hashing.NOT_HASHED_TAG})
         self.assertEqual(first[''], picker.status([("photos: 0% hashed (not hashing)", 'red')]))
         # z is hashed: only it changes
         self.job._hashes['z'] = 'H'
         marks._on_hashed('z', {'sha1': 'H'})
         self.assertEqual({relpath: shown for relpath, shown in marks().items() if relpath},
-                         {'z': hashing.HASHED_MARK + ' z'})
+                         {'z': 'z  ' + hashing.HASHED_TAG})
         marks.close()
         self.assertEqual(self.job._subscribers, [])
 
@@ -219,9 +219,9 @@ class MarksTest(unittest.TestCase):
         marks = hashes_screen.Marks(self.job, ['a/x', 'z'], [self.job])
         marks()
         self.job._current.add('a/x')
-        self.assertEqual(marks()['a/x'], hashing.HASHING_MARK + ' x')
+        self.assertEqual(marks()['a/x'], 'x  ' + hashing.HASHING_TAG)
         self.job._current.discard('a/x')
-        self.assertEqual(marks()['a/x'], hashing.NOT_HASHED_MARK + ' x')
+        self.assertEqual(marks()['a/x'], 'x  ' + hashing.NOT_HASHED_TAG)
 
     def test_more_status_after_the_jobs(self):
         marks = hashes_screen.Marks(None, ['a'], [self.job], lambda: [("Claude: describing 1 file", 'yellow')])
@@ -247,7 +247,7 @@ class ViewFilesTest(unittest.TestCase):
 
         def view_files(rootpath, relpaths, header='', shown_as=None, on_selection=None, **_):
             self.assertEqual((rootpath, relpaths), ('/photos', ['x', 'y']))
-            self.assertEqual(shown_as()['x'], hashing.HASHED_MARK + ' x')
+            self.assertEqual(shown_as()['x'], 'x  ' + hashing.HASHED_TAG)
             with self.assertRaises(picker.PickerClosed):
                 on_selection(Selection(), lambda found=None, default=None: sent.update(found))
             return True

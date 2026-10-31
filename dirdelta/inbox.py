@@ -300,9 +300,9 @@ class InboxSort(object):
         return hashes_screen.offer(hashes_screen.prepare(self._views()))
 
     def _shown_as(self, relpaths):
-        """{relpath: what the picker shows it as}: its name (after its mark, hashed or not, if the
-        inbox is being hashed), and Claude's description, if any (or that Claude's looking at it),
-        and why it looks like junk, if it does; and '': the status, how far hashing got and what
+        """{relpath: what the picker shows it as}: its name, and Claude's description, if any (or that Claude's looking at it),
+        and why it looks like junk, if it does, and whether it's hashed (if the inbox is local); and
+        '': the status, how far hashing got and what
         Claude is doing"""
         shown = {}
         job = hashing.job_for(self.inbox_path) if not self.inbox_is_cloud else None
@@ -315,13 +315,10 @@ class InboxSort(object):
             junk_reason = self._junk(relpath)
             if junk_reason is not None:
                 tags.append((JUNK_BY_NAME if relpath in self._junk_by_name else JUNK_BY_CLAUDE) % (junk_reason,))
-            name = os.path.basename(relpath)
             if job is not None:
-                name = "%s %s" % (hashing.mark(job, relpath), name)
+                tags.append(hashing.tag(job, relpath))
             if tags:
-                shown[relpath] = "%s  %s" % (name, '  '.join(tags))
-            elif job is not None:
-                shown[relpath] = name
+                shown[relpath] = "%s  %s" % (os.path.basename(relpath), '  '.join(tags))
         describing, placing = len(self._describing), len(self._placing)
         failed = len([relpath for relpath in relpaths if relpath in self._failed])
         busy = ["%s %s" % (what, _files(count))

@@ -475,7 +475,7 @@ class InboxSortTest(unittest.TestCase):
         self.assertEqual(sorter._checked, {})
         # Marked as hashed in the picker, with how far each got on the bottom line
         shown = sorter._shown_as(['a.txt'])
-        self.assertEqual(shown['a.txt'], inbox.hashing.HASHED_MARK + ' a.txt')
+        self.assertEqual(shown['a.txt'], 'a.txt  ' + inbox.hashing.HASHED_TAG)
         self.assertIn('inbox: hashed', shown[''])
 
     def test_claude_is_told_of_copies_and_its_removals_are_offered(self):
