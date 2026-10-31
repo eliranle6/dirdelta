@@ -207,7 +207,7 @@ def dashboard(replica_trees=(), known=None, other_paths=()):
     for name, tree in items:
         job = _job_of(name, tree)
         options += [_HEADING % (name,), _INFO % (name,)]
-        shown[_HEADING % (name,)] = picker.Disabled(_HEADING % ("%s: %s" % (names[name], name)
+        shown[_HEADING % (name,)] = picker.Skipped(_HEADING % ("%s: %s" % (names[name], name)
                                                                 if names[name] != name else name,))
         info = known.info_at(name) if known is not None else None
         known_lines = choose_replicas.known_lines(info) if info else ["  Never synced before"]
@@ -216,22 +216,22 @@ def dashboard(replica_trees=(), known=None, other_paths=()):
             known_lines.append("  Its disk isn't connected now")
         for number, line in enumerate(known_lines):
             options.append(_KNOWN % ("%d %s" % (number, name),))
-            shown[options[-1]] = picker.Disabled(line)
+            shown[options[-1]] = picker.Skipped(line)
         if job is not None:
             options += [_BAR % (name,), _STATE % (name,), _TOGGLE % (name,), _FILES % (name,), _RESCAN % (name,)]
         elif isinstance(tree, clouddirtree.CloudDirTree):
             nr_files, size, first, note = _drive_lines(tree)
-            shown[_INFO % (name,)] = picker.Disabled("  %s, %s%s" % (_files(nr_files), elsewhere.format_size(size),
+            shown[_INFO % (name,)] = picker.Skipped("  %s, %s%s" % (_files(nr_files), elsewhere.format_size(size),
                                                                       _cache_age()))
             options += [_DRIVE % (name,), _DRIVE_NOTE % (name,)]
-            shown[_DRIVE % (name,)] = picker.Disabled(first)
-            shown[_DRIVE_NOTE % (name,)] = picker.Disabled(note)
+            shown[_DRIVE % (name,)] = picker.Skipped(first)
+            shown[_DRIVE_NOTE % (name,)] = picker.Skipped(note)
         elif paths.is_cloud_path(name):
-            shown[_INFO % (name,)] = picker.Disabled("  In Google Drive: its files and Drive's hashes are "
+            shown[_INFO % (name,)] = picker.Skipped("  In Google Drive: its files and Drive's hashes are "
                                                      "counted when it's synced or sorted")
         else:
             kept = hashcache.count_under(os.path.realpath(name))
-            shown[_INFO % (name,)] = picker.Disabled(
+            shown[_INFO % (name,)] = picker.Skipped(
                 "  Hashes kept of %s (as of when they were hashed); how many are left is counted when it's "
                 "synced or sorted" % (_files(kept),))
     options.append(BACK)
@@ -288,19 +288,19 @@ def _jobs_shown(items, names):
     for name, job in _jobs_by_name(items).items():
         progress = job.progress()
         if progress.state in (hashing.NOT_SCANNED, hashing.SCANNING):
-            shown[_INFO % (name,)] = picker.Disabled("  Listing its files...")
-            shown[_BAR % (name,)] = picker.Disabled("  Hashes: -")
+            shown[_INFO % (name,)] = picker.Skipped("  Listing its files...")
+            shown[_BAR % (name,)] = picker.Skipped("  Hashes: -")
         else:
-            shown[_INFO % (name,)] = picker.Disabled("  %s, %s" % (_files(progress.nr_files),
+            shown[_INFO % (name,)] = picker.Skipped("  %s, %s" % (_files(progress.nr_files),
                                                                    elsewhere.format_size(progress.size)))
-            shown[_BAR % (name,)] = picker.Disabled("  Hashes: " + progress_line(progress))
+            shown[_BAR % (name,)] = picker.Skipped("  Hashes: " + progress_line(progress))
         state = _state_text(job, progress)
         if progress.current:
             state += ": now %s%s" % (progress.current[0], " (and %d more)" % (len(progress.current) - 1,)
                                      if len(progress.current) > 1 else "")
         if progress.nr_failed:
             state += "; %s couldn't be hashed (unreadable, or changing while read)" % (_files(progress.nr_failed),)
-        shown[_STATE % (name,)] = picker.Disabled("  " + state)
+        shown[_STATE % (name,)] = picker.Skipped("  " + state)
         short = names.get(name, job.name())
         if progress.state == hashing.DONE:
             shown[_TOGGLE % (name,)] = picker.Disabled("  Pause hashing %s: it's all hashed" % (short,))

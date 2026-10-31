@@ -40,6 +40,9 @@ class PickerError(programs.ProgramError):
 # What shown_as (see pick_option()) shows an option as when it can't be picked: in grey, with Enter
 # doing nothing on it
 Disabled = collections.namedtuple('Disabled', ['text'])
+# What shown_as shows an option as when it's not one at all (a heading, a blank line, a line of
+# information): as a Disabled, and skipped when moving through the menu
+Skipped = collections.namedtuple('Skipped', ['text'])
 # What shown_as shows an option as in a color (a text color: red, green, yellow, blue, magenta, cyan)
 Colored = collections.namedtuple('Colored', ['text', 'color'])
 
@@ -445,7 +448,10 @@ def _send_updates(fd, shown_as, is_done):
 
 
 def _update(item, shown):
-    """treepicker's --updates line showing item as shown (a string, or Disabled)"""
+    """treepicker's --updates line showing item as shown (a string, a Disabled, a Skipped or a
+    Colored)"""
+    if isinstance(shown, Skipped):
+        return '%s\t%s\tskipped' % (item, shown.text)
     if isinstance(shown, Disabled):
         return '%s\t%s\tdisabled' % (item, shown.text)
     if isinstance(shown, Colored):

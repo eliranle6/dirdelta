@@ -21,7 +21,7 @@ CLOUD = 'Google Drive'
 QUIT = 'Quit'
 KNOWN_LIST = '  Replicas dashboard: every known replica (last updates, files, hashes)'
 SORT = '  New sort: choose an inbox, and the sorted tree its files go to (with Claude\'s help)'
-# The menu's sections' headings (shown in grey: they can't be picked)
+# The menu's sections' headings (shown in grey, and skipped when moving: they can't be picked)
 SYNC_SECTION = '\u2500\u2500 Sync two replicas \u2500\u2500'
 RECENT_SYNCS_SECTION = '\u2500\u2500 Recent syncs \u2500\u2500'
 SORT_SECTION = '\u2500\u2500 Sort an inbox into a sorted tree \u2500\u2500'
@@ -39,7 +39,7 @@ CLOUD_ROOT = 'cloud'
 
 
 def blank_line(number):
-    """A blank line of the menu, between its sections (shown in grey, so it can't be picked):
+    """A blank line of the menu, between its sections (skipped, as the headings are: see picker.Skipped):
     spaces, number of them and one, so each is an option of its own"""
     return ' ' * (number + 1)
 
@@ -64,7 +64,7 @@ def run(replicas):
                 options += ([blank_line(len(options))] if options else []) + [heading] + section
         # Quit apart from the last section too
         options.append(blank_line(len(options)))
-        headings = {option: picker.Disabled(option)
+        headings = {option: picker.Skipped(option)
                     for option in [heading for heading, _ in sections] + [option for option in options if not option.strip()]}
         option = picker.pick_option(options + [QUIT],
                                     header='Choose the two replicas to sync, or an inbox to sort',

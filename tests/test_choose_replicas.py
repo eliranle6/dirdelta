@@ -51,7 +51,7 @@ class ChooseReplicasTest(unittest.TestCase):
         self.assertEqual(sorted(option for option in self.kwargs['shown_as']() if option.strip()),
                          sorted([SYNC_SECTION, choose_replicas.RECENT_SYNCS_SECTION, SORT_SECTION,
                                  choose_replicas.RECENT_SORTS_SECTION, choose_replicas.REPLICAS_SECTION]))
-        self.assertTrue(all(isinstance(shown, choose_replicas.picker.Disabled)
+        self.assertTrue(all(isinstance(shown, choose_replicas.picker.Skipped)
                             for shown in self.kwargs['shown_as']().values()))
         self.assertEqual(self.kwargs['selected'], '  Replica A: ' + NONE)
 
@@ -66,7 +66,7 @@ class ChooseReplicasTest(unittest.TestCase):
         # Each its own option, and none can be picked
         self.assertEqual(len(set(blanks)), 3)
         shown = self.kwargs['shown_as']()
-        self.assertTrue(all(isinstance(shown[blank], choose_replicas.picker.Disabled) for blank in blanks))
+        self.assertTrue(all(isinstance(shown[blank], choose_replicas.picker.Skipped) for blank in blanks))
 
     def test_two_local_dirs(self):
         chosen = self.run_menu(['  Replica A: ' + NONE, 'Local disk',

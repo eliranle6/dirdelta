@@ -473,6 +473,15 @@ class StatusTest(unittest.TestCase):
 
 
 
+class UpdateLineTest(unittest.TestCase):
+    def test_each_kind_of_option(self):
+        self.assertEqual(picker._update('a', 'A'), 'a\tA')
+        self.assertEqual(picker._update('a', picker.Disabled('A')), 'a\tA\tdisabled')
+        # A heading: skipped when moving
+        self.assertEqual(picker._update('a', picker.Skipped('A')), 'a\tA\tskipped')
+        self.assertEqual(picker._update('a', picker.Colored('A', 'red')), 'a\tA\tcolor=red')
+
+
 class StyledTest(unittest.TestCase):
     def test_parts_in_their_styles_and_back(self):
         text = picker.styled([('a.jpg', None), ('  ', None), ('[x]', 'bold,magenta'), ('', 'red')])

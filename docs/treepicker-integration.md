@@ -87,7 +87,9 @@ Like fzf: dirdelta starts `treepicker`, which draws on the terminal itself
   in); treepicker still prints the label when it's picked. `LABEL<tab>TEXT<tab>disabled\0`
   (a `picker.Disabled` in `shown_as`) greys the option out, and Enter does
   nothing on it, until an update without it: the main menu's options with
-  nothing to do.
+  nothing to do. `LABEL<tab>TEXT<tab>skipped\0` (a `picker.Skipped`) is
+  disabled and also skipped by j/k, Ctrl-J/Ctrl-K and Home/End: the start menu's headings and
+  blank lines, and the dashboard's lines of information.
 - Labels: every run gets the dry run's (`--label DRY RUN --label-color green`,
   or LIVE in red), and Copy's and Remove's file picker and confirmation a
   second one after it (COPY in blue, REMOVE in magenta), each `--label` with
