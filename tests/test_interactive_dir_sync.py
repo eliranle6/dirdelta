@@ -387,8 +387,9 @@ class RefreshKeyTest(unittest.TestCase):
         self.assertEqual(self.sync.checked, {})
         # Its files by name are listed again, when they're next needed
         self.assertFalse(self.sync.src_index.is_built())
-        self.assertEqual(calls[0].kwargs['keys'], 'r')
-        self.assertIn('r: read the selected folder anew from Google Drive', calls[0].kwargs['header'])
+        # And the replicas dashboard's
+        self.assertEqual(calls[0].kwargs['keys'], 'r#')
+        self.assertIn(('r', 'read the folder anew from Drive'), calls[0].kwargs['key_hints'])
         self.assertIsNone(calls[0].kwargs['selected'])
         # What's still missing, what's still picked of it, where it was
         self.assertEqual(calls[1].args[1], ['a/1.mp3', 'b/3.mp3'])
@@ -404,8 +405,8 @@ class RefreshKeyTest(unittest.TestCase):
         other = dirtree.DirTree('/other')
         other.add_file_by_relpath('a.mp3')
         calls = self.browse(other, self.local, [None])
-        self.assertEqual(calls[0].kwargs['keys'], '')
-        self.assertNotIn('Google Drive', calls[0].kwargs['header'])
+        self.assertEqual(calls[0].kwargs['keys'], '#')
+        self.assertNotIn('r', [key for key, _ in calls[0].kwargs['key_hints']])
         self.assertFalse(self.sync.has_changed)
 
     def test_a_refresh_with_nothing_left_missing_says_so(self):

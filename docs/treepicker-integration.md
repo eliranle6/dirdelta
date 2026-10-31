@@ -46,6 +46,10 @@ Like fzf: dirdelta starts `treepicker`, which draws on the terminal itself
   with an empty path is a status, shown as a yellow label ("Claude: describing 2 files"); or, as
   `picker.status()` makes it, several labels each in its color (`\x01COLOR\x01TEXT...`; colors
   include orange), e.g. each replica's hashing ("photos: 63% hashed" in orange).
+- The keys row at the bottom (the search line takes it while searching): treepicker's main keys,
+  the caller's (`--key KEY TEXT`, `picker.py`'s `key_hints`, which can also say what one of
+  treepicker's does there), `/`, `?` and `q`; `--help-line` adds lines to `?`'s help (the tags'
+  legend). The status line no longer ends with `?: help`.
 - While a search filters the tree, Space on a dir picks only the matches under it.
 - The inbox's picker: Enter with nothing picked picks the selected node, as Space would
   (`--enter-picks-selection`, `pick_files(enter_picks_selection=True)`).

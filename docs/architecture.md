@@ -175,6 +175,21 @@ source's. Committed at most every `SAVE_INTERVAL` (a timer), and at exit:
 SQLite rather than JSON, so hashing a whole replica doesn't rewrite a big file
 again and again.
 
+### The screens' layout (every picker, menu and progress screen)
+The top says what the screen is: a menu's tree root is its breadcrumbs
+(`picker.trail()`: `dirdelta > Sync a ⇄ b > What to do`, from `picker.place()`
+and `pick_option(title=...)`; replicas by `paths.short_names()`), with the
+header (the question, or what the files are) above it; never keys. The bottom
+is the status bar (the mode's label, the caller's labels, statuses such as
+hashing's, counts, the selection) and, under it, the keys row: treepicker's
+main keys, the caller's (`key_hints=[(key, what it does)]`: `--key`), `/`, `?`
+(with `help_lines`, e.g. the tags' legend: `--help-line`) and `q`, which
+`picker._run()` names "quit" on the start menu and "back" anywhere else (going
+back from a sync or a sort, or "Nothing: go back" before one, returns to the
+start menu: `main._run()`'s loop; Quit quits). What a picker's threads raise
+goes to `picker.ERRORS_LOG`, not the screen, and a failing `shown_as` puts a red
+label on the status bar.
+
 ### `hashing.py`, `hashes_screen.py`
 `hashing.Job(root)`: a local replica's hashing. `scan()` lists its files (one
 `find -type f -printf '%s %T@ %P'`) and takes the ones the hash cache has with
@@ -196,7 +211,10 @@ Jobs are kept by root (`job()`, `job_for()`), for the whole run.
 asks whether to hash what's left (now and wait, `wait()`, a progress screen
 that Ctrl-C leaves while it goes on; in the background; or not now), and starts
 the jobs all hashed already, so later files are hashed too. `dashboard(jobs,
-clouds)`: a menu, live through `shown_as`, of each job's bar, state, current
+known, other_paths)`, the "Replicas dashboard" (the sync's menu, `#` in the
+file pickers, and the start menu's, of every known replica): a menu, live
+through `shown_as`, of each replica's files (how many, their size), what
+`replicas.json` knows of it, and its job's bar, state, current
 file, failures, Pause/Resume, its files (`view_files()`: a tree of them with
 their tags, the selected one's hash beside it) and a new scan; and each cloud
 replica's Drive hashes (how many have SHA-1, SHA-256). `Marks`: a picker's
@@ -500,9 +518,10 @@ edited first (`messages.ask()`), or not; `note_changed()`/`note_entry()` keep
 when and what. `replicalog.parse()`/`last_entry()` read the log's format
 (`DD.MM.YYYY - text`, its continuation lines after it; what it can't parse is
 kept as text). `choose_replicas` shows each pair's paths with when they were
-last updated (`pair_label(known=...)`), and "Known replicas" (`show_known()`):
-each one's last entry, last sync and change, other paths, and whether its disk
-is connected (`replicalog.is_disk_connected()`).
+last updated (`pair_label(known=...)`), and the "Replicas dashboard"
+(`hashes_screen.dashboard(other_paths=known_paths())`): each one's last entry,
+last sync and change (`known_lines()`), whether its disk is connected
+(`replicalog.is_disk_connected()`), and its hashes.
 
 Thin wiring: for two local dirs, make their `LocalDiskDirTree`s without
 scanning them (each action diffs them with dirdiff, see below); else build
@@ -550,9 +569,11 @@ they are. A picker covers what was printed before it, so what's to be read
 goes on a screen that waits for Enter: `show(title, lines)` for messages
 (the scan warnings, "Nothing to copy"), and `progress_screen(title)` for
 actions. `progress_screen(title)` (a context manager) runs an action on the whole
-screen, on a terminal: it clears it, keeps the title on the top line with
-a scroll region (`ESC[2;Hr`) for the lines under it, catches Ctrl-C, and
-at the end says Done/Stopped and waits for Enter. Actions that catch Ctrl-C to say
+screen, on a terminal, laid out as the pickers are: the title alone on the top
+line, a scroll region (`ESC[2;H-2r`) for the lines under it, and at the bottom
+a status bar (the mode's label, then Working/Done/Stopped: `_bottom()`) and a
+keys row (`Ctrl-C stop`, then `Enter continue`; `ask()`'s `Enter done`,
+`Ctrl-C back`). It catches Ctrl-C, and at the end waits for Enter. Actions that catch Ctrl-C to say
 how far they got (copying, removing) call `note_stopped()`. Without a
 terminal it only prints.
 
@@ -560,7 +581,7 @@ terminal it only prints.
 `DRYRUN` (true unless `DRYRUN=0` is set), read at each use, and `label()`:
 ("DRY RUN", "green") or ("LIVE", "red"), which `picker.py` passes to every
 treepicker run (`--label`, `--label-color`: at the start of its bottom line)
-and `interactive_dir_sync.py` to the progress screen (its top line).
+and `interactive_dir_sync.py` to the progress screen (its status bar).
 Copy's and Remove's file picker and confirmation add their own label after
 it (`InteractiveDirSync.LABELS`: COPY in blue, REMOVE in magenta).
 

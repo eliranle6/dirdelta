@@ -133,12 +133,12 @@ class InteractiveDirSync(object):
         clouds = [replica for replica in (self._src, self._dst)
                   if isinstance(replica, clouddirtree.CloudDirTree)]
         jobs = hashes_screen.jobs_of([self._src, self._dst])
-        header = ("Files in %s, which are not in %s. Pick some, then choose what to do with them:\n"
-                  "(To pick a file, press Space. When finished, press Enter.%s%s)" %
-                  (self._src.displayname(), self._dst.displayname(),
-                   " %s: read the selected folder anew from Google Drive." % (self.REFRESH_KEY,)
-                   if clouds else "", " " + hashes_screen.KEY_HELP if jobs else ""))
-        keys = (self.REFRESH_KEY if clouds else '') + (hashes_screen.KEY if jobs else '')
+        header = ("Files in %s, which are not in %s. Pick some, then choose what to do with them." %
+                  (self._src.displayname(), self._dst.displayname()))
+        keys = (self.REFRESH_KEY if clouds else '') + hashes_screen.KEY
+        key_hints = ([('Enter', 'choose what to do')] +
+                     ([(self.REFRESH_KEY, 'read the folder anew from Drive')] if clouds else []) +
+                     [hashes_screen.KEY_HINT])
         picked, selected = [], None
         while True:
             src_job = hashing.job_for(self._src.fullpath()) if is_local(self._src) else None
@@ -149,7 +149,8 @@ class InteractiveDirSync(object):
             try:
                 chosen = picker.pick_files(
                     self._src.displayname(), missing, header=header, picked=picked,
-                    keys=keys, selected=selected, shown_as=marks,
+                    keys=keys, selected=selected, shown_as=marks, key_hints=key_hints,
+                    help_lines=hashes_screen.HELP_LINES if jobs else (),
                     previews=functools.partial(elsewhere.find_previews, missing, self._src, self.dst_index,
                                                checked=self.checked, src_index=self.src_index),
                     on_selection=functools.partial(elsewhere.check_contents, missing, self._src,
@@ -161,7 +162,7 @@ class InteractiveDirSync(object):
                 return
             selected = chosen.selected
             if chosen.key == hashes_screen.KEY:
-                hashes_screen.dashboard_of([self._src, self._dst])
+                hashes_screen.dashboard([self._src, self._dst])
                 picked = chosen.files
                 continue
             if chosen.key == self.REFRESH_KEY:
@@ -245,7 +246,7 @@ class InteractiveDirSync(object):
         header = ("%s picked in %s, which %s lacks. What to do with them?" %
                   (count, src_name, dst_name))
         answer = picker.pick_option([self.NOTHING] + [label for label, _ in options.values()],
-                                    header=header, shown_as=lambda: disabled)
+                                    header=header, shown_as=lambda: disabled, title="What to do")
         action = next((action for action, (label, _) in options.items() if label == answer), None)
         if action is None:
             return None
@@ -350,7 +351,7 @@ class InteractiveDirSync(object):
         if dryrun.DRYRUN:
             lines.append("(A dry run: nothing on disk will change. DRYRUN=0 changes files.)")
         answer = picker.pick_option([self.CONFIRM_NO, self.CONFIRM_YES], header='\n'.join(lines),
-                                    label=self.LABELS[action])
+                                    label=self.LABELS[action], title="Sure?")
         if answer != self.CONFIRM_YES:
             return None
         title = "Moving %s in %s" % (_files(len(moves)), replica.displayname())
@@ -385,7 +386,7 @@ class InteractiveDirSync(object):
         if dryrun.DRYRUN:
             lines.append("(A dry run: nothing on disk will change. DRYRUN=0 changes files.)")
         answer = picker.pick_option([self.CONFIRM_NO, self.CONFIRM_YES], header='\n'.join(lines),
-                                    label=self.LABELS[action])
+                                    label=self.LABELS[action], title="Sure?")
         if answer != self.CONFIRM_YES:
             return False
         if action == self.REMOVE:
@@ -393,7 +394,7 @@ class InteractiveDirSync(object):
                     (_files(len(relpaths)), self._src.displayname(),
                      " (to Drive's trash)" if not is_local(self._src) else ", for good")]
             answer = picker.pick_option([self.CONFIRM_NO, self.CONFIRM_SURE], header='\n'.join(sure),
-                                        label=self.LABELS[action])
+                                        label=self.LABELS[action], title="Sure?")
             return answer == self.CONFIRM_SURE
         return True
 

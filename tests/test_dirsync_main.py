@@ -80,13 +80,20 @@ class MainMenuTest(unittest.TestCase):
     def test_each_way_gets_its_files(self):
         for b in (localdiskdirtree.LocalDiskDirTree('/b', silent=True), dirtree.DirTree('cloud/b')):
             a = localdiskdirtree.LocalDiskDirTree('/a', silent=True)
-            self.assertEqual(self.options(a, b), ['Files in /a, not in /b', 'Files in /b, not in /a', 'Quit'])
+            self.assertEqual(self.options(a, b), ['Files in /a, not in /b', 'Files in /b, not in /a', 'Replicas dashboard', 'Quit'])
+
+    def test_quit_quits_and_q_goes_back(self):
+        a = localdiskdirtree.LocalDiskDirTree('/a', silent=True)
+        b = localdiskdirtree.LocalDiskDirTree('/b', silent=True)
+        for answer, result in (('Quit', dirsync_main.QUIT), (None, None)):
+            with mock.patch('dirdelta.picker.pick_option', return_value=answer):
+                self.assertEqual(dirsync_main._sync(a, b, '/a', '/b'), result)
 
     def test_a_hashed_replicas_hashes_are_an_option_and_on_the_bottom_line(self):
         a = localdiskdirtree.LocalDiskDirTree('/a', silent=True)
         b = dirtree.DirTree('cloud/b')
         job = hashing.Job('/a')
-        answers = ['Hashes of the files', 'Quit']
+        answers = ['Replicas dashboard', 'Quit']
         shown = []
 
         def pick_option(options, shown_as):
@@ -96,14 +103,15 @@ class MainMenuTest(unittest.TestCase):
                 mock.patch('dirdelta.picker.pick_option', side_effect=pick_option), \
                 mock.patch('dirdelta.hashes_screen.dashboard') as dashboard:
             dirsync_main._sync(a, b, '/a', '/b')
-        dashboard.assert_called_once_with([job], [])
-        self.assertIn("a: listing its files...", shown[0]['Hashes of the files'])
+        dashboard.assert_called_once_with([a, b], None)
+        self.assertEqual(shown[0]['Replicas dashboard'],
+                         "Replicas dashboard: files, last updates, hashes (a: listing its files...)")
         self.assertIn("a: listing its files...", shown[0][''])
 
     def test_a_cloud_replica_can_be_refreshed_from_drive(self):
         a = localdiskdirtree.LocalDiskDirTree('/a', silent=True)
         b = clouddirtree.CloudDirTree('cloud/b')
-        self.assertEqual(self.options(a, b)[-2:], ['Refresh /b from Google Drive', 'Quit'])
+        self.assertEqual(self.options(a, b)[-3:], ['Refresh /b from Google Drive', 'Replicas dashboard', 'Quit'])
 
     def test_a_refresh_finds_each_ways_files_again_and_lists_its_files_anew(self):
         a = localdiskdirtree.LocalDiskDirTree('/a', silent=True)
@@ -168,7 +176,7 @@ class MainMenuTest(unittest.TestCase):
         self.writable = set()
         a = localdiskdirtree.LocalDiskDirTree('/a', silent=True)
         b = dirtree.DirTree('cloud/b')
-        self.assertEqual(self.options(a, b), ['Files in /a, not in /b', 'Files in /b, not in /a', 'Quit'])
+        self.assertEqual(self.options(a, b), ['Files in /a, not in /b', 'Files in /b, not in /a', 'Replicas dashboard', 'Quit'])
         title, lines, _ = self.show.call_args.args
         self.assertEqual(title, 'Read-only')
         self.assertEqual(len(lines), 1)
@@ -193,6 +201,7 @@ class MainMenuTest(unittest.TestCase):
         self.assertEqual(self.shown(a, b), [
             'Files in /a, not in /b (3 files)',
             'Files in /b, not in /a (1 file)',
+            'Replicas dashboard: files, last updates, hashes',
             'Quit',
         ])
 

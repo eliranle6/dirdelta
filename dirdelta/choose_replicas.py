@@ -19,13 +19,14 @@ NOT_CHOSEN = '<none: press Enter to choose one>'
 LOCAL = 'Local disk'
 CLOUD = 'Google Drive'
 QUIT = 'Quit'
-KNOWN_LIST = 'Known replicas: when each was last updated'
+KNOWN_LIST = '  Replicas dashboard: every known replica (last updates, files, hashes)'
 SORT = '  New sort: choose an inbox, and the sorted tree its files go to (with Claude\'s help)'
 # The menu's sections' headings (shown in grey: they can't be picked)
 SYNC_SECTION = '\u2500\u2500 Sync two replicas \u2500\u2500'
 RECENT_SYNCS_SECTION = '\u2500\u2500 Recent syncs \u2500\u2500'
 SORT_SECTION = '\u2500\u2500 Sort an inbox into a sorted tree \u2500\u2500'
 RECENT_SORTS_SECTION = '\u2500\u2500 Recent inbox sorts \u2500\u2500'
+REPLICAS_SECTION = '\u2500\u2500 Replicas \u2500\u2500'
 # What a replica the user knows is offered as, when choosing a sorted tree
 KNOWN = 'Known replica: '
 
@@ -49,17 +50,19 @@ def run(replicas):
         pairs = dict(favorites, **recent)
         sorts = {sort_label(*sort): Sort(*sort) for sort in replicas.sorts}
         sections = [(SYNC_SECTION, list(slots) + list(favorites)), (RECENT_SYNCS_SECTION, list(recent)),
-                    (SORT_SECTION, [SORT]), (RECENT_SORTS_SECTION, list(sorts))]
+                    (SORT_SECTION, [SORT]), (RECENT_SORTS_SECTION, list(sorts)),
+                    (REPLICAS_SECTION, [KNOWN_LIST] if replicas.known else [])]
         options = [option for heading, section in sections if section for option in [heading] + section]
         headings = {heading: picker.Disabled(heading) for heading, _ in sections}
-        known_list = [KNOWN_LIST] if replicas.known else []
-        option = picker.pick_option(options + known_list + [QUIT],
+        option = picker.pick_option(options + [QUIT],
                                     header='Choose the two replicas to sync, or an inbox to sort',
                                     shown_as=lambda: headings, selected=options[1])
         if option in (None, QUIT):
             return None
         if option == KNOWN_LIST:
-            show_known(replicas)
+            # Imported here: hashes_screen uses this module's known_lines()
+            from dirdelta import hashes_screen
+            hashes_screen.dashboard(known=replicas, other_paths=known_paths(replicas))
             continue
         if option == SORT:
             sort = _choose_sort(replicas)
@@ -173,47 +176,47 @@ def _time(iso_time):
     return ('%s %s' % (_date(date), hours)).strip()
 
 
-def show_known(replicas):
-    """Show what's known of each replica synced (replicas', a Replicas): its log's last entry,
-    when it was last synced and changed, the paths it was at, and whether its disk is connected
-    (so it shows the ones that aren't, too); the latest updated first"""
-    def last_date(item):
-        return ((item[1].get('last_entry') or {}).get('date') or '', item[1].get('seen') or '')
+def known_paths(replicas):
+    """The paths of the replicas known (replicas', a Replicas), each at the path it was last seen at,
+    the latest updated first"""
+    def last_date(info):
+        return ((info.get('last_entry') or {}).get('date') or '', info.get('seen') or '')
+    return [(info.get('paths') or [identity])[-1]
+            for identity, info in sorted(replicas.known.items(), key=lambda item: last_date(item[1]), reverse=True)]
+
+
+def known_lines(info):
+    """The lines of what's known of a replica (its info, see replicas.Replicas.known): its log's
+    last entry, and when it was last synced and changed"""
     lines = []
-    for identity, info in sorted(replicas.known.items(), key=last_date, reverse=True):
-        found = info.get('paths') or [identity]
-        lines.append(found[0])
-        entry = info.get('last_entry')
-        if entry:
-            text = (entry.get('text') or '').splitlines() or ['']
-            lines.append('  Last update: %s%s%s' % (_date(entry['date']) if entry.get('date') else '(no date)',
-                                                    ' - ' + text[0] if text[0] else '',
-                                                    ' (+%d more line%s)' % (len(text) - 1, 's' if len(text) > 2 else '')
-                                                    if len(text) > 1 else ''))
-        else:
-            lines.append('  Last update: (no %s)' % (replicalog.LOG_NAME,))
-        synced = ['synced %s' % (_time(info['seen']),)] if info.get('seen') else []
-        synced += ['changed by dirdelta %s' % (_time(info['changed']),)] if info.get('changed') else []
-        if synced:
-            lines.append('  ' + '; '.join(synced).capitalize())
-        if len(found) > 1:
-            lines.append('  Also seen at: %s' % (', '.join(found[1:]),))
-        if not replicalog.is_disk_connected(identity):
-            lines.append("  Its disk isn't connected now (filesystem UUID %s)" % (replicalog.disk_uuid(identity),))
-        lines.append('')
-    messages.show("Known replicas: when each was last updated", lines[:-1], dryrun.label())
+    entry = info.get('last_entry')
+    if entry:
+        text = (entry.get('text') or '').splitlines() or ['']
+        lines.append('  Last update: %s%s%s' % (_date(entry['date']) if entry.get('date') else '(no date)',
+                                                ' - ' + text[0] if text[0] else '',
+                                                ' (+%d more line%s)' % (len(text) - 1, 's' if len(text) > 2 else '')
+                                                if len(text) > 1 else ''))
+    else:
+        lines.append('  Last update: (no %s)' % (replicalog.LOG_NAME,))
+    synced = ['synced %s' % (_time(info['seen']),)] if info.get('seen') else []
+    synced += ['changed by dirdelta %s' % (_time(info['changed']),)] if info.get('changed') else []
+    if synced:
+        lines.append('  ' + '; '.join(synced).capitalize())
+    return lines
 
 
 def _choose_replica(name, known=()):
     """Let the user choose a local dir or a Drive one, or one of known (paths) at once. Returns its
     path, or None if they quit."""
     options = {KNOWN + path: path for path in known}
-    where = picker.pick_option(list(options) + [LOCAL, CLOUD], header='Where is %s?' % (name,))
+    where = picker.pick_option(list(options) + [LOCAL, CLOUD], header='Where is %s?' % (name,),
+                               title='Choose %s' % (name,))
     if where in options:
         return options[where]
-    header = 'Choose %s (Enter picks the selected dir)' % (name,)
+    header = 'Choose %s' % (name,)
+    key_hints = [('Enter', 'choose the selected dir')]
     if where == LOCAL:
-        return picker.pick_under_dir(LOCAL_ROOT, dirs_only=True, lazy=True, header=header)
+        return picker.pick_under_dir(LOCAL_ROOT, dirs_only=True, lazy=True, header=header, key_hints=key_hints)
     if where == CLOUD:
         try:
             tree = utils.create_dirtree_from_arg(CLOUD_ROOT)
@@ -223,7 +226,7 @@ def _choose_replica(name, known=()):
             return None
         if tree is None:
             return None
-        picked = picker.pick_from_tree(tree, header=header, dirs_only=True)
+        picked = picker.pick_from_tree(tree, header=header, dirs_only=True, key_hints=key_hints)
         # A cloud tree's paths are Drive's (/mein/music), not cloud paths (cloud/mein/music)
         return paths.join_cloud(picked[0].relpath) if picked else None
     return None

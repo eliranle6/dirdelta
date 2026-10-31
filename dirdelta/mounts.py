@@ -134,13 +134,13 @@ def ensure_mounted(path):
             return True
         if not is_connected(mount):
             header = "%s isn't mounted, and its disk (%s) isn't connected" % (mount.target, _described(mount))
-            if picker.pick_option([TRY_AGAIN, BACK], header=header) != TRY_AGAIN:
+            if picker.pick_option([TRY_AGAIN, BACK], header=header, title='Mount') != TRY_AGAIN:
                 return False
             continue
         command = mount_command(mount)
         header = "%s isn't mounted (last time: %s). Mount it?" % (mount.target, _described(mount))
         mount_option = "%s (runs: %s)" % (MOUNT, shlex.join(command))
-        if picker.pick_option([mount_option, BACK], header=header) != mount_option:
+        if picker.pick_option([mount_option, BACK], header=header, title='Mount') != mount_option:
             return False
         if not _mount(mount, command):
             # Asked again: it may be fixed meanwhile (e.g. the password mistyped)

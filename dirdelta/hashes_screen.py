@@ -8,19 +8,30 @@ import shutil
 import threading
 import time
 
+from dirdelta import choose_replicas
 from dirdelta import clouddirtree
+from dirdelta import drivecache
 from dirdelta import dryrun
 from dirdelta import elsewhere
 from dirdelta import hashcache
 from dirdelta import hashing
 from dirdelta import localdiskdirtree
 from dirdelta import messages
+from dirdelta import paths
 from dirdelta import picker
+from dirdelta import replicalog
+from dirdelta import replicas
 
 # The file pickers' key that shows the dashboard
 KEY = '#'
-# What the file pickers' headers say of it
-KEY_HELP = "%s: hashing (pause, resume, which files)." % (KEY,)
+# What the file pickers' keys row says of it
+KEY_HINT = (KEY, "replicas dashboard")
+# What ? says in the file pickers of the tags hashing adds after the files' names
+HELP_LINES = ["Tags after a file's name (/ searches them too):",
+              "  %-24s its contents' hash is known (any name, any size: it's found by it)" % (hashing.HASHED_TAG,),
+              "  %-24s being read now" % (hashing.HASHING_TAG,),
+              "  %-24s matched by its name and size only, for now" % (hashing.NOT_HASHED_TAG,),
+              "  %-24s unreadable, or it changed while it was read" % (hashing.FAILED_TAG,)]
 
 NOTHING = "Nothing: go back"
 NOT_NOW = "Not now: go on, matching files by their names and sizes (%s in the file pickers starts it)" % (KEY,)
@@ -93,7 +104,7 @@ def offer(jobs):
     lines += ["Waiting for it before comparing is recommended. Until it's done, files are matched",
               "by their names and sizes, and compared when selected."]
     answer = picker.pick_option([NOTHING, NOT_NOW, HASH_AND_WAIT, HASH_IN_BACKGROUND],
-                                header='\n'.join(lines))
+                                header='\n'.join(lines), title="Hash the files?")
     if answer in (None, NOTHING):
         return False
     if answer in (HASH_AND_WAIT, HASH_IN_BACKGROUND):
@@ -135,10 +146,10 @@ def wait(jobs):
     """Show how far the jobs got, on a screen, until they're done, or Ctrl-C (they go on, in the
     background)"""
     names = ", ".join(job.root for job in jobs)
-    with messages.progress_screen("Ctrl-C goes on, hashing in the background: hashing the files of %s" % (names,),
-                                  dryrun.label(), is_stoppable=False, wait=False):
-        messages.print_line("Each file is read once, and its hash kept. Ctrl-C goes on while it hashes in the "
-                            "background (%s in the file pickers shows how far it got)." % (KEY,))
+    with messages.progress_screen("Hashing the files of %s" % (names,), dryrun.label(), is_stoppable=False,
+                                  wait=False, keys=[('Ctrl-C', 'go on (it hashes in the background)')]):
+        messages.print_line("Each file is read once, and its hash kept. %s in the file pickers shows how far "
+                            "it got." % (KEY,))
         messages.print_line("")
         try:
             while True:
@@ -159,8 +170,11 @@ def wait(jobs):
         messages.print_line("All hashed: %s" % (progress_line(progress),), 'green')
 
 
-# The dashboard's options, made unique by the replica's root (shown_as says what they show)
-_HEADING = "── %s ──"
+# The dashboard's options, made unique by the replica's path (shown_as says what they show)
+_HEADING = "\u2500\u2500 %s \u2500\u2500"
+_INFO = "  info %s"
+_KNOWN = "  known %s"
+_SYNCED = "  synced %s"
 _BAR = "  bar %s"
 _STATE = "  state %s"
 _TOGGLE = "  toggle %s"
@@ -169,80 +183,144 @@ _RESCAN = "  rescan %s"
 _DRIVE = "  drive %s"
 _DRIVE_NOTE = "  drive note %s"
 BACK = "Back"
+TITLE = "Replicas dashboard"
 
 
-def dashboard(jobs, clouds=()):
-    """The hashing dashboard: for each job, how far it got (a bar, files, sizes, speed, time left,
-    the files being hashed now), pausing or resuming it, its files (hashed or not), and scanning it
-    again; for each cloud replica (of clouds, CloudDirTrees), how many of its files' hashes Drive
-    gave. Until Back."""
-    selected = None
+def dashboard(replica_trees=(), known=None, other_paths=()):
+    """The replicas dashboard, until Back (or q): for each replica (of replica_trees, then of
+    other_paths, replicas' paths without trees, e.g. all the known ones), its files (how many,
+    their size), what's known of it (known, a replicas.Replicas, else the one saved: its log's last
+    entry, when it was last synced and changed), and its hashes: a local one's hashing, if it has a
+    job (a bar, files, sizes, speed, time left, the files being hashed now; pausing or resuming it,
+    its files, hashed or not, and scanning it again), else how many of its files' hashes are kept;
+    and how many of a cloud one's files Drive gave hashes of"""
+    if known is None:
+        try:
+            known = replicas.load()
+        except replicas.ReplicasError:
+            known = None
+    items = [(tree.displayname(), tree) for tree in replica_trees]
+    items += [(path, None) for path in other_paths if path not in dict(items)]
+    jobs = list(_jobs_by_name(items).values())
+    names = paths.short_names([name for name, _ in items])
+    options, shown = [], {}
+    for name, tree in items:
+        job = _job_of(name, tree)
+        options += [_HEADING % (name,), _INFO % (name,)]
+        shown[_HEADING % (name,)] = picker.Disabled(_HEADING % ("%s: %s" % (names[name], name)
+                                                                if names[name] != name else name,))
+        info = known.info_at(name) if known is not None else None
+        known_lines = choose_replicas.known_lines(info) if info else ["  Never synced before"]
+        if info and not paths.is_cloud_path(name) and not replicalog.is_disk_connected(
+                next((identity for identity, other in known.known.items() if other is info), '')):
+            known_lines.append("  Its disk isn't connected now")
+        for number, line in enumerate(known_lines):
+            options.append(_KNOWN % ("%d %s" % (number, name),))
+            shown[options[-1]] = picker.Disabled(line)
+        if job is not None:
+            options += [_BAR % (name,), _STATE % (name,), _TOGGLE % (name,), _FILES % (name,), _RESCAN % (name,)]
+        elif isinstance(tree, clouddirtree.CloudDirTree):
+            nr_files, size, first, note = _drive_lines(tree)
+            shown[_INFO % (name,)] = picker.Disabled("  %s, %s%s" % (_files(nr_files), elsewhere.format_size(size),
+                                                                      _cache_age()))
+            options += [_DRIVE % (name,), _DRIVE_NOTE % (name,)]
+            shown[_DRIVE % (name,)] = picker.Disabled(first)
+            shown[_DRIVE_NOTE % (name,)] = picker.Disabled(note)
+        elif paths.is_cloud_path(name):
+            shown[_INFO % (name,)] = picker.Disabled("  In Google Drive: its files and Drive's hashes are "
+                                                     "counted when it's synced or sorted")
+        else:
+            kept = hashcache.count_under(os.path.realpath(name))
+            shown[_INFO % (name,)] = picker.Disabled(
+                "  Hashes kept of %s (as of when they were hashed); how many are left is counted when it's "
+                "synced or sorted" % (_files(kept),))
+    options.append(BACK)
+    header = ("What's known of each replica, and the hashes of its files. A local one's are worked out "
+              "here (SHA-1, as Drive's), each file read once, at the lowest priority, and kept in %s." %
+              (hashcache.CACHE_FILE,))
+
+    def shown_now():
+        now = dict(shown, **_jobs_shown(items, names))
+        now[''] = picker.status(hashing.status_parts(jobs))
+        return now
+    first = shown_now()
+    # The first that can be picked
+    selected = next((option for option in options if option.startswith(("  toggle", "  See")) and
+                     not isinstance(first.get(option), picker.Disabled)), BACK)
     while True:
-        options, shown = [], {}
-        for job in jobs:
-            root = job.root
-            options += [_HEADING % (root,), _BAR % (root,), _STATE % (root,), _TOGGLE % (root,),
-                        _FILES % (root,), _RESCAN % (root,)]
-        drive_lines = {}
-        for cloud in clouds:
-            name = cloud.displayname()
-            drive_lines[name] = _drive_lines(cloud)
-            options += [_HEADING % (name,), _DRIVE % (name,), _DRIVE_NOTE % (name,)]
-            shown[_HEADING % (name,)] = picker.Disabled(_HEADING % ("%s (Google Drive)" % (name,),))
-            shown[_DRIVE % (name,)] = picker.Disabled(drive_lines[name][0])
-            shown[_DRIVE_NOTE % (name,)] = picker.Disabled(drive_lines[name][1])
-        options.append(BACK)
-        header = ("Hashing the local replicas' files (SHA-1, as Drive's), each read once, at the lowest "
-                  "priority\nThe hashes are kept in %s" % (hashcache.CACHE_FILE,))
-        if selected is None:
-            # The first that can be picked
-            first = _jobs_shown(jobs)
-            selected = next((option for option in options
-                             if option.startswith(("  toggle", "  See")) and
-                             not isinstance(first.get(option), picker.Disabled)), BACK)
-        option = picker.pick_option(options, header=header, shown_as=lambda: dict(
-            shown, **_jobs_shown(jobs), **{'': picker.status(hashing.status_parts(jobs))}), selected=selected)
+        option = picker.pick_option(options, header=header, title=TITLE, shown_as=shown_now, selected=selected,
+                                    key_hints=[('Enter', 'do it'), ('q', 'back')])
         if option in (None, BACK):
             return
         selected = option
-        for job in jobs:
-            if option == _TOGGLE % (job.root,):
+        for name, job in _jobs_by_name(items).items():
+            if option == _TOGGLE % (name,):
                 if job.is_started():
                     job.pause()
                 else:
                     job.start()
-            elif option == _FILES % (job.root,):
+            elif option == _FILES % (name,):
                 view_files(job)
-            elif option == _RESCAN % (job.root,):
+            elif option == _RESCAN % (name,):
                 job.scan_in_background()
 
 
-def _jobs_shown(jobs):
-    """The dashboard's options of the jobs, as they're shown now"""
+def _job_of(name, tree):
+    """The hashing job of the local replica named name (its tree's displayname, or its path), if any"""
+    if paths.is_cloud_path(name) or (tree is not None and not is_local(tree)):
+        return None
+    return hashing.job_for(tree.fullpath() if tree is not None else name)
+
+
+def _cache_age():
+    """'; Drive's file list read DD.MM.YYYY HH:MM' (when the cache was last written), or ''"""
+    try:
+        written = os.path.getmtime(drivecache.FILE_LIST_CACHE)
+    except OSError:
+        return ""
+    return "; Drive's file list cached %s" % (time.strftime('%d.%m.%Y %H:%M', time.localtime(written)),)
+
+
+def _jobs_shown(items, names):
+    """The dashboard's options of the local replicas' (of items, [(name, tree or None)]) files and
+    hashing, as they're shown now; names: their short names, by name (see paths.short_names())"""
     shown = {}
-    for job in jobs:
-        root, progress = job.root, job.progress()
-        shown[_HEADING % (root,)] = picker.Disabled(_HEADING % (root,))
+    for name, job in _jobs_by_name(items).items():
+        progress = job.progress()
         if progress.state in (hashing.NOT_SCANNED, hashing.SCANNING):
-            shown[_BAR % (root,)] = picker.Disabled("  Listing its files...")
+            shown[_INFO % (name,)] = picker.Disabled("  Listing its files...")
+            shown[_BAR % (name,)] = picker.Disabled("  Hashes: -")
         else:
-            shown[_BAR % (root,)] = picker.Disabled("  " + progress_line(progress))
+            shown[_INFO % (name,)] = picker.Disabled("  %s, %s" % (_files(progress.nr_files),
+                                                                   elsewhere.format_size(progress.size)))
+            shown[_BAR % (name,)] = picker.Disabled("  Hashes: " + progress_line(progress))
         state = _state_text(job, progress)
         if progress.current:
             state += ": now %s%s" % (progress.current[0], " (and %d more)" % (len(progress.current) - 1,)
                                      if len(progress.current) > 1 else "")
         if progress.nr_failed:
             state += "; %s couldn't be hashed (unreadable, or changing while read)" % (_files(progress.nr_failed),)
-        shown[_STATE % (root,)] = picker.Disabled("  " + state)
+        shown[_STATE % (name,)] = picker.Disabled("  " + state)
+        short = names.get(name, job.name())
         if progress.state == hashing.DONE:
-            shown[_TOGGLE % (root,)] = picker.Disabled("  Pause hashing %s: it's all hashed" % (job.name(),))
+            shown[_TOGGLE % (name,)] = picker.Disabled("  Pause hashing %s: it's all hashed" % (short,))
         elif job.is_started():
-            shown[_TOGGLE % (root,)] = "  Pause hashing %s" % (job.name(),)
+            shown[_TOGGLE % (name,)] = "  Pause hashing %s" % (short,)
         else:
-            shown[_TOGGLE % (root,)] = "  %s hashing %s" % ("Resume" if progress.is_paused else "Start", job.name())
-        shown[_FILES % (root,)] = "  See its files: which are hashed, and which not yet"
-        shown[_RESCAN % (root,)] = "  Look for new or changed files in it (after changes outside dirdelta)"
+            shown[_TOGGLE % (name,)] = "  %s hashing %s" % ("Resume" if progress.is_paused else "Start", short)
+        shown[_FILES % (name,)] = "  See its files: which are hashed, and which not yet"
+        shown[_RESCAN % (name,)] = "  Look for new or changed files in it (after changes outside dirdelta)"
     return shown
+
+
+def _jobs_by_name(items):
+    """{name: job} of the local replicas (of items, [(name, tree or None)]) that have a hashing job"""
+    found = {}
+    for name, tree in items:
+        job = _job_of(name, tree)
+        if job is not None:
+            found[name] = job
+    return found
 
 
 def _state_text(job, progress):
@@ -260,12 +338,13 @@ def _state_text(job, progress):
 
 
 def _drive_lines(cloud):
-    """The dashboard's lines of a cloud replica: how many of its files Drive gave SHA-1s of (and
-    SHA-256s), and what to do about the rest"""
-    nr_files = nr_sha1 = nr_sha256 = 0
+    """How many files a cloud replica has, their size, and the dashboard's lines of it: how many of
+    its files Drive gave SHA-1s of (and SHA-256s), and what to do about the rest"""
+    nr_files = nr_sha1 = nr_sha256 = size = 0
     for file_entry in cloud.iter_files():
         known = cloud.known_hashes(file_entry.relpath)
         nr_files += 1
+        size += cloud.file_size(file_entry.relpath) or 0
         nr_sha1 += 'sha1' in known
         nr_sha256 += 'sha256' in known
     first = "  Drive's hashes, none read here: SHA-1 of %s of %s, SHA-256 of %s" % (
@@ -277,7 +356,7 @@ def _drive_lines(cloud):
         note = "  %s have no hash: Google's own files (Docs, Sheets...)" % (_files(nr_files - nr_sha256),)
     else:
         note = "  All its files have Drive's hashes"
-    return first, note
+    return nr_files, size, first, note
 
 
 def view_files(job):
@@ -291,7 +370,8 @@ def view_files(job):
     header = ("%s's files, hashed or not, as they're hashed. / searches their tags too, e.g. /not hashed "
               "for the ones left." % (job.root,))
     try:
-        picker.view_files(job.root, relpaths, header=header, shown_as=marks,
+        picker.view_files(job.root, relpaths, header=header, shown_as=marks, help_lines=HELP_LINES,
+                          key_hints=[('Enter', 'back'), ('q', 'back')],
                           on_selection=lambda selection, send: _send_hash_previews(job, selection, send))
     finally:
         marks.close()
@@ -369,6 +449,3 @@ def picker_status(replicas, extra=()):
     return picker.status(hashing.status_parts(jobs_of(replicas)) + list(extra))
 
 
-def dashboard_of(replicas):
-    """The dashboard (see dashboard()) of replicas (trees): the local ones' jobs, and the cloud ones"""
-    dashboard(jobs_of(replicas), [replica for replica in replicas if isinstance(replica, clouddirtree.CloudDirTree)])

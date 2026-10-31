@@ -20,6 +20,8 @@ atexit.register(shutil.rmtree, _hash_cache_dir, ignore_errors=True)
 _mounts_dir = tempfile.mkdtemp(prefix='dirdelta-test-mounts-')
 mounts.MOUNTS_FILE = os.path.join(_mounts_dir, 'mounts.json')
 atexit.register(shutil.rmtree, _mounts_dir, ignore_errors=True)
+# Nor write the real errors' log (~/.cache/dirdelta/errors.log)
+picker.ERRORS_LOG = os.path.join(_hash_cache_dir, 'errors.log')
 # Nor download into the real downloads' cache (~/.cache/dirdelta/downloads): test_inbox and
 # test_downloads import this module
 _downloads_dir = tempfile.mkdtemp(prefix='dirdelta-test-downloads-')

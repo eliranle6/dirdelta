@@ -47,7 +47,7 @@ class ChooseReplicasTest(unittest.TestCase):
         self.run_menu(['Quit'])
         self.assertEqual(sorted(self.kwargs['shown_as']()),
                          sorted([SYNC_SECTION, choose_replicas.RECENT_SYNCS_SECTION, SORT_SECTION,
-                                 choose_replicas.RECENT_SORTS_SECTION]))
+                                 choose_replicas.RECENT_SORTS_SECTION, choose_replicas.REPLICAS_SECTION]))
         self.assertTrue(all(isinstance(shown, choose_replicas.picker.Disabled)
                             for shown in self.kwargs['shown_as']().values()))
         self.assertEqual(self.kwargs['selected'], '  Replica A: ' + NONE)
@@ -208,19 +208,25 @@ class ChooseReplicasTest(unittest.TestCase):
                              datetime.datetime(2026, 10, 30, 9, 5))
         self.known.note_changed('uuid:U:/eliran', datetime.datetime(2026, 10, 30, 9, 30))
         self.known.note_seen('drive:R:/eliran', 'cloud/eliran', None, datetime.datetime(2026, 10, 29, 8, 0))
-        with mock.patch('dirdelta.replicalog.is_disk_connected', side_effect=lambda identity: identity.startswith('drive')):
+        shown = {}
+
+        def dashboard(known=None, other_paths=()):
+            shown['paths'] = other_paths
+        with mock.patch('dirdelta.hashes_screen.dashboard', side_effect=dashboard):
             self.assertIsNone(self.run_menu([choose_replicas.KNOWN_LIST, 'Quit']))
-        title, lines = self.show.call_args.args[:2]
-        self.assertEqual(title, choose_replicas.KNOWN_LIST)
-        self.assertEqual(lines, [
-            '/mnt/win/eliran',
+        # The latest updated first
+        self.assertEqual(shown['paths'], ['/mnt/win/eliran', 'cloud/eliran'])
+        # In a section of its own, after the sorts
+        self.assertEqual(self.menus[0][-3:], [choose_replicas.REPLICAS_SECTION, choose_replicas.KNOWN_LIST, 'Quit'])
+
+    def test_what_is_known_of_a_replica(self):
+        self.known.note_seen('uuid:U:/eliran', '/mnt/win/eliran',
+                             replicalog.Entry(datetime.date(2026, 5, 17), 'removed old money.ods\nremove Resume.*'),
+                             datetime.datetime(2026, 10, 30, 9, 5))
+        self.known.note_changed('uuid:U:/eliran', datetime.datetime(2026, 10, 30, 9, 30))
+        self.assertEqual(choose_replicas.known_lines(self.known.info_at('/mnt/win/eliran')), [
             '  Last update: 17.05.2026 - removed old money.ods (+1 more line)',
-            '  Synced 30.10.2026 09:05; changed by dirdelta 30.10.2026 09:30',
-            "  Its disk isn't connected now (filesystem UUID U)",
-            '',
-            'cloud/eliran',
-            '  Last update: (no last_update.txt)',
-            '  Synced 29.10.2026 08:00'])
+            '  Synced 30.10.2026 09:05; changed by dirdelta 30.10.2026 09:30'])
 
     def test_no_known_replicas_no_option(self):
         self.run_menu(['Quit'])

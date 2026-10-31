@@ -135,7 +135,7 @@ class MountsTest(unittest.TestCase):
         self.answers['mount'] = lambda command: self.mounted.add('/media/disk') or (0, '')
         headers = []
 
-        def pick_option(options, header):
+        def pick_option(options, header, **_):
             headers.append(header)
             if len(headers) == 2:
                 # Connected before the second try

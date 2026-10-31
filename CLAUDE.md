@@ -58,8 +58,11 @@ ones not hashed yet are offered for hashing (`hashing.py`, `hashes_screen.py`):
 a pool of threads (one fewer than the physical cores) reads them in the
 background, at the lowest priority, into the hash cache, so a file is found by
 its contents (SHA-1, as Drive's) whatever its name and size. `#` in the file
-pickers (and "Hashes of the files" in the sync's menu) shows how far it got,
-pauses and resumes it.
+pickers (and the "Replicas dashboard" in the sync's and the start menus) shows
+how far it got, pauses and resumes it. Every screen has the same layout (see
+docs/architecture.md, "The screens' layout"): what it is on top (breadcrumbs),
+a status bar and a keys row at the bottom; `q` goes back (quits only on the
+start menu), and a sync or sort returns to the start menu.
 dirdelta doesn't use curses itself: each pick is a `treepicker` run, which
 has the terminal while it's open, and
 what's to be read in between (warnings, "Nothing to copy", an action's
@@ -92,7 +95,8 @@ change dirdelta made to Drive was cut off before it was added to the cache),
 `~/.cache/dirdelta/ai.json` (what Claude said of files),
 `~/.cache/dirdelta/hashes.sqlite` (local files' hashes; a `hashes.json` next to it is the old
 format's, unused since 2026-10-31),
-`~/.cache/dirdelta/downloads/` (Drive files downloaded for Claude or to open) or `secrets/`.
+`~/.cache/dirdelta/downloads/` (Drive files downloaded for Claude or to open),
+`~/.cache/dirdelta/errors.log` (what went wrong in a picker's threads) or `secrets/`.
 
 ## Structure
 
@@ -146,7 +150,7 @@ module:
 PYTHONPATH=.:tests .venv/bin/python3 -m unittest test_interactive_dir_sync -v
 ```
 
-Every module has a test file (529 tests, all passing as of 2026-10-31) except
+Every module has a test file (540 tests, all passing as of 2026-10-31) except
 the thin wiring in `main.py`/`dirsync_main.py`, covered only by running the
 app. Shared fakes:
 - `tests/helpers.py`: `scripted_option_picker` / `scripted_tree_picker` /

@@ -17,7 +17,19 @@ from dirdelta import replicas
 from dirdelta import utils
 
 
+# What run() returns when the user chose Quit (rather than going back)
+QUIT = 'quit'
+
+
 def run(args):
+    """Sync the replicas at args' paths. Returns QUIT if the user chose to quit dirdelta, else None
+    (they went back)"""
+    names = paths.short_names([args.dir_a_path, args.dir_b_path])
+    with picker.place("Sync %s \u21c4 %s" % (names[args.dir_a_path], names[args.dir_b_path])):
+        return _run(args)
+
+
+def _run(args):
     if not paths.is_cloud_path(args.dir_a_path) and not paths.is_cloud_path(args.dir_b_path):
         # Two local dirs: each action diffs them with dirdiff, which scans them anew, so there's
         # nothing to scan here
@@ -47,8 +59,9 @@ def run(args):
     if not hashes_screen.offer(hashes_screen.prepare([dirtree_a, dirtree_b])):
         return
     changes = replicalog.Changes()
-    _sync(dirtree_a, dirtree_b, args.dir_a_path, args.dir_b_path, known_replicas, changes)
+    result = _sync(dirtree_a, dirtree_b, args.dir_a_path, args.dir_b_path, known_replicas, changes)
     replicalog.offer_entries(changes, trees, known_replicas)
+    return result
 
 
 def scan_errors_warning(tree):
@@ -60,10 +73,10 @@ def _sync(replica_a, replica_b, replica_a_path, replica_b_path, known_replicas=N
     """The main menu, until the user quits. With known_replicas (a Replicas, saved when changed),
     it also makes the pair a favorite, or not. changes: where the files changed live are noted (a
     replicalog.Changes), if anywhere."""
-    QUIT = "Quit"
+    QUIT_OPTION = "Quit"
     ADD_FAVORITE = "Add to favorites"
     REMOVE_FAVORITE = "Remove from favorites"
-    HASHES = "Hashes of the files"
+    DASHBOARD = hashes_screen.TITLE
     read_only = _read_only_lines(replica_a, replica_a_path) + _read_only_lines(replica_b, replica_b_path)
     if read_only:
         messages.show("Read-only", read_only, dryrun.label())
@@ -85,13 +98,12 @@ def _sync(replica_a, replica_b, replica_a_path, replica_b_path, known_replicas=N
     for way in ways:
         way.find_missing()
     jobs = hashes_screen.jobs_of([replica_a, replica_b])
-    hash_options = [HASHES] if jobs else []
 
     def shown_as():
         shown = {label: action.shown_as() for label, action in actions.items()}
+        shown[DASHBOARD] = "%s: files, last updates, hashes%s" % (
+            DASHBOARD, " (%s)" % ("; ".join(text for text, _ in hashing.status_parts(jobs)),) if jobs else "")
         if jobs:
-            shown[HASHES] = "%s: %s (pause, resume, which files)" % (
-                HASHES, "; ".join(hashing.status_text(job) for job in jobs))
             shown[''] = hashes_screen.picker_status([replica_a, replica_b])
         return shown
 
@@ -101,12 +113,13 @@ def _sync(replica_a, replica_b, replica_a_path, replica_b_path, known_replicas=N
         if known_replicas is not None:
             is_favorite = known_replicas.is_favorite(replica_a_path, replica_b_path)
             favorite_options = [REMOVE_FAVORITE if is_favorite else ADD_FAVORITE]
-        option = picker.pick_option(list(actions) + list(refreshes) + hash_options + favorite_options + [QUIT],
+        option = picker.pick_option(list(actions) + list(refreshes) + [DASHBOARD] + favorite_options + [QUIT_OPTION],
                                     shown_as=shown_as)
-        if option in (None, QUIT):
-            break
-        if option == HASHES:
-            hashes_screen.dashboard_of([replica_a, replica_b])
+        if option in (None, QUIT_OPTION):
+            # q goes back (to the start menu, if there's one); Quit quits
+            return QUIT if option == QUIT_OPTION else None
+        if option == DASHBOARD:
+            hashes_screen.dashboard([replica_a, replica_b], known_replicas)
             continue
         if option in (ADD_FAVORITE, REMOVE_FAVORITE):
             known_replicas.toggle_favorite(replica_a_path, replica_b_path)
@@ -200,7 +213,9 @@ class _Action(object):
         sync = interactive_dir_sync.InteractiveDirSync(way.src, way.dst, way.missing,
                                                        way.indexes[way.src], way.indexes[way.dst],
                                                        way.checked, self.changes)
-        sync.browse()
+        names = paths.short_names([way.src.displayname(), way.dst.displayname()])
+        with picker.place("Files in %s, not in %s" % (names[way.src.displayname()], names[way.dst.displayname()])):
+            sync.browse()
         return sync.has_changed
 
 

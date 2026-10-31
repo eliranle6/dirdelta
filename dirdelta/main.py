@@ -42,15 +42,20 @@ def _run(args):
     # Run the right main (no args is choosing the dirs to synchronize, one arg is dir picker, two
     # args are dirs synchronization)
     if args.dir_a_path is None:
-        known_replicas = replicas.load()
-        chosen = choose_replicas.run(known_replicas)
-        if chosen is None:
-            return None
-        if isinstance(chosen, choose_replicas.Sort):
-            if _ready(chosen.inbox, chosen.root):
-                inbox.run(chosen.inbox, chosen.root, known_replicas)
-            return None
-        args.dir_a_path, args.dir_b_path = chosen
+        # The start menu, again after a sync or a sort (or going back from one), until Quit
+        while True:
+            known_replicas = replicas.load()
+            chosen = choose_replicas.run(known_replicas)
+            if chosen is None:
+                return None
+            if isinstance(chosen, choose_replicas.Sort):
+                if _ready(chosen.inbox, chosen.root):
+                    inbox.run(chosen.inbox, chosen.root, known_replicas)
+                continue
+            args.dir_a_path, args.dir_b_path = chosen
+            if _ready(args.dir_a_path, args.dir_b_path) and dirsync_main.run(args) == dirsync_main.QUIT:
+                return None
+            args.dir_a_path = args.dir_b_path = None
     elif args.sort:
         if args.dir_b_path is None:
             sys.exit('dirdelta: --sort takes two paths: the inbox, and the sorted tree')

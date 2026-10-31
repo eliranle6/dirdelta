@@ -61,7 +61,8 @@ def ask(title, lines, prompt, default='', label=None):
     Returns it (stripped), or None if the user gave none (empty, or Ctrl-C or Ctrl-D)."""
     readline.set_startup_hook(lambda: readline.insert_text(default))
     try:
-        with progress_screen(title, label, is_stoppable=False, wait=False):
+        with progress_screen(title, label, is_stoppable=False, wait=False,
+                             keys=[('Enter', 'done'), ('Ctrl-C', 'back')]):
             for line in lines:
                 print_line(line)
             try:
@@ -75,18 +76,25 @@ def ask(title, lines, prompt, default='', label=None):
 
 # A label's look on a terminal, by its color name: bold, black or white on the color
 _LABEL_STYLES = {'green': '\033[1;30;42m', 'red': '\033[1;37;41m'}
+# The status bar's look (as treepicker's): black on white
+_STATUS_STYLE = '\033[30;47m'
+_RESET = '\033[0m'
 
 
 @contextlib.contextmanager
-def progress_screen(title, label=None, is_stoppable=True, wait=True):
-    """Show what's printed inside (an action's progress) on the whole screen, under title, which
-    stays on the top line while the lines scroll under it. When the action ends, wait for Enter, so
-    its report can be read before the next picker covers it.
+def progress_screen(title, label=None, is_stoppable=True, wait=True, keys=None):
+    """Show what's printed inside (an action's progress) on the whole screen, laid out as the
+    pickers are: title on the top line, the lines scrolling under it, and at the bottom, a status
+    bar (label, a (text, color) pair such as dryrun.label(), and whether the action is working, done
+    or stopped) and a row of the keys (Ctrl-C to stop it while it works; Enter to continue once
+    it's done). When the action ends, wait for Enter, so its report can be read before the next
+    picker covers it.
 
-    Ctrl-C inside stops the action (which may catch it itself, to say how far it got). label, a
-    (text, color) pair (e.g. dryrun.label()), starts the top line. Without wait, it doesn't wait for
-    Enter (unless it was stopped), e.g. for an action whose results are shown next anyway. Without is_stoppable, the top line
-    doesn't offer Ctrl-C (for messages). Without a terminal, the title and the lines are just printed.
+    Ctrl-C inside stops the action (which may catch it itself, to say how far it got). Without
+    wait, it doesn't wait for Enter (unless it was stopped), e.g. for an action whose results are
+    shown next anyway. Without is_stoppable, it's not an action (e.g. messages): no Ctrl-C, and no
+    status. keys: the keys row while it's shown ([(key, what it does)]), if not those. Without a
+    terminal, the title and the lines are just printed.
     """
     global _is_stopped
     _is_stopped = False
@@ -100,42 +108,54 @@ def progress_screen(title, label=None, is_stoppable=True, wait=True):
         return
 
     height = shutil.get_terminal_size().lines
-    # Clear the screen, title on the top line, and the lines scrolling in the rest (a scroll region)
-    _write("\033[2J\033[H" + _top_line(("Ctrl-C to stop: " if is_stoppable else "") + title, label) +
-           "\033[2;%dr\033[2;1H" % (height,))
+    if keys is None:
+        keys = [('Ctrl-C', 'stop')] if is_stoppable else []
+    # Clear the screen, the title on the top line, the bars at the bottom, and the lines scrolling
+    # between them (a scroll region)
+    _write("\033[2J\033[H\033[1m" + _fit(title) + _RESET + "\033[2;%dr" % (max(2, height - 2),) +
+           _bottom(height, label, "Working..." if is_stoppable else "", keys) + "\033[2;1H")
     try:
         yield
     except KeyboardInterrupt:
         note_stopped()
     finally:
-        done = ("Stopped. " if _is_stopped else "Done. ") if is_stoppable else ""
         if wait or _is_stopped:
-            # Save the cursor, rewrite the top line, and restore it. What to do first, in case the
-            # line is cut.
-            _write("\0337\033[1;1H" + _top_line("%sPress Enter to continue: %s" % (done, title), label) +
-                   "\0338")
+            status = ("Stopped (Ctrl-C)" if _is_stopped else "Done") if is_stoppable else ""
+            # Saving the cursor, and back to it after
+            _write("\0337" + _bottom(height, label, status, [('Enter', 'continue')]) + "\0338")
             try:
                 input()
             except (EOFError, KeyboardInterrupt):
                 pass
-        # Back to scrolling the whole screen, and the cursor below what was shown (where the next
-        # line goes, if what's next isn't a picker)
-        _write("\033[r\033[%d;1H\n" % (height,))
+        # Back to scrolling the whole screen, and the cursor at its bottom (where the next line
+        # goes, if what's next isn't a picker)
+        _write("\033[r\033[%d;1H\033[2K\033[%d;1H\033[2K" % (height - 1, height))
 
 
-def _top_line(text, label=None):
-    """text on the current line, in reverse video, over the whole width, after label (text, color)
-    in its color"""
-    width = shutil.get_terminal_size().columns
-    line = ""
+def _bottom(height, label, status, keys):
+    """The bottom two rows: the status bar (label, then status, over the whole width), then the keys
+    row, each key in reverse video then what it does (as treepicker's)"""
+    width = shutil.get_terminal_size().columns - 1
+    bar = ""
     if label is not None:
         label_text = " %s " % (label[0],)
-        line = _LABEL_STYLES.get(label[1], "\033[1m") + label_text + "\033[0m "
+        bar = _LABEL_STYLES.get(label[1], "\033[1m") + label_text + _RESET + _STATUS_STYLE + " "
         width -= len(label_text) + 1
-    return line + "\033[7m" + text[:max(0, width)].ljust(max(0, width)) + "\033[0m\033[K"
+    else:
+        bar = _STATUS_STYLE
+    bar += _fit((" " + status) if status else "", width).ljust(max(0, width)) + _RESET
+    keys_row = ""
+    for key, text in keys:
+        keys_row += "\033[7m %s %s %s  " % (key, _RESET, text)
+    return "\033[%d;1H\033[2K%s\033[%d;1H\033[2K%s" % (height - 1, bar, height, keys_row)
+
+
+def _fit(text, width=None):
+    """text cut to the screen's width (or width)"""
+    width = shutil.get_terminal_size().columns - 1 if width is None else width
+    return text[:max(0, width)]
 
 
 def _write(text):
     sys.stdout.write(text)
     sys.stdout.flush()
-

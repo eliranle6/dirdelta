@@ -37,7 +37,7 @@ def _ask_whether_to_refresh(rootpath):
         header = ("The cloud files list cache may be out of date in %s: dirdelta was cut off while "
                   "changing it in Google Drive.\nRefresh it to see those changes." %
                   (', '.join(paths.join_cloud(path) for path in stale),))
-    return picker.pick_option(options, header=header)
+    return picker.pick_option(options, header=header, title="Google Drive's file list")
 
 
 def _overlap(path, other):

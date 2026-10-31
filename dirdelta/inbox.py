@@ -230,17 +230,17 @@ class InboxSort(object):
     def run(self):
         """Let the user pick some of the inbox's files, then choose what to do with them (_act()),
         and back to the picker, where they were, until they quit, or the inbox is empty"""
-        header = ("Files in %s, to sort into %s. Pick some, then choose what to do with them:\n"
-                  "(To pick a file, press Space. When finished, press Enter (with none picked: the "
-                  "selected one). Ctrl-I: Claude describes the picked files (or the selected one), and "
-                  "says where they go, while you go on. Ctrl-X: open the selected file.%s "
-                  "[claude: ...]: what Claude says it is; [junk? ...]: it may be removed; / searches "
-                  "them too.%s)" %
-                  (self.inbox_path, self.root_path,
-                   " %s: read the selected folder anew from Google Drive." % (self.REFRESH_KEY,)
-                   if self.inbox_is_cloud else "",
-                   " " + hashes_screen.KEY_HELP if self._jobs() else ""))
-        keys = (self.REFRESH_KEY if self.inbox_is_cloud else '') + (hashes_screen.KEY if self._jobs() else '')
+        header = ("Files in %s, to sort into %s. Pick some, then choose what to do with them." %
+                  (self.inbox_path, self.root_path))
+        keys = (self.REFRESH_KEY if self.inbox_is_cloud else '') + hashes_screen.KEY
+        key_hints = ([('Enter', 'what to do (none picked: the selected one)'),
+                      ('Ctrl-I', 'Claude: describe, and say where they go'), ('Ctrl-X', 'open')] +
+                     ([(self.REFRESH_KEY, 'read the folder anew from Drive')] if self.inbox_is_cloud else []) +
+                     [hashes_screen.KEY_HINT])
+        help_lines = (["Tags after a file's name (/ searches them too):",
+                       "  [claude: ...]            what Claude says it is",
+                       "  [junk? ...]              it may be removed (by its name or size, or as Claude says)"] +
+                      (hashes_screen.HELP_LINES[1:] if self._jobs() else []))
         picked, selected = [], None
         while True:
             files = self._inbox_files()
@@ -253,7 +253,7 @@ class InboxSort(object):
             self._start_indexing()
             chosen = picker.pick_files(
                 self.inbox_path, files, header=header, picked=picked, label=LABEL,
-                keys=keys, selected=selected,
+                keys=keys, selected=selected, key_hints=key_hints, help_lines=help_lines,
                 previews=lambda send, files=files: self._send_previews(files, send),
                 shown_as=lambda files=files: self._shown_as(files),
                 notify_keys=DESCRIBE_KEY + OPEN_KEY, enter_picks_selection=True,
@@ -266,7 +266,7 @@ class InboxSort(object):
                 return
             selected = chosen.selected
             if chosen.key == hashes_screen.KEY:
-                hashes_screen.dashboard_of(self._views())
+                hashes_screen.dashboard(self._views(), self._known_replicas)
                 picked = chosen.files
                 continue
             if chosen.key == self.REFRESH_KEY:
@@ -445,6 +445,7 @@ class InboxSort(object):
                     for label, reason in options.values() if reason is not None}
         answer = picker.pick_option([self.NOTHING] + [label for label, _ in options.values()],
                                     header="%s picked in %s. What to do with them?" % (count, self.inbox_path),
+                                    title="What to do",
                                     shown_as=lambda: disabled, label=LABEL)
         action = next((action for action, (label, _) in options.items() if label == answer), None)
         if action == self.DESCRIBE:
@@ -790,7 +791,7 @@ class InboxSort(object):
         options = {self.RECENT_DIR % (relpath or '.',): relpath for relpath in recent}
         pick = self.PICK_DIR
         answer = picker.pick_option(list(options) + [pick], header="Where in %s to %s the %s?" %
-                                    (self.root_path, verb, count), label=LABEL)
+                                    (self.root_path, verb, count), label=LABEL, title="Where to")
         if answer == pick:
             return self._pick_dir(verb, count)
         if answer not in options:
@@ -801,16 +802,16 @@ class InboxSort(object):
         """Let the user pick a dir in the sorted tree to move or copy (verb) the files (count) to, or
         make a new one in it (NEW_DIR_KEY, then its name). Returns its relpath ('' the root), or
         None."""
-        header = ("Pick the dir in %s to %s the %s to (Enter picks the selected dir; %s: a new dir in it)" %
-                  (self.root_path, verb, count, self.NEW_DIR_KEY))
+        header = "Pick the dir in %s to %s the %s to." % (self.root_path, verb, count)
+        key_hints = [('Enter', 'this dir'), (self.NEW_DIR_KEY, 'a new dir in it')]
         if self.root_is_cloud:
             root = clouddirtree.factory(self.root_path)
             picked = picker.pick_from_tree(root, header=header, dirs_only=True, root_name=self.root_path,
-                                           keys=self.NEW_DIR_KEY)
+                                           keys=self.NEW_DIR_KEY, key_hints=key_hints)
             key, relpath = (picked[0], picked[1][0].relpath) if picked else ('', None)
         else:
             picked = picker.pick_under_dir(self.root_path, dirs_only=True, lazy=True, header=header,
-                                           keys=self.NEW_DIR_KEY)
+                                           keys=self.NEW_DIR_KEY, key_hints=key_hints)
             key, relpath = (picked[0], _relpath(picked[1], self.root_path)) if picked else ('', None)
         if relpath is not None and key == self.NEW_DIR_KEY:
             relpath = self._new_dir(relpath, verb, count)
@@ -878,10 +879,10 @@ class InboxSort(object):
         summary = ("%s %s from %s into %d dirs of %s%s" %
                    (verb, _files(len(plan)), self.inbox_path, len(destinations), self.root_path,
                     " (%d of them new)" % (len(new_dirs),) if new_dirs else ""))
-        header = ("%s, where shown (beside each: where it's from). Look them through, then:\n"
-                  "Enter: go on to say yes or no. q: back to the inbox." % (summary,))
+        header = "%s, where shown (beside each: where it's from). Look them through." % (summary,)
         if not picker.view_files(self.root_path, sorted(targets, key=lambda target: target.split('/')),
-                                 header=header, previews=previews, label=LABEL):
+                                 header=header, previews=previews, label=LABEL,
+                                 key_hints=[('Enter', 'go on to say yes or no'), ('q', 'back to the inbox')]):
             return None
         lines = [summary + "?"]
         if not self.is_one_tree:
@@ -891,7 +892,7 @@ class InboxSort(object):
                 " (to Drive's trash)" if self.inbox_is_cloud and action == self.MOVE_TO else ""))
         if dryrun.DRYRUN:
             lines.append("(A dry run: nothing on disk will change. DRYRUN=0 changes files.)")
-        if picker.pick_option([self.CONFIRM_NO, self.CONFIRM_YES], header='\n'.join(lines),
+        if picker.pick_option([self.CONFIRM_NO, self.CONFIRM_YES], header='\n'.join(lines), title="Sure?",
                               label=LABEL) != self.CONFIRM_YES:
             return None
         moves = [(self._full(relpath), _join(self._root_rel, target)) for relpath, target in plan]
@@ -994,13 +995,13 @@ class InboxSort(object):
             lines.append("  (and %d more)" % (len(relpaths) - interactive_dir_sync.InteractiveDirSync.MAX_FILES_LISTED,))
         if dryrun.DRYRUN:
             lines.append("(A dry run: nothing on disk will change. DRYRUN=0 changes files.)")
-        if picker.pick_option([self.CONFIRM_NO, self.CONFIRM_YES], header='\n'.join(lines),
+        if picker.pick_option([self.CONFIRM_NO, self.CONFIRM_YES], header='\n'.join(lines), title="Sure?",
                               label=LABEL) != self.CONFIRM_YES:
             return None
         sure = "Are you sure? %s will be removed from %s%s." % (
             _files(len(relpaths)), self.inbox_path, " (to Drive's trash)" if self.inbox_is_cloud else
             " (to the trash)" if to_trash else ", for good")
-        if picker.pick_option([self.CONFIRM_NO, self.CONFIRM_SURE], header=sure, label=LABEL) != self.CONFIRM_SURE:
+        if picker.pick_option([self.CONFIRM_NO, self.CONFIRM_SURE], header=sure, label=LABEL, title="Sure?") != self.CONFIRM_SURE:
             return None
         file_entries = self._entries(self._full(relpath) for relpath in relpaths)
         # Once it's done (or stopped), Enter goes back to the picker, so what was removed can be read
@@ -1058,9 +1059,11 @@ def run(inbox_path, root_path, known_replicas=None):
         known_replicas.record_sort(sort.inbox_path, sort.root_path)
         replicalog.note_seen(sort.log_trees(), known_replicas)
         replicas.save(known_replicas)
-    if not sort.prepare_hashing():
-        return
-    sort.run()
+    names = paths.short_names([sort.inbox_path, sort.root_path])
+    with picker.place("Sort %s \u2192 %s" % (names[sort.inbox_path], names[sort.root_path])):
+        if not sort.prepare_hashing():
+            return
+        sort.run()
     if known_replicas is not None:
         replicalog.offer_entries(sort.changes, sort.log_trees(), known_replicas)
 

@@ -207,7 +207,7 @@ def offer_entries(changes, replicas_and_paths, known_replicas):
             line = entry_line(today, text)
             add = ADD_ENTRY % (LOG_NAME, path)
             header = "Add what was done to the log (%s) of %s?\n  %s" % (LOG_NAME, path, line)
-            answer = picker.pick_option([NO_ENTRY, add, EDIT_ENTRY], header=header)
+            answer = picker.pick_option([NO_ENTRY, add, EDIT_ENTRY], header=header, title="Log entry")
             if answer == EDIT_ENTRY:
                 edited = messages.ask("The entry of %s's %s" % (path, LOG_NAME),
                                       ["What changed in %s (after its date, %s):" % (

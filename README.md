@@ -183,7 +183,8 @@ surely the file. `Enter` then asks what to do with the picked files, with
 surely them, rename: move B's match to the file's path, or the file to the match's (greyed out
 when it can't be done). A confirmation follows, with No selected (a removal asks a second time,
 "Are you sure?", also with No selected): No takes you back to the picker, with the same files
-picked; Yes goes ahead. Its progress fills the screen under a top line saying what's being done;
+picked; Yes goes ahead. Its progress fills the screen under a top line saying what's being done
+(and over a status bar saying whether it's working, done or stopped, and a row of the keys);
 `Ctrl-C` stops it (a file cut off in the middle of its copy is deleted), and when it's done or
 stopped, `Enter` goes back to the picker, where you were, without the files done; `q` goes back
 to the main menu. With a cloud replica, the menu also has "Refresh cloud/X from Google
@@ -191,8 +192,11 @@ Drive", which reads that folder anew from Drive (as the refresh offered at the s
 it changed outside dirdelta, and in the file picker `r` reads just the selected folder anew. Unless
 `DRYRUN=0` is set, both are dry
 runs: they change nothing on disk (not even the dirs copied files would go into), and say what they
-would have done. Every screen says which it is, at the start of its bottom line (the progress
-screen: its top line): "DRY RUN" in green, or "LIVE" in red.
+would have done. Every screen says which it is, at the start of its status bar (its bottom line but
+one): "DRY RUN" in green, or "LIVE" in red. Every screen is laid out the same way: what it is on
+top (a menu's first line is its breadcrumbs, e.g. `dirdelta > Sync eliran ⇄ cloud/eliran > What
+to do`), the status bar, then the keys of that screen on the last line (`?` lists them all; `q`
+goes back, and quits only on the start menu).
 
 Each replica's log, `last_update.txt` at its root, which you keep (newest last; an entry a line
 starting with its date, `DD.MM.YYYY - what changed`, its other lines after it): when a sync starts,
@@ -200,9 +204,9 @@ dirdelta reads each replica's (a Drive one is downloaded, once until it changes)
 entry in `replicas.json`, by the replica's identity: a local one by its filesystem's UUID and the path
 in it (so a disk is the same replica wherever it's mounted), a Drive one by the account and its path.
 The menu of a run without paths says when each was last updated (`/mnt/win/eliran (updated
-17.05.2026) <-> cloud/eliran`), and "Known replicas: when each was last updated" lists them all, with
-their last entry, when they were last synced and changed by dirdelta, and which disks aren't
-connected now. When you quit a sync that changed files (live: copied, removed or moved), it offers
+17.05.2026) <-> cloud/eliran`), and its "Replicas dashboard" lists them all, with their last
+entry, when they were last synced and changed by dirdelta, which disks aren't connected now, and
+their files' hashes (in a sync or a sort, the same dashboard is in its menu and behind `#`). When you quit a sync that changed files (live: copied, removed or moved), it offers
 an entry for each changed replica, e.g. `30.10.2026 - copied 12 files from cloud/eliran` for the one
 copied into: added to its log (only its: the other's log is of the other's changes), edited first,
 or not (a log is made if there's none).

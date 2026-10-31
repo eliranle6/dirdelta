@@ -5,11 +5,14 @@ a subprocess (see docs/treepicker-integration.md), found by programs.find() (whe
 make deploy or make build put it, or else on PATH).
 """
 import collections
+import contextlib
 import functools
 import os
 import subprocess
 import tempfile
 import threading
+import time
+import traceback
 
 from dirdelta import entries
 from dirdelta import dryrun
@@ -19,6 +22,10 @@ PROGRAM_NAME = 'treepicker'
 
 # treepicker's exit code when the user quit without picking
 _EXIT_CODE_QUIT = 1
+
+# Where what goes wrong in a picker's threads is written (rather than on the screen, which
+# treepicker has)
+ERRORS_LOG = os.path.expanduser('~/.cache/dirdelta/errors.log')
 
 # How often a menu's options are asked again what they're shown as (see pick_option())
 SHOWN_AS_INTERVAL = 0.25
@@ -31,6 +38,29 @@ class PickerError(programs.ProgramError):
 # What shown_as (see pick_option()) shows an option as when it can't be picked: in grey, with Enter
 # doing nothing on it
 Disabled = collections.namedtuple('Disabled', ['text'])
+
+# Where the user is, the screens' breadcrumbs: the places entered (see place()), after the program's
+# name. A menu's tree's root shows them (treepicker shows the path to the selection after it).
+PROGRAM = 'dirdelta'
+_trail = []
+# What the trail's places are shown apart by, as treepicker shows a path
+TRAIL_SEPARATOR = ' > '
+
+
+@contextlib.contextmanager
+def place(name):
+    """Inside, the menus' breadcrumbs end with name (e.g. 'Sync eliran \u21c4 cloud/eliran')"""
+    _trail.append(name)
+    try:
+        yield
+    finally:
+        _trail.pop()
+
+
+def trail(title=None):
+    """The breadcrumbs, as a menu's root shows them: the program, the places, and title, if given"""
+    return TRAIL_SEPARATOR.join([PROGRAM] + _trail + ([title] if title else []))
+
 
 # A preview's line starting with it, a label color's name and it again is shown highlighted (see
 # highlighted())
@@ -53,12 +83,13 @@ def status(parts):
 Picked = collections.namedtuple('Picked', ['key', 'selected', 'files'])
 
 
-def pick_from_tree(tree, header='', dirs_only=False, root_name=None, keys=''):
+def pick_from_tree(tree, header='', dirs_only=False, root_name=None, keys='', key_hints=()):
     """Let the user pick a node of a DirTree (with dirs_only, only of its dirs), its root shown as
     root_name (default: the tree's displayname()). Returns [the picked node's data (entry)], or None
     if the user quit. With keys (e.g. 'n'), keys that end picking too: it returns (the key, '' for
     Enter; [the picked or selected node's data]), or None."""
-    args = ['--typed', '--root', root_name or tree.displayname()] + _header_args(header) + _keys_args(keys)
+    args = (['--typed', '--root', root_name or tree.displayname()] + _header_args(header) + _keys_args(keys) +
+            _help_args(key_hints, ()))
     if dirs_only:
         args.append('--dirs-only')
     picked_paths = _run(args + ['-'], list(_tree_paths(tree)))
@@ -72,7 +103,7 @@ def pick_from_tree(tree, header='', dirs_only=False, root_name=None, keys=''):
 
 def pick_files(rootpath, relpaths, header='', picked=None, label=None, keys='', selected=None,
                previews=None, on_selection=None, shown_as=None, notify_keys='', on_notify=None,
-               enter_picks_selection=False):
+               enter_picks_selection=False, key_hints=(), help_lines=()):
     """Let the user pick some of the files at relpaths (relative to rootpath, each dir's files and
     subdirs together, in the order to show them, as dirdiff lists them). Picking a dir picks the
     files under it. Returns a Picked: the picked ones (of relpaths), in that order, and where the
@@ -105,8 +136,13 @@ def pick_files(rootpath, relpaths, header='', picked=None, label=None, keys='', 
     more about the selected file than previews does for all of them. It too should stop on
     PickerClosed, which the Selection raises too, once the picker is gone.
 
+    key_hints: [(key, what it does here)] for the keys row at the bottom (the caller's keys, or
+    treepicker's, e.g. ('Enter', 'choose what to do')); help_lines: lines for its ? help (e.g. what
+    the tags mean).
+
     Only the files are sent: treepicker adds their dirs, so no tree is built here."""
-    args = ['--typed', '--root', rootpath, '-m', '--print-selection'] + _header_args(header)
+    args = (['--typed', '--root', rootpath, '-m', '--print-selection'] + _header_args(header) +
+            _help_args(key_hints, help_lines))
     if enter_picks_selection:
         args.append('--enter-picks-selection')
     if keys:
@@ -140,11 +176,12 @@ def pick_files(rootpath, relpaths, header='', picked=None, label=None, keys='', 
                   [path for path in picked_paths if path in files])
 
 
-def view_files(rootpath, relpaths, header='', previews=None, label=None, shown_as=None, on_selection=None):
+def view_files(rootpath, relpaths, header='', previews=None, label=None, shown_as=None, on_selection=None,
+               key_hints=(), help_lines=()):
     """Show the files at relpaths (relative to rootpath, as pick_files() takes them), e.g. what an
     action will make, with previews ({relpath: lines}) beside them, to look through. Returns
     whether the user pressed Enter (rather than quit). shown_as, on_selection: as pick_files()'s."""
-    args = ['--typed', '--root', rootpath] + _header_args(header)
+    args = ['--typed', '--root', rootpath] + _header_args(header) + _help_args(key_hints, help_lines)
     send_previews = None
     if previews:
         send_previews = lambda send: send(previews, default=[])
@@ -152,7 +189,7 @@ def view_files(rootpath, relpaths, header='', previews=None, label=None, shown_a
                 previews=send_previews, on_selection=on_selection) is not None
 
 
-def pick_under_dir(dirpath, max_depth=None, dirs_only=False, lazy=False, header='', keys=''):
+def pick_under_dir(dirpath, max_depth=None, dirs_only=False, lazy=False, header='', keys='', key_hints=()):
     """Let the user pick a file or dir (with dirs_only, a dir) under the local dir dirpath, scanned
     by treepicker itself: all of it at the start, or with lazy, a dir at a time, as it's shown
     (for a huge one, like /). Returns the picked one's full path, or None if the user quit. With
@@ -163,7 +200,7 @@ def pick_under_dir(dirpath, max_depth=None, dirs_only=False, lazy=False, header=
         args.append('--dirs-only')
     if lazy:
         args.append('--lazy')
-    picked = _run(args + _header_args(header) + _keys_args(keys) + [dirpath], None)
+    picked = _run(args + _header_args(header) + _keys_args(keys) + _help_args(key_hints, ()) + [dirpath], None)
     if picked is None:
         return None
     key, picked = _key_and_selected(keys, picked)
@@ -185,7 +222,8 @@ def _key_and_selected(keys, printed):
     return printed[0], printed[1:2]
 
 
-def pick_option(options, header='', shown_as=None, label=None, selected=None):
+def pick_option(options, header='', shown_as=None, label=None, selected=None, title=None, key_hints=(),
+                help_lines=()):
     """Let the user pick one of the options (strings). Returns it, or None if the user quit.
 
     shown_as, if given, is called again and again while the menu is shown (every
@@ -193,8 +231,9 @@ def pick_option(options, header='', shown_as=None, label=None, selected=None):
     the options to show otherwise than as themselves, e.g. with a count that's coming in: a
     string, or a Disabled for one that can't be picked (until shown_as says otherwise). What's
     returned is still the option itself. label: as pick_files()'s. selected: the option to start
-    with selected (else the first)."""
-    args = ['--list', '--root', 'Options'] + _header_args(header)
+    with selected (else the first). title: what the menu is, after the breadcrumbs (see place()).
+    key_hints, help_lines: as pick_files()'s."""
+    args = ['--list', '--root', trail(title)] + _header_args(header) + _help_args(key_hints, help_lines)
     if selected is not None:
         args += ['--select', selected]
     picked = _run(args, options, shown_as, label)
@@ -221,6 +260,17 @@ def _header_args(header):
     return ['--header', header] if header else []
 
 
+def _help_args(key_hints, help_lines):
+    """treepicker's args for the keys row's keys ([(key, what it does here)], e.g. ('#', 'hashing'))
+    and the lines its ? help adds"""
+    args = []
+    for key, text in key_hints:
+        args += ['--key', key, text]
+    for line in help_lines:
+        args += ['--help-line', line]
+    return args
+
+
 def _run(args, input_items, shown_as=None, label=None, previews=None, on_selection=None, notify=None):
     """Run treepicker with args and the items (or None) on its stdin, and with shown_as (see
     pick_option()) sending it what to show the items as, and previews and on_selection (see
@@ -230,6 +280,9 @@ def _run(args, input_items, shown_as=None, label=None, previews=None, on_selecti
     command = [_find_program(), '-0']
     for text, color in [dryrun.label()] + ([label] if label else []):
         command += ['--label', text, '--label-color', color]
+    if not any(args[i:i + 2] == ['--key', 'q'] for i in range(len(args))):
+        # q quits the start menu; anywhere else, it goes back to where the user was
+        command += ['--key', 'q', 'back' if _trail else 'quit']
     command += args
     is_done = threading.Event()
     # Pipes to treepicker (which reads --updates and --preview) and from it (it writes
@@ -260,7 +313,7 @@ def _run(args, input_items, shown_as=None, label=None, previews=None, on_selecti
         keys, on_notify = notify
         command.extend(['--notify', keys])
         jobs.append(functools.partial(_read_notifications, pipe('--notify-fd', False), on_notify))
-    threads = [threading.Thread(target=job, daemon=True) for job in jobs]
+    threads = [threading.Thread(target=_logging_errors, args=(job,), daemon=True) for job in jobs]
     try:
         # From a file, rather than written to a pipe by communicate(): with a sender busy on its
         # thread (holding the GIL), writing a big input would be slow to get the GIL back each time
@@ -300,13 +353,40 @@ def _run(args, input_items, shown_as=None, label=None, previews=None, on_selecti
     return output.split('\0')[:-1]
 
 
+def _logging_errors(job):
+    """Run job (a picker's thread's), writing what it raises to ERRORS_LOG, not on the screen"""
+    try:
+        job()
+    except Exception:
+        _log_error()
+
+
+def _log_error():
+    """Write the exception being handled, with its traceback, to ERRORS_LOG"""
+    try:
+        os.makedirs(os.path.dirname(ERRORS_LOG), exist_ok=True)
+        with open(ERRORS_LOG, 'a') as log:
+            log.write("%s\n%s\n" % (time.strftime('%Y-%m-%d %H:%M:%S'), traceback.format_exc()))
+    except OSError:
+        pass
+
+
 def _send_updates(fd, shown_as, is_done):
     """Send treepicker what shown_as() says to show the items as, as it changes, until is_done (or
     treepicker is gone)"""
     sent = {}
+    is_logged = False
     with open(fd, 'wb', closefd=False) as updates:
         while True:
-            changed = {item: shown for item, shown in shown_as().items() if sent.get(item) != shown}
+            try:
+                now = shown_as()
+            except Exception:
+                # Said on the bottom line, once written down (a bug: the rest stays as it was)
+                if not is_logged:
+                    _log_error()
+                    is_logged = True
+                now = {'': status([("Something went wrong: see %s" % (ERRORS_LOG,), 'red')])}
+            changed = {item: shown for item, shown in now.items() if sent.get(item) != shown}
             if changed:
                 try:
                     updates.write(_null_terminated(_update(item, shown)

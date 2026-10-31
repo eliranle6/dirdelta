@@ -24,6 +24,7 @@ import threading
 import time
 
 from dirdelta import hashcache
+from dirdelta import paths
 
 ALGORITHM = 'sha1'
 # How much of a file is read at a time (pausing between reads)
@@ -519,25 +520,29 @@ def color(progress):
     return 'red' if done < 34 else 'orange' if done < 67 else 'yellow'
 
 
-def status_text(job, progress=None):
-    """A job's status, short, for a picker's bottom line: e.g. 'photos: 63% hashed (paused)'"""
+def status_text(job, progress=None, name=None):
+    """A job's status, short, for a picker's bottom line: e.g. 'photos: 63% hashed (paused)'; name:
+    the replica's name there (default: its dir's name)"""
     progress = progress or job.progress()
+    name = name or job.name()
     if progress.state in (NOT_SCANNED, SCANNING):
-        return "%s: listing its files..." % (job.name(),)
+        return "%s: listing its files..." % (name,)
     if progress.state == DONE:
-        return "%s: hashed ✓" % (job.name(),)
-    text = "%s: %d%% hashed" % (job.name(), percent(progress))
+        return "%s: hashed \u2713" % (name,)
+    text = "%s: %d%% hashed" % (name, percent(progress))
     if not progress.is_started:
         text += " (paused)" if progress.is_paused else " (not hashing)"
     return text
 
 
 def status_parts(jobs):
-    """[(text, color)] of the jobs' statuses, for picker.status()"""
+    """[(text, color)] of the jobs' statuses, for picker.status(), each by its replica's short name
+    (one that tells it from the others, see paths.short_names())"""
+    names = paths.short_names([job.root for job in jobs])
     parts = []
     for job in jobs:
         progress = job.progress()
-        parts.append((status_text(job, progress), color(progress)))
+        parts.append((status_text(job, progress, names[job.root]), color(progress)))
     return parts
 
 

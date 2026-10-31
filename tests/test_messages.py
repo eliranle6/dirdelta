@@ -80,22 +80,26 @@ class ProgressScreenTest(unittest.TestCase):
         self.assertEqual(lines, b'Copying 2 files\none\n')
         input_mock.assert_not_called()
 
-    def test_on_a_terminal_the_title_stays_on_top_and_enter_ends_it(self):
+    def test_on_a_terminal_the_title_on_top_the_bars_at_the_bottom_and_enter_ends_it(self):
         escapes, lines, input_mock = self.run_screen(True, lambda: messages.print_line('one'))
-        # Cleared, the title on top, the rest scrolling (rows 2 to 10), then the region reset
-        self.assertTrue(escapes.startswith('\033[2J\033[H'))
-        self.assertIn('Ctrl-C to stop: Copying 2 files', escapes)
-        self.assertIn('\033[2;10r', escapes)
-        self.assertIn('Done. Press Enter to continue: Copying 2 files', escapes)
-        # Scrolling the whole screen again, the cursor below it
-        self.assertTrue(escapes.endswith('\033[r\033[10;1H\n'))
+        # Cleared, the title alone on top, the rest scrolling (rows 2 to 8), above the status bar
+        # and the keys row
+        self.assertTrue(escapes.startswith('\033[2J\033[H\033[1mCopying 2 files\033[0m\033[2;8r'))
+        self.assertIn('\033[9;1H\033[2K\033[30;47m Working...', escapes)
+        self.assertIn('\033[10;1H\033[2K\033[7m Ctrl-C \033[0m stop', escapes)
+        # Once done: Enter, at the bottom (never on top)
+        self.assertIn('\033[30;47m Done', escapes)
+        self.assertIn('\033[7m Enter \033[0m continue', escapes)
+        self.assertNotIn('Press Enter', escapes)
+        # Scrolling the whole screen again, the bars cleared
+        self.assertTrue(escapes.endswith('\033[r\033[9;1H\033[2K\033[10;1H\033[2K'))
         self.assertEqual(lines, b'one\n')
         input_mock.assert_called_once_with()
 
-    def test_label_starts_the_top_line(self):
+    def test_label_starts_the_status_bar(self):
         escapes, _, _ = self.run_screen(True, lambda: None, label=('DRY RUN', 'green'))
-        self.assertIn('\033[2J\033[H\033[1;30;42m DRY RUN \033[0m \033[7mCtrl-C to stop', escapes)
-        self.assertIn('\033[1;30;42m DRY RUN \033[0m \033[7mDone.', escapes)
+        self.assertIn('\033[9;1H\033[2K\033[1;30;42m DRY RUN \033[0m\033[30;47m  Working...', escapes)
+        self.assertIn('\033[1;30;42m DRY RUN \033[0m\033[30;47m  Done', escapes)
 
     def test_label_without_a_terminal(self):
         _, lines, _ = self.run_screen(False, lambda: None, label=('LIVE', 'red'))
@@ -107,7 +111,7 @@ class ProgressScreenTest(unittest.TestCase):
             raise KeyboardInterrupt()
         escapes, lines, _ = self.run_screen(True, body)
         self.assertIn(b'Stopped (Ctrl-C)', lines)
-        self.assertIn('Stopped. Press Enter to continue: Copying 2 files', escapes)
+        self.assertIn('\033[30;47m Stopped (Ctrl-C)', escapes)
 
     def test_an_action_that_stops_itself_shows_as_stopped(self):
         # E.g. copying, which catches Ctrl-C to say how many files it copied
@@ -117,22 +121,23 @@ class ProgressScreenTest(unittest.TestCase):
         escapes, lines, _ = self.run_screen(True, body)
         # Red, on a terminal
         self.assertEqual(lines, b'\x1b[31mStopped (Ctrl-C)\x1b[0m\nCopied 1 of 2 files\n')
-        self.assertIn('Stopped. Press Enter to continue', escapes)
+        self.assertIn('\033[30;47m Stopped (Ctrl-C)', escapes)
 
     def test_the_next_screen_starts_not_stopped(self):
         self.run_screen(True, messages.note_stopped)
         escapes, _, _ = self.run_screen(True, lambda: None)
-        self.assertIn('Done. Press Enter to continue', escapes)
+        self.assertIn('\033[30;47m Done', escapes)
 
     def test_show(self):
         escapes, lines, input_mock = self.run_screen(
             True, None, screen=lambda: messages.show('Nothing to copy', ['/b has all of /a'],
                                                     ('DRY RUN', 'green')))
         self.assertEqual(lines, b'/b has all of /a\n')
-        # Not an action: no Ctrl-C
+        # Not an action: no Ctrl-C, no status
         self.assertNotIn('Ctrl-C', escapes)
-        self.assertIn('\033[7mNothing to copy', escapes)
-        self.assertIn('\033[7mPress Enter to continue: Nothing to copy', escapes)
+        self.assertNotIn('Done', escapes)
+        self.assertIn('\033[1mNothing to copy', escapes)
+        self.assertIn('\033[7m Enter \033[0m continue', escapes)
         input_mock.assert_called_once_with()
 
     def test_ask(self):
@@ -146,9 +151,10 @@ class ProgressScreenTest(unittest.TestCase):
         self.assertEqual(hook.call_args_list[-1], mock.call())
         input_mock.assert_called_once_with('> ')
         self.assertEqual(lines, b'Moving a.txt\n')
-        self.assertIn('\033[7mThe name', escapes)
+        self.assertIn('\033[1mThe name', escapes)
+        self.assertIn('\033[7m Enter \033[0m done  \033[7m Ctrl-C \033[0m back', escapes)
         # No Enter to wait for after it
-        self.assertNotIn('Press Enter', escapes)
+        self.assertNotIn('continue', escapes)
         self.assertEqual(asked['answer'], input_mock.return_value.strip.return_value)
 
     def test_ask_with_no_answer_is_none(self):

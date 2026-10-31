@@ -88,7 +88,55 @@ class PickerTest(unittest.TestCase):
         if not with_label:
             index = args.index('--label')
             args = args[:index] + args[index + 4:]
+            # Nor what q does, which every call says too (see test_q_quits_or_goes_back)
+            index = args.index('--key')
+            if args[index + 1] == 'q':
+                args = args[:index] + args[index + 3:]
         return args, [item for item in log['stdin'].split('\0') if item]
+
+    def test_q_quits_or_goes_back(self):
+        self.answer('x')
+        picker.pick_option(['x'])
+        args, _ = self.call(with_label=True)
+        self.assertEqual(args[5:8], ['--key', 'q', 'quit'])
+        with picker.place('Sync'):
+            picker.pick_option(['x'])
+        args, _ = self.call(with_label=True)
+        self.assertEqual(args[5:8], ['--key', 'q', 'back'])
+        # Unless the caller says what it does
+        picker.pick_option(['x'], key_hints=[('q', 'cancel')])
+        args, _ = self.call(with_label=True)
+        self.assertNotIn('quit', args)
+        self.assertIn('cancel', args)
+
+    def test_a_failing_background_job_is_logged_not_printed(self):
+        self.answer('x')
+        log = os.path.join(tempfile.mkdtemp(prefix='dirdelta-picker-'), 'errors.log')
+        self.addCleanup(shutil.rmtree, os.path.dirname(log))
+
+        def shown_as():
+            raise TypeError("a bug")
+        with mock.patch('dirdelta.picker.ERRORS_LOG', log), mock.patch('sys.stderr') as stderr:
+            self.assertEqual(picker.pick_option(['x'], shown_as=shown_as), 'x')
+        stderr.write.assert_not_called()
+        with open(log) as f:
+            self.assertIn("TypeError: a bug", f.read())
+
+    def test_a_failing_shown_as_says_so_on_the_bottom_line(self):
+        sent = []
+
+        def updates(fd, shown_as, is_done):
+            pass
+        log = os.path.join(tempfile.mkdtemp(prefix='dirdelta-picker-'), 'errors.log')
+        self.addCleanup(shutil.rmtree, os.path.dirname(log))
+        read_fd, write_fd = os.pipe()
+        is_done = mock.Mock()
+        is_done.wait.return_value = True
+        with mock.patch('dirdelta.picker.ERRORS_LOG', log):
+            picker._send_updates(write_fd, mock.Mock(side_effect=TypeError("a bug")), is_done)
+        os.close(write_fd)
+        with os.fdopen(read_fd, 'rb') as pipe:
+            self.assertIn(b"Something went wrong", pipe.read())
 
     def test_every_picker_shows_whether_its_a_dry_run(self):
         self.answer('x')
@@ -344,7 +392,7 @@ class PickerTest(unittest.TestCase):
         self.answer('Copy from /a to /b')
         self.assertEqual(picker.pick_option(options, header='What now?'), 'Copy from /a to /b')
         args, items = self.call()
-        self.assertEqual(args, ['-0', '--list', '--root', 'Options', '--header', 'What now?'])
+        self.assertEqual(args, ['-0', '--list', '--root', 'dirdelta', '--header', 'What now?'])
         self.assertEqual(items, options)
 
     def test_pick_option_sends_what_options_are_shown_as_as_it_changes(self):
@@ -359,7 +407,7 @@ class PickerTest(unittest.TestCase):
         with mock.patch('dirdelta.picker.SHOWN_AS_INTERVAL', 0.01):
             self.assertEqual(picker.pick_option(options, shown_as=shown_as), 'Copy')
         args, items = self.call()
-        self.assertEqual(args[:-2], ['-0', '--list', '--root', 'Options'])
+        self.assertEqual(args[:-2], ['-0', '--list', '--root', 'dirdelta'])
         self.assertEqual(args[-2], '--updates')
         self.assertEqual(items, options)
         with open(self.log) as f:
@@ -404,6 +452,18 @@ class PickerTest(unittest.TestCase):
         self.assertEqual(picker.pick_files('/root', [name]).files, [name])
         _, items = self.call()
         self.assertEqual(items, ['f ' + name])
+
+
+class TrailTest(unittest.TestCase):
+    def test_the_places_entered_after_the_program(self):
+        self.assertEqual(picker.trail(), 'dirdelta')
+        with picker.place('Sync a \u21c4 b'):
+            self.assertEqual(picker.trail('Hashing'), 'dirdelta > Sync a \u21c4 b > Hashing')
+        self.assertEqual(picker.trail(), 'dirdelta')
+
+    def test_help_args(self):
+        self.assertEqual(picker._help_args([('#', 'dashboard')], ['[x]: y']),
+                         ['--key', '#', 'dashboard', '--help-line', '[x]: y'])
 
 
 class StatusTest(unittest.TestCase):

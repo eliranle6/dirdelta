@@ -99,6 +99,17 @@ def known_under(dirpath):
     return {path[len(prefix):]: (size, mtime_ns, json.loads(hashes)) for path, size, mtime_ns, hashes in rows}
 
 
+def count_under(dirpath):
+    """How many files under dirpath (an absolute path) have hashes kept (as they were when hashed)"""
+    prefix = dirpath.rstrip('/') + '/'
+    with _lock:
+        db = _database()
+        if db is None:
+            return 0
+        return db.execute('SELECT count(*) FROM files WHERE path >= ? AND path < ?',
+                          (prefix, prefix[:-1] + '0')).fetchone()[0]
+
+
 def move(path, new_path):
     """A file, or a dir with all in it, was moved from path to new_path (a rename keeps its contents,
     size and modification time): its hashes are kept under its new path"""
