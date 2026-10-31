@@ -472,5 +472,15 @@ class StatusTest(unittest.TestCase):
                          "\x01green\x01a: hashed\x01orange\x01b: 40% hashed")
 
 
+
+class StyledTest(unittest.TestCase):
+    def test_parts_in_their_styles_and_back(self):
+        text = picker.styled([('a.jpg', None), ('  ', None), ('[x]', 'bold,magenta'), ('', 'red')])
+        self.assertEqual(text, '\x02\x02a.jpg\x02\x02  \x02bold,magenta\x02[x]')
+        self.assertEqual(picker.unstyled(text), 'a.jpg  [x]')
+        # Without styles, plain
+        self.assertEqual(picker.styled([('a', None), ('b', '')]), 'ab')
+
+
 if __name__ == '__main__':
     unittest.main()

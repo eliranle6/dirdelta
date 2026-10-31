@@ -487,6 +487,8 @@ HASHED_TAG = "[\u25cf hashed]"
 HASHING_TAG = "[\u25d0 hashing now]"
 NOT_HASHED_TAG = "[\u25cb not hashed yet]"
 FAILED_TAG = "[\u2715 couldn't be hashed]"
+# Each one's style (see picker.styled()): hashing in orange, as its status label
+TAG_STYLES = {HASHED_TAG: 'green', HASHING_TAG: 'orange', NOT_HASHED_TAG: 'grey', FAILED_TAG: 'red'}
 
 
 def tag(job, relpath):

@@ -166,8 +166,11 @@ class InteractiveDirSyncTest(unittest.TestCase):
             kwargs = self.pick_files.call_args.kwargs
             self.assertEqual(kwargs['notify_keys'], '\x18')
             self.assertIn(('Ctrl-X', 'open'), kwargs['key_hints'])
-            kwargs['on_notify']('\x18', 'sub/c.txt', ['sub/b.txt'])
-        open_in_background.assert_called_once_with(['sub/c.txt'], {'sub/b.txt', 'sub/c.txt'})
+            kwargs['on_notify']('\x18', 'sub/c.txt', [])
+            kwargs['on_notify']('\x18', 'sub/c.txt', ['sub/b.txt', 'sub/c.txt'])
+        files = {'sub/b.txt', 'sub/c.txt'}
+        self.assertEqual(open_in_background.call_args_list, [mock.call(['sub/c.txt'], files),
+                                                             mock.call(['sub/b.txt', 'sub/c.txt'], files)])
 
     def test_what_opening_says_is_on_the_bottom_line(self):
         self._browse([None], [])

@@ -8,6 +8,7 @@ import collections
 import contextlib
 import functools
 import os
+import re
 import subprocess
 import tempfile
 import threading
@@ -85,6 +86,28 @@ def segments(parts):
     """A line of pick_option(previews_below=...)'s in parts: parts is [(text, color)], each on a
     label color (or plain, for None or '')"""
     return ''.join('%s%s%s%s' % (HIGHLIGHT_MARK, color or '', HIGHLIGHT_MARK, text) for text, color in parts if text)
+
+
+# A text of a tree's node (shown_as's) or of a preview's line is in styled parts with it (see
+# styled())
+STYLE_MARK = '\x02'
+# The styles' colors there (text colors, rather than labels' backgrounds)
+STYLE_COLORS = ('red', 'green', 'yellow', 'blue', 'magenta', 'cyan', 'grey', 'orange')
+
+
+def styled(parts):
+    """A pick_files() node's text (shown_as's), or a preview column's line, in styled parts: parts is
+    [(text, style)], a style being a STYLE_COLORS color, 'bold', or both ('bold,magenta'; None or
+    '': plain). A node's styles show while it isn't selected, picked or matching a search (which
+    matches its text, not its styles); the empty parts are left out."""
+    if not any(style for text, style in parts if text):
+        return ''.join(text for text, _ in parts)
+    return ''.join('%s%s%s%s' % (STYLE_MARK, style or '', STYLE_MARK, text) for text, style in parts if text)
+
+
+def unstyled(text):
+    """text (styled()'s) without its styles"""
+    return re.sub('%s[^%s]*%s' % ((STYLE_MARK,) * 3), '', text)
 
 
 def display_width(text):

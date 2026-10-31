@@ -55,6 +55,11 @@ Like fzf: dirdelta starts `treepicker`, which draws on the terminal itself
   parts (`picker.pick_option(previews_below=...)`, `picker.segments()`), e.g. the inbox's action
   menu's destination path, and under it a bracket per part saying where it's from. And an
   `--updates` option may end with `color=NAME` (`picker.Colored`): the option's text color.
+- Styled parts (`picker.styled()`): an `--updates` text, or a preview column's line, may switch
+  styles with `\x02STYLE\x02` (a text color, `grey`, `orange` and/or `bold`; empty: plain), e.g.
+  the tags after a file's name (hashing's, Claude's in magenta, junk in yellow, downloads) and the
+  inbox's preview titles. treepicker searches the text without the marks, and shows a node's
+  styles only while it isn't selected, picked, greyed or a search's match.
 - While a search filters the tree, Space on a dir picks only the matches under it.
 - The inbox's picker: Enter with nothing picked picks the selected node, as Space would
   (`--enter-picks-selection`, `pick_files(enter_picks_selection=True)`).
@@ -125,7 +130,8 @@ dirdelta, each a commit:
   sibling, Ctrl-/ searches only when Enter is
   pressed, and f switches between the matches-only tree and the whole tree
   with matches highlighted. ? shows the keys (the stats line says so).
-  Not there: the leaf jumps (Ctrl-J/K) and u/d (use Ctrl-U/Ctrl-D or
+  Ctrl-J/Ctrl-K go to the next/previous sibling (Enter is told from Ctrl-J: curses
+  runs with `nonl()`, so Enter is a carriage return). Not there: u/d (use Ctrl-U/Ctrl-D or
   PageUp/PageDown); not needed.
 - Search is smartcase (case-insensitive unless the keyword has uppercase)
   and matches names, like the Python picker's.

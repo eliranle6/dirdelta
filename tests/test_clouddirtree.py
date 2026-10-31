@@ -675,6 +675,20 @@ class CloudDirTreeChangesTest(unittest.TestCase):
             self.assertEqual(f.read(), b'track content')
         self.assertIn('album/track.mp3', local)
 
+    def test_a_download_with_progress_says_how_far_it_got_after_each_chunk(self):
+        made = {}
+
+        def downloader(local_file, request, chunksize=None):
+            made['chunksize'] = chunksize
+            local_file.write(b'track content')
+            return mock.Mock(next_chunk=mock.Mock(side_effect=[(mock.Mock(resumable_progress=5), False),
+                                                               (mock.Mock(resumable_progress=13), True)]))
+        got = []
+        with mock.patch('dirdelta.clouddirtree.MediaIoBaseDownload', side_effect=downloader):
+            self.tree.fetch_file('album/track.mp3', os.path.join(self.local_dir, 'track.mp3'), progress=got.append)
+        self.assertEqual(got, [5, 13])
+        self.assertEqual(made['chunksize'], clouddirtree.PROGRESS_CHUNK_SIZE)
+
     def test_a_download_gets_drives_modification_time(self):
         self.tree._modified['album/track.mp3'] = 1719842602
         def downloader(local_file, request):

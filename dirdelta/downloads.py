@@ -11,11 +11,21 @@ DOWNLOADS_DIR = os.path.expanduser('~/.cache/dirdelta/downloads')
 MAX_BYTES = 2 * 1024 ** 3
 
 
+def _path(cloud_path, size):
+    """Where the Drive file at cloud_path (of size) is downloaded to"""
+    key = hashlib.sha1(('%s\t%s' % (cloud_path, size)).encode('utf-8', 'surrogateescape')).hexdigest()[:16]
+    return os.path.join(DOWNLOADS_DIR, key, os.path.basename(cloud_path))
+
+
+def is_downloaded(cloud_path, size):
+    """Whether the Drive file at cloud_path (of size) is downloaded already (get() needn't)"""
+    return os.path.exists(_path(cloud_path, size))
+
+
 def get(cloud_path, size, fetch):
     """The local path of the Drive file at cloud_path (of size), downloaded with fetch(local_path)
     unless it was already. Raises what fetch raises (and then keeps nothing)."""
-    key = hashlib.sha1(('%s\t%s' % (cloud_path, size)).encode('utf-8', 'surrogateescape')).hexdigest()[:16]
-    path = os.path.join(DOWNLOADS_DIR, key, os.path.basename(cloud_path))
+    path = _path(cloud_path, size)
     if os.path.exists(path):
         # Used now: the last to go
         os.utime(os.path.dirname(path))

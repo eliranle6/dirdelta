@@ -76,6 +76,8 @@ def ask(title, lines, prompt, default='', label=None):
 
 # A label's look on a terminal, by its color name: bold, black or white on the color
 _LABEL_STYLES = {'green': '\033[1;30;42m', 'red': '\033[1;37;41m'}
+# What a screen says under its lines once they're all there, while it waits for Enter
+PRESS_ENTER = "Press Enter to continue"
 # The status bar's look (as treepicker's): black on white
 _STATUS_STYLE = '\033[30;47m'
 _RESET = '\033[0m'
@@ -123,6 +125,10 @@ def progress_screen(title, label=None, is_stoppable=True, wait=True, keys=None):
             status = ("Stopped (Ctrl-C)" if _is_stopped else "Done") if is_stoppable else ""
             # Saving the cursor, and back to it after
             _write("\0337" + _bottom(height, label, status, [('Enter', 'continue')]) + "\0338")
+            # And under what was printed, where it's read, after a blank line, the cursor waiting
+            # after it
+            print_line("")
+            _write("\033[1m" + PRESS_ENTER + _RESET + " ")
             try:
                 input()
             except (EOFError, KeyboardInterrupt):

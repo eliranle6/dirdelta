@@ -23,6 +23,8 @@ RESUMABLE_MIN_SIZE = 5 * 1024 * 1024
 # How many times the client retries a request that failed on a rate limit or a server error, waiting
 # longer each time (exponential backoff)
 NUM_RETRIES = 5
+# How much of a file a download with progress (see fetch_file()) asks Drive for at a time
+PROGRESS_CHUNK_SIZE = 4 * 1024 * 1024
 # The most requests in a batch request, and ids that generateIds gives at once (the API's limits)
 MAX_BATCH_SIZE = 100
 MAX_GENERATED_IDS = 1000
@@ -156,18 +158,25 @@ class CloudDirTree(dirtree.DirTree):
         return (["%s Google files (Docs, Sheets, ...), which are only in Drive, so they can't be "
                  "copied to a dir: skipped" % (len(google_files),)] + _listed(google_files))
 
-    def fetch_file(self, relpath, local_path):
-        """Download the file at relpath to local_path. Raises OSError if it can't."""
+    def fetch_file(self, relpath, local_path, progress=None):
+        """Download the file at relpath to local_path. Raises OSError if it can't. With progress,
+        it's called with how many bytes are downloaded so far, after each PROGRESS_CHUNK_SIZE (one
+        request after another, never at once)."""
         reason = self.cant_fetch(relpath)
         if reason is not None:
             raise OSError("Can't download %s: %s" % (relpath, reason))
         try:
             request = driveapi.service().files().get_media(fileId=self._cloud_ids[relpath])
             with open(local_path, 'wb') as local_file:
-                downloader = MediaIoBaseDownload(local_file, request)
+                if progress is None:
+                    downloader = MediaIoBaseDownload(local_file, request)
+                else:
+                    downloader = MediaIoBaseDownload(local_file, request, chunksize=PROGRESS_CHUNK_SIZE)
                 is_done = False
                 while not is_done:
-                    _, is_done = downloader.next_chunk()
+                    status, is_done = downloader.next_chunk()
+                    if progress is not None and status is not None:
+                        progress(status.resumable_progress)
         except HttpError as error:
             raise OSError("Download of %s failed: %s" % (relpath, error))
         # When it was modified, as in Drive, rather than when it was downloaded

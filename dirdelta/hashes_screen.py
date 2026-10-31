@@ -430,6 +430,14 @@ class Marks(object):
         if self._job is not None:
             self._job.unsubscribe(self._on_hashed)
 
+    def text(self, relpath):
+        """What the file at relpath is shown as: its name, and its tag if it's the job's"""
+        name = os.path.basename(relpath)
+        if self._job is None or relpath not in self._wanted:
+            return name
+        tag = hashing.tag(self._job, relpath)
+        return picker.styled([(name, None), ("  ", None), (tag, hashing.TAG_STYLES[tag])])
+
     def __call__(self):
         shown = {}
         if self._job is not None:
@@ -439,7 +447,7 @@ class Marks(object):
             changed = set(self._relpaths) if changed is None else changed | current | self._current
             self._current = current
             for relpath in changed:
-                shown[relpath] = "%s  %s" % (os.path.basename(relpath), hashing.tag(self._job, relpath))
+                shown[relpath] = self.text(relpath)
         shown[''] = picker.status(hashing.status_parts(self._status_jobs) + (self._extra() if self._extra else []))
         return shown
 

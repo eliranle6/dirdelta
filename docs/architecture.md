@@ -121,9 +121,15 @@ at a time, `_drive_lock`), from `Ctrl-I` (`pick_files(notify_keys='\t\x18')`,
 treepicker's `--notify`, `_on_key()`: the picked files, or else the selected file or dir's;
 describing and placing) or the menu (Describe: describing only; Ask where:
 both); quitting waits for it (`_finish_describing()`). `Ctrl-X` (`OPEN_KEY`, `opening.KEY`)
-opens the selected file (`open_in_background()`, an `opening.Opener`: `xdg-open` in a session of
-its own, a Drive file downloaded first, through `downloads.get()`; the bottom line says how it
-went, `Opener.status()`); a sync's picker has it too. Every key that acts on the selection is in
+opens the picked files, or else the selected one (`Opener.press()`, an `opening.Opener`: `xdg-open`
+in a session of its own, a queue of them on a thread of its own, a Drive file downloaded first,
+through `downloads.get()` and `fetch_file(progress=...)`, which asks Drive for
+`PROGRESS_CHUNK_SIZE` at a time; more than one to download asked about first, on the status
+bar, by `press()`: a second `Ctrl-X` on the same files within `CONFIRM_FOR` goes ahead). The
+status bar says how far the downloads got (`Opener.status_parts()`), and each file in a tag after
+its name (`Opener.tags()`, added by `opening.with_tags()` to `_shown_as()`'s, or a sync's
+`hashes_screen.Marks`'s); a sync's picker has it too. The menu's Open asks on a screen of its
+own (`opening.confirm()`). Every key that acts on the selection is in
 the action menu too (at its end): Open (the picked files, at most `opening.MAX_OPENED`), and for a
 Drive inbox "Read ... anew from Google Drive" (`r`'s; `_act()` returns `REFRESH_KEY` for it). Enter (with none picked, the
 selection: `pick_files(enter_picks_selection=True)`, treepicker's
@@ -155,8 +161,8 @@ by the names, sizes and descriptions it's given), and the copies (by their conte
 Logs (see `dirsync_main.py` below): `inbox.run()` notes both replicas seen
 (`replicalog.note_seen()`, `InboxSort.log_trees()`: a tree of each, apart from
 the one moves happen in), the sort notes what it does live in `InboxSort.changes`
-(the sorted tree: 'added' from the inbox, 'copied'; the inbox: 'moved' to the
-sorted tree, 'removed'), and once it's quit, `replicalog.offer_entries()`.
+(the sorted tree: 'added' from the inbox, 'copied'; the inbox: only 'removed',
+not the files moved out of it to the sorted tree), and once it's quit, `replicalog.offer_entries()`.
 Junk (`_junk()`): by its name or size (`junk.find()` at each pick, `_junk_by_name`: system,
 temporary, partly downloaded, empty files, installers, archives unpacked beside them), or a
 `remove` of Claude's for a file with no copies. Shown as `[junk? why]` (`JUNK_BY_NAME`) or
@@ -479,8 +485,8 @@ took ~2.5s; the picker now opens 0.2s after the diff).
   read-only one (`is_writable()`), Rename for picks with no sure match
   (`elsewhere.sure_matches()`; a Google file or a `___DUP__` one can't be
   moved, `cant_move()`); then what the picker's keys do on the selection, so
-  each is in the menu too: Open (`opening.Opener`, the picked files; `Ctrl-X`
-  opens the selected one, a `--notify` key), and with a cloud replica Read
+  each is in the menu too: Open (`opening.Opener`, the picked files, as
+  `Ctrl-X`, a `--notify` key, does: see `inbox.py` above), and with a cloud replica Read
   anew from Drive (`r`'s: `_act()` returns `REFRESH_KEY`, and `browse()`
   does what the key does) → its confirmation (`pick_option(['No', 'Yes'])`, No
   first; a removal a second time, "Are you sure?", `[No, CONFIRM_SURE]`) → act

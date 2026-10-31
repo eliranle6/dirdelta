@@ -90,10 +90,12 @@ class ProgressScreenTest(unittest.TestCase):
         # Once done: Enter, at the bottom (never on top)
         self.assertIn('\033[30;47m Done', escapes)
         self.assertIn('\033[7m Enter \033[0m continue', escapes)
-        self.assertNotIn('Press Enter', escapes)
+        # And under the lines, where they're read
+        self.assertIn('\033[1m%s\033[0m ' % (messages.PRESS_ENTER,), escapes)
+        self.assertLess(escapes.index('\033[30;47m Done'), escapes.index(messages.PRESS_ENTER))
         # Scrolling the whole screen again, the bars cleared
         self.assertTrue(escapes.endswith('\033[r\033[9;1H\033[2K\033[10;1H\033[2K'))
-        self.assertEqual(lines, b'one\n')
+        self.assertEqual(lines, b'one\n\n')
         input_mock.assert_called_once_with()
 
     def test_label_starts_the_status_bar(self):
@@ -120,7 +122,7 @@ class ProgressScreenTest(unittest.TestCase):
             messages.print_line('Copied 1 of 2 files')
         escapes, lines, _ = self.run_screen(True, body)
         # Red, on a terminal
-        self.assertEqual(lines, b'\x1b[31mStopped (Ctrl-C)\x1b[0m\nCopied 1 of 2 files\n')
+        self.assertEqual(lines, b'\x1b[31mStopped (Ctrl-C)\x1b[0m\nCopied 1 of 2 files\n\n')
         self.assertIn('\033[30;47m Stopped (Ctrl-C)', escapes)
 
     def test_the_next_screen_starts_not_stopped(self):
@@ -132,7 +134,7 @@ class ProgressScreenTest(unittest.TestCase):
         escapes, lines, input_mock = self.run_screen(
             True, None, screen=lambda: messages.show('Nothing to copy', ['/b has all of /a'],
                                                     ('DRY RUN', 'green')))
-        self.assertEqual(lines, b'/b has all of /a\n')
+        self.assertEqual(lines, b'/b has all of /a\n\n')
         # Not an action: no Ctrl-C, no status
         self.assertNotIn('Ctrl-C', escapes)
         self.assertNotIn('Done', escapes)

@@ -66,6 +66,12 @@ LOOKING = "(Claude is looking at it...)"
 # What a file Claude described is shown as, after its name: a search (/) for 'claude:' finds them,
 # and one for a word finds the files Claude said it of
 DESCRIBED = "[claude: %s]"
+# The style of what Claude says, after a file's name (see picker.styled()): in Claude's color, as
+# its options' in the action menu (VERB_COLORS)
+CLAUDE_STYLE = 'magenta'
+# The titles of what Claude says, in the preview column
+DESCRIPTION_TITLE = "Description (ai):"
+DESTINATION_TITLE = "Dest. path recommendation (ai):"
 
 
 # What an option of the action menu does to the files, and its color: its text's, and its label's
@@ -255,7 +261,7 @@ class InboxSort(object):
                   (self.inbox_path, self.root_path))
         keys = (self.REFRESH_KEY if self.inbox_is_cloud else '') + hashes_screen.KEY
         key_hints = ([('Enter', 'what to do (none picked: the selected one)'),
-                      ('Ctrl-I', 'Claude: describe, and say where they go'), ('Ctrl-X', 'open')] +
+                      ('Ctrl-I', 'Claude: describe, and say where they go'), opening.KEY_HINT] +
                      ([(self.REFRESH_KEY, 'read the folder anew from Drive')] if self.inbox_is_cloud else []) +
                      [hashes_screen.KEY_HINT])
         help_lines = (["Tags after a file's name (/ searches them too):",
@@ -333,29 +339,34 @@ class InboxSort(object):
         shown = {}
         job = hashing.job_for(self.inbox_path) if not self.inbox_is_cloud else None
         for relpath in relpaths:
+            # Each (text, style): Claude's in its color, junk in a guess's yellow
             tags = []
             if relpath in self._descriptions:
-                tags.append(DESCRIBED % (self._descriptions[relpath],))
+                tags.append((DESCRIBED % (self._descriptions[relpath],), CLAUDE_STYLE))
             elif relpath in self._describing:
-                tags.append(LOOKING)
+                tags.append((LOOKING, 'grey'))
             junk_reason = self._junk(relpath)
             if junk_reason is not None:
-                tags.append((JUNK_BY_NAME if relpath in self._junk_by_name else JUNK_BY_CLAUDE) % (junk_reason,))
+                tags.append(((JUNK_BY_NAME if relpath in self._junk_by_name else JUNK_BY_CLAUDE) % (junk_reason,),
+                             'yellow'))
             if job is not None:
-                tags.append(hashing.tag(job, relpath))
+                tag = hashing.tag(job, relpath)
+                tags.append((tag, hashing.TAG_STYLES[tag]))
             if tags:
-                shown[relpath] = "%s  %s" % (os.path.basename(relpath), '  '.join(tags))
+                shown[relpath] = picker.styled([(os.path.basename(relpath), None)] +
+                                               [part for tag in tags for part in (("  ", None), tag)])
         describing, placing = len(self._describing), len(self._placing)
         failed = len([relpath for relpath in relpaths if relpath in self._failed])
         busy = ["%s %s" % (what, _files(count))
                 for what, count in (("describing", describing), ("placing", placing)) if count]
         status = ("Claude: " + ', '.join(busy) if busy else
                   "Claude: couldn't do %s" % (_files(failed),) if failed else '')
-        note = self._opener.status()
-        if note:
-            status = note + ("; " + status if status else "")
-        shown[''] = (hashes_screen.picker_status(self._views(), [(status, 'yellow')]) if self._jobs() else
-                     status)
+        # Downloading files to open them: how far it got (on the status bar, first), and each
+        # file's tag
+        opening.with_tags(shown, self._opener, os.path.basename)
+        parts = self._opener.status_parts() + ([(status, 'yellow')] if status else [])
+        shown[''] = (hashes_screen.picker_status(self._views(), parts) if self._jobs() else
+                     picker.status(parts) if self._opener.status_parts() else status)
         return shown
 
     def _send_previews(self, relpaths, send):
@@ -371,39 +382,44 @@ class InboxSort(object):
             time.sleep(PREVIEWS_INTERVAL)
 
     def _previews(self, relpaths):
-        """{relpath: lines} beside the picker: the file's size, and what Claude said of it"""
+        """{relpath: lines} beside the picker: the file's size, what Claude said of it, where the
+        sorted tree has it already, and where it goes; each under a title in its color (Claude's
+        in its own, see CLAUDE_STYLE)"""
         previews = {}
         for relpath in relpaths:
             size = self._size(relpath)
-            lines = ["This one: %s" % (elsewhere.format_size(size),)] if size is not None else []
+            lines = [picker.styled([("Size: ", 'bold'), (elsewhere.format_size(size), None)])] if size is not None else []
             if relpath in self._descriptions:
-                lines += ["", "Claude says it's:"] + _wrapped(self._descriptions[relpath], "  ")
+                lines += ["", _title(DESCRIPTION_TITLE, CLAUDE_STYLE)] + _wrapped(self._descriptions[relpath], "  ")
             elif relpath in self._describing:
-                lines += ["", "Claude is looking at it..."]
+                lines += ["", _title(DESCRIPTION_TITLE, CLAUDE_STYLE), _grey("  Claude is looking at it...")]
             elif relpath in self._failed and relpath not in self._descriptions:
-                lines += ["", "Claude couldn't describe it:"] + _wrapped(self._failed[relpath], "  ")
+                lines += ["", _title(DESCRIPTION_TITLE + " failed", 'red')] + _wrapped(self._failed[relpath], "  ")
             lines += self._copies_lines(relpath)
             recommendation = self._recommendations.get(relpath)
             if relpath in self._junk_by_name:
-                lines += ["", MAYBE_JUNK, "By its name or size, it's:"] + _wrapped(self._junk_by_name[relpath], "  ")
+                lines += ["", MAYBE_JUNK, _title("Junk? By its name or size:", 'yellow')] + \
+                    _wrapped(self._junk_by_name[relpath], "  ")
             if recommendation and recommendation.get('action') == 'remove':
                 if self._junk(relpath) is not None and relpath not in self._junk_by_name:
                     lines += ["", MAYBE_JUNK]
-                lines += ["", "Claude recommends removing it:"] + _wrapped(recommendation.get('reason', ''), "  ")
+                lines += ["", _title("Recommendation (ai): remove it", CLAUDE_STYLE)] + \
+                    _wrapped(recommendation.get('reason', ''), "  ")
             elif recommendation:
                 # Relative to the sorted tree, so a long root doesn't hide where in it
                 target = self._target(relpath)
-                lines += ["", "Claude recommends it go to:", "  %s/" % (os.path.dirname(target) or '.',)]
-                if os.path.basename(target) != os.path.basename(relpath):
-                    lines += ["  renamed:"] + _wrapped(os.path.basename(target), "    ")
-                lines += ["  (in %s)" % (self.root_path,)]
+                is_renamed = os.path.basename(target) != os.path.basename(relpath)
+                lines += ["", _title(DESTINATION_TITLE, CLAUDE_STYLE)]
+                lines += _wrapped(target if is_renamed else "%s/" % (os.path.dirname(target) or '.',), "  ")
+                if is_renamed:
+                    lines.append(_grey("  (renamed)"))
                 lines += _wrapped(recommendation.get('reason', ''), "  ")
             elif relpath in self._placing:
-                lines += ["", "Claude is working out where", "it goes..."]
+                lines += ["", _title(DESTINATION_TITLE, CLAUDE_STYLE), _grey("  Claude is working it out...")]
             elif relpath in self._failed and relpath in self._descriptions:
-                lines += ["", "Claude couldn't say where it goes:"] + _wrapped(self._failed[relpath], "  ")
+                lines += ["", _title(DESTINATION_TITLE + " failed", 'red')] + _wrapped(self._failed[relpath], "  ")
             else:
-                lines += ["", "Where it goes: Ctrl-I (or pick", "it, press Enter, and ask Claude)."]
+                lines += ["", picker.styled([("Dest. path:", 'bold')]), _grey("  Ctrl-I asks Claude")]
             previews[relpath] = lines
         return previews
 
@@ -496,8 +512,13 @@ class InboxSort(object):
                                  "it looks" if is_one or len(junky) == 1 else "they look",
                                  "Drive's trash" if self.inbox_is_cloud else "the trash"),
                                 None if junky else "not junk", REMOVE, [])),
-            (self.REMOVE, ("Remove %s from %s" % (they, self.inbox_path), None, REMOVE, [])),
-            (self.OPEN, ("Open %s with %s program%s (or Ctrl-X: the selected one)" %
+            # Not when it does what removing the copies does (all of them are), or the junk does
+            # (all of them are, in Drive, where both go to its trash)
+            (self.REMOVE, ("Remove %s from %s" % (they, self.inbox_path),
+                           "the same as removing the copies" if len(removable) == len(relpaths) else
+                           "the same as removing the junk" if self.inbox_is_cloud and len(junky) == len(relpaths) else
+                           None, REMOVE, [])),
+            (self.OPEN, ("Open %s with %s program%s (or Ctrl-X)" %
                          (they, "its" if is_one else "their", "" if is_one else "s"),
                          None if len(relpaths) <= opening.MAX_OPENED else "too many", OPEN, [])),
             (self.READ_ANEW, ("Read %s/ anew from Google Drive (or r)" % (_join(self.inbox_path, folder),),
@@ -516,7 +537,8 @@ class InboxSort(object):
                                     previews_below=lines)
         action = next((action for action, (label, _, _, _) in options.items() if label == answer), None)
         if action == self.OPEN:
-            self.open_in_background(relpaths, relpaths)
+            if opening.confirm(self._opener, relpaths, relpaths, LABEL):
+                self.open_in_background(relpaths, relpaths)
             return None
         if action == self.READ_ANEW:
             return self.REFRESH_KEY
@@ -632,16 +654,17 @@ class InboxSort(object):
         or that it has none, or its candidates (to compare when it's selected)"""
         copies = self._copies(relpath)
         if copies:
-            return (["", "In %s already, the same contents:" % (self.root_path,)] +
-                    ["  " + copy for copy in copies[:3]] + [SURELY_A_COPY])
+            return (["", _title("Already exists! in:", 'green')] +
+                    [line for copy in copies[:3] for line in _wrapped_path(_join(self.root_path, copy), "    ")] +
+                    [SURELY_A_COPY])
         if relpath in self._checked:
-            return ["", "Not in %s (its contents compared)" % (self.root_path,)]
+            return ["", picker.styled([("Not in the sorted tree", 'bold'), (" (contents compared)", 'grey')])]
         if not self._root_index.is_built():
-            return ["", "Looking through %s's files..." % (self.root_path,)]
+            return ["", _grey("Looking through the sorted tree...")]
         candidates = elsewhere._same_sized(relpath, self._size(relpath), self._root_index)
         if candidates:
-            return ["", "%s of its size in %s: compared" % (_files(len(candidates)), self.root_path),
-                    "when it's selected"]
+            return ["", _grey("%s of its size in the sorted tree:" % (_files(len(candidates)),)),
+                    _grey("compared when it's selected")]
         return []
 
     def _start_indexing(self):
@@ -834,9 +857,11 @@ class InboxSort(object):
 
     def _on_key(self, key, selected, picked, files):
         """A notify key pressed in the picker of files (on another thread): Ctrl-X opens the
-        selected file, Ctrl-I asks Claude about the picked ones (or the selected one, or a dir's)"""
+        picked files (or the selected one; more than one to download asked about first, see
+        opening.Opener.press()), Ctrl-I asks Claude about the picked ones (or the selected one, or
+        a dir's)"""
         if key == OPEN_KEY:
-            self.open_in_background([selected], files)
+            self._opener.press(picked or [selected], files)
         else:
             self.ask_in_background(picked or [relpath for relpath in files if _is_at_or_under(relpath, selected)])
 
@@ -992,8 +1017,9 @@ class InboxSort(object):
         for relpath in done:
             self._root_index.add(targets[relpath], sizes[relpath])
         if action == self.MOVE_TO:
+            # Only the sorted tree's log says so: files leaving the inbox for it is what an inbox is
+            # for, not a change of the inbox to keep in its own log
             self.changes.note(self.root_path, 'added', len(done), self.inbox_path)
-            self.changes.note(self.inbox_path, 'moved', len(done), self.root_path, 'to')
         else:
             self.changes.note(self.root_path, 'copied', len(done), self.inbox_path)
         not_done = [relpath for relpath, _ in plan if relpath not in set(done)]
@@ -1158,8 +1184,24 @@ def _bracket(names, width):
     return '[' + inside + ' ' * (width - 2 - len(inside)) + ']'
 
 
+def _title(text, color):
+    """A preview's title, bold in color"""
+    return picker.styled([(text, 'bold,' + color)])
+
+
+def _grey(text):
+    """A preview's line of how it's going (rather than what's known)"""
+    return picker.styled([(text, 'grey')])
+
+
 def _wrapped(text, indent):
     return [indent + line for line in textwrap.wrap(text, PREVIEW_WIDTH - len(indent))] if text else []
+
+
+def _wrapped_path(path, indent):
+    """A path's lines in the preview column: cut at its spaces, or where it fills a line (not at its
+    names' hyphens)"""
+    return [indent + line for line in textwrap.wrap(path, PREVIEW_WIDTH - len(indent), break_on_hyphens=False)]
 
 
 def _relpath(path, root):

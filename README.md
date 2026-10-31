@@ -91,9 +91,16 @@ them, with "Nothing" selected first:
 
 - `Ctrl-I` in the picker, on the picked files (or else the selected file or dir): all of what's
   below, describing them and saying where they go, in the background.
-- `Ctrl-X` in the picker opens the selected file with its program (`xdg-open`), as a double-click
-  would (and "Open" in the menu opens the picked ones, up to 10; a sync's picker has both too). A Drive file is downloaded first, into `~/.cache/dirdelta/downloads` (also where the files
-  Claude reads are downloaded to), so it's downloaded once (the least recently used go beyond 2 GB).
+- `Ctrl-X` in the picker opens the picked files (or else the selected one, up to 10) with their
+  programs (`xdg-open`), as a double-click would; so does "Open" in the menu (a sync's picker has
+  both too). A Drive file is downloaded first, into `~/.cache/dirdelta/downloads` (also where the
+  files Claude reads are downloaded to), so it's downloaded once (the least recently used go beyond
+  2 GB). More than one to download is asked about first: `Ctrl-X` asks on the status bar ("Ctrl-X
+  again: download 3 files (29.0 MB) into ...", pressed again within 10 seconds to go ahead, so you
+  stay in the picker), the menu's Open on a screen of its own. Then they're downloaded in the
+  background, one after another: the status bar says how far it got in all ("Downloading to open:
+  2 of 3 files, 55% (16.0 MB of 29.0 MB)"), and each file in a tag after its name: `[↓ waiting]`,
+  `[↓ 35%]`, `[↓ opened]` (or `[↓ failed]`).
 - "Describe N files with Claude": a short description of each (at most 10 words, by Claude Haiku, which reads
   the files), shown after its name in the picker (`a.txt  [claude: a shopping list]`), and searchable (`/claude:`
   shows the described ones). It's
@@ -182,7 +189,7 @@ surely the file. `Enter` then asks what to do with the picked files, with
 "Nothing" selected first: copy them to B, remove them from A, or, for the ones whose match in B is
 surely them, rename: move B's match to the file's path, or the file to the match's (greyed out
 when it can't be done); and what the picker's keys do, so they're all in the menu too: open them
-with their programs (`Ctrl-X` opens the selected one, see "Sorting an inbox"), and, with a cloud
+with their programs (as `Ctrl-X` does, see "Sorting an inbox"), and, with a cloud
 replica, read the selected folder anew from Drive (`r`). A confirmation follows, with No selected (a removal asks a second time,
 "Are you sure?", also with No selected): No takes you back to the picker, with the same files
 picked; Yes goes ahead. Its progress fills the screen under a top line saying what's being done
@@ -213,8 +220,8 @@ an entry for each changed replica, e.g. `30.10.2026 - copied 12 files from cloud
 copied into: added to its log (only its: the other's log is of the other's changes), edited first,
 or not (a log is made if there's none).
 An inbox's sort does the same for the inbox and the sorted tree, when you quit it: e.g. `30.10.2026 -
-added 12 files from cloud/unsorted` for the sorted tree, and `moved 12 files to cloud/eliran; removed
-3 files` for the inbox.
+added 12 files from cloud/unsorted` for the sorted tree, and `removed 3 files` for the inbox (not
+the files moved out of it: that's what an inbox is for).
 
 The fixtures are a small music library. Both have 106 files in common; only `alpha` has 364 (e.g.
 `podcasts/`, `music/Nina Simone/` and `first/infirst/ininfirst/huh/99.mp3`), and only `bravo` has 31

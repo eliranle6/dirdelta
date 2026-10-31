@@ -154,13 +154,18 @@ class InteractiveDirSync(object):
                 src_job.first(missing)
             marks = hashes_screen.Marks(src_job, missing, jobs, extra=self._opener.status_parts) if jobs else None
             files = set(missing)
+
+            def shown_as(marks=marks, src_job=src_job):
+                """The hashing tags (Marks), and the downloads' to open the files (opening.py)"""
+                shown = marks() if marks is not None else {'': picker.status(self._opener.status_parts())}
+                return opening.with_tags(shown, self._opener, lambda relpath: (
+                    marks.text(relpath) if marks is not None else os.path.basename(relpath)))
             try:
                 chosen = picker.pick_files(
                     self._src.displayname(), missing, header=header, picked=picked,
                     keys=keys, selected=selected, key_hints=key_hints,
-                    shown_as=marks or (lambda: {'': picker.status(self._opener.status_parts())}),
-                    notify_keys=opening.KEY,
-                    on_notify=lambda key, selected, picked: self._opener.open_in_background([selected], files),
+                    shown_as=shown_as, notify_keys=opening.KEY,
+                    on_notify=lambda key, selected, picked: self._opener.press(picked or [selected], files),
                     help_lines=hashes_screen.HELP_LINES if jobs else (),
                     previews=functools.partial(elsewhere.find_previews, missing, self._src, self.dst_index,
                                                checked=self.checked, src_index=self.src_index),
@@ -262,7 +267,7 @@ class InteractiveDirSync(object):
                                  (_files(nr_renamed_in_src), src_name),
                                  self._cant_rename(self._src, nr_renamed_in_src)),
         }
-        options[self.OPEN] = ("Open %s with %s program%s (or Ctrl-X: the selected one)" %
+        options[self.OPEN] = ("Open %s with %s program%s (or Ctrl-X)" %
                               ("it" if len(relpaths) == 1 else "the " + count,
                                "its" if len(relpaths) == 1 else "their", "" if len(relpaths) == 1 else "s"),
                               None if len(relpaths) <= opening.MAX_OPENED else
@@ -281,7 +286,8 @@ class InteractiveDirSync(object):
         if action is None:
             return None
         if action == self.OPEN:
-            self._opener.open_in_background(relpaths, relpaths)
+            if opening.confirm(self._opener, relpaths, relpaths):
+                self._opener.open_in_background(relpaths, relpaths)
             return None
         if action == self.READ_ANEW:
             return self.REFRESH_KEY
