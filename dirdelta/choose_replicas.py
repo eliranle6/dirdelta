@@ -86,29 +86,13 @@ def run(replicas):
                 return sort
             continue
         if option in sorts:
-            if not _mounted(sorts[option]):
-                continue
-            missing = [path for path in sorts[option]
-                       if not paths.is_cloud_path(path) and not os.path.isdir(path)]
-            if missing:
-                messages.show("No such directory",
-                              ["%s is not a directory (anymore?)." % (path,) for path in missing],
-                              dryrun.label(), 'red')
-                continue
-            return sorts[option]
+            if _are_there(sorts[option]):
+                return sorts[option]
+            continue
         if option in pairs:
-            if not _mounted(pairs[option]):
-                continue
-            # A favorite or recent pair's local dir may be gone since (a cloud one is checked when
-            # the sync reads Drive's file list)
-            missing = [path for path in pairs[option]
-                       if not paths.is_cloud_path(path) and not os.path.isdir(path)]
-            if missing:
-                messages.show("No such directory",
-                              ["%s is not a directory (anymore?)." % (path,) for path in missing],
-                              dryrun.label(), 'red')
-                continue
-            return pairs[option]
+            if _are_there(pairs[option]):
+                return pairs[option]
+            continue
         index = slots[option]
         path = _choose_replica('Replica %s' % ('AB'[index],))
         if path is None:
@@ -134,6 +118,20 @@ def _choose_sort(replicas):
     if root is None:
         return None
     return Sort(inbox, root)
+
+
+def _are_there(replica_paths):
+    """Whether the replicas at replica_paths (a sort's or a pair's) can be used: their volumes are
+    mounted (see _mounted()), and their local dirs there, which may be gone since (a cloud one is
+    checked when its Drive file list is read); if not, it's said why"""
+    if not _mounted(replica_paths):
+        return False
+    missing = [path for path in replica_paths if not paths.is_cloud_path(path) and not os.path.isdir(path)]
+    if missing:
+        messages.show("No such directory", ["%s is not a directory (anymore?)." % (path,) for path in missing],
+                      dryrun.label(), 'red')
+        return False
+    return True
 
 
 def _mounted(replica_paths):
