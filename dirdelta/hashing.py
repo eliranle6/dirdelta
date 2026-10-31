@@ -253,6 +253,11 @@ class Job(object):
         with self._lock:
             return set(self._failed)
 
+    def is_failed(self, relpath):
+        """Whether the file at relpath couldn't be hashed (since the last scan)"""
+        with self._lock:
+            return relpath in self._failed
+
     def hashes(self):
         """{relpath: {algorithm: hash}} of the files hashed"""
         with self._lock:
@@ -497,7 +502,7 @@ def tag(job, relpath):
         return HASHED_TAG
     if job.is_being_hashed(relpath):
         return HASHING_TAG
-    return FAILED_TAG if relpath in job._failed else NOT_HASHED_TAG
+    return FAILED_TAG if job.is_failed(relpath) else NOT_HASHED_TAG
 
 
 def percent(progress):
