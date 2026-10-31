@@ -40,6 +40,7 @@ from dirdelta import replicalog
 from dirdelta import renaming
 from dirdelta import replicas
 from dirdelta import sidetree
+from dirdelta import text
 
 # The label of the inbox's screens, so they're told from a sync's
 LABEL = ('SORT', 'cyan')
@@ -103,8 +104,7 @@ class InboxError(Exception):
     pass
 
 
-def _files(count):
-    return "1 file" if count == 1 else "%d files" % (count,)
+_files = text.files
 
 
 def _of(count, total):

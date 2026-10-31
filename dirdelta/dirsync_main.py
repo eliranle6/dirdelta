@@ -16,6 +16,7 @@ from dirdelta import picker
 from dirdelta import replicalog
 from dirdelta import replicas
 from dirdelta import utils
+from dirdelta import text
 
 
 # What run() returns when the user chose Quit (rather than going back)
@@ -155,8 +156,7 @@ def _sync(replica_a, replica_b, replica_a_path, replica_b_path, known_replicas=N
                 job.scan_in_background()
 
 
-def _files(count):
-    return "1 file" if count == 1 else "%d files" % (count,)
+_files = text.files
 
 
 # How often the "loading" dots of a menu option change, in seconds

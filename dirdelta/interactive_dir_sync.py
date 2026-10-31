@@ -19,6 +19,7 @@ from dirdelta import opening
 from dirdelta import picker
 from dirdelta import renaming
 from dirdelta import sidetree
+from dirdelta import text
 
 
 # The relpaths of the files in a dir that another lacks (see find_missing()), and the lines of a
@@ -75,8 +76,7 @@ def can_copy(src, dst):
     return is_writable(dst) and (is_local(src) or is_local(dst))
 
 
-def _files(count):
-    return "1 file" if count == 1 else "%d files" % (count,)
+_files = text.files
 
 
 class InteractiveDirSync(object):

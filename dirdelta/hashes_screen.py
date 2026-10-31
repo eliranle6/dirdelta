@@ -21,6 +21,7 @@ from dirdelta import paths
 from dirdelta import picker
 from dirdelta import replicalog
 from dirdelta import replicas
+from dirdelta import text
 
 # The file pickers' key that shows the dashboard
 KEY = '#'
@@ -42,7 +43,7 @@ WAIT_INTERVAL = 0.5
 
 
 def _files(count):
-    return "1 file" if count == 1 else "{:,} files".format(count)
+    return text.files(count, grouped=True)
 
 
 def is_local(replica):

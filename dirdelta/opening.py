@@ -18,6 +18,7 @@ from dirdelta import downloads
 from dirdelta import elsewhere
 from dirdelta import localdiskdirtree
 from dirdelta import picker
+from dirdelta import text
 
 # The file pickers' key that opens the picked files, or the selected one (Ctrl-X), and its keys
 # row's hint
@@ -51,8 +52,7 @@ CONFIRM_YES = 'Yes, download and open them'
 _WAITING, _DOWNLOADING, _OPENED, _FAILED = 'waiting', 'downloading', 'opened', 'failed'
 
 
-def _files(count):
-    return "1 file" if count == 1 else "%d files" % (count,)
+_files = text.files
 
 
 def _short_dir():

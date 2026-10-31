@@ -24,6 +24,7 @@ from dirdelta import hashcache
 from dirdelta import hashing
 from dirdelta import localdiskdirtree
 from dirdelta import picker
+from dirdelta import text
 
 # How many of a name's files in the other replica a preview lists (a common name, like README.md,
 # may have many): the likeliest to be the file
@@ -770,8 +771,7 @@ def _time_note(match_modified, modified):
     return ", newer" if match_modified > modified else ", older"
 
 
-def _files(count):
-    return "1 file" if count == 1 else "%d files" % (count,)
+_files = text.files
 
 
 def _size_note(match_size, size):
