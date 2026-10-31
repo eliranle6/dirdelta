@@ -105,7 +105,7 @@ class MainMenuTest(unittest.TestCase):
             dirsync_main._sync(a, b, '/a', '/b')
         dashboard.assert_called_once_with([a, b], None)
         self.assertEqual(shown[0]['Replicas dashboard'],
-                         "Replicas dashboard: files, last updates, hashes (a: listing its files...)")
+                         "Replicas dashboard: files, when synced, hashes (a: listing its files...)")
         self.assertIn("a: listing its files...", shown[0][''])
 
     def test_a_cloud_replica_can_be_refreshed_from_drive(self):
@@ -201,7 +201,7 @@ class MainMenuTest(unittest.TestCase):
         self.assertEqual(self.shown(a, b), [
             'Files in /a, not in /b (3 files)',
             'Files in /b, not in /a (1 file)',
-            'Replicas dashboard: files, last updates, hashes',
+            'Replicas dashboard: files, when synced, hashes',
             'Quit',
         ])
 

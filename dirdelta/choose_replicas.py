@@ -19,7 +19,7 @@ NOT_CHOSEN = '<none: press Enter to choose one>'
 LOCAL = 'Local disk'
 CLOUD = 'Google Drive'
 QUIT = 'Quit'
-KNOWN_LIST = '  Replicas dashboard: every known replica (last updates, files, hashes)'
+KNOWN_LIST = '  Replicas dashboard: every known replica (when synced, files, hashes)'
 SORT = '  New sort: choose an inbox, and the sorted tree its files go to (with Claude\'s help)'
 # The menu's sections' headings (shown in grey, and skipped when moving: they can't be picked)
 SYNC_SECTION = '\u2500\u2500 Sync two replicas \u2500\u2500'
