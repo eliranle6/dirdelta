@@ -398,6 +398,9 @@ class CloudDirTree(dirtree.DirTree):
                 fields=drivecache.FILE_FIELDS).execute(num_retries=NUM_RETRIES)
         except HttpError as error:
             messages.print_line("Move failed: %s" % (error,), "red")
+            # Nothing changed in Drive: the cache isn't stale for it
+            if is_newly_stale:
+                drivecache.unmark_stale(self.fullpath())
             return False
         # The file again, by its id: the cache's later line is the one it has
         drivecache.add(dict(md, parents=[parent_id]))
@@ -428,6 +431,9 @@ class CloudDirTree(dirtree.DirTree):
                 fields=drivecache.FILE_FIELDS).execute(num_retries=NUM_RETRIES)
         except HttpError as error:
             messages.print_line("Move failed: %s" % (error,), "red")
+            # Nothing changed in Drive: the cache isn't stale for it
+            if is_newly_stale:
+                drivecache.unmark_stale(self.fullpath())
             return False
         drivecache.add(dict(md, parents=[parent_id], mimeType=drivecache.FOLDER_MIME_TYPE))
         if is_newly_stale:
@@ -460,6 +466,9 @@ class CloudDirTree(dirtree.DirTree):
                 fields=drivecache.FILE_FIELDS).execute(num_retries=NUM_RETRIES)
         except HttpError as error:
             messages.print_line("Copy failed: %s" % (error,), "red")
+            # Nothing changed in Drive: the cache isn't stale for it
+            if is_newly_stale:
+                drivecache.unmark_stale(self.fullpath())
             return False
         md = dict(body, **md)
         drivecache.add(md)
@@ -648,6 +657,9 @@ class CloudDirTree(dirtree.DirTree):
                 num_retries=NUM_RETRIES)
         except HttpError as error:
             messages.print_line("Remove failed: %s" % (error,), "red")
+            # Nothing changed in Drive: the cache isn't stale for it
+            if is_newly_stale:
+                drivecache.unmark_stale(self.fullpath())
             return False
         drivecache.trash(cloud_id)
         if is_newly_stale:
