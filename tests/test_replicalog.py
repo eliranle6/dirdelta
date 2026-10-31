@@ -117,7 +117,7 @@ class ChangesTest(unittest.TestCase):
 
 
 class LogEntriesTest(unittest.TestCase):
-    """After a sync that changed a replica, an entry for its last_update.txt is offered"""
+    """After a sync that changed a replica, when it was is noted (no last_update.txt entry anymore)"""
     def setUp(self):
         self.tmpdir = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, self.tmpdir)
@@ -150,24 +150,14 @@ class LogEntriesTest(unittest.TestCase):
             replicalog.offer_entries(self.changes, self.trees, self.known)
         return pick
 
-    def test_added_to_the_changed_replicas_log(self):
-        pick = self.offer(["Add it to its last_update.txt (%s)" % (self.b,)])
-        line = "%s - copied 2 files from %s; removed 1 file" % (self.today, self.a)
-        self.assertIn(line, pick.call_args.kwargs['header'])
-        self.assertEqual(self.log(self.b), "1.1.2026 - started\n" + line + "\n")
+    def test_nothing_is_asked_or_written_but_the_change_is_known(self):
+        # No last_update.txt entries anymore (2026-11-01)
+        with mock.patch('dirdelta.picker.pick_option', side_effect=AssertionError('asked')):
+            replicalog.offer_entries(self.changes, self.trees, self.known)
+        self.assertEqual(self.log(self.b), "1.1.2026 - started\n")
         self.assertIsNone(self.log(self.a))
-        info = self.known.known['id:' + self.b]
-        self.assertEqual(info['last_entry']['text'], "copied 2 files from %s; removed 1 file" % (self.a,))
-        self.assertIsNotNone(info['changed'])
+        self.assertIsNotNone(self.known.known['id:' + self.b]['changed'])
         replicalog.replicas.save.assert_called_with(self.known)
-
-    def test_edited_first_and_only_its_own_log(self):
-        pick = self.offer([replicalog.EDIT_ENTRY, "Add it to its"], edited="copied the trip's photos")
-        self.assertEqual(pick.call_args.args[0],
-                         [replicalog.NO_ENTRY, "Add it to its last_update.txt (%s)" % (self.b,), replicalog.EDIT_ENTRY])
-        self.assertEqual(self.log(self.b), "1.1.2026 - started\n%s - copied the trip's photos\n" % (self.today,))
-        # The other replica's log isn't of this one's changes
-        self.assertIsNone(self.log(self.a))
 
     def test_none_added_but_its_change_is_known(self):
         self.offer([replicalog.NO_ENTRY])
