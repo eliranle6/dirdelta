@@ -365,6 +365,12 @@ class CloudDirTreeChangesTest(unittest.TestCase):
         # Nothing changed in Drive: not stale (asking for a refresh) either
         self.assertFalse(clouddirtree.drivecache.is_stale())
 
+    def test_a_removed_files_size_is_forgotten_with_it(self):
+        self.tree._sizes['song.mp3'] = 123
+        self.tree.remove_files([self.tree.get_node('song.mp3').data])
+        self.assertNotIn('song.mp3', self.tree)
+        self.assertIsNone(self.tree.file_size('song.mp3'))
+
     def test_a_dry_run_leaves_the_cache_fresh(self):
         with mock.patch('dirdelta.dryrun.DRYRUN', True):
             self.upload(['new.mp3'])

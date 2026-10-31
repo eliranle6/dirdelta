@@ -633,8 +633,7 @@ class CloudDirTree(dirtree.DirTree):
         if not self._trash(self._cloud_ids[relpath]):
             return False
         for node in self._tree.subtree(relpath).all_nodes_itr():
-            self._cloud_ids.pop(node.identifier, None)
-            self._google_files.discard(node.identifier)
+            self._forget(node.identifier)
         self.remove_node(relpath)
         return True
 
@@ -643,9 +642,15 @@ class CloudDirTree(dirtree.DirTree):
         if not self._trash(self._cloud_ids[file_entry.relpath]):
             return False
         self.remove_node(file_entry.relpath)
-        del self._cloud_ids[file_entry.relpath]
-        self._google_files.discard(file_entry.relpath)
+        self._forget(file_entry.relpath)
         return True
+
+    def _forget(self, relpath):
+        """Drop what's kept of the file or folder at relpath, once it's gone: its id, and its size,
+        hashes and times, so a later one of its path isn't taken for it"""
+        for by_relpath in (self._cloud_ids, self._sizes, self._dates_taken, self._hashes, self._modified):
+            by_relpath.pop(relpath, None)
+        self._google_files.discard(relpath)
 
     def _trash(self, cloud_id):
         """Move the file or folder with cloud_id to Drive's trash (where it can be restored from, for

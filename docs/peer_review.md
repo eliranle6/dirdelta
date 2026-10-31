@@ -52,7 +52,7 @@ repetition.
 - Path joins: `inbox._join`, `opening.Opener._full`, `replicalog.posix_join`.
 A small `text.py` (counts, listings) and `paths.join` cover them.
 
-## 5. CloudDirTree keeps file metadata in six parallel dicts (M, high value)
+## 5. CloudDirTree keeps file metadata in six parallel dicts (M, high value) — the drift on removal fixed 2026-11-01 (`_forget()`); the entries not done
 `_cloud_ids`, `_google_files`, `_sizes`, `_dates_taken`, `_hashes`, `_modified`, all keyed by
 relpath, must be moved/copied/dropped by hand on every change (`_move_file`, `_move_dir`,
 `_copy_within`, `_trash_folder`, `_remove_file`, `_uploaded`, `write_file`), and they already
