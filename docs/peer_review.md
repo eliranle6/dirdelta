@@ -190,7 +190,7 @@ other); `expect_key_error` and `notify_key_error` loop over the same key table;
 `UpdatesReader::feed` and `PreviewsReader::feed` share the same delimiter-buffering loop;
 `needs_cleaning` and `clean_path` walk components twice.
 
-## 23. C++: the demo `picker` program is built and installed (S, low)
+## 23. C++: the demo `picker` program is built and installed (S, low) — fixed 2026-11-01
 `make install` installs `build/picker` (a hard-coded "people" tree) next to treepicker and
 dirdiff. Keep it out of `install`.
 
