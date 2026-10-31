@@ -1,5 +1,6 @@
 """Replica paths, as given on the command line: a cloud (Google Drive) one starts with the component
 'cloud' (e.g. cloud/mein/music), a local one is any other."""
+import os
 
 
 def components(path):
@@ -43,3 +44,11 @@ def is_at_or_under(path, dirpath):
     paths (the root '/'); a '/' ending dirpath doesn't matter"""
     dirpath = dirpath.rstrip('/')
     return not dirpath or path == dirpath or path.startswith(dirpath + '/')
+
+
+def normalized(path):
+    """A replica's path as it's shown and kept, one way for all: a cloud one cleaned ('cloud//mein/'
+    is 'cloud/mein'), a local one absolute and real (symlinks resolved), without a trailing '/'"""
+    if is_cloud_path(path):
+        return '/'.join(components(path))
+    return os.path.realpath(path)

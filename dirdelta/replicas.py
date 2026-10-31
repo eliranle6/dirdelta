@@ -28,12 +28,8 @@ class ReplicasError(Exception):
     pass
 
 
-def normalized(path):
-    """path as it's kept: a cloud path cleaned ('cloud//mein/' is 'cloud/mein'), a local one
-    absolute and without a trailing '/'"""
-    if paths.is_cloud_path(path):
-        return '/'.join(paths.components(path))
-    return os.path.abspath(path)
+# One way for all (see paths.normalized())
+normalized = paths.normalized
 
 
 class Replicas(object):

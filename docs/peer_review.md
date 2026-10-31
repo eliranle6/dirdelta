@@ -141,7 +141,7 @@ same backend (a local rename, or a Drive parents change) would let it keep just 
 parse by the file's (mtime, size), or move it to SQLite like `hashcache` (with an index on
 parent), which also stops the file from growing with `trashedId` lines forever.
 
-## 16. Paths are normalized three ways (S, small bug risk)
+## 16. Paths are normalized three ways (S, small bug risk) — fixed 2026-11-01 (`paths.normalized()`, real paths)
 `replicas.normalized()` uses `abspath`, `inbox._normalized()` and `LocalDiskDirTree` use
 `realpath`, `hashing` uses `realpath`, `replicalog.identity` uses `realpath`. The same dir
 reached through a symlink is one replica to the hasher and two pairs to the history. Pick one

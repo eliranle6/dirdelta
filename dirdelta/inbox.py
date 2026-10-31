@@ -1390,11 +1390,8 @@ def _tree(path):
     return localdiskdirtree.LocalDiskDirTree(path, silent=True)
 
 
-def _normalized(path):
-    """A replica path as it's shown and kept: a cloud one cleaned, a local one absolute and real"""
-    if paths.is_cloud_path(path):
-        return paths.join_cloud('/'.join(paths.components(path)[1:]))
-    return os.path.realpath(path)
+# One way for all (see paths.normalized())
+_normalized = paths.normalized
 
 
 def run(inbox_path, root_path, known_replicas=None):
