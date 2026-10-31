@@ -184,7 +184,7 @@ uses `std::filesystem::directory_iterator`. One `std::filesystem` scan would dro
 utility and the tmpfile (measure first: speed matters here). At least wait on find's pid and
 look `find` up on PATH, as the Python side does.
 
-## 22. C++: small duplication in cli/readers (S, low)
+## 22. C++: small duplication in cli/readers (S, low) — the key checks one (2026-11-01); the rest not done
 `pick_and_print` copies `CliOptions` into `PickerOptions` field by field (embed one in the
 other); `expect_key_error` and `notify_key_error` loop over the same key table;
 `UpdatesReader::feed` and `PreviewsReader::feed` share the same delimiter-buffering loop;
