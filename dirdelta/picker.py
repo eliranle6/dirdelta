@@ -13,6 +13,7 @@ import tempfile
 import threading
 import time
 import traceback
+import unicodedata
 
 from dirdelta import entries
 from dirdelta import dryrun
@@ -38,6 +39,8 @@ class PickerError(programs.ProgramError):
 # What shown_as (see pick_option()) shows an option as when it can't be picked: in grey, with Enter
 # doing nothing on it
 Disabled = collections.namedtuple('Disabled', ['text'])
+# What shown_as shows an option as in a color (a text color: red, green, yellow, blue, magenta, cyan)
+Colored = collections.namedtuple('Colored', ['text', 'color'])
 
 # Where the user is, the screens' breadcrumbs: the places entered (see place()), after the program's
 # name. A menu's tree's root shows them (treepicker shows the path to the selection after it).
@@ -76,6 +79,19 @@ def status(parts):
     """A status for shown_as's '' (see pick_files()) of several labels, each in its color: parts is
     [(text, color)] (a --label-color, or 'orange'); the empty ones are left out"""
     return ''.join('%s%s%s%s' % (HIGHLIGHT_MARK, color, HIGHLIGHT_MARK, text) for text, color in parts if text)
+
+
+def segments(parts):
+    """A line of pick_option(previews_below=...)'s in parts: parts is [(text, color)], each on a
+    label color (or plain, for None or '')"""
+    return ''.join('%s%s%s%s' % (HIGHLIGHT_MARK, color or '', HIGHLIGHT_MARK, text) for text, color in parts if text)
+
+
+def display_width(text):
+    """How many columns text takes on a terminal (a wide character, e.g. CJK, two; a combining one
+    none)"""
+    return sum(0 if unicodedata.combining(char) else 2 if unicodedata.east_asian_width(char) in 'WF' else 1
+               for char in text)
 
 
 # What pick_files() returns: the key that ended picking ('' for Enter), the selected node's relpath
@@ -223,7 +239,7 @@ def _key_and_selected(keys, printed):
 
 
 def pick_option(options, header='', shown_as=None, label=None, selected=None, title=None, key_hints=(),
-                help_lines=()):
+                help_lines=(), previews_below=None):
     """Let the user pick one of the options (strings). Returns it, or None if the user quit.
 
     shown_as, if given, is called again and again while the menu is shown (every
@@ -232,11 +248,17 @@ def pick_option(options, header='', shown_as=None, label=None, selected=None, ti
     string, or a Disabled for one that can't be picked (until shown_as says otherwise). What's
     returned is still the option itself. label: as pick_files()'s. selected: the option to start
     with selected (else the first). title: what the menu is, after the breadcrumbs (see place()).
-    key_hints, help_lines: as pick_files()'s."""
+    key_hints, help_lines: as pick_files()'s. previews_below: {option: lines} shown below the
+    menu, above its status bar, while the option is selected (e.g. what it would do), each line
+    plain, or in colored parts (see segments()). shown_as's options may be Colored too."""
     args = ['--list', '--root', trail(title)] + _header_args(header) + _help_args(key_hints, help_lines)
     if selected is not None:
         args += ['--select', selected]
-    picked = _run(args, options, shown_as, label)
+    previews = None
+    if previews_below:
+        args.append('--preview-below')
+        previews = lambda send: send(previews_below, default=[])
+    picked = _run(args, options, shown_as, label, previews=previews)
     return None if picked is None else picked[0]
 
 
@@ -403,6 +425,8 @@ def _update(item, shown):
     """treepicker's --updates line showing item as shown (a string, or Disabled)"""
     if isinstance(shown, Disabled):
         return '%s\t%s\tdisabled' % (item, shown.text)
+    if isinstance(shown, Colored):
+        return '%s\t%s\tcolor=%s' % (item, shown.text, shown.color)
     return '%s\t%s' % (item, shown)
 
 

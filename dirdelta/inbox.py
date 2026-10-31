@@ -12,6 +12,7 @@ import contextlib
 import functools
 import os
 import posixpath
+import shutil
 import subprocess
 import textwrap
 import threading
@@ -67,6 +68,23 @@ LOOKING = "(Claude is looking at it...)"
 # What a file Claude described is shown as, after its name: a search (/) for 'claude:' finds them,
 # and one for a word finds the files Claude said it of
 DESCRIBED = "[claude: %s]"
+
+
+# What an option of the action menu does to the files, and its color: its text's, and its label's
+# in the lines below the menu (Claude's in magenta, as what comes from Claude there)
+ASK = 'claude'
+MOVE = 'move'
+COPY = 'copy'
+REMOVE = 'remove'
+VERB_COLORS = {ASK: 'magenta', MOVE: 'blue', COPY: 'cyan', REMOVE: 'red'}
+# A part of a destination's path: where it comes from, and its bracket's color and names (the
+# first that fits), e.g. [Claude's dir] (Claude's in magenta, as its options' color)
+SORTED_TREE = ((None), ("sorted tree", "tree"))
+CLAUDES_DIR = ('magenta', ("Claude's dir", "Claude's", "Claude"))
+CLAUDES_NAME = ('magenta', ("Claude's name", "Claude's", "Claude"))
+YOUR_DIR = ('yellow', ("your pick", "yours"))
+YOUR_NAME = ('yellow', ("you type it", "yours"))
+OWN_NAME = ('green', ("its own name", "own name", "own"))
 
 
 class InboxError(Exception):
@@ -402,52 +420,81 @@ class InboxSort(object):
         destinations = sorted({os.path.dirname(self._target(relpath)) for relpath in recommended})
         renamed = [relpath for relpath in recommended
                    if os.path.basename(self._target(relpath)) != os.path.basename(relpath)]
-        renamed_text = ", %d renamed" % (len(renamed),) if renamed else ""
-        if len(destinations) == 1:
-            to = "Claude's recommendation: %s/%s" % (_join(self.root_path, destinations[0]),
-                                                    " (%s)" % (renamed_text[2:],) if renamed else "")
-            claudes_dirs = "Claude's dir, %s/" % (_join(self.root_path, destinations[0]),)
-        else:
-            to = "Claude's recommendations (%d dirs%s)" % (len(destinations), renamed_text)
-            claudes_dirs = "Claude's dirs (%d)" % (len(destinations),)
-        # A name to type is for one file
-        one = "can't: a name is typed for one file" if len(relpaths) > 1 else None
-        options = {
-            self.DESCRIBE: ("Describe %s with Claude, while you go on (sends it their contents; or Ctrl-I)" %
-                            (_of(len(undescribed), len(relpaths)),),
-                            None if undescribed else "they all have a description, or are being described"),
-            self.RECOMMEND: ("Ask Claude where %s go in %s, while you go on (or Ctrl-I)" %
-                             (_of(len(unrecommended), len(relpaths)), self.root_path),
-                             None if unrecommended else "they all have a recommendation, or are being placed"),
-            self.MOVE_RECOMMENDED: ("Move %s to %s" % (_of(len(recommended), len(relpaths)), to),
-                                    None if recommended else "none of them has a recommendation to move it yet"),
-            self.MOVE_TO_CLAUDES_DIR: ("Move %s, keeping their names, to %s" %
-                                       (_of(len(recommended), len(relpaths)), claudes_dirs),
-                                       None if recommended else "none of them has a recommendation yet"),
-            self.MOVE_TO_CLAUDES_DIR_TYPED: ("Move the file, under a name you type, to %s" % (claudes_dirs,),
-                                             one or (None if recommended else "it has no recommendation yet")),
-            self.REMOVE_COPIES: ("Remove %s that are copies of files in %s%s" %
-                                 (_of(len(removable), len(relpaths)), self.root_path, not_yet),
-                                 None if removable else "none of them is a copy of a file there (by its contents)"),
-            self.REMOVE_JUNK: ("Remove %s that look like junk (to %s)" %
-                               (_of(len(junky), len(relpaths)), "Drive's trash" if self.inbox_is_cloud else "the trash"),
-                               None if junky else "none of them looks like junk (by its name, or as Claude says)"),
-            self.MOVE_TO: ("Move the %s to... (pick a dir in %s)" % (count, self.root_path), None),
-            self.MOVE_TO_CLAUDES_NAMES: ("Move the %s, under Claude's names (%d renamed), to... (pick a dir in %s)" %
-                                         (count, len(renamed), self.root_path),
-                                         None if renamed else "none of them has a name from Claude"),
-            self.MOVE_TO_TYPED: ("Move the file, under a name you type, to... (pick a dir in %s)" % (self.root_path,),
-                                 one),
-            self.COPY_TO: ("Copy the %s to... (pick a dir in %s)" % (count, self.root_path), None),
-            self.REMOVE: ("Remove the %s from %s" % (count, self.inbox_path), None),
-        }
-        disabled = {label: picker.Disabled("%s: %s" % (label, reason))
-                    for label, reason in options.values() if reason is not None}
-        answer = picker.pick_option([self.NOTHING] + [label for label, _ in options.values()],
-                                    header="%s picked in %s. What to do with them?" % (count, self.inbox_path),
-                                    title="What to do",
-                                    shown_as=lambda: disabled, label=LABEL)
-        action = next((action for action, (label, _) in options.items() if label == answer), None)
+        is_one = len(relpaths) == 1
+        name = os.path.basename(relpaths[0]) if is_one else None
+        # Where each option puts the files: the parts of the path, each with where it's from (see
+        # _destination_lines())
+        root = (self.root_path.rstrip('/') + '/', SORTED_TREE)
+        claudes_dir = (((destinations[0] + '/') if destinations[0] else '', CLAUDES_DIR)
+                       if len(destinations) == 1 else ("<Claude's %d dirs>/" % (len(destinations),), CLAUDES_DIR))
+        claudes_name = ((os.path.basename(self._target(relpaths[0])), CLAUDES_NAME) if is_one and recommended else
+                        ("<Claude's names, %d renamed>" % (len(renamed),), CLAUDES_NAME))
+        own_name = (name, OWN_NAME) if is_one else ("<their own names>", OWN_NAME)
+        your_dir = ("<a dir you pick>/", YOUR_DIR)
+        typed = ("<a name you type>", YOUR_NAME)
+        it = "it" if is_one else _of(len(recommended), len(relpaths))
+        they = "it" if is_one else "the %s" % (count,)
+        # Each: its label, why it can't be (None: it can), what it does (a verb), and where it puts
+        # them (the path's parts). The ones that can't be done aren't offered, nor one that does the
+        # same as another (Claude's dir under the file's own name, when Claude keeps the name).
+        options = collections.OrderedDict([
+            (self.DESCRIBE, ("Describe %s with Claude, while you go on (sends it their contents; or Ctrl-I)" %
+                             ("it" if is_one else _of(len(undescribed), len(relpaths)),),
+                             None if undescribed else "described", ASK, [])),
+            (self.RECOMMEND, ("Ask Claude where %s go%s in %s, while you go on (or Ctrl-I)" %
+                              ("it" if is_one else _of(len(unrecommended), len(relpaths)), "es" if is_one else "",
+                               self.root_path), None if unrecommended else "placed", ASK, [])),
+            (self.MOVE_RECOMMENDED, ("Move %s to Claude's recommendation: %s" %
+                                     (it, ''.join(text for text, _ in [root, claudes_dir, claudes_name]))
+                                     if is_one or len(destinations) == 1 else
+                                     "Move %s to Claude's recommendations (%d dirs%s)" %
+                                     (it, len(destinations), ", %d renamed" % (len(renamed),) if renamed else ""),
+                                     None if recommended else "no recommendation", MOVE,
+                                     [root, claudes_dir, claudes_name])),
+            (self.MOVE_TO_CLAUDES_DIR, ("Move %s to Claude's dir, keeping %s name: %s" %
+                                        (it, "its" if is_one else "their",
+                                         ''.join(text for text, _ in [root, claudes_dir, own_name])),
+                                        None if renamed else "the same as Claude's recommendation", MOVE,
+                                        [root, claudes_dir, own_name])),
+            (self.MOVE_TO_CLAUDES_DIR_TYPED, ("Move it to Claude's dir, under a name you type: %s" %
+                                              (''.join(text for text, _ in [root, claudes_dir, typed]),),
+                                              None if is_one and recommended else "not one file with a recommendation",
+                                              MOVE, [root, claudes_dir, typed])),
+            (self.MOVE_TO, ("Move %s to a dir you pick: %s" % (they, ''.join(text for text, _ in [root, your_dir, own_name])),
+                            None, MOVE, [root, your_dir, own_name])),
+            (self.MOVE_TO_CLAUDES_NAMES, ("Move %s to a dir you pick, under Claude's %s: %s" %
+                                          (they, "name" if is_one else "names",
+                                           ''.join(text for text, _ in [root, your_dir, claudes_name])),
+                                          None if renamed else "no other name from Claude", MOVE,
+                                          [root, your_dir, claudes_name])),
+            (self.MOVE_TO_TYPED, ("Move it to a dir you pick, under a name you type: %s" %
+                                  (''.join(text for text, _ in [root, your_dir, typed]),),
+                                  None if is_one else "not one file", MOVE, [root, your_dir, typed])),
+            (self.COPY_TO, ("Copy %s to a dir you pick (keeping %s in the inbox): %s" %
+                            (they, "it" if is_one else "them", ''.join(text for text, _ in [root, your_dir, own_name])),
+                            None, COPY, [root, your_dir, own_name])),
+            (self.REMOVE_COPIES, ("Remove %s: %s in %s%s" %
+                                  ("it" if is_one else _of(len(removable), len(relpaths)),
+                                   "a copy of a file" if is_one else "copies of files", self.root_path, not_yet),
+                                  None if removable else "not a copy", REMOVE, [])),
+            (self.REMOVE_JUNK, ("Remove %s: %s like junk (to %s)" %
+                                ("it" if is_one else _of(len(junky), len(relpaths)),
+                                 "it looks" if is_one or len(junky) == 1 else "they look",
+                                 "Drive's trash" if self.inbox_is_cloud else "the trash"),
+                                None if junky else "not junk", REMOVE, [])),
+            (self.REMOVE, ("Remove %s from %s" % (they, self.inbox_path), None, REMOVE, [])),
+        ])
+        options = collections.OrderedDict((action, option) for action, option in options.items() if option[1] is None)
+        labels = [self.NOTHING] + [label for label, _, _, _ in options.values()]
+        colors = {label: picker.Colored(label, VERB_COLORS[verb]) for label, _, verb, _ in options.values()}
+        lines = {label: self._destination_lines(verb, parts, relpaths, removable if action == self.REMOVE_COPIES else
+                                                junky if action == self.REMOVE_JUNK else relpaths)
+                 for action, (label, _, verb, parts) in options.items()}
+        header = ("%s, in %s: what to do with it?" % (name, posixpath.dirname(posixpath.join(self.inbox_path, relpaths[0])))
+                  if is_one else "%s picked in %s. What to do with them?" % (count, self.inbox_path))
+        answer = picker.pick_option(labels, header=header, title="What to do", shown_as=lambda: colors, label=LABEL,
+                                    previews_below=lines)
+        action = next((action for action, (label, _, _, _) in options.items() if label == answer), None)
         if action == self.DESCRIBE:
             self.describe_in_background(undescribed)
             return None
@@ -492,6 +539,26 @@ class InboxSort(object):
                 _join(self.root_path, copy) for copy in self._copies(relpath)[:2]))
                 for relpath in removable])
         return None
+
+    def _destination_lines(self, verb, parts, relpaths, acted_on):
+        """The lines below the menu for an option: what it does to the files (verb, see VERB_COLORS),
+        as a label in its color, and where it puts them (parts: the path's, each (text, where it's
+        from)), and under the path, a bracket under each part saying where it's from, in that one's
+        color (see SORTED_TREE)"""
+        verb_label = " %s " % (verb.upper(),)
+        if not parts:
+            what = (os.path.basename(acted_on[0]) if len(acted_on) == 1 else _files(len(acted_on)))
+            text = {ASK: " Claude, about %s, while you go on" % (what,),
+                    REMOVE: " %s, from %s%s" % (what, self.inbox_path,
+                                                " (to the trash)" if verb == REMOVE and not self.inbox_is_cloud else "")}
+            return [picker.segments([(verb_label, VERB_COLORS[verb]), (text.get(verb, ''), None)])]
+        parts = _fitting(parts, shutil.get_terminal_size().columns - 1 - picker.display_width(verb_label) - 1)
+        path_line = picker.segments([(verb_label, VERB_COLORS[verb]), (" ", None)] +
+                                    [(text, None) for text, _ in parts])
+        brackets = [(" " * (picker.display_width(verb_label) + 1), None)]
+        for text, (color, names) in parts:
+            brackets.append((_bracket(names, picker.display_width(text)), color))
+        return [path_line, picker.segments(brackets)]
 
     def _typed_name(self, plan):
         """plan (one file: [(relpath, its path in the sorted tree)]) with the name the user types for
@@ -1066,6 +1133,24 @@ def run(inbox_path, root_path, known_replicas=None):
         sort.run()
     if known_replicas is not None:
         replicalog.offer_entries(sort.changes, sort.log_trees(), known_replicas)
+
+
+def _fitting(parts, width):
+    """parts (a path's, [(text, origin)]) to fit in width columns: the first one (the sorted tree's
+    root) cut to its last dir, after '.../', if they don't"""
+    if sum(picker.display_width(text) for text, _ in parts) <= width or not parts:
+        return parts
+    first, origin = parts[0]
+    return [('.../' + os.path.basename(first.rstrip('/')) + '/', origin)] + parts[1:]
+
+
+def _bracket(names, width):
+    """A bracket width columns wide, saying the first of names (the longest first) that fits, e.g.
+    [Claude's dir ]; or as much of the last as fits"""
+    if width < 2:
+        return ' ' * width
+    inside = next((name for name in names if len(name) <= width - 2), names[-1][:width - 2])
+    return '[' + inside + ' ' * (width - 2 - len(inside)) + ']'
 
 
 def _wrapped(text, indent):

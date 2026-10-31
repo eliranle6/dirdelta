@@ -161,6 +161,19 @@ files that look like junk" (`REMOVE_JUNK`) is `_remove(to_trash=True)`: a local 
 to the desktop's trash (`LocalDiskDirTree.trashing()`: `_remove_file()` runs `gio trash`), Drive's
 to its trash as always.
 
+### The inbox's action menu (`InboxSort._act()`)
+Only what can be done is offered (no greyed-out options), and not two that do
+the same (Claude's dir under the file's own name, when Claude keeps the name;
+Claude's names, when it renames none). For one file, the header names it and
+each destination ends with its name. Options are colored by what they do
+(`VERB_COLORS`: Claude's in magenta, moves blue, the copy cyan, removals red),
+and below the menu (`_destination_lines()`) the selected one says it again: its
+verb as a label in that color, the destination path, and under each part of
+the path a bracket saying where it's from (`SORTED_TREE`, `CLAUDES_DIR`,
+`CLAUDES_NAME` in magenta, `YOUR_DIR`/`YOUR_NAME` in yellow, `OWN_NAME` in
+green; `_bracket()` takes the longest name that fits, `_fitting()` cuts a long
+sorted tree's root to `.../its-name/`).
+
 ### `hashcache.py`
 Local files' contents' hashes, in `~/.cache/dirdelta/hashes.sqlite`
 (`CACHE_FILE`, SQLite in WAL mode: a table `files(path, size, mtime_ns,

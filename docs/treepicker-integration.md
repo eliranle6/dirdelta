@@ -50,6 +50,11 @@ Like fzf: dirdelta starts `treepicker`, which draws on the terminal itself
   the caller's (`--key KEY TEXT`, `picker.py`'s `key_hints`, which can also say what one of
   treepicker's does there), `/`, `?` and `q`; `--help-line` adds lines to `?`'s help (the tags'
   legend). The status line no longer ends with `?: help`.
+- A blank row between the header and the tree, on every screen.
+- `--preview-below`: the selected option's preview above the status bar, its lines in colored
+  parts (`picker.pick_option(previews_below=...)`, `picker.segments()`), e.g. the inbox's action
+  menu's destination path, and under it a bracket per part saying where it's from. And an
+  `--updates` option may end with `color=NAME` (`picker.Colored`): the option's text color.
 - While a search filters the tree, Space on a dir picks only the matches under it.
 - The inbox's picker: Enter with nothing picked picks the selected node, as Space would
   (`--enter-picks-selection`, `pick_files(enter_picks_selection=True)`).
