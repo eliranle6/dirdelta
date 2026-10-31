@@ -170,11 +170,11 @@ highlighted `SURELY_A_COPY`); Claude is told (`ai.recommend(copies=...)`) and
 may answer `action: 'remove'` (for junk too, with no copies: what Claude says,
 by the names, sizes and descriptions it's given), and the copies (by their contents, whatever Claude says) are offered as
 "Remove N of the M files that are copies of files in X". After a move or copy, the sorted tree's index has the file.
-Logs (see `dirsync_main.py` below): `inbox.run()` notes both replicas seen
-(`replicalog.note_seen()`, `InboxSort.log_trees()`: a tree of each, apart from
-the one moves happen in), the sort notes what it does live in `InboxSort.changes`
-(the sorted tree: 'added' from the inbox, 'copied'; the inbox: only 'removed',
-not the files moved out of it to the sorted tree), and once it's quit, `replicalog.offer_entries()`.
+Logs (see `dirsync_main.py` below): only the sorted tree has one (an inbox has no
+`last_update.txt`, since 2026-10-31). `inbox.run()` notes it seen (`replicalog.note_seen()`,
+`InboxSort.log_trees()`: a tree of it, apart from the one moves happen in), the sort notes what it
+does to it live in `InboxSort.changes` ('added' from the inbox, 'copied', 'moved' by a dir's
+rename), and once it's quit, `replicalog.offer_entries()`.
 Junk (`_junk()`): by its name or size (`junk.find()` at each pick, `_junk_by_name`: system,
 temporary, partly downloaded, empty files, installers, archives unpacked beside them), or a
 `remove` of Claude's for a file with no copies. Shown as `[junk? why]` (`JUNK_BY_NAME`) or

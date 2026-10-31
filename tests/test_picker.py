@@ -273,6 +273,15 @@ class PickerTest(unittest.TestCase):
         self.assertEqual(args[args.index('--expect-twice') + 1], 'c')
         self.assertNotIn('--expect', args)
 
+    def test_enter_in_the_side_tree_says_its_selection(self):
+        self.answer(picker.SIDE_KEY + '|a|docs|a/1.txt')
+        side = picker.Side('sorted', ['d docs'], True)
+        self.assertEqual(picker.pick_files('/r', ['a/1.txt'], side=side),
+                         picker.Picked(picker.SIDE_KEY, 'a', ['a/1.txt'], 'docs'))
+        args, _ = self.call()
+        self.assertEqual(args[args.index('--side-root') + 1], 'sorted')
+        self.assertEqual(args[args.index('--side-key') + 1], picker.SIDE_KEY)
+
     def test_pick_files_with_keys_ended_by_enter_returns_the_picks(self):
         self.answer('|a|a/1.txt')
         self.assertEqual(picker.pick_files('/r', ['a/1.txt', 'b/2.txt'], keys='r'),

@@ -63,6 +63,11 @@ Like fzf: dirdelta starts `treepicker`, which draws on the terminal itself
 - V picks a range, as vim's visual line mode (with `-m`): moving picks every line from where V was
   pressed to the selection, a dir with what's under it; V, Space or Enter keep it, Esc unpicks it. Esc (Ctrl-[) without a range or a search unpicks all.
   A picked node's styled parts keep their styles (its plain ones, its name, are red).
+- A tree beside the picked one (`pick_files(side=picker.Side(...))`, treepicker's `--side FILE`,
+  `--side-root`, `--side-select FD`, `--side-key`): the inbox's sorted tree, or a sync's other
+  replica (`sidetree.items()`), in the lower part of the right column; Ctrl-L moves in it, Ctrl-H
+  back. It follows the selected file (`Side.follow`: Claude's dir, a copy's or a same-named file's
+  place), and in an inbox's sort Enter there moves the files into its dir (`_move_to_side()`).
 - While a search filters the tree, Space on a dir picks only the matches under it.
 - The inbox's picker: Enter with nothing picked picks the selected node, as Space would
   (`--enter-picks-selection`, `pick_files(enter_picks_selection=True)`).

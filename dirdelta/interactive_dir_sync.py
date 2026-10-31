@@ -18,6 +18,7 @@ from dirdelta import messages
 from dirdelta import opening
 from dirdelta import picker
 from dirdelta import renaming
+from dirdelta import sidetree
 
 
 # The relpaths of the files in a dir that another lacks (see find_missing()), and the lines of a
@@ -125,6 +126,8 @@ class InteractiveDirSync(object):
         self._missing_future = missing
         self.src_index = src_index or elsewhere.Index(src)
         self.dst_index = dst_index or elsewhere.Index(dst)
+        # The action menu's last action done (see browse())
+        self._last_action = None
         self.checked = checked if checked is not None else {}
         # Where what's changed live is noted (a replicalog.Changes, by the replicas' displaynames),
         # for the entries of their logs, if anywhere
@@ -149,7 +152,8 @@ class InteractiveDirSync(object):
         header = ("Files in %s, which are not in %s. Pick some, then choose what to do with them." %
                   (self._src.displayname(), self._dst.displayname()))
         keys = (self.REFRESH_KEY if clouds else '') + hashes_screen.KEY
-        key_hints = ([('Enter', 'choose what to do'), opening.KEY_HINT, renaming.KEY_HINT] +
+        key_hints = ([('Enter', 'choose what to do'), opening.KEY_HINT, renaming.KEY_HINT,
+                      ('Ctrl-L', 'look through %s' % (self._dst.displayname(),))] +
                      ([(self.REFRESH_KEY_NAME, 'read the folder anew from Drive')] if clouds else []) +
                      [hashes_screen.KEY_HINT])
         picked, selected = [], None
@@ -172,6 +176,8 @@ class InteractiveDirSync(object):
                     self._src.displayname(), missing, header=header, picked=picked,
                     keys=keys, selected=selected, key_hints=key_hints,
                     shown_as=shown_as, notify_keys=opening.KEY, twice_keys=renaming.KEY,
+                    # dst beside it, to look through (e.g. for a newer version of a file)
+                    side=picker.Side(self._dst.displayname(), self._side_items(), False, self._side_follow),
                     # Ctrl-X opens the selected one (the picked ones: the menu's Open)
                     on_notify=lambda key, selected, picked: self._opener.press([selected], files),
                     help_lines=hashes_screen.HELP_LINES if jobs else (),
@@ -190,6 +196,8 @@ class InteractiveDirSync(object):
                 picked = chosen.files
                 continue
             key = chosen.key
+            # What the action menu's action was (Copy and Remove change only the files they do)
+            self._last_action = None
             if key == renaming.PRESSED:
                 picked = chosen.files
                 renamed = self._rename_selected(selected)
@@ -225,7 +233,15 @@ class InteractiveDirSync(object):
                     continue
                 is_changed = bool(done) and not dryrun.DRYRUN
                 self.has_changed = self.has_changed or is_changed
-            if is_changed:
+            if is_changed and self._last_action in (self.COPY, self.REMOVE):
+                # Only the ones done aren't missing now (copied to dst, or removed from src): no
+                # need to diff the replicas anew, which for local ones scans them both
+                done_now = set(done)
+                missing = [relpath for relpath in missing if relpath not in done_now]
+                if not missing:
+                    self._say_nothing()
+                    return
+            elif is_changed:
                 # Diffed anew (the trees as they are now: no background finding)
                 self._missing_future = None
                 missing = self._missing()
@@ -255,6 +271,20 @@ class InteractiveDirSync(object):
         for job in hashes_screen.jobs_of([self._src]):
             job.scan_in_background()
         return new_relpath, moves
+
+    def _side_items(self):
+        """dst's dirs and files, for the tree beside the picker (see sidetree.py)"""
+        path = self._dst.displayname() if isinstance(self._dst, clouddirtree.CloudDirTree) else self._dst.fullpath()
+        return sidetree.items(path, self._dst)
+
+    def _side_follow(self, relpath):
+        """Where in dst src's file at relpath is related to, for the tree beside the picker: a file
+        of its name there (the first, by path), or else its own path (the closest dir dst has)"""
+        if self.dst_index.is_built():
+            named = self.dst_index.files_named(os.path.basename(relpath))
+            if named:
+                return sorted(named)[0]
+        return relpath
 
     def _index_of(self, replica):
         return self.src_index if replica is self._src else self.dst_index
@@ -349,6 +379,7 @@ class InteractiveDirSync(object):
             return None if moves is None else self._rename(action, moves)
         if not self._confirm(action, relpaths):
             return None
+        self._last_action = action
         files = [self._file_entry(relpath) for relpath in relpaths]
         if action == self.COPY:
             title = "Copying %s from %s to %s" % (count, src_name, dst_name)

@@ -234,6 +234,14 @@ class InteractiveDirSyncTest(unittest.TestCase):
         self.assertEqual(kwargs['selected'], 'sub/a.txt')
         self.assertEqual(kwargs['picked'], ['sub/a.txt'])
 
+    def test_after_a_copy_the_replicas_arent_diffed_anew(self):
+        real = interactive_dir_sync.find_missing
+        with mock.patch('dirdelta.dryrun.DRYRUN', False), \
+                mock.patch('dirdelta.interactive_dir_sync.find_missing', side_effect=real) as find_missing:
+            self._browse([picker.Picked('', 'sub/b.txt', ['sub/b.txt']), None], ['Copy', YES])
+        find_missing.assert_called_once()
+        self.assertEqual(self._offered()[1][0], ['sub/c.txt'])
+
     def test_two_cloud_replicas_cant_copy(self):
         src = clouddirtree.CloudDirTree('cloud/a')
         src.add_file_by_relpath('x')

@@ -231,8 +231,9 @@ class InboxSortTest(unittest.TestCase):
                       dirs=[os.path.join(self.root, 'docs')] * 2)
         changes = self.sorter.changes
         self.assertEqual(changes.summary(self.root), "added 1 file from %s; copied 1 file from %s" % (self.inbox, self.inbox))
-        # The inbox's log isn't offered the move (only its removals)
-        self.assertEqual(changes.summary(self.inbox), "removed 1 file")
+        # An inbox has no log: none of it is noted for one
+        self.assertEqual(changes.summary(self.inbox), "")
+        self.assertEqual(changes.paths(), [self.root])
         # Not in a dry run
         self.sort([['b.jpg'], None], ['Remove it from', YES, SURE], is_dry_run=True)
         self.assertEqual(self.sorter.changes.paths(), [])
@@ -253,7 +254,9 @@ class InboxSortTest(unittest.TestCase):
         # Seen at the start, and its log's last entry is the one added since
         self.assertIsNotNone(known.known['id:' + self.root]['seen'])
         self.assertEqual(known.known['id:' + self.root]['last_entry']['text'], "added 1 file from %s" % (self.inbox,))
-        self.assertIsNone(known.known['id:' + self.inbox]['last_entry'])
+        # An inbox has no log: it isn't a replica kept track of
+        self.assertNotIn('id:' + self.inbox, known.known)
+        self.assertFalse(self.exists('inbox', 'last_update.txt'))
         # Then offered for the changed one: the sorted tree (it's added the file), not the inbox the
         # file left
         headers = [call.kwargs['header'] for call in pick.call_args_list[2:]]
@@ -777,10 +780,11 @@ class InboxSortTest(unittest.TestCase):
                       known=known)
             self.assertEqual(known.dirs_of(self.root), ['docs'])
             save.assert_called_with(known)
-            # Then the recent ones, before picking one
+            # Then the recent ones, after picking one (first), a blank line apart
             self.sort([['b.jpg'], None], ['Copy it to a dir you pick', 'Recent: docs/', YES], known=known)
             menu = self.pick_option.call_args_list[1]
-            self.assertEqual(menu.args[0], ['Recent: docs/', Sort.PICK_DIR])
+            self.assertEqual(menu.args[0], [Sort.PICK_DIR, ' ', 'Recent: docs/'])
+            self.assertEqual(menu.kwargs['shown_as'](), {' ': picker.Skipped('')})
             self.assertIn(self.root, menu.kwargs['header'])
             self.assertTrue(self.exists('sorted', 'docs', 'b.jpg'))
             # A new one, or one picked, goes to the top; one not moved to (No) doesn't

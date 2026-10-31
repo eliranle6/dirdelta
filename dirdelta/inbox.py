@@ -39,6 +39,7 @@ from dirdelta import picker
 from dirdelta import replicalog
 from dirdelta import renaming
 from dirdelta import replicas
+from dirdelta import sidetree
 
 # The label of the inbox's screens, so they're told from a sync's
 LABEL = ('SORT', 'cyan')
@@ -157,7 +158,7 @@ class InboxSort(object):
     SIBLING_DIR_KEYS = 'oO'
     # Where files go: a dir picked in the sorted tree, or one of the recent ones (by its relpath in
     # it: the header names the sorted tree)
-    PICK_DIR = "Pick a dir (or make a new one: n in the picker)"
+    PICK_DIR = "Pick a dir (or make a new one: n, or o beside the selected one, in the picker)"
     RECENT_DIR = "Recent: %s/"
 
     def __init__(self, inbox_path, root_path, known_replicas=None):
@@ -167,8 +168,8 @@ class InboxSort(object):
         self.root_path = _normalized(root_path)
         # Where the sorted tree's recent dirs are kept (a replicas.Replicas, saved), if anywhere
         self._known_replicas = known_replicas
-        # What's changed live in the inbox and the sorted tree, by their paths, for their logs'
-        # entries (see replicalog.py)
+        # What's changed live in the sorted tree, for its log's entry (see replicalog.py). An inbox
+        # has no log: it's where files wait to be sorted, not a replica to keep track of
         self.changes = replicalog.Changes()
         for path in (self.inbox_path, self.root_path):
             if not paths.is_cloud_path(path) and not os.path.isdir(path):
@@ -279,7 +280,7 @@ class InboxSort(object):
         keys = (self.REFRESH_KEY if self.inbox_is_cloud else '') + hashes_screen.KEY
         key_hints = ([('Enter', 'what to do (none picked: the selected one)'),
                       ('Ctrl-I', 'Claude: describe, and say where they go'), opening.KEY_HINT,
-                      renaming.KEY_HINT] +
+                      renaming.KEY_HINT, ('Ctrl-L', 'the sorted tree')] +
                      ([(self.REFRESH_KEY_NAME, 'read the folder anew from Drive')] if self.inbox_is_cloud else []) +
                      [hashes_screen.KEY_HINT])
         help_lines = (["Tags after a file's name (/ searches them too):",
@@ -302,6 +303,7 @@ class InboxSort(object):
                 previews=lambda send, files=files: self._send_previews(files, send),
                 shown_as=lambda files=files: self._shown_as(files),
                 notify_keys=DESCRIBE_KEY + OPEN_KEY, enter_picks_selection=True, twice_keys=renaming.KEY,
+                side=picker.Side(self.root_path, self._side_items(), True, self._side_follow),
                 on_notify=lambda key, selected, picked, files=files: self._on_key(key, selected, picked, files),
                 on_selection=functools.partial(elsewhere.check_contents, files, self._inbox_view,
                                                self._inbox_index, self._root_index, self._checked,
@@ -324,7 +326,13 @@ class InboxSort(object):
                     interactive_dir_sync.refresh_replica(self._inbox_tree, self._full(selected))
                 picked = chosen.files
                 continue
-            done = self._act(chosen.files, selected)
+            if chosen.key == picker.SIDE_KEY:
+                # Enter in the sorted tree beside it: the picked files (or the selected one's) go there
+                done = self._move_to_side([relpath for relpath in chosen.files] or
+                                          [relpath for relpath in files if _is_at_or_under(relpath, selected)],
+                                          chosen.side_selected)
+            else:
+                done = self._act(chosen.files, selected)
             if done == self.REFRESH_KEY:
                 with self._drive_lock:
                     interactive_dir_sync.refresh_replica(self._inbox_tree, self._full(selected))
@@ -372,10 +380,61 @@ class InboxSort(object):
         sizes = {new: self._size(new) for new in moved.values()}
         ai.carry({self._cache_key(ai.File(relpath, None, sizes[new])): self._cache_key(ai.File(new, None, sizes[new]))
                   for relpath, new in moved.items()})
-        self.changes.note(self.inbox_path, 'moved', len(moved))
         # Its hashes are kept under the new paths: the jobs list them there
         for job in self._jobs():
             job.scan_in_background()
+
+    # The sorted tree beside the inbox's picker (see sidetree.py)
+
+    def _side_items(self):
+        """The sorted tree's dirs and files, for the tree beside the picker, but the inbox's, if
+        it's in it"""
+        excluded = (_relpath_in(self._inbox_rel, self._root_rel)
+                    if self.is_one_tree and _is_at_or_under(self._inbox_rel, self._root_rel) else None)
+        return sidetree.items(self.root_path, self._root_view, excluded)
+
+    def _side_follow(self, relpath):
+        """Where in the sorted tree the inbox's file at relpath is related to (for the tree beside
+        the picker to show, while it's selected): Claude's dir for it, or else where a copy of it
+        is, or else a file of its name; None for none (or a dir)"""
+        recommendation = self._recommendations.get(relpath)
+        target = self._target(relpath) if recommendation else None
+        if target is not None:
+            return posixpath.dirname(target)
+        copies = self._copies(relpath)
+        if copies:
+            return copies[0]
+        if self._root_index.is_built():
+            named = self._root_index.files_named(posixpath.basename(relpath))
+            if named:
+                return sorted(named)[0]
+        return None
+
+    def _move_to_side(self, relpaths, side_relpath):
+        """Move the inbox's files at relpaths into the sorted tree's dir at side_relpath (or the dir
+        of the file there), Enter's in the sorted tree beside the picker, once the user confirms (see
+        _approve()). Returns the ones moved, as _act() does."""
+        if not relpaths:
+            return None
+        destination = side_relpath if self._is_sorted_dir(side_relpath) else posixpath.dirname(side_relpath)
+        destination = self._not_the_inbox(destination)
+        if destination is None:
+            return None
+        done = self._approve(self.MOVE_TO, [(relpath, _join(destination, posixpath.basename(relpath)))
+                                            for relpath in relpaths])
+        if done and self._known_replicas is not None:
+            self._known_replicas.record_dir(self.root_path, destination)
+            replicas.save(self._known_replicas)
+        return done
+
+    def _is_sorted_dir(self, relpath):
+        """Whether the sorted tree's relpath is a dir (the root too)"""
+        if not relpath:
+            return True
+        if self.root_is_cloud:
+            node = self._root_view.get_node(relpath)
+            return node is not None and isinstance(node.data, entries.DirEntry)
+        return os.path.isdir(os.path.join(self.root_path, relpath))
 
     def _views(self):
         """The inbox's and the sorted tree's trees, each on its own"""
@@ -993,8 +1052,11 @@ class InboxSort(object):
             return self._pick_dir(verb, count)
         options = {self.RECENT_DIR % (relpath or '.',): relpath for relpath in recent}
         pick = self.PICK_DIR
-        answer = picker.pick_option(list(options) + [pick], header="Where in %s to %s the %s?" %
-                                    (self.root_path, verb, count), label=LABEL, title="Where to")
+        # Picking one first, then the recent ones, apart
+        labels, blanks = picker.grouped([[pick], list(options)])
+        answer = picker.pick_option(labels, header="Where in %s to %s the %s?" %
+                                    (self.root_path, verb, count), label=LABEL, title="Where to",
+                                    shown_as=lambda: blanks)
         if answer == pick:
             return self._pick_dir(verb, count)
         if answer not in options:
@@ -1257,9 +1319,9 @@ class InboxSort(object):
         return done
 
     def log_trees(self):
-        """[(tree, path)] of the inbox and the sorted tree, each a tree of its own (as it is now: a
-        Drive one from the cache), to read and write their logs (see replicalog.py)"""
-        return [(_tree(path), path) for path in (self.inbox_path, self.root_path)]
+        """[(tree, path)] of the sorted tree, a tree of its own (as it is now: a Drive one from the
+        cache), to read and write its log (see replicalog.py); an inbox has none"""
+        return [(_tree(self.root_path), self.root_path)]
 
     def _entries(self, relpaths):
         """The entries of the inbox's files at relpaths (in its tree), to remove them"""
@@ -1303,7 +1365,6 @@ class InboxSort(object):
         if kept:
             self._say_not_done("removed", kept, len(relpaths))
         removed = [relpath for relpath in relpaths if relpath not in left]
-        self.changes.note(self.inbox_path, 'removed', len(removed))
         return removed
 
 
@@ -1339,7 +1400,8 @@ def _normalized(path):
 def run(inbox_path, root_path, known_replicas=None):
     """Sort the inbox at inbox_path into root_path (see InboxSort), with known_replicas (a
     replicas.Replicas, saved) remembering them as a recent sort, and what's known of each (its log,
-    see replicalog.py); once it's done, offer entries for the logs of the ones it changed"""
+    see replicalog.py); once it's done, offer an entry for the sorted tree's log, if it changed
+    (an inbox has no log)"""
     sort = InboxSort(inbox_path, root_path, known_replicas)
     if known_replicas is not None:
         known_replicas.record_sort(sort.inbox_path, sort.root_path)

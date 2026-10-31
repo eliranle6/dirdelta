@@ -149,7 +149,20 @@ def display_width(text):
 
 # What pick_files() returns: the key that ended picking ('' for Enter), the selected node's relpath
 # ('' for the root), to show it again there, and the files picked
-Picked = collections.namedtuple('Picked', ['key', 'selected', 'files'])
+Picked = collections.namedtuple('Picked', ['key', 'selected', 'files', 'side_selected'],
+                                defaults=(None,))
+
+# Another tree beside a pick_files() picker's, in the lower part of its right column, to look
+# through (Ctrl-L moves in it, Ctrl-H back), e.g. where its files would go: its root's name, its
+# items ('d DIR' or 'f FILE', relpaths in it, each dir before what's in it), whether Enter there
+# ends picking (then the Picked's key is SIDE_KEY, and its side_selected the side tree's selected
+# relpath, '' the root), and follow, if given: called with the picker's selected relpath each time
+# it moves (on a thread of its own), returning the side tree's relpath to select (or its closest
+# dir there), or None to leave it where it is
+Side = collections.namedtuple('Side', ['root_name', 'items', 'is_enter_picking', 'follow'],
+                              defaults=(False, None))
+# What a Picked's key is when Enter in the side tree ended it (a byte no key prints)
+SIDE_KEY = '\x1d'
 
 
 def pick_from_tree(tree, header='', dirs_only=False, root_name=None, keys='', key_hints=(), twice_keys=''):
@@ -173,7 +186,7 @@ def pick_from_tree(tree, header='', dirs_only=False, root_name=None, keys='', ke
 
 def pick_files(rootpath, relpaths, header='', picked=None, label=None, keys='', selected=None,
                previews=None, on_selection=None, shown_as=None, notify_keys='', on_notify=None,
-               enter_picks_selection=False, key_hints=(), help_lines=(), twice_keys=''):
+               enter_picks_selection=False, key_hints=(), help_lines=(), twice_keys='', side=None):
     """Let the user pick some of the files at relpaths (relative to rootpath, each dir's files and
     subdirs together, in the order to show them, as dirdiff lists them). Picking a dir picks the
     files under it. Returns a Picked: the picked ones (of relpaths), in that order, and where the
@@ -234,19 +247,23 @@ def pick_files(rootpath, relpaths, header='', picked=None, label=None, keys='', 
                 key, selected, [path for path in picked if path in files]))
         picked_paths = _run(args + ['-'], ('f ' + relpath for relpath in relpaths),
                             shown_as=shown_as, label=label, previews=previews,
-                            on_selection=on_selection, notify=notify)
+                            on_selection=on_selection, notify=notify, side=side)
     if picked_paths is None:
         return None
     key = ''
-    if keys or twice_keys:
+    if keys or twice_keys or (side is not None and side.is_enter_picking):
         # The key that ended it first (none for Enter)
         key, picked_paths = _twice(picked_paths[0], twice_keys), picked_paths[1:]
-    # Then the selected node
+    # Then the selected node, and after Enter in the side tree, its selected one
     selected, picked_paths = picked_paths[0], picked_paths[1:]
+    side_selected = None
+    if key == SIDE_KEY:
+        side_selected, picked_paths = picked_paths[0], picked_paths[1:]
+        side_selected = '' if side_selected == '.' else side_selected
     # What's picked includes the dirs whose files all are
     files = set(relpaths)
     return Picked(key, '' if selected == '.' else selected,
-                  [path for path in picked_paths if path in files])
+                  [path for path in picked_paths if path in files], side_selected)
 
 
 def view_files(rootpath, relpaths, header='', previews=None, label=None, shown_as=None, on_selection=None,
@@ -360,11 +377,13 @@ def _help_args(key_hints, help_lines):
     return args
 
 
-def _run(args, input_items, shown_as=None, label=None, previews=None, on_selection=None, notify=None):
+def _run(args, input_items, shown_as=None, label=None, previews=None, on_selection=None, notify=None,
+         side=None):
     """Run treepicker with args and the items (or None) on its stdin, and with shown_as (see
     pick_option()) sending it what to show the items as, and previews and on_selection (see
     pick_files()) what to show beside them, and notify (keys, a function of what they say) what
-    to do on its keys. Returns what was picked, or None if the user quit.
+    to do on its keys, and side (a Side) the tree beside it. Returns what was picked, or None if the
+    user quit.
     Every picker shows whether it's a dry run, and then label (text, color), if given."""
     command = [_find_program(), '-0']
     for text, color in [dryrun.label()] + ([label] if label else []):
@@ -387,6 +406,19 @@ def _run(args, input_items, shown_as=None, label=None, previews=None, on_selecti
         return our_fd
 
     jobs = []
+    # The ones on the selection's moves, each its own (see Selection), all moved by one reader
+    selections = []
+    side_file = None
+    if side is not None:
+        side_file = tempfile.NamedTemporaryFile('wb', prefix='dirdelta-side-')
+        side_file.write(_null_terminated(side.items))
+        side_file.flush()
+        command.extend(['--side', side_file.name, '--side-root', side.root_name])
+        if side.is_enter_picking:
+            command.extend(['--side-key', SIDE_KEY])
+        if side.follow is not None:
+            selections.append(Selection())
+            jobs.append(functools.partial(_follow, selections[-1], side.follow, pipe('--side-select', True)))
     if shown_as is not None:
         jobs.append(functools.partial(_send_updates, pipe('--updates', True), shown_as, is_done))
     if previews is not None or on_selection is not None:
@@ -395,9 +427,11 @@ def _run(args, input_items, shown_as=None, label=None, previews=None, on_selecti
             jobs.append(functools.partial(preview_sender.run, previews))
         if on_selection is not None:
             selection = Selection()
-            jobs.append(functools.partial(_read_selection, pipe('--selection', False), selection))
+            selections.append(selection)
             jobs.append(functools.partial(preview_sender.run,
                                           lambda send: on_selection(selection, send)))
+    if selections:
+        jobs.append(functools.partial(_read_selection, pipe('--selection', False), selections))
     if notify is not None:
         keys, on_notify = notify
         command.extend(['--notify', keys])
@@ -433,6 +467,8 @@ def _run(args, input_items, shown_as=None, label=None, previews=None, on_selecti
                 thread.join()
         for our_fd in our_fds:
             os.close(our_fd)
+        if side_file is not None:
+            side_file.close()
     if process.returncode == _EXIT_CODE_QUIT:
         return None
     if process.returncode != 0:
@@ -548,9 +584,21 @@ class Selection(object):
             self._condition.notify_all()
 
 
-def _read_selection(fd, selection):
-    """Move selection as treepicker says the selection moves (each path ending with '\0'), until it
-    stops saying (it's gone)"""
+def _follow(selection, follow, fd):
+    """Send treepicker the side tree's relpath to select (see Side) each time the selection moves,
+    until it's gone"""
+    try:
+        while True:
+            relpath = follow(selection.wait_next())
+            if relpath is not None:
+                os.write(fd, ((relpath or '.') + '\0').encode('utf-8', 'surrogateescape'))
+    except (PickerClosed, BrokenPipeError):
+        pass
+
+
+def _read_selection(fd, selections):
+    """Move each of selections as treepicker says the selection moves (each path ending with '\0'),
+    until it stops saying (it's gone)"""
     pending = b''
     try:
         for chunk in iter(lambda: os.read(fd, 4096), b''):
@@ -558,11 +606,13 @@ def _read_selection(fd, selection):
             pending = paths.pop()
             for path in paths:
                 path = path.decode('utf-8', 'surrogateescape')
-                selection._move('' if path == '.' else path)
+                for selection in selections:
+                    selection._move('' if path == '.' else path)
     except OSError:
         pass
     finally:
-        selection._close()
+        for selection in selections:
+            selection._close()
 
 
 def _read_notifications(fd, on_notify):
