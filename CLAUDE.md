@@ -219,5 +219,4 @@ Notes for whoever changes things next:
   scan, in `localdiskdirtree.py`) rather than using `os.walk`.
 - Cloud state is cached to disk (`~/.cache/dirman/files.txt`) rather than
   queried live on every scan; refreshing a folder re-reads it from the Drive
-  API, one request at a time: never in parallel (the user doesn't want
-  Google to see unusual use of the account).
+  API.

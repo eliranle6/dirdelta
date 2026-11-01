@@ -65,8 +65,8 @@ def _short_dir():
 class Opener(object):
     """Opens files of tree (a DirTree), at relpaths under its root_rel (a dir's relpath in it, ''
     its root), e.g. an inbox's in the tree it shares with the sorted tree. Drive is asked under
-    drive_lock (a threading.Lock), if given, so it's one request at a time with whatever else asks
-    it."""
+    drive_lock (a threading.Lock), if given, as the Drive service (shared with whatever else asks
+    it) isn't thread-safe."""
 
     def __init__(self, tree, root_rel='', drive_lock=None):
         self._tree = tree

@@ -358,8 +358,7 @@ Cloud state is never queried live per-scan. Instead:
    selected at first, and `q`): then it's None, and the caller goes back (a
    sync or picker mode ends, the no-path menu shows again).
 2. `clouddirtree.refresh_cache(folder_path)` (a path in Drive, `/` for all
-   of My Drive) reads the folder anew, one request at a time (never in
-   parallel, so Drive sees nothing unusual): My Drive's root folder's id
+   of My Drive) reads the folder anew, a request at a time: My Drive's root folder's id
    (`files().get('root')`), then the folders on the way, by name, a request
    a level (`name = 'X' and 'PARENT' in parents and mimeType = folder`; none
    or two is a `DriveCacheError`), then what's in the folder, a level of

@@ -63,7 +63,7 @@ Put it in the node: a `CloudFileEntry(FileEntry)` with `cloud_id, size, hashes, 
 date_taken, is_google`, filled by one `_entry_from_md(md)`. Moving a node moves its data;
 `_move_subtree` stops needing callbacks.
 
-## 6. Drive parallelism contradicts itself (S to decide, clarity)
+## 6. Drive parallelism contradicts itself (S to decide, clarity) — no rule (2026-11-01): the parallel uploads stay; the lock's comments say it's for thread safety
 `inbox.py` has `_drive_lock`, "Drive is asked one request at a time", and `opening.Opener` takes
 it too; but `clouddirtree.UPLOAD_THREADS = 4` uploads in parallel, and `_make_folders_batch`
 sends up to 100 creates per batch request. Either the rule is "one at a time" (then the uploads

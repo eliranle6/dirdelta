@@ -222,7 +222,7 @@ class InboxSort(object):
         self._failed = {}
         # The queued files to ask about anew (Ctrl-I on ones asked before), whatever Claude's cache has
         self._anew = set()
-        # Drive is asked one request at a time: the describer's downloads and the screen's changes
+        # The describer's downloads and the screen's changes share one Drive service (not thread-safe)
         self._drive_lock = threading.Lock()
         # As a sync looks for a file where the other replica has it (elsewhere.py), the inbox's files
         # are looked for in the sorted tree, by name, size and contents: each as a replica of its own
