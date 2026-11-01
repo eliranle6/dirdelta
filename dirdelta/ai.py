@@ -16,6 +16,8 @@ import os
 
 # The model, for descriptions and recommendations both: the fastest and cheapest
 MODEL = 'claude-haiku-5-5'
+# For a plan of what to do with files (see aiplan.py), where following what the user said matters most
+PLAN_MODEL = 'claude-opus-5-5'
 CACHE_FILE = os.path.expanduser('~/.cache/dirdelta/ai.json')
 # How many files one request is about
 BATCH_SIZE = 10
@@ -225,7 +227,7 @@ def _ask_for_recommendations(files, dirs, root_name, descriptions, copies):
             # A copy (known by its contents), or else junk (what Claude says)
             answers[relpath] = {'action': 'remove', 'path': '', 'reason': reason, 'copies': known}
             continue
-        path = _clean_path(item.get('path', ''), os.path.basename(relpath))
+        path = clean_path(item.get('path', ''), os.path.basename(relpath))
         if path is not None:
             answers[relpath] = {'action': 'move', 'path': path, 'reason': reason, 'copies': known}
     return answers
@@ -256,7 +258,7 @@ def _short(description):
     return ' '.join(words[:MAX_DESCRIPTION_WORDS]).rstrip('.')
 
 
-def _clean_path(path, name):
+def clean_path(path, name):
     """A recommended path (of a file named name) as a relpath in the sorted tree (a leading '/' is
     its root too), with name's extension if it has none, or None if it isn't one: empty, or going up
     out of the tree"""
@@ -267,6 +269,12 @@ def _clean_path(path, name):
     if extension and not os.path.splitext(parts[-1])[1]:
         parts[-1] += extension
     return '/'.join(parts)
+
+
+def ask(prompt, schema, system_prompt):
+    """What Claude answers to prompt, by schema (a dict), going only by what it's told: it reads
+    nothing. Raises AIError if it can't be asked."""
+    return _run_query(prompt, [], schema, max_turns=5, model=PLAN_MODEL, system_prompt=system_prompt)
 
 
 def _run_query(prompt, readable_dirs, schema, max_turns, model, system_prompt=SYSTEM_PROMPT):

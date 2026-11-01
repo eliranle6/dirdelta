@@ -527,7 +527,7 @@ sit alongside it as `scandrive.py`; it's now archived at
 returning src's files (relative paths) that dst lacks, and find's errors.
 It scans both dirs in C++ (~1s for two 119k-file dirs, where building their
 Python trees took ~6s). `programs.find(name)` finds treepicker and
-dirdiff: next to the running python, `lib/treepicker/build/`, `PATH`.
+dirdiff: this copy's build (`DIRDELTA_PROGRAMS_DIR`, set by `bin/python` and make), next to the running python, `PATH`.
 
 ### `interactive_dir_sync.py`
 `InteractiveDirSync(src, dst)`. Its diff (`_missing()`): for two local dirs,
@@ -769,11 +769,24 @@ stdout, all `\0`-separated (`-0`). Exit code 1 means the user quit (→
 Names are passed as bytes with `surrogateescape`, so non-UTF-8 file names
 round-trip. Tests (`tests/test_picker.py`) run a fake treepicker script.
 
+## Asking AI: `aiplan.py`, `aiplan_screen.py`
+
+The user says what to do with files in their own words, and the AI answers with a plan to review.
+`aiplan.py` has no UI, so another GUI can use it as it is: a `Task` (the `File`s to choose from, what's
+known of each, the `Action`s the caller offers, others it may act on) and what the user said make a
+`Plan` (`Step`s, and what was `left_out` and why). The AI answers by the files' numbers, and all it says is
+checked: only actions offered, only files it was told of, one step per file, no target that's taken, in
+`meta/`, outside the tree, or the target of another step, and each `Action.check` the caller gives.
+It goes through `ai.ask()`, so another provider is a change there. It reads nothing.
+`aiplan_screen.py` asks what to do, and shows the plan as a `pick_files()` tree, by kind, all picked.
+`InteractiveDirSync._ask_ai()` and `InboxSort._ask_ai()` build the `Task` and do the approved steps through
+the same functions and confirmations as their menus.
+
 ## `lib/treepicker/` — treepicker and dirdiff (git submodule)
 
 The C++ tree picker dirdelta runs, and `dirdiff` (github.com/eliranle6/treepicker;
 its README and `--help` describe them). `make build` builds them in
-`lib/treepicker/build/`; `make install`/`make deploy` copy them next to the
+the build dir (see `bin/builddir`); `make install`/`make deploy` copy them next to the
 environment's python, where `programs.find()` looks first. The Python picker
 library that was the UI before (with `cursesswitch`) was
 removed on 2026-10-24.

@@ -1,3 +1,4 @@
+import contextlib
 import json
 import os
 import shutil
@@ -295,18 +296,66 @@ class InboxSortTest(unittest.TestCase):
         self.assertTrue(self.exists('inbox', 'a.txt'))
         self.assertFalse(self.exists('sorted', 'a.txt'))
 
+    def ask_ai(self, steps, picks, answers=()):
+        """Sort, the inbox's picker answering picks, then the review keeping all, the AI answering steps"""
+        picks = list(picks)
+
+        def pick_files(root, items, **_):
+            if root == "The AI's plan":
+                self.reviewed = list(items)
+                return picker.Picked('', '', list(items))
+            chosen = picks.pop(0)
+            return picker.Picked('', '', chosen) if isinstance(chosen, list) else chosen
+        with mock.patch('dirdelta.ai._run_query', return_value={'summary': 'ok', 'steps': steps}), \
+                mock.patch('dirdelta.messages.ask', return_value='sort them'), \
+                mock.patch('dirdelta.picker.pick_files', side_effect=pick_files), \
+                helpers.answering_option_picker(answers), mock.patch('dirdelta.dryrun.DRYRUN', False), \
+                mock.patch('dirdelta.localdiskdirtree.LocalDiskDirTree.trashing', return_value=contextlib.nullcontext()), \
+                mock.patch('dirdelta.picker.view_files') as self.view_files:
+            self.sorter = Sort(self.inbox, self.root)
+            self.sorter.run()
+
+    def test_ask_ai_with_nothing_picked_does_what_the_user_approves_of_all_the_files(self):
+        self.ask_ai([{'action': Sort.MOVE_TO, 'number': 1, 'path': 'docs/a2.txt', 'reason': 'a doc'},
+                     {'action': Sort.COPY_TO, 'number': 2, 'path': 'photos/b.jpg', 'reason': 'a photo'},
+                     {'action': Sort.MOVE_IN_INBOX, 'number': 3, 'path': 'c2.jpg', 'reason': 'neater'}],
+                    [picker.Picked('a', '', []), None], [YES, YES, YES])
+        self.assertTrue(self.exists('sorted', 'docs', 'a2.txt'))
+        self.assertFalse(self.exists('inbox', 'a.txt'))
+        self.assertTrue(self.exists('sorted', 'photos', 'b.jpg'))
+        self.assertTrue(self.exists('inbox', 'b.jpg'))
+        self.assertTrue(self.exists('inbox', 'c2.jpg'))
+        # Its own review, not the approval's as well
+        self.view_files.assert_not_called()
+
+    def test_ask_ai_in_the_menu_is_about_the_picked_ones(self):
+        self.ask_ai([{'action': Sort.REMOVE, 'number': 1, 'reason': 'junk'},
+                     {'action': Sort.REMOVE, 'number': 2, 'reason': 'not told of it'}],
+                    [['b.jpg'], None], ['Ask AI', YES, 'Yes, remove them'])
+        self.assertEqual(self.reviewed, ['Remove from the inbox/b.jpg'])
+        self.assertFalse(self.exists('inbox', 'b.jpg'))
+        self.assertTrue(self.exists('inbox', 'a.txt'))
+
+    def test_ask_ai_cant_put_a_file_where_one_is_or_in_the_inbox(self):
+        helpers.make_files(self.root, ['docs/a.txt'])
+        self.ask_ai([{'action': Sort.MOVE_TO, 'number': 1, 'path': 'docs/a.txt', 'reason': ''},
+                     {'action': Sort.MOVE_TO, 'number': 2, 'path': 'photos/b.jpg', 'reason': ''}],
+                    [picker.Picked('a', '', []), None], [YES])
+        self.assertEqual(self.reviewed, ['Move to the sorted tree/b.jpg'])
+
     def test_the_menu_starts_with_nothing(self):
         self.sort([['a.txt'], None], [NOTHING])
         # Each kind of action apart, after a blank line (skipped when moving)
         with_blanks = self.pick_option.call_args.args[0]
         self.assertEqual([option.split(' ')[0] if option.strip() else '' for option in with_blanks],
-                         ['Nothing:', '', 'Describe', 'Ask', '', 'Move', 'Move', 'Move', '', 'Copy', '', 'Remove', '', 'Open'])
+                         ['Nothing:', '', 'Ask', 'Describe', 'Ask', '', 'Move', 'Move', 'Move', '', 'Copy', '', 'Remove', '', 'Open'])
         self.assertTrue(all(self.pick_option.call_args.kwargs['shown_as']()[blank] == picker.Skipped('')
                             for blank in with_blanks if not blank.strip()))
         options = [option for option in with_blanks if option.strip()]
         self.assertEqual(options[0], NOTHING)
         # With nothing recommended yet, and no copies or junk, only what can be done is offered
         self.assertEqual(options[1:], [
+            "Ask AI what to do with it, and review its plan",
             "Describe it with Claude, while you go on (sends it their contents)",
             "Ask Claude where it goes in %s, while you go on" % (self.root,),
             "Move it to a dir you pick: %s/<a dir you pick>/a.txt" % (self.root,),
@@ -322,18 +371,18 @@ class InboxSortTest(unittest.TestCase):
         # the picker's key that does it, if one does
         shown = self.pick_option.call_args.kwargs['shown_as']()
         self.assertEqual([picker.unstyled(shown[option])[:9] for option in options],
-                         [' ' * 9, ' ' * 9, '[Ctrl-I] '] + [' ' * 9] * 6)
-        self.assertEqual(shown[options[2]], picker.styled([('[Ctrl-I]', 'bold'), (' ', None), (options[2], 'magenta')]))
-        self.assertEqual(shown[options[3]], ' ' * 9 + picker.styled([
+                         [' ' * 9, '[a]      ', ' ' * 9, '[Ctrl-I] '] + [' ' * 9] * 6)
+        self.assertEqual(shown[options[3]], picker.styled([('[Ctrl-I]', 'bold'), (' ', None), (options[3], 'magenta')]))
+        self.assertEqual(shown[options[4]], ' ' * 9 + picker.styled([
             ("Move it to ", 'blue'), ("a dir you pick", 'yellow'), (": ", 'blue'), (self.root + '/', None),
             ("<a dir you pick>/", 'yellow'), ("a.txt", 'green')]))
-        self.assertEqual(shown[options[4]], ' ' * 9 + picker.styled([
+        self.assertEqual(shown[options[5]], ' ' * 9 + picker.styled([
             ("Move it to ", 'blue'), ("a dir you pick", 'yellow'), (", ", 'blue'), ("under a name you type", 'yellow'),
             (": ", 'blue'), (self.root + '/', None), ("<a dir you pick>/", 'yellow'), ("<a name you type>", 'yellow')]))
-        self.assertTrue(shown[options[6]].startswith(' ' * 9 + picker.styled([
+        self.assertTrue(shown[options[7]].startswith(' ' * 9 + picker.styled([
             ("Copy it to ", 'cyan'), ("a dir you pick", 'yellow'), (" (keeping it in the inbox): ", 'cyan')])))
         # And below the menu, what it does and where to, and where each part of the path is from
-        lines = self.pick_option.call_args.kwargs['previews_below'][options[3]]
+        lines = self.pick_option.call_args.kwargs['previews_below'][options[4]]
         self.assertEqual(lines[0], picker.segments([(" MOVE ", 'blue'), (" ", None), (self.root + '/', None),
                                                     ("<a dir you pick>/", None), ("a.txt", None)]))
         width = picker.display_width

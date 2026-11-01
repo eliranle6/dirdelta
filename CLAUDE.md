@@ -13,9 +13,10 @@ built with `make`; `dirdelta/picker.py` runs it as a subprocess (see
 the UI before is gone (removed 2026-10-24). On the original dev machine this directory sits
 inside a local `dirstuff/` folder alongside a Python venv and an `unused/`
 scratch dir, but neither is part of this repo, and nothing in the repo may
-assume that layout (see Structure below). Dependencies go in a `.venv`
-inside the repo (gitignored; see README.md), which the Makefile targets
-pick up automatically, falling back to `python3` on `PATH`.
+assume that layout (see Structure below). Nothing generated goes in the repo, so it can be copied as it is: `bin/builddir` says where it goes
+(`~/.cache/dirdelta-build/<this copy's path>/`: the programs, bytecode, install's leftovers), and
+the dependencies are in one venv next to those (`make venv`), which the Makefile targets and
+`bin/python` pick up automatically, falling back to `python3` on `PATH`.
 
 Deep dives live in `docs/`:
 - `docs/architecture.md` — module-by-module breakdown and data flow (scan → diff → pick → copy/remove)
@@ -31,13 +32,13 @@ re-deriving it from scratch.
 ## Running it
 
 See README.md for running from source (`make` to build treepicker, then
-`python -m dirdelta` from the repo root), `make install` (into a venv) and
+`bin/python -m dirdelta`), `make install` (into a venv) and
 `make deploy` (a pipx-managed `dirdelta` in `~/.local/bin`); both also
 install treepicker next to the environment's python. To sync, run it
 without paths and choose the replicas from the menu, which remembers the
 recent pairs and the favorites (so the `bin/example-*.sh` launchers with
-paths in them were removed, 2026-10-27). From the repo, with its `.venv`
-Python (falling back to `python3`): `bin/sync.sh` runs it that way, and
+paths in them were removed, 2026-10-27). From the repo, through `bin/python`
+(the venv's Python, falling back to `python3`, finding this copy's modules and programs): `bin/sync.sh` runs it that way, and
 `bin/pick.sh [PATH]` runs picker mode on PATH (default: the current dir;
 other arguments, e.g. `-x PROGRAM`, go to dirdelta too).
 
@@ -68,7 +69,8 @@ has the terminal while it's open, and
 what's to be read in between (warnings, "Nothing to copy", an action's
 report) is on a full screen that waits for Enter (`messages.show()`,
 `messages.progress_screen()`); plain progress lines ("Scanning...") just
-print. Copy, Remove and Rename (chosen after picking files in a
+print. Asking AI (`a`, or the file menu's "Ask AI": `aiplan.py`, `aiplan_screen.py`) has it answer what the user
+says with a plan of those same actions, to review and confirm. Copy, Remove and Rename (chosen after picking files in a
 direction's picker, which then comes back) run on the progress screen,
 stoppable with Ctrl-C, and ask for confirmation first (Remove twice). A "cloud" path is any path whose
 first component is literally `cloud` (see `paths.py`).
@@ -84,8 +86,7 @@ Env vars that change execution mode:
 Developer tasks all live in the Makefile (`make` lists them): `test`,
 `clean`, `install`, `deploy`, `undeploy`. Keep new ones there too rather
 than adding shell scripts. `make clean`
-removes `__pycache__`/`*.pyc`/`*.egg-info`/`build/`/pbr's `AUTHORS` and
-`ChangeLog` in this repo and the submodule, skipping `.venv`. It does not
+removes this copy's build output (and what older versions left in the repo), not the venv. It does not
 touch `~/.cache/dirman/files.txt` (the real Drive cache, refreshed a folder at a
 time: a replica's, at the start or from the main menu, or one in it, with the file
 picker's `r`; with a `files.txt.stale` next to it, listing the folders where a
@@ -105,19 +106,19 @@ format's, unused since 2026-10-31),
 
 ```
 dirstuff/                    the original dev machine's local folder, not a git repo
-├── dirstuff-venv/            that machine's older venv (activate it, or make .venv)
+├── dirstuff-venv/            that machine's older venv (activate it, or make venv)
 ├── unused/                   dead/unimported scripts kept for reference only
 │   ├── scandrive.py           (an old scan of all of Drive, like the one dirdelta had until 2026-10-29)
 │   └── parse-drive-files.py
 └── dirdelta/                 THIS repo
-    ├── bin/                   sync.sh, pick.sh: sync and picker mode from source
+    ├── bin/                   sync.sh, pick.sh: sync and picker mode from source; python, builddir
     ├── Makefile               dev tasks: build, test, clean, install, deploy, undeploy
     ├── dirdelta/              the application (see docs/architecture.md)
     ├── secrets/               Google OAuth secrets — never print/edit
     ├── tests/                 unittest suite + tests/fixtures/{alpha,bravo}
     └── lib/
         └── treepicker/        git submodule — the C++ tree library, treepicker and
-                               dirdiff (make build → lib/treepicker/build/)
+                               dirdiff (make build → see bin/builddir)
 ```
 
 (`treepicker` is a C++ learning project of the same author. Its own working copy
@@ -150,10 +151,10 @@ copy of the module that the app never sees. To run one
 module:
 
 ```bash
-PYTHONPATH=.:tests .venv/bin/python3 -m unittest test_interactive_dir_sync -v
+PYTHONPATH=tests bin/python -m unittest test_interactive_dir_sync -v
 ```
 
-Every module has a test file (621 tests, all passing as of 2026-11-01) except
+Every module has a test file (647 tests, all passing as of 2026-11-01) except
 the thin wiring in `main.py`/`dirsync_main.py`, covered only by running the
 app. Shared fakes:
 - `tests/helpers.py`: `scripted_option_picker` / `scripted_tree_picker` /
@@ -198,7 +199,7 @@ Drive credentials.
 
 Notes for whoever changes things next:
 - To check something in a real terminal without a person at the keyboard,
-  run `python -m dirdelta` in a detached tmux session (`tmux new-session -d
+  run `bin/python -m dirdelta` in a detached tmux session (`tmux new-session -d
   -x 90 -y 20 ...`), send keys with `tmux send-keys`, and read the screen
   with `tmux capture-pane -p`. treepicker draws on `/dev/tty`, so the
   terminal must be a real (pseudo-)terminal.

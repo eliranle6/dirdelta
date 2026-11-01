@@ -107,9 +107,9 @@ Like fzf: dirdelta starts `treepicker`, which draws on the terminal itself
   an error (its message is on stderr).
 
 treepicker is the `lib/treepicker` submodule, built by `make` (make build) into
-`lib/treepicker/build/treepicker`; `make install` and `make deploy` put a copy
-next to the environment's python. dirdelta runs the first of: treepicker
-next to the running python, that build, treepicker on `PATH`.
+the build dir (see `bin/builddir`, `<it>/treepicker/treepicker`); `make install` and `make deploy` put a copy
+next to the environment's python. dirdelta runs the first of: that build
+(`bin/python` and make say where), treepicker next to the running python, treepicker on `PATH`.
 
 ## Plan and status
 

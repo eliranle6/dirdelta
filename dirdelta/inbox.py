@@ -20,6 +20,8 @@ import threading
 import time
 
 from dirdelta import ai
+from dirdelta import aiplan
+from dirdelta import aiplan_screen
 from dirdelta import clouddirtree
 from dirdelta import drivecache
 from dirdelta import downloads
@@ -128,9 +130,10 @@ class InboxSort(object):
     READ_ANEW = 'read anew'
     DESCRIBE = 'describe'
     RECOMMEND = 'recommend'
+    ASK_AI = 'ask AI'
     # The picker's keys that do an option of the menu, shown before it
     # (Ctrl-X opens the selected one, not the picked ones: Open has no key)
-    SHORTCUTS = {RECOMMEND: 'Ctrl-I', READ_ANEW: 'Ctrl-R'}
+    SHORTCUTS = {ASK_AI: aiplan_screen.KEY_NAME, RECOMMEND: 'Ctrl-I', READ_ANEW: 'Ctrl-R'}
     # Moving: to Claude's dir, or to a dir the user picks; under the file's name, Claude's, or one
     # the user types
     MOVE_RECOMMENDED = 'move to the recommendations'
@@ -241,6 +244,8 @@ class InboxSort(object):
         self._junk_by_name = {}
         # Opens the inbox's files (Ctrl-X, or Open in the action menu)
         self._opener = opening.Opener(self._inbox_tree, self._inbox_rel, self._drive_lock)
+        # What the AI was last asked (see _ask_ai()), to start from next time
+        self._last_instruction = ''
 
     # The inbox's files
 
@@ -277,8 +282,8 @@ class InboxSort(object):
         and back to the picker, where they were, until they quit, or the inbox is empty"""
         header = ("Files in %s, to sort into %s. Pick some, then choose what to do with them." %
                   (self.inbox_path, self.root_path))
-        keys = (self.REFRESH_KEY if self.inbox_is_cloud else '') + hashes_screen.KEY
-        key_hints = ([('Enter', 'what to do (none picked: the selected one)'),
+        keys = (self.REFRESH_KEY if self.inbox_is_cloud else '') + hashes_screen.KEY + aiplan_screen.KEY
+        key_hints = ([('Enter', 'what to do (none picked: the selected one)'), aiplan_screen.KEY_HINT,
                       ('Ctrl-I', 'Claude: describe, and say where they go'), opening.KEY_HINT,
                       renaming.KEY_HINT, ('Ctrl-L', 'the sorted tree')] +
                      ([(self.REFRESH_KEY_NAME, 'read the folder anew from Drive')] if self.inbox_is_cloud else []) +
@@ -331,6 +336,9 @@ class InboxSort(object):
                 done = self._move_to_side([relpath for relpath in chosen.files] or
                                           [relpath for relpath in files if _is_at_or_under(relpath, selected)],
                                           chosen.side_selected)
+            elif chosen.key == aiplan_screen.KEY:
+                # About the picked ones, or with none picked, all of them: the AI picks
+                done = self._ask_ai(chosen.files or files)
             else:
                 done = self._act(chosen.files, selected)
             if done == self.REFRESH_KEY:
@@ -594,6 +602,7 @@ class InboxSort(object):
         # them (the path's parts). The ones that can't be done aren't offered, nor one that does the
         # same as another (Claude's dir under the file's own name, when Claude keeps the name).
         options = collections.OrderedDict([
+            (self.ASK_AI, ("Ask AI what to do with %s, and review its plan" % (they,), None, ASK, [])),
             (self.DESCRIBE, ("Describe %s with Claude, while you go on (sends it their contents)" %
                              ("it" if is_one else _of(len(undescribed), len(relpaths)),),
                              None if undescribed else "described", ASK, [])),
@@ -676,11 +685,15 @@ class InboxSort(object):
                                                 junky if action == self.REMOVE_JUNK else
                                                 [(folder or '.') + '/'] if action == self.READ_ANEW else relpaths)
                  for action, (label, _, verb, parts) in options.items()}
+        lines[options[self.ASK_AI][0]] = [picker.segments([(" %s " % (ASK.upper(),), VERB_COLORS[ASK]),
+                                                           (" tell it what to do; it answers with a plan to review", None)])]
         header = ("%s, in %s: what to do with it?" % (name, posixpath.dirname(posixpath.join(self.inbox_path, relpaths[0])))
                   if is_one else "%s picked in %s. What to do with them?" % (count, self.inbox_path))
         answer = picker.pick_option(labels, header=header, title="What to do", shown_as=lambda: colors, label=LABEL,
                                     previews_below=lines)
         action = next((action for action, (label, _, _, _) in options.items() if label == answer), None)
+        if action == self.ASK_AI:
+            return self._ask_ai(relpaths)
         if action == self.OPEN:
             if opening.confirm(self._opener, relpaths, relpaths, LABEL):
                 self.open_in_background(relpaths, relpaths)
@@ -1150,11 +1163,69 @@ class InboxSort(object):
             return None
         return relpath
 
-    def _approve(self, action, plan):
+    def _ai_task(self, relpaths):
+        """What to ask the AI about the inbox's files at relpaths (see aiplan.py): what's known of
+        each, and the sorted tree's dirs"""
+        def in_sorted_tree(relpath, target):
+            full = _join(self._root_rel, target)
+            if self.is_one_tree and _is_at_or_under(full, self._inbox_rel):
+                return "that's in the inbox"
+            return "there's a file or dir there already" if self._root_tree.exists(full) else None
+
+        def in_inbox(relpath, target):
+            return "there's a file or dir there already" if self._inbox_tree.exists(self._full(target)) else None
+        where = "its path relative to the root of the sorted tree"
+        actions = [aiplan.Action(self.MOVE_TO, "Move to the sorted tree", "move the file into the sorted tree: %s." % (where,),
+                                 True, False, in_sorted_tree),
+                   aiplan.Action(self.COPY_TO, "Copy to the sorted tree",
+                                 "copy the file to the sorted tree, keeping it in the inbox: %s." % (where,),
+                                 True, False, in_sorted_tree),
+                   aiplan.Action(self.MOVE_IN_INBOX, "Move in the inbox",
+                                 "move or rename the file in the inbox: its path relative to the inbox.",
+                                 True, False, in_inbox),
+                   aiplan.Action(self.REMOVE, "Remove from the inbox", "remove the file from the inbox.")]
+        files = []
+        for relpath in relpaths:
+            notes = ([self._descriptions[relpath]] if relpath in self._descriptions else [])
+            copies = self._copies(relpath)
+            if copies:
+                notes.append("the sorted tree has the same contents at %s" % (', '.join(copies[:3]),))
+            if self._junk(relpath) is not None:
+                notes.append("looks like junk: %s" % (self._junk(relpath),))
+            files.append(aiplan.File(relpath, self._size(relpath), '; '.join(notes)))
+        dirs = self._root_dirs()
+        listed = ["%s%s" % (dirpath or '. (the root)', " (e.g. %s)" % (', '.join(dirs[dirpath]),) if dirs[dirpath] else "")
+                  for dirpath in sorted(dirs)[:ai.MAX_DIRS_GIVEN]]
+        return aiplan.Task("These are files in the inbox %s, of files waiting to be sorted into the sorted tree %s." %
+                           (self.inbox_path, self.root_path), files, actions,
+                           context=["The sorted tree's dirs, with a few of the names of the files in each:"] + listed)
+
+    def _ask_ai(self, relpaths):
+        """Ask the AI what to do with the inbox's files at relpaths, and do what the user approves of
+        its plan (each kind once they confirm it, as if they chose it). Returns the ones done (in a
+        dry run, the ones it would have done), or None if none were."""
+        self._last_instruction, steps = aiplan_screen.ask(self._ai_task(relpaths), self._last_instruction, LABEL)
+        if not steps:
+            return None
+        done = []
+        for action in (self.MOVE_TO, self.COPY_TO):
+            plan = [(step.relpath, step.target) for step in aiplan_screen.of_action(steps, action)]
+            if plan:
+                done += self._approve(action, plan, is_reviewed=True) or []
+        moves = [(step.relpath, step.target) for step in aiplan_screen.of_action(steps, self.MOVE_IN_INBOX)]
+        if moves:
+            done += self._move_plan_in_inbox(moves, self.inbox_path) or []
+        removed = aiplan_screen.of_action(steps, self.REMOVE)
+        if removed:
+            done += self._remove([step.relpath for step in removed],
+                                 ["  %s: %s" % (step.relpath, step.reason) for step in removed], to_trash=True) or []
+        return done or None
+
+    def _approve(self, action, plan, is_reviewed=False):
         """Show where each file of plan (relpath, its path in the sorted tree: a dir and a name, maybe
-        another) goes, as the tree it makes, then, once the user confirms, move (MOVE_TO) or copy them
-        there. Returns the picked files done (or that would have been, in a dry run), or None if the
-        user didn't confirm."""
+        another) goes, as the tree it makes (unless is_reviewed: it was), then, once the user confirms,
+        move (MOVE_TO) or copy them there. Returns the picked files done (or that would have been, in a
+        dry run), or None if the user didn't confirm."""
         verb = "Move" if action == self.MOVE_TO else "Copy"
         targets = {}
         for relpath, target in plan:
@@ -1187,7 +1258,7 @@ class InboxSort(object):
                    (verb, _files(len(plan)), self.inbox_path, len(destinations), self.root_path,
                     " (%d of them new)" % (len(new_dirs),) if new_dirs else ""))
         header = "%s, where shown (beside each: where it's from). Look them through." % (summary,)
-        if not picker.view_files(self.root_path, sorted(targets, key=lambda target: target.split('/')),
+        if not is_reviewed and not picker.view_files(self.root_path, sorted(targets, key=lambda target: target.split('/')),
                                  header=header, previews=previews, label=LABEL,
                                  key_hints=[('Enter', 'go on to say yes or no'), ('q', 'back to the inbox')]):
             return None
@@ -1249,15 +1320,24 @@ class InboxSort(object):
         moved (in a dry run, the ones it would move), or None if none were."""
         plan = [(relpath, _join(destination, posixpath.basename(relpath))) for relpath in relpaths
                 if posixpath.dirname(relpath) != destination]
+        where = _join(self.inbox_path, destination)
+        if not plan:
+            messages.show("Can't move them there", ["%s/ has them already." % (where,)], dryrun.label(), 'red')
+            return None
+        return self._move_plan_in_inbox(plan, where)
+
+    def _move_plan_in_inbox(self, plan, where):
+        """Move the inbox's files, each of plan (relpath, its new one in the inbox), to where (what to
+        call it), once the user confirms; what's known of them goes with them. Returns the ones moved
+        (in a dry run, the ones it would move), or None if none were."""
         there = [target for _, target in plan if self._inbox_tree.exists(self._full(target))]
-        if not plan or there:
+        if there:
             messages.show("Can't move them there",
-                          ["%s/ has them already." % (_join(self.inbox_path, destination),)] if not plan else
-                          ["%s/ has a file or dir of the same name already:" % (_join(self.inbox_path, destination),)] +
+                          ["%s/ has a file or dir of the same name already:" % (where,)] +
                           ["  " + target for target in there[:interactive_dir_sync.InteractiveDirSync.MAX_FILES_LISTED]],
                           dryrun.label(), 'red')
             return None
-        lines = ["Move %s to %s/?" % (_files(len(plan)), _join(self.inbox_path, destination))]
+        lines = ["Move %s to %s/?" % (_files(len(plan)), where)]
         lines += text.listed(["  " + relpath for relpath, _ in plan], interactive_dir_sync.InteractiveDirSync.MAX_FILES_LISTED)
         if dryrun.DRYRUN:
             lines.append(dryrun.NOTE)

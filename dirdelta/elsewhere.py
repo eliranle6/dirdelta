@@ -203,6 +203,10 @@ class Index(object):
             new, self._new = self._new, set()
         return new
 
+    def relpaths(self):
+        """All its files' relpaths, once built"""
+        return [relpath for files in self._by_name.values() for relpath in files]
+
     def files_named(self, name):
         """{relpath: size} of the files with the name"""
         return self._by_name.get(name, {})

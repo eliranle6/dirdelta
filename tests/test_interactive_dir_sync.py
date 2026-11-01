@@ -157,7 +157,7 @@ class InteractiveDirSyncTest(unittest.TestCase):
         self.assertEqual(options[0], NOTHING)
         # Each kind apart, after a blank line
         self.assertEqual([option.split(' ')[0] for option in options[1:]],
-                         ['', 'Copy', '', 'Remove', '', 'Rename', 'Rename', '', 'Open'])
+                         ['', 'Ask', '', 'Copy', '', 'Remove', '', 'Rename', 'Rename', '', 'Open'])
         self.assertEqual(self._offered()[1], (['sub/b.txt', 'sub/c.txt'], ['sub/b.txt']))
         self.assertEqual(self.pick_files.call_args.kwargs['selected'], 'sub/c.txt')
 
@@ -434,7 +434,7 @@ class RefreshKeyTest(unittest.TestCase):
         # Its files by name are listed again, when they're next needed
         self.assertFalse(self.sync.src_index.is_built())
         # And the replicas dashboard's
-        self.assertEqual(calls[0].kwargs['keys'], Sync.REFRESH_KEY + '#')
+        self.assertEqual(calls[0].kwargs['keys'], Sync.REFRESH_KEY + '#a')
         self.assertIn(('Ctrl-R', 'read the folder anew from Drive'), calls[0].kwargs['key_hints'])
         self.assertIsNone(calls[0].kwargs['selected'])
         # What's still missing, what's still picked of it, where it was
@@ -468,7 +468,7 @@ class RefreshKeyTest(unittest.TestCase):
         other = dirtree.DirTree('/other')
         other.add_file_by_relpath('a.mp3')
         calls = self.browse(other, self.local, [None])
-        self.assertEqual(calls[0].kwargs['keys'], '#')
+        self.assertEqual(calls[0].kwargs['keys'], '#a')
         self.assertNotIn('r', [key for key, _ in calls[0].kwargs['key_hints']])
         self.assertFalse(self.sync.has_changed)
 
@@ -488,6 +488,92 @@ class RefreshKeyTest(unittest.TestCase):
         self.assertEqual(lines, ["Couldn't refresh it: no network"])
         self.assertFalse(self.sync.has_changed)
         self.assertEqual(calls[1].kwargs['picked'], ['b/3.mp3'])
+
+
+class AskAITest(unittest.TestCase):
+    """Asking the AI, in a sync of two local dirs, with what it answers scripted"""
+
+    def setUp(self):
+        self.tmpdir = os.path.realpath(tempfile.mkdtemp(prefix='dirdelta-ask-'))
+        self.addCleanup(shutil.rmtree, self.tmpdir)
+        self.src_path, self.dst_path = os.path.join(self.tmpdir, 'src'), os.path.join(self.tmpdir, 'dst')
+        helpers.make_files(self.src_path, ['a.txt', 'b.txt', 'c.txt'])
+        helpers.make_files(self.dst_path, ['old/d.txt'])
+        for patcher in (mock.patch('dirdelta.messages.print_line'), mock.patch('dirdelta.messages.print_progress'),
+                        mock.patch('dirdelta.messages.show'), mock.patch('dirdelta.messages.ask', return_value='do it')):
+            patcher.start()
+            self.addCleanup(patcher.stop)
+        self.sync = Sync(localdiskdirtree.LocalDiskDirTree(self.src_path, silent=True),
+                         localdiskdirtree.LocalDiskDirTree(self.dst_path, silent=True))
+
+    def ask(self, steps, review=None, is_dry_run=False):
+        """_ask_ai() of all src's files, the AI answering steps, the review answering review(items)
+        (by default, leaving all picked), and every confirmation answered yes (the last option)"""
+        def pick_files(root, items, **_):
+            self.items = list(items)
+            return (review or (lambda items: picker.Picked('', '', list(items))))(items)
+        with mock.patch('dirdelta.ai._run_query', return_value={'summary': 'ok', 'steps': steps}) as query, \
+                mock.patch('dirdelta.picker.pick_files', side_effect=pick_files), \
+                mock.patch('dirdelta.picker.pick_option', side_effect=lambda options, **_: options[-1]), \
+                mock.patch('dirdelta.dryrun.DRYRUN', is_dry_run), mock.patch.object(
+                    localdiskdirtree.LocalDiskDirTree, 'trashing', return_value=contextlib.nullcontext()):
+            self.query = query
+            return self.sync._ask_ai(['a.txt', 'b.txt', 'c.txt'])
+
+    def test_what_the_user_approves_is_done(self):
+        done = self.ask([{'action': Sync.COPY, 'number': 1, 'reason': 'wanted'},
+                         {'action': Sync.RENAME_IN_SRC, 'number': 2, 'path': 'new/b2.txt', 'reason': 'neater'},
+                         {'action': Sync.RENAME_IN_DST, 'number': 4, 'path': 'moved/d.txt', 'reason': 'neater'},
+                         {'action': Sync.REMOVE, 'number': 3, 'reason': 'junk'}])
+        self.assertEqual(sorted(done), ['a.txt', 'b.txt', 'c.txt', 'moved/d.txt'])
+        self.assertTrue(os.path.exists(os.path.join(self.dst_path, 'a.txt')))
+        self.assertTrue(os.path.exists(os.path.join(self.src_path, 'new/b2.txt')))
+        self.assertTrue(os.path.exists(os.path.join(self.dst_path, 'moved/d.txt')))
+        self.assertFalse(os.path.exists(os.path.join(self.src_path, 'c.txt')))
+        self.assertIsNone(self.sync._last_action)
+
+    def test_whats_unpicked_in_the_review_isnt_done(self):
+        steps = [{'action': Sync.COPY, 'number': 1, 'reason': ''}, {'action': Sync.COPY, 'number': 2, 'reason': ''}]
+        done = self.ask(steps, lambda items: picker.Picked('', '', ['Copy to destination/b.txt']))
+        self.assertEqual(done, ['b.txt'])
+        self.assertFalse(os.path.exists(os.path.join(self.dst_path, 'a.txt')))
+
+    def test_quitting_the_review_does_nothing(self):
+        self.assertIsNone(self.ask([{'action': Sync.COPY, 'number': 1, 'reason': ''}], lambda items: None))
+        self.assertEqual(sorted(os.listdir(self.dst_path)), ['old'])
+
+    def test_a_dry_run_changes_nothing(self):
+        done = self.ask([{'action': Sync.COPY, 'number': 1, 'reason': ''},
+                         {'action': Sync.REMOVE, 'number': 2, 'reason': ''}], is_dry_run=True)
+        self.assertEqual(sorted(done), ['a.txt', 'b.txt'])
+        self.assertEqual(sorted(os.listdir(self.dst_path)), ['old'])
+        self.assertTrue(os.path.exists(os.path.join(self.src_path, 'b.txt')))
+
+    def test_a_target_thats_taken_isnt_offered(self):
+        self.ask([{'action': Sync.RENAME_IN_SRC, 'number': 1, 'path': 'b.txt', 'reason': ''},
+                  {'action': Sync.COPY, 'number': 3, 'reason': ''}])
+        self.assertEqual(self.items, ['Copy to destination/c.txt'])
+
+    def test_it_reads_nothing(self):
+        self.ask([{'action': Sync.COPY, 'number': 1, 'reason': ''}])
+        prompt, readable_dirs = self.query.call_args.args[:2]
+        self.assertEqual(readable_dirs, [])
+        self.assertIn('a.txt', prompt)
+        self.assertIn('do it', prompt)
+
+    def test_the_key_with_nothing_picked_asks_about_all_the_files(self):
+        with mock.patch.object(Sync, '_ask_ai', return_value=None) as ask, helpers.scripted_files_picker(
+                mock.Mock(side_effect=[picker.Picked('a', '', []), None])), \
+                mock.patch('dirdelta.interactive_dir_sync.hashes_screen.jobs_of', return_value=[]):
+            self.sync.browse()
+        ask.assert_called_once_with(['a.txt', 'b.txt', 'c.txt'])
+
+    def test_the_key_asks_about_the_picked_ones(self):
+        with mock.patch.object(Sync, '_ask_ai', return_value=None) as ask, helpers.scripted_files_picker(
+                mock.Mock(side_effect=[picker.Picked('a', '', ['b.txt']), None])), \
+                mock.patch('dirdelta.interactive_dir_sync.hashes_screen.jobs_of', return_value=[]):
+            self.sync.browse()
+        ask.assert_called_once_with(['b.txt'])
 
 
 class ShownTest(unittest.TestCase):

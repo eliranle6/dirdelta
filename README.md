@@ -26,17 +26,21 @@ from the source tree, or install it (see below). From the repo root:
 ```bash
 git clone --recursive https://github.com/eliranle6/dirdelta && cd dirdelta
 git submodule update --init       # fetches lib/treepicker (treepicker), if cloned without --recursive
-python3 -m venv .venv
-.venv/bin/pip install -r requirements.txt
+make venv                         # dirdelta's dependencies
 make                              # builds treepicker: needs g++ and libncurses-dev
 ```
 
 dirdelta's pickers and menus are `treepicker`, and it diffs two local dirs with `dirdiff`: C++
 programs from [treepicker](https://github.com/eliranle6/treepicker) (see `docs/treepicker-integration.md`), a
-submodule at `lib/treepicker`. `make` builds them into `lib/treepicker/build/`, where dirdelta finds them
-when run from the source tree.
+submodule at `lib/treepicker`.
 
-Development tasks are Makefile targets (`make help` lists them). They use `.venv` automatically
+Nothing generated goes in the repo, so it can be copied to another dir as it is: `bin/builddir` says
+where it goes, `~/.cache/dirdelta-build/<this copy's path>/` (the programs, the bytecode, what's made
+while installing; `DIRDELTA_BUILD_DIR` overrides it), with one `venv` beside those, shared by all the
+copies. A copy somewhere else needs only a `make` of its own. `bin/python` runs Python with all of it
+found, and is how dirdelta runs from the source tree.
+
+Development tasks are Makefile targets (`make help` lists them). They use `make venv`'s automatically
 when it exists, and otherwise whichever `python3` is on your `PATH`, so an already activated venv
 works too. `make PYTHON=/path/to/python3 ...` overrides that.
 
@@ -45,7 +49,7 @@ works too. `make PYTHON=/path/to/python3 ...` overrides that.
 Run the `dirdelta` package as a module from the repo root (after `make`, which builds treepicker):
 
 ```bash
-.venv/bin/python3 -m dirdelta --help
+bin/python -m dirdelta --help
 ```
 
 Work on copies of the sample trees in `tests/fixtures`, since Remove deletes real files:
@@ -57,7 +61,7 @@ rm -rf /tmp/dd && cp -r tests/fixtures /tmp/dd
 ### Choosing what to sync (no paths)
 
 ```bash
-.venv/bin/python3 -m dirdelta      # or bin/sync.sh
+bin/python -m dirdelta      # or bin/sync.sh
 ```
 
 A menu: "Replica A" and "Replica B", each `<none: press Enter to choose one>` until chosen (a local
@@ -81,7 +85,7 @@ tree), and "Recent inbox sorts", with a blank line between them (and before Quit
 ### Sorting an inbox
 
 ```bash
-.venv/bin/python3 -m dirdelta --sort cloud/unsorted cloud/eliran
+bin/python -m dirdelta --sort cloud/unsorted cloud/eliran
 ```
 
 An inbox is a dir of files not sorted yet; the sorted tree is where they go (local dirs or Google
@@ -164,14 +168,30 @@ the picked files itself (text, images, PDFs; a Drive file is downloaded first, a
 with the file when it's moved or copied. Descriptions and
 recommendations are both asked of `claude-haiku-5-5`.
 
+### Asking AI what to do
+
+In a sync's and a sort's file pickers, `a` asks the AI (Claude, for now) about the picked files, or with
+none picked, about all of them; the menu that Enter opens has "Ask AI" too, for what it's about. You
+say what to do in your own words, e.g. "copy the 2019 photos, and remove the unfinished downloads". It
+picks the files, and answers with a plan: in a sync, copying, removing from the source (to the trash),
+and renaming in either replica; in a sort, moving or copying into the sorted tree, moving or renaming
+in the inbox, and removing (to the trash).
+
+Nothing's done until you approve it. The plan is shown as a tree, by kind, with where each file goes and
+why beside it: Space unpicks a file or a whole kind, Enter goes on, `q` goes back. Each kind is then
+confirmed as it is from the menu (a removal twice), and a dry run changes nothing. It's told the files'
+paths and sizes, and what's known of them (e.g. Claude's descriptions, or that the other replica has a
+copy), never their contents. What can't be done (a file it wasn't told of, a path that's taken) is left
+out of the plan, and said. At most 5000 files at once.
+
 ### Picker mode (one path)
 
 `bin/pick.sh [PATH]` runs it from the repo on PATH (default: the current dir), or:
 
 ```bash
-.venv/bin/python3 -m dirdelta /tmp/dd/alpha            # prints the picked path after exiting
-.venv/bin/python3 -m dirdelta -x ls /tmp/dd/alpha      # runs `ls <picked path>` instead
-.venv/bin/python3 -m dirdelta -m 1 /tmp/dd/alpha       # scan only one level deep (default 20)
+bin/python -m dirdelta /tmp/dd/alpha            # prints the picked path after exiting
+bin/python -m dirdelta -x ls /tmp/dd/alpha      # runs `ls <picked path>` instead
+bin/python -m dirdelta -m 1 /tmp/dd/alpha       # scan only one level deep (default 20)
 ```
 
 Move with `h`/`j`/`k`/`l` or the arrows, `Ctrl-D`/`Ctrl-U` to page, `/` to search (`Enter` keeps
@@ -181,8 +201,8 @@ dir is scanned by `treepicker` itself, so even big trees open fast.
 ### Sync mode (two paths)
 
 ```bash
-.venv/bin/python3 -m dirdelta /tmp/dd/alpha /tmp/dd/bravo             # a dry run: changes nothing
-DRYRUN=0 .venv/bin/python3 -m dirdelta /tmp/dd/alpha /tmp/dd/bravo    # Copy, Remove and Rename really do
+bin/python -m dirdelta /tmp/dd/alpha /tmp/dd/bravo             # a dry run: changes nothing
+DRYRUN=0 bin/python -m dirdelta /tmp/dd/alpha /tmp/dd/bravo    # Copy, Remove and Rename really do
 ```
 
 The menu offers, for each direction, "Files in A, not in B" (with how many there are). Choose one,
@@ -264,9 +284,10 @@ It also runs treepicker's own tests (in `lib/treepicker`), which need Google Tes
 make clean
 ```
 
-Removes `__pycache__`, `*.pyc`, `build/`, `*.egg-info`, `.eggs` and pbr's generated
-`AUTHORS`/`ChangeLog`, and treepicker's build (`lib/treepicker/build`). It leaves `.venv`, `secrets/` and the Drive cache
-(`~/.cache/dirman/files.txt`) alone; delete `.venv` yourself to start over.
+Removes this copy's build output (see `bin/builddir`), and what older versions left in the repo
+(`__pycache__`, `*.pyc`, `build/`, `*.egg-info`, `.eggs`, pbr's `AUTHORS`/`ChangeLog`, `lib/treepicker/build`).
+It leaves the venv, `secrets/` and the Drive cache (`~/.cache/dirman/files.txt`) alone; to start over,
+delete the venv too (`~/.cache/dirdelta-build/venv`).
 
 ## Deploying to your system
 
@@ -294,5 +315,5 @@ venv.
 make install          # pip install . (and treepicker next to that python)
 ```
 
-Installs dirdelta into the same environment the other targets use (`.venv` if it exists, else the
+Installs dirdelta into the same environment the other targets use (`make venv`'s if it exists, else the
 `python3` on your `PATH`), and treepicker next to that environment's python. Useful for trying the packaged `dirdelta` command without deploying it.

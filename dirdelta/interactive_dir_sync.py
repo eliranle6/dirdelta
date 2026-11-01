@@ -1,9 +1,12 @@
 import collections
+import contextlib
 import functools
 import os
 
 from googleapiclient.errors import HttpError
 
+from dirdelta import aiplan
+from dirdelta import aiplan_screen
 from dirdelta import clouddirtree
 from dirdelta import dirdiff
 from dirdelta import drivecache
@@ -97,9 +100,10 @@ class InteractiveDirSync(object):
     # its folder anew from Drive (r)
     OPEN = 'open'
     READ_ANEW = 'read anew'
+    ASK_AI = 'ask AI'
     # The picker's keys that do an option of the menu, shown before it
     # (Ctrl-X opens the selected one, not the picked ones: Open has no key)
-    SHORTCUTS = {READ_ANEW: 'Ctrl-R'}
+    SHORTCUTS = {READ_ANEW: 'Ctrl-R', ASK_AI: aiplan_screen.KEY_NAME}
     # The label of each action's confirmation, so what it's for shows at a glance (magenta, not
     # red: red is LIVE's)
     LABELS = {COPY: ('COPY', 'blue'), REMOVE: ('REMOVE', 'magenta'),
@@ -141,6 +145,8 @@ class InteractiveDirSync(object):
         self.has_changed = False
         # Opens src's files (Ctrl-X, or Open in the action menu)
         self._opener = opening.Opener(src)
+        # What the AI was last asked (see _ask_ai()), to start from next time
+        self._last_instruction = ''
 
     def browse(self):
         """Let the user pick some of the files of src that dst lacks, then choose what to do with
@@ -155,8 +161,8 @@ class InteractiveDirSync(object):
         jobs = hashes_screen.jobs_of([self._src, self._dst])
         header = ("Files in %s, which are not in %s. Pick some, then choose what to do with them." %
                   (self._src.displayname(), self._dst.displayname()))
-        keys = (self.REFRESH_KEY if clouds else '') + hashes_screen.KEY
-        key_hints = ([('Enter', 'choose what to do'), opening.KEY_HINT, renaming.KEY_HINT,
+        keys = (self.REFRESH_KEY if clouds else '') + hashes_screen.KEY + aiplan_screen.KEY
+        key_hints = ([('Enter', 'choose what to do'), aiplan_screen.KEY_HINT, opening.KEY_HINT, renaming.KEY_HINT,
                       ('Ctrl-L', 'look through %s' % (self._dst.displayname(),))] +
                      ([(self.REFRESH_KEY_NAME, 'read the folder anew from Drive')] if clouds else []) +
                      [hashes_screen.KEY_HINT])
@@ -218,7 +224,10 @@ class InteractiveDirSync(object):
                           if moved.get(relpath, relpath) in still_missing]
                 selected = _shown(new_relpath, missing)
                 continue
-            if not key:
+            if key == aiplan_screen.KEY:
+                # About the picked ones, or with none picked, all of them: the AI picks
+                done = self._ask_ai(chosen.files or missing)
+            elif not key:
                 done = self._act(chosen.files, selected)
                 if done == self.REFRESH_KEY:
                     key = self.REFRESH_KEY
@@ -344,6 +353,8 @@ class InteractiveDirSync(object):
                                  (_files(nr_renamed_in_src), src_name),
                                  self._cant_rename(self._src, nr_renamed_in_src)),
         }
+        options[self.ASK_AI] = ("Ask AI what to do with %s, and review its plan" %
+                                ("it" if len(relpaths) == 1 else "the " + count,), None)
         options[self.OPEN] = ("Open %s with %s program%s" %
                               ("it" if len(relpaths) == 1 else "the " + count,
                                "its" if len(relpaths) == 1 else "their", "" if len(relpaths) == 1 else "s"),
@@ -362,7 +373,7 @@ class InteractiveDirSync(object):
                     for label, reason in options.values()}
         disabled[self.NOTHING] = prefixes[self.NOTHING] + self.NOTHING
         # Similar actions together, a blank line between each kind
-        kinds = [[self.COPY], [self.REMOVE], [self.RENAME_IN_DST, self.RENAME_IN_SRC], [self.OPEN, self.READ_ANEW]]
+        kinds = [[self.ASK_AI], [self.COPY], [self.REMOVE], [self.RENAME_IN_DST, self.RENAME_IN_SRC], [self.OPEN, self.READ_ANEW]]
         labels, blanks = picker.grouped([[self.NOTHING]] + [[options[action][0] for action in kind if action in options]
                                                              for kind in kinds])
         disabled.update(blanks)
@@ -381,9 +392,20 @@ class InteractiveDirSync(object):
         if action in (self.RENAME_IN_DST, self.RENAME_IN_SRC):
             moves = self._renames(action, may_be_there)
             return None if moves is None else self._rename(action, moves)
-        if not self._confirm(action, relpaths):
+        if action == self.ASK_AI:
+            return self._ask_ai(relpaths)
+        return self._copy_or_remove(action, relpaths)
+
+    def _copy_or_remove(self, action, relpaths, to_trash=False):
+        """Copy the files at relpaths to dst, or remove them from src (action), once the user confirms.
+        Returns the ones done (in a dry run, the ones it would have done), or None if the user didn't
+        confirm. With to_trash, a local src's go to the desktop's trash, rather than for good."""
+        to_trash = to_trash and is_local(self._src)
+        if not self._confirm(action, relpaths, to_trash):
             return None
         self._last_action = action
+        src_name, dst_name = self._src.displayname(), self._dst.displayname()
+        count = _files(len(relpaths))
         files = [self._file_entry(relpath) for relpath in relpaths]
         if action == self.COPY:
             title = "Copying %s from %s to %s" % (count, src_name, dst_name)
@@ -391,7 +413,8 @@ class InteractiveDirSync(object):
             title = "Removing %s from %s" % (count, src_name)
         if dryrun.DRYRUN:
             title += " (a dry run)"
-        with messages.progress_screen(title, dryrun.label()):
+        with messages.progress_screen(title, dryrun.label()), (self._src.trashing() if to_trash else
+                                                               contextlib.nullcontext()):
             if action == self.COPY:
                 self._copy(files)
             else:
@@ -409,6 +432,69 @@ class InteractiveDirSync(object):
                 self.src_index.remove(relpath)
             self._note(self._src, 'removed', len(done))
         return done
+
+    def _ai_task(self, relpaths):
+        """What to ask the AI about src's files at relpaths (see aiplan.py): dst's files are told too,
+        to rename them, and each's copies there, as far as it's known"""
+        src_name, dst_name = self._src.displayname(), self._dst.displayname()
+
+        def can_rename(replica):
+            def check(relpath, target):
+                return replica.cant_move(relpath) or ("there's a file there already" if _exists(replica, target) else None)
+            return check
+        actions = []
+        if can_copy(self._src, self._dst):
+            actions.append(aiplan.Action(self.COPY, "Copy to destination",
+                                         "copy the file to %s, to the same path." % (dst_name,)))
+        if is_writable(self._src):
+            actions.append(aiplan.Action(self.RENAME_IN_SRC, "Rename in source",
+                                         "move or rename the file in %s." % (src_name,), True, False,
+                                         can_rename(self._src)))
+        if is_writable(self._dst):
+            actions.append(aiplan.Action(self.RENAME_IN_DST, "Rename in destination",
+                                         "move or rename one of %s's other files, in it (e.g. to the path of the "
+                                         "same file in %s, so they match)." % (dst_name, src_name), True, True,
+                                         can_rename(self._dst)))
+        if is_writable(self._src):
+            actions.append(aiplan.Action(self.REMOVE, "Remove from source",
+                                         "remove the file from %s, which is then in neither." % (src_name,)))
+        files = []
+        for relpath in relpaths:
+            same = [match for match, is_same in elsewhere.known_same(relpath, self.src_index, self.dst_index).items()
+                    if is_same]
+            files.append(aiplan.File(relpath, self._src.file_size(relpath),
+                                     "the same contents as %s in %s" % (', '.join(sorted(same)[:3]), dst_name)
+                                     if same else ''))
+        others = sorted(relpath for relpath in self.dst_index.relpaths() if not paths.is_meta(relpath))
+        return aiplan.Task("These are files in the source, %s, which the destination, %s, lacks at the same paths." %
+                           (src_name, dst_name),
+                           files, actions, others)
+
+    def _ask_ai(self, relpaths):
+        """Ask the AI what to do with src's files at relpaths, and do what the user approves of its plan
+        (each kind once they confirm it, as if they chose it). Returns the files done (in a dry run,
+        the ones it would have done), or None if none were."""
+        messages.print_line("Looking through %s and %s..." % (self._src.displayname(), self._dst.displayname()))
+        self.src_index.build()
+        self.dst_index.build()
+        self._last_instruction, steps = aiplan_screen.ask(self._ai_task(relpaths), self._last_instruction)
+        if not steps:
+            return None
+        done = []
+        for action in (self.COPY, self.RENAME_IN_SRC, self.RENAME_IN_DST):
+            moves = [(step.relpath, step.target) for step in aiplan_screen.of_action(steps, action) if step.target]
+            if action == self.COPY:
+                copied = [step.relpath for step in aiplan_screen.of_action(steps, action)]
+                done += (self._copy_or_remove(action, copied) or []) if copied else []
+            elif moves:
+                done += self._rename(action, moves) or []
+        removed = [step.relpath for step in aiplan_screen.of_action(steps, self.REMOVE)]
+        if removed:
+            # Which only src has: what the AI said to remove can be restored
+            done += self._copy_or_remove(self.REMOVE, removed, to_trash=True) or []
+        # Of several kinds: the replicas are diffed anew
+        self._last_action = None
+        return done or None
 
     def _note(self, replica, verb, count, source=None):
         """Note a live change of the replica's files (see replicalog.Changes.note())"""
@@ -500,7 +586,7 @@ class InteractiveDirSync(object):
         return entries.FileEntry(os.path.basename(relpath), relpath,
                                  os.path.join(self._src.fullpath(), relpath))
 
-    def _confirm(self, action, relpaths):
+    def _confirm(self, action, relpaths, to_trash=False):
         """Whether the user confirms copying or removing the files at relpaths; a removal, twice"""
         if action == self.COPY:
             question = "Copy %s from %s to %s?" % (_files(len(relpaths)), self._src.displayname(),
@@ -519,7 +605,8 @@ class InteractiveDirSync(object):
         if action == self.REMOVE:
             sure = ["Are you sure? %s will be removed from %s%s." %
                     (_files(len(relpaths)), self._src.displayname(),
-                     " (to Drive's trash)" if not is_local(self._src) else ", for good")]
+                     " (to Drive's trash)" if not is_local(self._src) else
+                     " (to the trash)" if to_trash else ", for good")]
             answer = picker.pick_option([self.CONFIRM_NO, self.CONFIRM_SURE], header='\n'.join(sure),
                                         label=self.LABELS[action], title="Sure?")
             return answer == self.CONFIRM_SURE
@@ -531,6 +618,11 @@ class InteractiveDirSync(object):
 
     def _remove(self, files):
         self._src.remove_files(files)
+
+
+def _exists(replica, relpath):
+    """Whether the replica has a file or dir at relpath"""
+    return os.path.lexists(os.path.join(replica.fullpath(), relpath)) if is_local(replica) else replica.exists(relpath)
 
 
 def _shown(relpath, missing, before=None):
