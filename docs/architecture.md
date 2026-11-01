@@ -212,6 +212,13 @@ the path a bracket saying where it's from (`SORTED_TREE`, `CLAUDES_DIR`,
 green; `_bracket()` takes the longest name that fits, `_fitting()` cuts a long
 sorted tree's root to `.../its-name/`).
 
+### `replicainfo.py`
+What's known of a replica, as the screens say it (`known_lines()`: its log's
+last entry, when it was synced and changed; `freshness()`, `SYNCED_MARK`,
+`CACHE_MARK`, `cache_time()`, `path_marks_help()`), for the start menu, the
+sync's menu and the dashboard (`choose_replicas` keeps their old names as
+aliases), so `choose_replicas` and `hashes_screen` don't import each other for it.
+
 ### `hashcache.py`
 Local files' contents' hashes. A local replica's are kept in it, in
 `meta/hashes.sqlite` (`paths.META_DIR`, `META_NAME`; by their paths in the

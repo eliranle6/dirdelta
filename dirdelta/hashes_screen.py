@@ -8,9 +8,7 @@ import shutil
 import threading
 import time
 
-from dirdelta import choose_replicas
 from dirdelta import clouddirtree
-from dirdelta import drivecache
 from dirdelta import dryrun
 from dirdelta import elsewhere
 from dirdelta import hashcache
@@ -19,6 +17,7 @@ from dirdelta import localdiskdirtree
 from dirdelta import messages
 from dirdelta import paths
 from dirdelta import picker
+from dirdelta import replicainfo
 from dirdelta import replicalog
 from dirdelta import replicas
 from dirdelta import syncstate
@@ -282,7 +281,7 @@ def _add_replica(item, options, shown, known, names):
     shown[_HEADING % (name,)] = picker.Skipped(_HEADING % ("%s: %s" % (names[name], name)
                                                             if names[name] != name else name,))
     info = known.info_at(name) if known is not None else None
-    known_lines = choose_replicas.known_lines(info, styled=True) if info else ["  Never synced before"]
+    known_lines = replicainfo.known_lines(info, styled=True) if info else ["  Never synced before"]
     if info and not paths.is_cloud_path(name) and not replicalog.is_disk_connected(
             next((identity for identity, other in known.known.items() if other is info), '')):
         known_lines.append("  Its disk isn't connected now")
@@ -296,7 +295,7 @@ def _add_replica(item, options, shown, known, names):
         # When Drive's file list was read, in its freshness's color
         shown[_INFO % (name,)] = picker.Skipped(picker.styled([
             ("  %s, %s" % (_files(nr_files), elsewhere.format_size(size)), None),
-            (_cache_age(name), choose_replicas.freshness(choose_replicas.cache_time(name)))]))
+            (_cache_age(name), replicainfo.freshness(replicainfo.cache_time(name)))]))
         options += [_DRIVE % (name,), _DRIVE_NOTE % (name,)]
         shown[_DRIVE % (name,)] = picker.Skipped(first)
         shown[_DRIVE_NOTE % (name,)] = picker.Skipped(note)
@@ -331,7 +330,7 @@ def _finish_dashboard(items, options, shown, names, jobs):
         option = picker.pick_option(options, header=header, title=TITLE, shown_as=shown_now, selected=selected,
                                     key_hints=[('Enter', 'do it'), ('q', 'back')],
                                     help_lines=["The pairs' marks:"] + ["  " + line for line in syncstate.help_lines()] +
-                                    choose_replicas.path_marks_help())
+                                    replicainfo.path_marks_help())
         if option in (None, BACK):
             return
         selected = option
@@ -356,8 +355,8 @@ def _job_of(name, tree):
 
 def _cache_age(path):
     """'; Drive's file list cached DD.MM.YYYY HH:MM' (when the cache's list of the Drive replica at
-    path was last updated, see choose_replicas.cache_time()), or ''"""
-    read = choose_replicas.cache_time(path)
+    path was last updated, see replicainfo.cache_time()), or ''"""
+    read = replicainfo.cache_time(path)
     return "; Drive's file list cached %s" % (read.strftime('%d.%m.%Y %H:%M'),) if read else ""
 
 

@@ -3,7 +3,6 @@ import datetime
 import threading
 import time
 
-from dirdelta import choose_replicas
 from dirdelta import clouddirtree
 from dirdelta import drivemeta
 from dirdelta import dryrun
@@ -16,6 +15,7 @@ from dirdelta import localdiskdirtree
 from dirdelta import messages
 from dirdelta import paths
 from dirdelta import picker
+from dirdelta import replicainfo
 from dirdelta import replicalog
 from dirdelta import replicas
 from dirdelta import syncstate
@@ -129,10 +129,10 @@ def _sync(replica_a, replica_b, replica_a_path, replica_b_path, known_replicas=N
             shown[''] = hashes_screen.picker_status([replica_a, replica_b])
         # When Drive's file list was read, in its freshness's color (today, this week, before)
         for label in refreshes:
-            read = choose_replicas.cache_time(refreshes[label].displayname())
+            read = replicainfo.cache_time(refreshes[label].displayname())
             shown[label] = picker.styled([(label + " ", None), (
-                "(%s list read %s)" % (choose_replicas.CACHE_MARK, read.strftime('%d.%m.%Y %H:%M')) if read else "",
-                choose_replicas.freshness(read))])
+                "(%s list read %s)" % (replicainfo.CACHE_MARK, read.strftime('%d.%m.%Y %H:%M')) if read else "",
+                replicainfo.freshness(read))])
         return shown
 
     # Present sync options until user quits
