@@ -28,5 +28,5 @@ def items(path, tree=None, excluded=None):
         # Each dir's together, its dirs and files by name (find's order is the disk's)
         found.sort(key=lambda item: item[2:].split('/'))
     if excluded:
-        found = [item for item in found if not (item[2:] == excluded or item[2:].startswith(excluded + '/'))]
+        found = [item for item in found if not paths.is_at_or_under(item[2:], excluded)]
     return found

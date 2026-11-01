@@ -42,4 +42,4 @@ def _ask_whether_to_refresh(rootpath):
 
 def _overlap(path, other):
     """Whether one of the paths (in Drive) is at or under the other"""
-    return any(a == b or a.startswith(b.rstrip('/') + '/') for a, b in ((path, other), (other, path)))
+    return paths.is_at_or_under(path, other) or paths.is_at_or_under(other, path)

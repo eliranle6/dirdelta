@@ -117,7 +117,7 @@ def unmounted(path):
         return None
     path = os.path.realpath(path)
     under = [mount for target, mount in load().items()
-             if target != '/' and (path == target or path.startswith(target.rstrip('/') + '/'))]
+             if target != '/' and paths.is_at_or_under(path, target)]
     if not under:
         return None
     mount = max(under, key=lambda mount: len(mount.target))

@@ -23,6 +23,7 @@ from dirdelta import dirtree
 from dirdelta import hashcache
 from dirdelta import hashing
 from dirdelta import localdiskdirtree
+from dirdelta import paths
 from dirdelta import picker
 from dirdelta import text
 
@@ -119,8 +120,7 @@ class Index(object):
         self._by_name = by_name
 
     def _is_excluded(self, relpath):
-        return self._excluded is not None and (relpath == self._excluded or
-                                               relpath.startswith(self._excluded + '/'))
+        return self._excluded is not None and paths.is_at_or_under(relpath, self._excluded)
 
     def invalidate(self):
         with self._lock:
