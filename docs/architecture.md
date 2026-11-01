@@ -358,7 +358,7 @@ aren't UTF-8 work). find's error messages (paths it couldn't read, e.g.
 find, is most of the time (~2.8s for /usr/share's 119k entries).
 
 `copy_in(files)` (or `copy_inner_entries_from_dirtree(dirtree)`, of its files) — for each of the given
-sub-tree, calls `add_file_by_relpath` to add the node to `self`'s tree, then
+files, calls `add_file_by_relpath` to add the node to `self`'s tree, then
 ensures the destination directory exists (`os.makedirs`, tolerant of
 already-exists, path derived from `full_filesystem_path()`), then calls
 `_copy_local_file_to_tree_with_path`. **Writing is gated behind

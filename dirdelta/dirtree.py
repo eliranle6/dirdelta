@@ -13,6 +13,11 @@ class HashStopped(Exception):
     """Raised by content_hash() (and elsewhere's comparing) when its should_stop() says to"""
 
 
+def _verb(verb):
+    """A batch's verb before each file, e.g. 'Copying', or in a dry run 'Dry run, not copying'"""
+    return "Dry run, not %s" % (verb,) if dryrun.DRYRUN else verb.capitalize()
+
+
 class DirTree(object):
     """A tree of a dir's files and dirs: each node's data is its entry (DirEntry or FileEntry), and
     its id is the entry's relpath (the root's is '').
@@ -132,9 +137,8 @@ class DirTree(object):
         relpaths, e.g. an inbox's files going to other dirs). A dry run changes neither."""
         files = list(files)
         # In a dry run nothing changes: no files or dirs, and not the tree
-        verb = "Dry run, not copying" if dryrun.DRYRUN else "Copying"
+        verb = _verb('copying')
         nr_started = nr_copied = 0
-        is_stopped = False
 
         def starting(file_entry):
             nonlocal nr_started
@@ -145,29 +149,20 @@ class DirTree(object):
             nonlocal nr_copied
             nr_copied += bool(is_copied)
 
-        try:
+        def work():
             if dryrun.DRYRUN:
                 for file_entry in files:
                     starting(file_entry)
                     copied(True)
             else:
                 self._copy_files(files, source, starting, copied)
-        except KeyboardInterrupt:
-            messages.note_stopped()
-            is_stopped = True
-        ended = "stopped" if is_stopped else "complete"
-        if dryrun.DRYRUN:
-            messages.print_line("Dry run %s: nothing was copied to %s (DRYRUN=0 copies)" % (ended, self.displayname()))
-        else:
-            messages.print_line("Copy %s: copied %d of %d files to %s" % (ended, nr_copied, len(files),
-                                                                        self.displayname()))
+        self._batch(work, ('Copy', 'copied', 'copies', 'to ' + self.displayname()), lambda: nr_copied, len(files))
 
     def remove_files(self, file_entries):
         """Remove the files, and drop them from the tree (so the next diff doesn't list them). A dry
         run changes neither."""
-        verb = "Dry run, not removing" if dryrun.DRYRUN else "Removing"
+        verb = _verb('removing')
         nr_started = nr_removed = 0
-        is_stopped = False
 
         def starting(what, nr_files=1):
             """Say that removing what starts: a file, or e.g. a folder of nr_files of the files"""
@@ -179,72 +174,70 @@ class DirTree(object):
             nonlocal nr_removed
             nr_removed += nr_files
 
-        try:
-            self._remove_files(file_entries, starting, removed)
-        except KeyboardInterrupt:
-            messages.note_stopped()
-            is_stopped = True
-        ended = "stopped" if is_stopped else "complete"
-        if dryrun.DRYRUN:
-            messages.print_line("Dry run %s: nothing was removed from %s (DRYRUN=0 removes)" % (ended,
-                                                                                          self.displayname()))
-        else:
-            messages.print_line("Remove %s: removed %d of %d files from %s%s" % (
-                ended, nr_removed, len(file_entries), self.displayname(), self.REMOVED_TO))
+        self._batch(lambda: self._remove_files(file_entries, starting, removed),
+                    ('Remove', 'removed', 'removes', 'from ' + self.displayname() + self.REMOVED_TO),
+                    lambda: nr_removed, len(file_entries), dry_where='from ' + self.displayname())
 
     def move_files(self, moves):
         """Move files within the tree: each of moves is (relpath, new_relpath); a whole dir's, as one
         (see dir_moves()). Returns the moves done. A dry run changes nothing (and returns none)."""
-        verb = "Dry run, not moving" if dryrun.DRYRUN else "Moving"
+        verb = _verb('moving')
         done = []
-        is_stopped = False
         dir_moves, file_moves = self.dir_moves(moves)
-        try:
+
+        def work():
             for dirpath, new_dirpath, its_moves in dir_moves:
                 messages.print_line("%s dir %s/ to %s/, with its %d files" % (verb, dirpath, new_dirpath,
                                                                              len(its_moves)))
                 if not dryrun.DRYRUN and self._move_dir(dirpath, new_dirpath):
-                    done += its_moves
+                    done.extend(its_moves)
             for number, (relpath, new_relpath) in enumerate(file_moves, 1):
                 messages.print_line("%s %s to %s (%d out of %d)" % (verb, relpath, new_relpath, number,
                                                                     len(file_moves)))
                 if not dryrun.DRYRUN and self._move_file(relpath, new_relpath):
                     done.append((relpath, new_relpath))
-        except KeyboardInterrupt:
-            messages.note_stopped()
-            is_stopped = True
-        if done:
-            self._moved(done)
-        ended = "stopped" if is_stopped else "complete"
-        if dryrun.DRYRUN:
-            messages.print_line("Dry run %s: nothing was moved in %s (DRYRUN=0 moves)" % (ended, self.displayname()))
-        else:
-            messages.print_line("Move %s: moved %d of %d files in %s" % (ended, len(done), len(moves),
-                                                                       self.displayname()))
+
+        def after():
+            if done:
+                self._moved(done)
+        self._batch(work, ('Move', 'moved', 'moves', 'in ' + self.displayname()), lambda: len(done), len(moves),
+                    after=after)
         return done
 
     def copy_files_within(self, copies):
         """Copy files within the tree: each of copies is (relpath, new_relpath). Returns the copies
         done. A dry run changes nothing (and returns none)."""
-        verb = "Dry run, not copying" if dryrun.DRYRUN else "Copying"
+        verb = _verb('copying')
         done = []
-        is_stopped = False
-        try:
+
+        def work():
             for number, (relpath, new_relpath) in enumerate(copies, 1):
                 messages.print_line("%s %s to %s (%d out of %d)" % (verb, relpath, new_relpath, number,
                                                                     len(copies)))
                 if not dryrun.DRYRUN and self._copy_within(relpath, new_relpath):
                     done.append((relpath, new_relpath))
+        self._batch(work, ('Copy', 'copied', 'copies', 'in ' + self.displayname()), lambda: len(done), len(copies))
+        return done
+
+    def _batch(self, work, words, nr_done, total, after=None, dry_where=None):
+        """Run a batch operation's work(), which Ctrl-C stops (it's said, see messages.note_stopped()),
+        then after() (if given), then say how it ended, by words: (its noun, its past, its third
+        person, where, e.g. ('Copy', 'copied', 'copies', 'to cloud/x')), nr_done() files of total
+        (or in a dry run, that nothing was, where dry_where says, if given)"""
+        noun, past, third, where = words
+        is_stopped = False
+        try:
+            work()
         except KeyboardInterrupt:
             messages.note_stopped()
             is_stopped = True
+        if after is not None:
+            after()
         ended = "stopped" if is_stopped else "complete"
         if dryrun.DRYRUN:
-            messages.print_line("Dry run %s: nothing was copied in %s (DRYRUN=0 copies)" % (ended, self.displayname()))
+            messages.print_line("Dry run %s: nothing was %s %s (DRYRUN=0 %s)" % (ended, past, dry_where or where, third))
         else:
-            messages.print_line("Copy %s: copied %d of %d files in %s" % (ended, len(done), len(copies),
-                                                                        self.displayname()))
-        return done
+            messages.print_line("%s %s: %s %d of %d files %s" % (noun, ended, past, nr_done(), total, where))
 
     def _copy_within(self, relpath, new_relpath):
         """Copy the file at relpath to new_relpath (where there's none), and add its node. Returns
