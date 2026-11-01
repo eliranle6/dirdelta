@@ -510,7 +510,7 @@ class InboxSort(object):
         previews = {}
         for relpath in relpaths:
             size = self._size(relpath)
-            lines = [picker.styled([("Size: ", 'bold'), (elsewhere.format_size(size), None)])] if size is not None else []
+            lines = [picker.styled([("Size: ", 'bold'), (text.format_size(size), None)])] if size is not None else []
             if relpath in self._descriptions:
                 lines += ["", _title(DESCRIPTION_TITLE, CLAUDE_STYLE)] + _wrapped(self._descriptions[relpath], "  ")
             elif relpath in self._describing:

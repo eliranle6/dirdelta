@@ -5,6 +5,7 @@ import tempfile
 import unittest
 from unittest import mock
 
+from dirdelta import text
 from dirdelta import dirtree
 from dirdelta import elsewhere
 from dirdelta import hashing
@@ -488,11 +489,11 @@ class CheckContentsTest(unittest.TestCase):
 
 class FormatSizeTest(unittest.TestCase):
     def test_sizes(self):
-        self.assertEqual(elsewhere.format_size(0), "0 B")
-        self.assertEqual(elsewhere.format_size(1023), "1023 B")
-        self.assertEqual(elsewhere.format_size(1536), "1.5 KB")
-        self.assertEqual(elsewhere.format_size(3 * 1024 ** 2), "3.0 MB")
-        self.assertEqual(elsewhere.format_size(5 * 1024 ** 4), "5120.0 GB")
+        self.assertEqual(text.format_size(0), "0 B")
+        self.assertEqual(text.format_size(1023), "1023 B")
+        self.assertEqual(text.format_size(1536), "1.5 KB")
+        self.assertEqual(text.format_size(3 * 1024 ** 2), "3.0 MB")
+        self.assertEqual(text.format_size(5 * 1024 ** 4), "5120.0 GB")
 
 
 

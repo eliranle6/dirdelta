@@ -15,11 +15,11 @@ import threading
 import time
 
 from dirdelta import downloads
-from dirdelta import elsewhere
 from dirdelta import localdiskdirtree
 from dirdelta import paths
 from dirdelta import picker
 from dirdelta import text
+from dirdelta.text import format_size as _size
 
 # The file pickers' key that opens the picked files, or the selected one (Ctrl-X), and its keys
 # row's hint
@@ -115,7 +115,7 @@ class Opener(object):
         if len(found) <= 1:
             return None
         return "download %s (%s) into %s, and open them" % (
-            _files(len(found)), elsewhere.format_size(sum(size or 0 for _, size in found)), _short_dir())
+            _files(len(found)), text.format_size(sum(size or 0 for _, size in found)), _short_dir())
 
     def press(self, relpaths, files):
         """Ctrl-X on relpaths (of files): open them, unless there's more than one file to download
@@ -254,11 +254,11 @@ class Opener(object):
                 if self._nr_total == 1:
                     relpath, = self._states
                     text = "Downloading %s to open it: %d%% (%s of %s)" % (
-                        self._name(relpath), percent, elsewhere.format_size(done), elsewhere.format_size(self._total))
+                        self._name(relpath), percent, _size(done), _size(self._total))
                 else:
                     text = "Downloading to open: %d of %d files, %d%% (%s of %s)" % (
                         min(self._nr_done + 1, self._nr_total), self._nr_total, percent,
-                        elsewhere.format_size(done), elsewhere.format_size(self._total))
+                        _size(done), _size(self._total))
                 return [(text, PROGRESS_COLOR)]
             note = self._note
         if note is not None and time.monotonic() < note[2]:
@@ -310,7 +310,7 @@ def confirm(opener, relpaths, files, label=None):
         return True
     found = opener.to_download(relpaths, files)
     lines = ["Open %s? First, %s:" % (_files(len(relpaths)), question.replace(", and open them", ""))]
-    lines += ["  %s (%s)" % (relpath, elsewhere.format_size(size or 0)) for relpath, size in found[:MAX_OPENED]]
+    lines += ["  %s (%s)" % (relpath, text.format_size(size or 0)) for relpath, size in found[:MAX_OPENED]]
     answer = picker.pick_option([CONFIRM_NO, CONFIRM_YES], header='\n'.join(lines), label=label, title="Sure?")
     return answer == CONFIRM_YES
 

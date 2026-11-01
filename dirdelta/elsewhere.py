@@ -680,7 +680,7 @@ def _preview(relpath, src, dst_name, matcher):
     # Read only for a file with candidates: they're to compare with
     date = matcher.date_taken(relpath) if matches else None
     modified = src.modified_time(relpath) if matches else None
-    about = [format_size(size)] if size is not None else []
+    about = [text.format_size(size)] if size is not None else []
     if date is not None:
         about.append("taken " + date)
     lines = [picker.styled([("This one: ", 'bold'), (", ".join(about), None)])] if about else []
@@ -778,20 +778,10 @@ def _size_note(match_size, size):
     if match_size is None:
         return ""
     if match_size == size:
-        return "  %s, same size" % (format_size(match_size),)
-    if size is not None and format_size(match_size) == format_size(size):
+        return "  %s, same size" % (text.format_size(match_size),)
+    if size is not None and text.format_size(match_size) == text.format_size(size):
         # Not to look the same as this one's
         return "  %d B" % (match_size,)
-    return "  " + format_size(match_size)
+    return "  " + text.format_size(match_size)
 
 
-def format_size(size):
-    """A size in bytes for people: 512 B, 3.4 KB, 1.2 MB, ..."""
-    if size < 1024:
-        return "%d B" % (size,)
-    size /= 1024.0
-    for unit in ("KB", "MB"):
-        if size < 1024:
-            return "%.1f %s" % (size, unit)
-        size /= 1024.0
-    return "%.1f GB" % (size,)

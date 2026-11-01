@@ -10,7 +10,6 @@ import time
 
 from dirdelta import clouddirtree
 from dirdelta import dryrun
-from dirdelta import elsewhere
 from dirdelta import hashcache
 from dirdelta import hashing
 from dirdelta import localdiskdirtree
@@ -101,7 +100,7 @@ def offer(jobs):
         # The path last, so a long one doesn't hide the rest
         lines.append("  %s of %s left (%s of %s): %s" % (
             "{:,}".format(progress.nr_files - progress.nr_done), _files(progress.nr_files),
-            elsewhere.format_size(progress.size - progress.size_done), elsewhere.format_size(progress.size),
+            text.format_size(progress.size - progress.size_done), text.format_size(progress.size),
             job.root))
     lines += ["Waiting for it before comparing is recommended. Until it's done, files are matched",
               "by their names and sizes, and compared when selected."]
@@ -135,12 +134,12 @@ def progress_line(progress):
     """A line of how far hashing got: its bar, %, files, size, speed and time left"""
     line = "%s %d%%  %s of %s, %s of %s" % (
         hashing.bar(progress), hashing.percent(progress), "{:,}".format(progress.nr_done),
-        _files(progress.nr_files), elsewhere.format_size(progress.size_done), elsewhere.format_size(progress.size))
+        _files(progress.nr_files), text.format_size(progress.size_done), text.format_size(progress.size))
     if progress.rate and progress.is_started and progress.state != hashing.DONE:
-        line += ", %s/s" % (elsewhere.format_size(progress.rate),)
+        line += ", %s/s" % (text.format_size(progress.rate),)
         left = hashing.time_left(progress)
         if left is not None and progress.state != hashing.DONE:
-            line += ", ~%s left" % (hashing.format_duration(left),)
+            line += ", ~%s left" % (text.format_duration(left),)
     return line
 
 
@@ -294,7 +293,7 @@ def _add_replica(item, options, shown, known, names):
         nr_files, size, first, note = _drive_lines(tree)
         # When Drive's file list was read, in its freshness's color
         shown[_INFO % (name,)] = picker.Skipped(picker.styled([
-            ("  %s, %s" % (_files(nr_files), elsewhere.format_size(size)), None),
+            ("  %s, %s" % (_files(nr_files), text.format_size(size)), None),
             (_cache_age(name), replicainfo.freshness(replicainfo.cache_time(name)))]))
         options += [_DRIVE % (name,), _DRIVE_NOTE % (name,)]
         shown[_DRIVE % (name,)] = picker.Skipped(first)
@@ -371,7 +370,7 @@ def _jobs_shown(items, names):
             shown[_BAR % (name,)] = picker.Skipped("  Hashes: -")
         else:
             shown[_INFO % (name,)] = picker.Skipped("  %s, %s" % (_files(progress.nr_files),
-                                                                   elsewhere.format_size(progress.size)))
+                                                                   text.format_size(progress.size)))
             shown[_BAR % (name,)] = picker.Skipped("  Hashes: " + progress_line(progress))
         state = _state_text(job, progress)
         if progress.current:
@@ -465,7 +464,7 @@ def _send_hash_previews(job, selection, send):
         if relpath is None:
             continue
         size = job.size_of(relpath)
-        lines = ["This one: %s" % (elsewhere.format_size(size),)] if size is not None else []
+        lines = ["This one: %s" % (text.format_size(size),)] if size is not None else []
         value = job.hash_of(relpath)
         if value is not None:
             lines += ["SHA-1:", "  " + value]

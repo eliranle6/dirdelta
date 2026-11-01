@@ -153,7 +153,7 @@ reached through a symlink is one replica to the hasher and two pairs to the hist
 note, and `drivecache.is_stale()` is unused. For a single-user tool, one forced refresh/migration
 would let these go.
 
-## 18. Layering: UI in the worker, screens importing screens (S, low-moderate) — in part 2026-11-01: `tag()` under the lock; the inbox's reach-ins public (`DirTree.exists()`, `files_under()`, `nodes_under()`, `elsewhere.matches_of_size()`); `known_lines()` and the freshness marks in `replicainfo.py`, so the start menu and the dashboard don't import each other for them; `hashing.py`'s formatting and `elsewhere.format_size` not moved
+## 18. Layering: UI in the worker, screens importing screens (S, low-moderate) — in part 2026-11-01: `tag()` under the lock; the inbox's reach-ins public (`DirTree.exists()`, `files_under()`, `nodes_under()`, `elsewhere.matches_of_size()`); `known_lines()` and the freshness marks in `replicainfo.py`, so the start menu and the dashboard don't import each other for them; `format_size()`/`format_duration()` in `text.py`; `hashing.py`'s tags, bar and status texts left there (they're its jobs' states, used by every picker)
 `hashing.py` (the thread pool) also holds the tags, bar, colors, `status_text`,
 `format_duration`; `hashing.tag()` reads `job._failed` without the lock. `hashes_screen` imports
 `choose_replicas` for `known_lines()`, and `choose_replicas` imports `hashes_screen` inside a

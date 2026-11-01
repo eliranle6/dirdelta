@@ -7,6 +7,7 @@ import unittest
 from unittest import mock
 
 import helpers
+from dirdelta import text
 from dirdelta import hashcache
 from dirdelta import hashing
 
@@ -204,7 +205,7 @@ class StatusTest(unittest.TestCase):
     def test_time_left_by_its_speed(self):
         self.assertEqual(hashing.time_left(_progress(size_done=400, rate=100)), 6)
         self.assertIsNone(hashing.time_left(_progress()))
-        self.assertEqual([hashing.format_duration(seconds) for seconds in (45, 720, 12000)],
+        self.assertEqual([text.format_duration(seconds) for seconds in (45, 720, 12000)],
                          ["45 s", "12 min", "3 h 20 min"])
 
     def test_the_tags(self):

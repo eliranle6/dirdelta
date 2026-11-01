@@ -25,6 +25,7 @@ import time
 
 from dirdelta import hashcache
 from dirdelta import paths
+from dirdelta import text
 
 ALGORITHM = 'sha1'
 # How much of a file is read at a time (pausing between reads)
@@ -561,14 +562,7 @@ def bar(progress, width=20):
     return '[%s%s]' % ('█' * filled, '░' * (width - filled))
 
 
-def format_duration(seconds):
-    """A duration for people: 45 s, 12 min, 3 h 20 min"""
-    seconds = int(seconds)
-    if seconds < 60:
-        return "%d s" % (seconds,)
-    if seconds < 3600:
-        return "%d min" % (seconds // 60,)
-    return "%d h %d min" % (seconds // 3600, seconds % 3600 // 60)
+format_duration = text.format_duration
 
 
 def time_left(progress):
