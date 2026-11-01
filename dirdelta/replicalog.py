@@ -154,6 +154,8 @@ class Changes(object):
     def __init__(self):
         # {path: {(verb, 'from' or 'to', where, or None): how many files}}, in the order they came
         self._counts = collections.OrderedDict()
+        # {path: when it was last changed (a datetime)}
+        self._when = {}
 
     def note(self, path, verb, count, place=None, preposition='from'):
         """Note that count files were copied (verb 'copied', from place), 'removed' or 'moved' (to
@@ -162,6 +164,11 @@ class Changes(object):
             counts = self._counts.setdefault(path, collections.OrderedDict())
             key = (verb, preposition if place else None, place)
             counts[key] = counts.get(key, 0) + count
+            self._when[path] = datetime.datetime.now()
+
+    def when(self, path):
+        """When the replica at path was last changed (a datetime), or None if it wasn't"""
+        return self._when.get(path)
 
     def paths(self):
         """The paths of the replicas changed, in the order they were"""
@@ -202,7 +209,7 @@ def offer_entries(changes, replicas_and_paths, known_replicas):
     for name in changes.paths():
         tree, path = by_name[name]
         text = changes.summary(name)
-        known_replicas.note_changed(identity(path), datetime.datetime.now())
+        known_replicas.note_changed(identity(path), changes.when(name) or datetime.datetime.now())
         while True:
             line = entry_line(today, text)
             add = ADD_ENTRY % (LOG_NAME, path)

@@ -1,4 +1,5 @@
 import concurrent.futures
+import datetime
 import threading
 import time
 
@@ -15,6 +16,7 @@ from dirdelta import paths
 from dirdelta import picker
 from dirdelta import replicalog
 from dirdelta import replicas
+from dirdelta import syncstate
 from dirdelta import utils
 from dirdelta import text
 
@@ -98,9 +100,22 @@ def _sync(replica_a, replica_b, replica_a_path, replica_b_path, known_replicas=N
     for way in ways:
         way.find_missing()
     jobs = hashes_screen.jobs_of([replica_a, replica_b])
+    # What each way found last, noted in known_replicas (once each time they're found)
+    noted = []
+
+    def note_compared():
+        futures = [way.missing for way in ways]
+        if known_replicas is None or futures == noted or not all(
+                future.done() and future.exception() is None for future in futures):
+            return
+        noted[:] = futures
+        known_replicas.note_compared(replica_a_path, replica_b_path, *[len(future.result().relpaths) for future in futures],
+                                     when=datetime.datetime.now())
+        replicas.save(known_replicas)
 
     def shown_as():
         shown = {label: action.shown_as() for label, action in actions.items()}
+        shown[STATE] = _state_line(ways, replica_a_path, replica_b_path)
         shown[DASHBOARD] = "%s: files, last updates, hashes%s" % (
             DASHBOARD, " (%s)" % ("; ".join(text for text, _ in hashing.status_parts(jobs)),) if jobs else "")
         if jobs:
@@ -119,8 +134,10 @@ def _sync(replica_a, replica_b, replica_a_path, replica_b_path, known_replicas=N
         if known_replicas is not None:
             is_favorite = known_replicas.is_favorite(replica_a_path, replica_b_path)
             favorite_options = [REMOVE_FAVORITE if is_favorite else ADD_FAVORITE]
-        option = picker.pick_option(list(actions) + list(refreshes) + [DASHBOARD] + favorite_options + [BACK],
-                                    shown_as=shown_as)
+        option = picker.pick_option([STATE, STATE_BLANK] + list(actions) + list(refreshes) + [DASHBOARD] +
+                                    favorite_options + [BACK], shown_as=shown_as, selected=list(actions)[0],
+                                    help_lines=syncstate.help_lines())
+        note_compared()
         if option in (None, BACK):
             # Back to the start menu (q too)
             return None
@@ -155,6 +172,27 @@ def _sync(replica_a, replica_b, replica_a_path, replica_b_path, known_replicas=N
 
 
 _files = text.files
+
+# The sync menu's first line: whether the two are in sync (see syncstate.py), as each way finds
+# their files; and a blank line after it (neither can be picked)
+STATE = "Sync state"
+STATE_BLANK = " "
+
+
+def _state_line(ways, path_a, path_b):
+    """The sync menu's line of whether the two are in sync, by what each way found (a
+    picker.Skipped), the replicas by their short names (the breadcrumbs')"""
+    names = paths.short_names([path_a, path_b])
+    path_a, path_b = names[path_a], names[path_b]
+    futures = [way.missing for way in ways]
+    if not all(future.done() for future in futures):
+        return picker.Skipped(picker.styled([("%s Comparing them..." % (syncstate.MARKS[syncstate.UNKNOWN],), 'grey')]))
+    if any(future.exception() is not None for future in futures):
+        return picker.Skipped(picker.styled([("%s Couldn't compare them" % (syncstate.MARKS[syncstate.UNKNOWN],), 'grey')]))
+    only_a, only_b = [len(future.result().relpaths) for future in futures]
+    state = syncstate.State(syncstate.found(only_a, only_b), only_a, only_b, None, [])
+    mark, color = syncstate.mark(state)
+    return picker.Skipped(picker.styled([(mark + " ", color), (syncstate.describe(state, path_a, path_b), color)]))
 
 
 # How often the "loading" dots of a menu option change, in seconds

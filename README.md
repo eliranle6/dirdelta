@@ -222,7 +222,11 @@ dirdelta reads each replica's (a Drive one is downloaded, once until it changes)
 entry in `replicas.json`, by the replica's identity: a local one by its filesystem's UUID and the path
 in it (so a disk is the same replica wherever it's mounted), a Drive one by the account and its path.
 The menu of a run without paths says when each was last updated (`/mnt/win/eliran (updated
-17.05.2026) <-> cloud/eliran`), and its "Replicas dashboard" lists them all, with their last
+17.05.2026) <-> cloud/eliran`), with marks (`?` explains them): before a pair, whether it was in
+sync when last synced (≡ green), one ahead of the other (» or « yellow), branched (≠ red: each has
+files the other lacks) or never compared (?), in grey if one was changed since; before each path,
+when it was last synced (● green today, yellow this week, red before), and for a Drive one when
+Drive's file list was read (☁). A sync's menu starts with the same state, as found now, and its "Replicas dashboard" lists them all, with their last
 entry, when they were last synced and changed by dirdelta, which disks aren't connected now, and
 their files' hashes (in a sync or a sort, the same dashboard is in its menu and behind `#`). When you quit a sync that changed files (live: copied, removed or moved), it offers
 an entry for each changed replica, e.g. `30.10.2026 - copied 12 files from cloud/eliran` for the one

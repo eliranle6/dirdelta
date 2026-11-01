@@ -13,6 +13,7 @@ from dirdelta import mounts
 from dirdelta import paths
 from dirdelta import picker
 from dirdelta import replicalog
+from dirdelta import syncstate
 from dirdelta import utils
 
 NOT_CHOSEN = '<none: press Enter to choose one>'
@@ -72,7 +73,7 @@ def run(replicas):
         headings.update(pair_texts)
         option = picker.pick_option(options + [QUIT],
                                     header='Choose the two replicas to sync, or an inbox to sort',
-                                    shown_as=lambda: headings, selected=options[1])
+                                    shown_as=lambda: headings, selected=options[1], help_lines=help_lines())
         if option in (None, QUIT):
             return None
         if option == KNOWN_LIST:
@@ -223,10 +224,25 @@ def cache_time():
         return None
 
 
+def help_lines():
+    """The start menu's ? help: what the marks before a pair and its paths are"""
+    return (["Marks before a pair: whether it's in sync, as far as dirdelta knows"] +
+            ["  " + line for line in syncstate.help_lines()] + path_marks_help())
+
+
+def path_marks_help():
+    """The ? help's lines of the marks before a replica's path"""
+    return (["Marks before a path:",
+             "  %s when the replica was last synced: green today, yellow this week, red before, grey never" % (SYNCED_MARK,),
+             "  %s (a Google Drive one) when Drive's file list was last read into the cache: the same colors" % (CACHE_MARK,),
+             "(updated DD.MM.YYYY) after a path: the last entry of its %s" % (replicalog.LOG_NAME,)])
+
+
 def styled_pair(label, path_a, path_b, known):
-    """A pair's menu label (label, ending with pair_label()'s) as it's shown: each path after a mark
-    in the color of when it was last synced (grey: never, as far as known), and a Drive one's after
-    one in the color of when Drive's file list was read"""
+    """A pair's menu label (label, ending with pair_label()'s) as it's shown: after a mark of whether
+    it's in sync (see syncstate.py), each path after a mark in the color of when it was last synced
+    (grey: never, as far as known), and a Drive one's after one in the color of when Drive's file
+    list was read"""
     def marks(path):
         info = known.info_at(path) if known is not None else None
         parts = [(SYNCED_MARK + " ", freshness((info or {}).get('seen')) or 'grey')]
@@ -236,7 +252,8 @@ def styled_pair(label, path_a, path_b, known):
     pair = pair_label(path_a, path_b, known)
     head = label[:len(label) - len(pair)] if label.endswith(pair) else label
     a_text = '%s%s' % (path_a, _updated(known, path_a))
-    return picker.styled([(head, None)] + marks(path_a) + [(a_text + " <-> ", None)] + marks(path_b) +
+    sync_mark, sync_color = syncstate.mark(syncstate.of(known, path_a, path_b))
+    return picker.styled([(head, None), (sync_mark + " ", sync_color)] + marks(path_a) + [(a_text + " <-> ", None)] + marks(path_b) +
                          [(pair[len(a_text) + 5:], None)])
 
 

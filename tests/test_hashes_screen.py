@@ -214,6 +214,19 @@ class DashboardTest(unittest.TestCase):
         self.assertIn("In Google Drive", shown[hashes_screen._INFO % ('cloud/c',)].text)
         self.assertEqual(shown[hashes_screen._KNOWN % ('0 /old',)].text, "  Never synced before")
 
+    def test_the_pairs_known_come_first_with_their_sync_state(self):
+        self.known.record('/photos', 'cloud/p')
+        self.known.note_compared('/photos', 'cloud/p', 0, 2, datetime.datetime(2026, 11, 1, 9, 5))
+        pick = self.dashboard(None, [hashes_screen.BACK])
+        options = pick.call_args.args[0]
+        self.assertEqual(options[0], hashes_screen.PAIRS_HEADING)
+        self.assertEqual(picker.unstyled(self.shown[options[1]].text), "\u00ab /photos <-> cloud/p")
+        self.assertEqual(picker.unstyled(self.shown[options[2]].text),
+                         "  cloud/p is ahead: it has 2 files that /photos lacks, and lacks none of its "
+                         "(as of 01.11.2026 09:05)")
+        self.assertIn(hashes_screen.REPLICAS_HEADING, options)
+        self.assertIn("The pairs' marks:", pick.call_args.kwargs['help_lines'])
+
     def test_a_cloud_replicas_hashes(self):
         cloud = mock.Mock()
         cloud.displayname.return_value = 'cloud/d'

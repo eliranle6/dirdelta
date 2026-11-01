@@ -100,7 +100,17 @@ class ReplicasFileTest(unittest.TestCase):
                                             'history': [['/a', 'cloud/b']],
                                             'sorts': [['cloud/unsorted', 'cloud/me']],
                                             'recent_dirs': {'cloud/me': ['photos/2026']},
-                                            'known': {}})
+                                            'known': {}, 'compared': []})
+
+    def test_a_pairs_comparison_loads_back_either_way_around(self):
+        known = replicas.Replicas()
+        known.note_compared('/a', 'cloud/b', 3, 0, datetime.datetime(2026, 11, 1, 14, 5))
+        known.note_compared('/a/', 'cloud/b', 2, 1, datetime.datetime(2026, 11, 1, 15, 0))
+        replicas.save(known)
+        loaded = replicas.load()
+        self.assertEqual(loaded.comparison('/a', 'cloud/b'), {'only': [2, 1], 'when': '2026-11-01 15:00'})
+        self.assertEqual(loaded.comparison('cloud/b', '/a'), {'only': [1, 2], 'when': '2026-11-01 15:00'})
+        self.assertIsNone(loaded.comparison('/a', '/c'))
 
     def test_whats_known_of_a_replica_by_its_identity(self):
         known = replicas.Replicas()

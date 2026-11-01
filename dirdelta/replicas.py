@@ -3,7 +3,8 @@ and the inboxes they sorted (each with its sorted tree, see inbox.py), kept in R
 for the menu that chooses what to sync or sort (see choose_replicas.py); the dirs of each sorted
 tree that its inboxes' files were moved or copied to last, offered first next time; and what's known
 of each replica synced (see replicalog.py), by its identity: the paths it was seen at, its log's
-last entry, and when dirdelta last saw it and changed it.
+last entry, and when dirdelta last saw it and changed it; and of each pair, what a sync last found
+each had that the other lacked (see syncstate.py).
 
 A pair is the same pair either way around (A and B, or B and A), and is kept the way around it was
 last used. Local paths are kept absolute and cloud ones cleaned (see normalized()), so the same dir
@@ -33,7 +34,7 @@ normalized = paths.normalized
 
 
 class Replicas(object):
-    def __init__(self, history=None, favorites=None, sorts=None, recent_dirs=None, known=None):
+    def __init__(self, history=None, favorites=None, sorts=None, recent_dirs=None, known=None, compared=None):
         # Pairs (tuples of 2 normalized paths), the latest first
         self.history = list(history or [])
         # Pairs, in the order they were added
@@ -48,6 +49,28 @@ class Replicas(object):
         # or None, 'seen': when dirdelta last synced it, 'changed': when a sync last changed it (or
         # None); times as 'YYYY-MM-DD HH:MM'}}
         self.known = {identity: dict(info) for identity, info in (known or {}).items()}
+        # Of each pair a sync compared, the latest first: {'pair': [path_a, path_b] (normalized),
+        # 'only': [how many of a's files b lacked, how many of b's a lacked], 'when': 'YYYY-MM-DD
+        # HH:MM'}
+        self.compared = [dict(item) for item in (compared or [])]
+
+    def note_compared(self, path_a, path_b, only_a, only_b, when):
+        """Note that a sync just found (when, a datetime) that a had only_a files b lacked, and b
+        only_b that a lacked"""
+        pair = _pair(path_a, path_b)
+        self.compared = [{'pair': list(pair), 'only': [only_a, only_b], 'when': _time(when)}] + [
+            old for old in self.compared if not _is_same_pair(old['pair'], pair)]
+        del self.compared[MAX_HISTORY + len(self.favorites):]
+
+    def comparison(self, path_a, path_b):
+        """What a sync last found of the pair, a's first: {'only': [a's files b lacked, b's a lacked],
+        'when': 'YYYY-MM-DD HH:MM'}; or None if it was never compared"""
+        pair = _pair(path_a, path_b)
+        for item in self.compared:
+            if _is_same_pair(item['pair'], pair):
+                only = item['only'] if tuple(item['pair']) == pair else list(reversed(item['only']))
+                return {'only': list(only), 'when': item['when']}
+        return None
 
     def note_seen(self, identity, path, entry, when):
         """Note that the replica with identity was just synced at path (when, a datetime), with its
@@ -125,7 +148,7 @@ def load():
             content = json.load(replicas_file)
         return Replicas(_pairs(content.get('history', [])), _pairs(content.get('favorites', [])),
                         _pairs(content.get('sorts', [])), _recent_dirs(content.get('recent_dirs', {})),
-                        _known(content.get('known', {})))
+                        _known(content.get('known', {})), _compared(content.get('compared', [])))
     except FileNotFoundError:
         return Replicas()
     except (OSError, ValueError, AttributeError, TypeError) as error:
@@ -139,7 +162,8 @@ def save(replicas):
                'history': [list(pair) for pair in replicas.history],
                'sorts': [list(pair) for pair in replicas.sorts],
                'recent_dirs': replicas.recent_dirs,
-               'known': replicas.known}
+               'known': replicas.known,
+               'compared': replicas.compared}
     try:
         os.makedirs(os.path.dirname(REPLICAS_FILE), exist_ok=True)
         temp_path = REPLICAS_FILE + '.tmp'
@@ -183,6 +207,15 @@ def _known(content):
             isinstance(info, dict) and isinstance(info.get('paths', []), list) for info in content.values()):
         raise ValueError("not what's known of the replicas: %r" % (content,))
     return content
+
+
+def _compared(content):
+    """The pairs compared, as read from the file: [{'pair': [a, b], 'only': [n, m], 'when': ...}]"""
+    if not isinstance(content, list) or not all(
+            isinstance(item, dict) and len(item.get('pair') or []) == 2 and len(item.get('only') or []) == 2 and
+            isinstance(item.get('when'), str) for item in content):
+        raise ValueError("not the pairs compared: %r" % (content,))
+    return [dict(item, pair=list(_pair(*item['pair']))) for item in content]
 
 
 def _time(when):

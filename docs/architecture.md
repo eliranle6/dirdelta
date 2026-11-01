@@ -96,6 +96,22 @@ before Quit. Choosing the sorted tree offers the
 replicas the user knows first (`known_replicas()`: the favorites', the
 recent pairs', the recent sorts' trees).
 
+Marks (`styled_pair()`; `?` explains them, `help_lines()`): before a pair, its
+sync state (`syncstate.py`); before each path, `SYNCED_MARK` (●) in the color of
+when it was last synced (`freshness()`: green today, yellow this week, red
+before), and before a Drive one `CACHE_MARK` (☁) in the color of when Drive's
+file list was read. `syncstate.of(known, a, b)` is a `State` from what a sync
+last found (`Replicas.note_compared()`/`comparison()`, `compared` in
+`replicas.json`: how many of each one's files the other lacked, noted by the
+sync menu each time both ways are found): in sync, one ahead (it has files the
+other lacks, and lacks none of the other's), branched (each has files the other
+lacks) or unknown, and the replicas changed since (by dirdelta, at the time of
+the change, `Changes.when()`, or a later log entry), which grey its mark. It has
+no screen code: `mark()`, `describe()` and `help_lines()` give marks and words
+for any front end. The sync menu's first line is the state as found now
+(`dirsync_main._state_line()`), and the dashboard lists the known pairs first,
+under "Pairs: what's synced to what".
+
 ### `inbox.py`, `ai.py` — sorting an inbox
 `InboxSort(inbox_path, root_path)`: local dirs or cloud paths. Both of a
 kind (`is_one_tree`): its files move within one tree that has both, their

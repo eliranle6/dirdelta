@@ -62,10 +62,11 @@ class MainMenuTest(unittest.TestCase):
 
     def shown(self, replica_a, replica_b):
         """What the main menu's options are shown as, once each way's files are found"""
-        def pick_option(options, shown_as):
+        def pick_option(options, shown_as, **_):
             while any('loading' in shown for shown in shown_as().values()):
                 time.sleep(0.01)
-            self.shown_options = [shown_as().get(option, option) for option in options]
+            self.shown_options = [shown_as().get(option, option) for option in options[2:]]
+            self.state_line = shown_as()[dirsync_main.STATE]
             return dirsync_main.BACK
         with mock.patch('dirdelta.picker.pick_option', side_effect=pick_option):
             dirsync_main._sync(replica_a, replica_b, '/a', '/b')
@@ -75,7 +76,8 @@ class MainMenuTest(unittest.TestCase):
         with mock.patch('dirdelta.picker.pick_option', return_value=dirsync_main.BACK) as pick_option:
             dirsync_main._sync(replica_a, replica_b, '/a', '/b')
         options, = pick_option.call_args.args
-        return options
+        self.assertEqual(options[:2], [dirsync_main.STATE, dirsync_main.STATE_BLANK])
+        return options[2:]
 
     def test_each_way_gets_its_files(self):
         for b in (localdiskdirtree.LocalDiskDirTree('/b', silent=True), dirtree.DirTree('cloud/b')):
@@ -96,7 +98,7 @@ class MainMenuTest(unittest.TestCase):
         answers = ['Replicas dashboard', dirsync_main.BACK]
         shown = []
 
-        def pick_option(options, shown_as):
+        def pick_option(options, shown_as, **_):
             shown.append(shown_as())
             return answers.pop(0)
         with mock.patch('dirdelta.hashing._jobs', {'/a': job}), \
@@ -205,6 +207,30 @@ class MainMenuTest(unittest.TestCase):
             dirsync_main.BACK,
         ])
 
+    def test_the_first_line_says_whether_theyre_in_sync(self):
+        a = localdiskdirtree.LocalDiskDirTree('/a', silent=True)
+        b = localdiskdirtree.LocalDiskDirTree('/b', silent=True)
+        self.shown(a, b)
+        self.assertIsInstance(self.state_line, picker.Skipped)
+        self.assertEqual(picker.unstyled(self.state_line.text),
+                         "\u2260 Branched: a has 3 files that b lacks, and b has 1 file that a lacks")
+        self.missing['/b'] = []
+        self.shown(a, b)
+        self.assertIn("a is ahead: it has 3 files that b lacks", picker.unstyled(self.state_line.text))
+
+    def test_what_was_found_is_noted_for_the_start_menu(self):
+        a = localdiskdirtree.LocalDiskDirTree('/a', silent=True)
+        b = localdiskdirtree.LocalDiskDirTree('/b', silent=True)
+        known = replicas.Replicas()
+
+        def pick_option(options, shown_as, **_):
+            while any('loading' in str(shown) for shown in shown_as().values()):
+                time.sleep(0.01)
+            return None
+        with mock.patch('dirdelta.picker.pick_option', side_effect=pick_option), mock.patch('dirdelta.replicas.save'):
+            dirsync_main._sync(a, b, '/a', '/b', known)
+        self.assertEqual(known.comparison('/b', '/a')['only'], [1, 3])
+
     def test_a_way_with_no_files_cant_be_picked(self):
         self.missing['/b'] = []
         a = localdiskdirtree.LocalDiskDirTree('/a', silent=True)
@@ -255,6 +281,9 @@ class MainMenuTest(unittest.TestCase):
                 mock.patch('dirdelta.replicas.save',
                            side_effect=lambda known: saved.append(list(known.favorites))):
             dirsync_main._sync(a, b, '/a', '/b', known)
+        # (What the ways found is saved too, when they found it: only the favorites' changes here)
+        saved = [favorites for number, favorites in enumerate(saved)
+                 if favorites != (saved[number - 1] if number else [])]
         self.assertEqual(menus, [['Add to favorites', dirsync_main.BACK], ['Remove from favorites', dirsync_main.BACK],
                                  ['Add to favorites', dirsync_main.BACK]])
         self.assertEqual(saved, [[('/a', '/b')], []])

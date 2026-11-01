@@ -21,6 +21,7 @@ from dirdelta import paths
 from dirdelta import picker
 from dirdelta import replicalog
 from dirdelta import replicas
+from dirdelta import syncstate
 from dirdelta import text
 
 # The file pickers' key that shows the dashboard
@@ -221,8 +222,17 @@ def dashboard(replica_trees=(), known=None, other_paths=()):
         blank += 1
         options.append(' ' * blank)
         shown[options[-1]] = picker.Skipped('')
-    # A heading for each only when there are both
-    has_headings = all(section for _, section in sections)
+    # What's synced to what first, under its heading, if any pair is known
+    pairs = _pairs(known)
+    if pairs:
+        options.append(PAIRS_HEADING)
+        shown[PAIRS_HEADING] = picker.Skipped(picker.styled([(PAIRS_HEADING, 'bold,green')]))
+        for number, (path_a, path_b) in enumerate(pairs):
+            if number:
+                add_blank()
+            _add_pair(path_a, path_b, options, shown, known)
+    # A heading for each only when there are both (or pairs before them)
+    has_headings = all(section for _, section in sections) or bool(pairs)
     for heading, section in sections:
         if section and has_headings:
             if options:
@@ -238,6 +248,30 @@ def dashboard(replica_trees=(), known=None, other_paths=()):
 
 
 REPLICAS_HEADING = '\u2550\u2550 Replicas \u2550\u2550'
+PAIRS_HEADING = '\u2550\u2550 Pairs: what\'s synced to what \u2550\u2550'
+_PAIR = "  pair %s <-> %s"
+_PAIR_STATE = "  pair state %s <-> %s"
+
+
+def _pairs(known):
+    """The pairs known (known's favorites, then its history's others), once each"""
+    if known is None:
+        return []
+    found = []
+    for pair in known.favorites + known.history:
+        if not any(set(pair) == set(other) for other in found):
+            found.append(pair)
+    return found
+
+
+def _add_pair(path_a, path_b, options, shown, known):
+    """The dashboard's lines of a pair: its paths after its sync state's mark, and what its state is
+    (see syncstate.py)"""
+    state = syncstate.of(known, path_a, path_b)
+    mark, color = syncstate.mark(state)
+    options += [_PAIR % (path_a, path_b), _PAIR_STATE % (path_a, path_b)]
+    shown[options[-2]] = picker.Skipped(picker.styled([(mark + " ", color), ("%s <-> %s" % (path_a, path_b), 'bold')]))
+    shown[options[-1]] = picker.Skipped(picker.styled([("  " + syncstate.describe(state, path_a, path_b), color)]))
 INBOXES_HEADING = '\u2550\u2550 Inboxes (files waiting to be sorted) \u2550\u2550'
 
 
@@ -295,7 +329,9 @@ def _finish_dashboard(items, options, shown, names, jobs):
                      not isinstance(first.get(option), picker.Disabled)), BACK)
     while True:
         option = picker.pick_option(options, header=header, title=TITLE, shown_as=shown_now, selected=selected,
-                                    key_hints=[('Enter', 'do it'), ('q', 'back')])
+                                    key_hints=[('Enter', 'do it'), ('q', 'back')],
+                                    help_lines=["The pairs' marks:"] + ["  " + line for line in syncstate.help_lines()] +
+                                    choose_replicas.path_marks_help())
         if option in (None, BACK):
             return
         selected = option
