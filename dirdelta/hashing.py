@@ -23,6 +23,7 @@ import subprocess
 import threading
 import time
 
+from dirdelta import replicanames
 from dirdelta import hashcache
 from dirdelta import paths
 from dirdelta import text
@@ -547,8 +548,8 @@ def status_text(job, progress=None, name=None):
 
 def status_parts(jobs):
     """[(text, color)] of the jobs' statuses, for picker.status(), each by its replica's short name
-    (one that tells it from the others, see paths.short_names())"""
-    names = paths.short_names([job.root for job in jobs])
+    (one that tells it from the others, see replicanames.short_names())"""
+    names = replicanames.short_names([job.root for job in jobs])
     parts = []
     for job in jobs:
         progress = job.progress()

@@ -12,6 +12,7 @@ from dirdelta import messages
 from dirdelta import mounts
 from dirdelta import paths
 from dirdelta import picker
+from dirdelta import replicanames
 from dirdelta import replicainfo
 from dirdelta import syncstate
 from dirdelta import utils
@@ -167,7 +168,8 @@ def sort_label(inbox, root):
 def pair_label(path_a, path_b, known=None):
     """The pair's label: each path, with when it was last updated (its log's last entry, as known
     (a Replicas), if it is)"""
-    return '%s%s <-> %s%s' % (path_a, _updated(known, path_a), path_b, _updated(known, path_b))
+    return '%s%s <-> %s%s' % (replicanames.labeled(path_a), _updated(known, path_a),
+                              replicanames.labeled(path_b), _updated(known, path_b))
 
 
 def _updated(known, path):
@@ -208,7 +210,7 @@ def styled_pair(label, path_a, path_b, known):
         return parts
     pair = pair_label(path_a, path_b, known)
     head = label[:len(label) - len(pair)] if label.endswith(pair) else label
-    a_text = '%s%s' % (path_a, _updated(known, path_a))
+    a_text = '%s%s' % (replicanames.labeled(path_a), _updated(known, path_a))
     sync_mark, sync_color = syncstate.mark(syncstate.of(known, path_a, path_b))
     return picker.styled([(head, None), (sync_mark + " ", sync_color)] + marks(path_a) + [(a_text + " <-> ", None)] + marks(path_b) +
                          [(pair[len(a_text) + 5:], None)])

@@ -43,6 +43,7 @@ from dirdelta import opening
 from dirdelta import paths
 from dirdelta import picker
 from dirdelta import replicalog
+from dirdelta import replicanames
 from dirdelta import renaming
 from dirdelta import replicas
 from dirdelta import sidetree
@@ -285,14 +286,15 @@ class InboxSort(object):
         """Let the user pick some of the inbox's files, then choose what to do with them (_act()),
         and back to the picker, where they were, until they quit, or the inbox is empty"""
         header = ("Files in %s, to sort into %s. Pick some, then choose what to do with them." %
-                  (self.inbox_path, self.root_path))
+                  (replicanames.full(self.inbox_path), replicanames.full(self.root_path)))
         keys = (self.REFRESH_KEY if self.inbox_is_cloud else '') + hashes_screen.KEY + aiplan_screen.KEY + contextmenu.KEY + archive_screen.KEY
-        key_hints = ([('Enter', 'what to do (none picked: the selected one)'), contextmenu.KEY_HINT, aiplan_screen.KEY_HINT, archive_screen.KEY_HINT,
-                      ('Ctrl-I', 'Claude: describe, and say where they go'), opening.KEY_HINT,
-                      renaming.KEY_HINT, ('Ctrl-L', 'the sorted tree')] +
+        # The keys row has little room: the rest are in the menu (:), and ?
+        key_hints = [('Enter', 'what to do (none picked: the selected one)'), contextmenu.KEY_HINT]
+        more_keys = ([aiplan_screen.KEY_HINT, archive_screen.KEY_HINT, ('Ctrl-I', 'Claude: describe, and say where they go'),
+                      opening.KEY_HINT, renaming.KEY_HINT, ('Ctrl-L', 'the sorted tree')] +
                      ([(self.REFRESH_KEY_NAME, 'read the folder anew from Drive')] if self.inbox_is_cloud else []) +
                      [hashes_screen.KEY_HINT])
-        help_lines = (["Tags after a file's name (/ searches them too):",
+        help_lines = (picker.key_help_lines(more_keys) + ["Tags after a file's name (/ searches them too):",
                        "  [claude: ...]            what Claude says it is",
                        "  [junk? ...]              it may be removed (by its name or size, or as Claude says)"] +
                       (hashes_screen.HELP_LINES[1:] if self._jobs() else []))
@@ -1552,7 +1554,7 @@ def _run(inbox_path, root_path, known_replicas):
         known_replicas.record_sort(sort.inbox_path, sort.root_path)
         replicalog.note_seen(sort.log_trees(), known_replicas)
         replicas.save(known_replicas)
-    names = paths.short_names([sort.inbox_path, sort.root_path])
+    names = replicanames.short_names([sort.inbox_path, sort.root_path])
     with picker.place("Sort %s \u2192 %s" % (names[sort.inbox_path], names[sort.root_path])):
         if not sort.prepare_hashing():
             return

@@ -25,6 +25,7 @@ from dirdelta import messages
 from dirdelta import opening
 from dirdelta import picker
 from dirdelta import renaming
+from dirdelta import replicanames
 from dirdelta import sidetree
 from dirdelta import text
 
@@ -164,11 +165,14 @@ class InteractiveDirSync(object):
         clouds = [replica for replica in (self._src, self._dst)
                   if isinstance(replica, clouddirtree.CloudDirTree)]
         jobs = hashes_screen.jobs_of([self._src, self._dst])
-        header = ("Files in %s, which are not in %s. Pick some, then choose what to do with them." %
-                  (self._src.displayname(), self._dst.displayname()))
+        src_name, dst_name = (replicanames.full(replica.displayname() if not is_local(replica) else replica.fullpath())
+                              for replica in (self._src, self._dst))
+        header = "%s lacks these. Pick some, then choose what to do with them." % (dst_name,)
         keys = (self.REFRESH_KEY if clouds else '') + hashes_screen.KEY + aiplan_screen.KEY + contextmenu.KEY + archive_screen.KEY
-        key_hints = ([('Enter', 'choose what to do'), contextmenu.KEY_HINT, aiplan_screen.KEY_HINT, archive_screen.KEY_HINT, opening.KEY_HINT, renaming.KEY_HINT,
-                      ('Ctrl-L', 'look through %s' % (self._dst.displayname(),))] +
+        # The keys row has little room: the rest are in the menu (:), and ?
+        key_hints = [('Enter', 'choose what to do'), contextmenu.KEY_HINT]
+        more_keys = ([aiplan_screen.KEY_HINT, archive_screen.KEY_HINT, opening.KEY_HINT, renaming.KEY_HINT,
+                      ('Ctrl-L', 'move in %s' % (dst_name,)), ('Enter there', 'remove what\'s selected there')] +
                      ([(self.REFRESH_KEY_NAME, 'read the folder anew from Drive')] if clouds else []) +
                      [hashes_screen.KEY_HINT])
         picked, selected = [], None
@@ -188,14 +192,14 @@ class InteractiveDirSync(object):
                     marks.text(relpath) if marks is not None else os.path.basename(relpath)))
             try:
                 chosen = picker.pick_files(
-                    self._src.displayname(), missing, header=header, picked=picked,
+                    src_name, missing, header=header, picked=picked,
                     keys=keys, selected=selected, key_hints=key_hints,
                     shown_as=shown_as, notify_keys=opening.KEY, twice_keys=renaming.KEY,
                     # dst beside it, to look through (e.g. for a newer version of a file)
-                    side=picker.Side(self._dst.displayname(), self._side_items(), False, self._side_follow),
+                    side=picker.Side(dst_name, self._side_items(), True, self._side_follow),
                     # Ctrl-X opens the selected one (the picked ones: the menu's Open)
                     on_notify=lambda key, selected, picked: self._opener.press([selected], files),
-                    help_lines=hashes_screen.HELP_LINES if jobs else (),
+                    help_lines=picker.key_help_lines(more_keys) + (hashes_screen.HELP_LINES if jobs else []),
                     previews=functools.partial(elsewhere.find_previews, missing, self._src, self.dst_index,
                                                checked=self.checked, src_index=self.src_index),
                     on_selection=functools.partial(elsewhere.check_contents, missing, self._src,
@@ -254,6 +258,8 @@ class InteractiveDirSync(object):
                 # where the selection is)
                 done = self._ask_ai(chosen.files or missing,
                                     chosen.files or (contextmenu.under(missing, selected) if selected else []))
+            elif key == picker.SIDE_KEY:
+                done = self._act_in_dst(chosen.side_selected)
             elif not key:
                 done = self._act(chosen.files, selected)
                 if done == self.REFRESH_KEY:
@@ -313,6 +319,43 @@ class InteractiveDirSync(object):
                 os.path.dirname(selected) if is_file else selected or '.',), self.REFRESH_KEY))
         entries.append(contextmenu.Entry(hashes_screen.KEY, "Replicas dashboard", hashes_screen.KEY))
         return contextmenu.choose(entries, contextmenu.nothing_picked(len(missing)), side=self._dst.displayname())
+
+    def _act_in_dst(self, relpath):
+        """Enter in the tree beside the picker, dst's, on the file or dir at relpath: choose what to do
+        with it there, e.g. to remove a version of a repository that src has another of, then copy that
+        one. Returns the files done (none in a dry run), or None if none were: then dst is diffed anew,
+        as its files changed."""
+        name = self._dst.displayname()
+        if not relpath:
+            messages.show("That's all of %s" % (name,), ["Select a file or dir in it."], dryrun.label())
+            return None
+        if not self.dst_index.is_built():
+            messages.print_line("Looking through %s..." % (name,))
+        self.dst_index.build()
+        files = [path for path in sorted(contextmenu.under(self.dst_index.relpaths(), relpath))
+                 if not paths.is_meta(path)]
+        if not files:
+            messages.show("Nothing to remove", ["%s has no files." % (relpath,)], dryrun.label())
+            return None
+        remove = "Remove %s (%s) from %s" % (relpath, _files(len(files)), name)
+        shown = {} if is_writable(self._dst) else {remove: picker.Disabled("%s: can't, it's read-only" % (remove,))}
+        answer = picker.pick_option([self.NOTHING, remove], header="%s, in %s: what to do with it?" % (relpath, name),
+                                    shown_as=lambda: shown, title="What to do")
+        if answer != remove or not self._confirm(self.REMOVE, files, replica=self._dst):
+            return None
+        title = "Removing %s from %s%s" % (_files(len(files)), name, " (a dry run)" if dryrun.DRYRUN else "")
+        with messages.progress_screen(title, dryrun.label()):
+            self._dst.remove_files([entries.FileEntry(os.path.basename(path), path,
+                                                      os.path.join(self._dst.fullpath(), path)) for path in files])
+        if dryrun.DRYRUN:
+            return []
+        done = [path for path in files if not self._dst.has_file(path)]
+        for path in done:
+            self.dst_index.remove(path)
+        # What src's files were compared with may be gone
+        self.checked.clear()
+        self._note(self._dst, 'removed', len(done))
+        return done
 
     def _explore(self, relpath, files):
         """e: look in src's zip at relpath (see archive_screen.py)"""
@@ -646,16 +689,18 @@ class InteractiveDirSync(object):
         return entries.FileEntry(os.path.basename(relpath), relpath,
                                  os.path.join(self._src.fullpath(), relpath))
 
-    def _confirm(self, action, relpaths, to_trash=False):
-        """Whether the user confirms copying or removing the files at relpaths; a removal, twice"""
+    def _confirm(self, action, relpaths, to_trash=False, replica=None):
+        """Whether the user confirms copying or removing the files at relpaths (of src, or the replica
+        they're in, if it isn't); a removal, twice"""
+        replica = replica or self._src
         if action == self.COPY:
             question = "Copy %s from %s to %s?" % (_files(len(relpaths)), self._src.displayname(),
                                                    self._dst.displayname())
         else:
-            question = "Remove %s from %s?" % (_files(len(relpaths)), self._src.displayname())
+            question = "Remove %s from %s?" % (_files(len(relpaths)), replica.displayname())
         lines = [question] + text.listed(["  %s" % (relpath,) for relpath in relpaths], self.MAX_FILES_LISTED)
         lines += (self._src.copy_notes(relpaths) if action == self.COPY else
-                  self._src.removal_notes(relpaths))
+                  replica.removal_notes(relpaths))
         if dryrun.DRYRUN:
             lines.append(dryrun.NOTE)
         answer = picker.pick_option([self.CONFIRM_NO, self.CONFIRM_YES], header='\n'.join(lines),
@@ -664,8 +709,8 @@ class InteractiveDirSync(object):
             return False
         if action == self.REMOVE:
             sure = ["Are you sure? %s will be removed from %s%s." %
-                    (_files(len(relpaths)), self._src.displayname(),
-                     " (to Drive's trash)" if not is_local(self._src) else
+                    (_files(len(relpaths)), replica.displayname(),
+                     " (to Drive's trash)" if not is_local(replica) else
                      " (to the trash)" if to_trash else ", for good")]
             answer = picker.pick_option([self.CONFIRM_NO, self.CONFIRM_SURE], header='\n'.join(sure),
                                         label=self.LABELS[action], title="Sure?")

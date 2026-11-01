@@ -93,7 +93,7 @@ picker's `r`; with a `files.txt.stale` next to it, listing the folders where a
 change dirdelta made to Drive was cut off before it was added to the cache, and a
 `files.txt.times`, when each folder's list was last updated and uploaded to the replica's
 `meta/files.jsonl`, see `drivemeta.py`),
-`~/.config/dirdelta/replicas.json` (the history, favorites and sorts, each sorted tree's recent dirs, and what's known of each replica: its `last_update.txt`'s last entry),
+`~/.config/dirdelta/replicas.json` (the history, favorites and sorts, each sorted tree's recent dirs, what's known of each replica: its `last_update.txt`'s last entry, and the labels),
 `~/.config/dirdelta/mounts.json` (how the replicas' volumes were mounted),
 `~/.cache/dirdelta/ai.json` (what Claude said of files),
 `~/.cache/dirdelta/hashes.sqlite` (local files' hashes, those not kept in their replica's
@@ -154,7 +154,7 @@ module:
 PYTHONPATH=tests bin/python -m unittest test_interactive_dir_sync -v
 ```
 
-Every module has a test file (688 tests, all passing as of 2026-11-01) except
+Every module has a test file (710 tests, all passing as of 2026-11-01) except
 the thin wiring in `main.py`/`dirsync_main.py`, covered only by running the
 app. Shared fakes:
 - `tests/helpers.py`: `scripted_option_picker` / `scripted_tree_picker` /

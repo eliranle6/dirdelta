@@ -1,0 +1,61 @@
+import unittest
+from unittest import mock
+
+from dirdelta import label_screen
+from dirdelta import mounts
+from dirdelta import replicanames
+from dirdelta import replicas
+
+MOUNT = mounts.Mount('/mnt/disk', '/dev/sdb1', 'ext4', 'rw', '', 'AAAA-1234', None)
+
+
+class RunTest(unittest.TestCase):
+    def setUp(self):
+        for name, patcher in (('mount', mock.patch('dirdelta.mounts.current_mount', return_value=MOUNT)),
+                              ('save', mock.patch('dirdelta.replicas.save'))):
+            setattr(self, name, patcher.start())
+            self.addCleanup(patcher.stop)
+        replicanames.forget()
+        self.addCleanup(replicanames.forget)
+        self.known = replicas.Replicas()
+
+    def run_with(self, chosen, typed='laptop', paths=('/mnt/disk/a',)):
+        """run(), each menu choosing the option starting with the next of chosen, and then going back"""
+        chosen = list(chosen)
+        self.menus = []
+        with mock.patch('dirdelta.picker.pick_option', side_effect=lambda options, **_: self._answer(options, chosen)), \
+                mock.patch('dirdelta.messages.ask', return_value=typed) as self.ask:
+            label_screen.run(self.known, list(paths))
+
+    def _answer(self, options, chosen):
+        self.menus.append(options)
+        if not chosen:
+            return None
+        start = chosen.pop(0)
+        return next(option for option in options if option.startswith(start))
+
+    def test_a_label_is_kept(self):
+        self.run_with(['Label'])
+        self.assertEqual(self.known.labels, {'uuid:AAAA-1234': 'laptop'})
+        self.save.assert_called_once_with(self.known)
+
+    def test_it_starts_from_the_current_one_and_can_be_removed(self):
+        self.known.set_label('uuid:AAAA-1234', 'old')
+        self.run_with(['Label'])
+        self.assertEqual(self.ask.call_args.args[3], 'old')
+        self.run_with(['Remove'])
+        self.assertEqual(self.known.labels, {})
+
+    def test_typing_nothing_keeps_it(self):
+        self.known.set_label('uuid:AAAA-1234', 'old')
+        self.run_with(['Label'], typed=None)
+        self.assertEqual(self.known.labels, {'uuid:AAAA-1234': 'old'})
+        self.save.assert_not_called()
+
+    def test_two_replicas_on_one_disk_are_one_option(self):
+        self.run_with([], paths=('/mnt/disk/a', '/mnt/disk/b'))
+        self.assertEqual(len([option for option in self.menus[0] if option.startswith('Label')]), 1)
+
+
+if __name__ == '__main__':
+    unittest.main()

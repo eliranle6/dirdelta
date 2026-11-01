@@ -34,7 +34,8 @@ normalized = paths.normalized
 
 
 class Replicas(object):
-    def __init__(self, history=None, favorites=None, sorts=None, recent_dirs=None, known=None, compared=None):
+    def __init__(self, history=None, favorites=None, sorts=None, recent_dirs=None, known=None, compared=None,
+                 labels=None):
         # Pairs (tuples of 2 normalized paths), the latest first
         self.history = list(history or [])
         # Pairs, in the order they were added
@@ -53,6 +54,15 @@ class Replicas(object):
         # 'only': [how many of a's files b lacked, how many of b's a lacked], 'when': 'YYYY-MM-DD
         # HH:MM'}
         self.compared = [dict(item) for item in (compared or [])]
+        # {what a label is of (replicanames.label_key()): the label the user gave it}
+        self.labels = dict(labels or {})
+
+    def set_label(self, key, label):
+        """Label what key is of (None: it has no label now)"""
+        if label:
+            self.labels[key] = label
+        else:
+            self.labels.pop(key, None)
 
     def note_compared(self, path_a, path_b, only_a, only_b, when):
         """Note that a sync just found (when, a datetime) that a had only_a files b lacked, and b
@@ -148,7 +158,8 @@ def load():
             content = json.load(replicas_file)
         return Replicas(_pairs(content.get('history', [])), _pairs(content.get('favorites', [])),
                         _pairs(content.get('sorts', [])), _recent_dirs(content.get('recent_dirs', {})),
-                        _known(content.get('known', {})), _compared(content.get('compared', [])))
+                        _known(content.get('known', {})), _compared(content.get('compared', [])),
+                        {str(key): str(label) for key, label in content.get('labels', {}).items()})
     except FileNotFoundError:
         return Replicas()
     except (OSError, ValueError, AttributeError, TypeError) as error:
@@ -163,7 +174,8 @@ def save(replicas):
                'sorts': [list(pair) for pair in replicas.sorts],
                'recent_dirs': replicas.recent_dirs,
                'known': replicas.known,
-               'compared': replicas.compared}
+               'compared': replicas.compared,
+               'labels': replicas.labels}
     try:
         os.makedirs(os.path.dirname(REPLICAS_FILE), exist_ok=True)
         temp_path = REPLICAS_FILE + '.tmp'

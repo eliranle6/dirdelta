@@ -63,10 +63,21 @@ def _found(folder_id):
     return folders[0], (files[0] if files else None)
 
 
+def _note_user():
+    """Note the account's user name, once, for the screens (see replicanames.py); only to say it:
+    without it, they say less"""
+    if drivecache.user() is None:
+        try:
+            drivecache.note_user(driveapi.user_name())
+        except Exception:
+            pass
+
+
 def check(folder_path):
     """Put the copy of folder_path's list kept in Drive (see the module's doc) in the cache, if it's
     newer than the cache's. Returns USED if it was, else None. Raises HttpError or OSError if Drive
     can't be asked."""
+    _note_user()
     folder_id = _folder_id(folder_path)
     if folder_id is None:
         return None

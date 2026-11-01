@@ -11,12 +11,14 @@ from dirdelta import hashcache
 from dirdelta import hashes_screen
 from dirdelta import hashing
 from dirdelta import interactive_dir_sync
+from dirdelta import label_screen
 from dirdelta import localdiskdirtree
 from dirdelta import messages
 from dirdelta import paths
 from dirdelta import picker
 from dirdelta import replicainfo
 from dirdelta import replicalog
+from dirdelta import replicanames
 from dirdelta import replicas
 from dirdelta import syncstate
 from dirdelta import utils
@@ -29,7 +31,7 @@ BACK = "Back to the start menu"
 
 def run(args):
     """Sync the replicas at args' paths, until the user goes back (to the start menu)"""
-    names = paths.short_names([args.dir_a_path, args.dir_b_path])
+    names = replicanames.short_names([args.dir_a_path, args.dir_b_path])
     with picker.place("Sync %s \u21c4 %s" % (names[args.dir_a_path], names[args.dir_b_path])):
         return _run(args)
 
@@ -86,6 +88,7 @@ def _sync(replica_a, replica_b, replica_a_path, replica_b_path, known_replicas=N
     ADD_FAVORITE = "Add to favorites"
     REMOVE_FAVORITE = "Remove from favorites"
     DASHBOARD = hashes_screen.TITLE
+    LABELS = "Label the replicas"
     read_only = _read_only_lines(replica_a, replica_a_path) + _read_only_lines(replica_b, replica_b_path)
     if read_only:
         messages.show("Read-only", read_only, dryrun.label())
@@ -98,8 +101,8 @@ def _sync(replica_a, replica_b, replica_a_path, replica_b_path, known_replicas=N
     actions = {}
     for way, src_path, dst_path in ((ways[0], replica_a_path, replica_b_path),
                                     (ways[1], replica_b_path, replica_a_path)):
-        label = "Files in %s, not in %s" % (src_path, dst_path)
-        actions[label] = _Action(label, way, "none, %s has them all" % (dst_path,), changes)
+        label = "Files only in %s" % (src_path,)
+        actions[label] = _Action(src_path, dst_path, way, changes)
     # A cloud replica's folder can be read anew from Drive, if Drive changed since the cache was made
     refreshes = {"Refresh %s from Google Drive" % (path,): replica
                  for replica, path in ((replica_a, replica_a_path), (replica_b, replica_b_path))
@@ -144,7 +147,8 @@ def _sync(replica_a, replica_b, replica_a_path, replica_b_path, known_replicas=N
             is_favorite = known_replicas.is_favorite(replica_a_path, replica_b_path)
             favorite_options = [REMOVE_FAVORITE if is_favorite else ADD_FAVORITE]
         option = picker.pick_option([STATE, STATE_BLANK] + list(actions) + list(refreshes) + [DASHBOARD] +
-                                    favorite_options + [BACK], shown_as=shown_as, selected=list(actions)[0],
+                                    favorite_options + ([LABELS] if known_replicas is not None else []) + [BACK],
+                                    shown_as=shown_as, selected=list(actions)[0],
                                     help_lines=syncstate.help_lines())
         note_compared()
         if option in (STATE, STATE_BLANK):
@@ -155,6 +159,9 @@ def _sync(replica_a, replica_b, replica_a_path, replica_b_path, known_replicas=N
             return None
         if option == DASHBOARD:
             hashes_screen.dashboard([replica_a, replica_b], known_replicas)
+            continue
+        if option == LABELS:
+            label_screen.run(known_replicas, [replica_a_path, replica_b_path])
             continue
         if option in (ADD_FAVORITE, REMOVE_FAVORITE):
             known_replicas.toggle_favorite(replica_a_path, replica_b_path)
@@ -194,7 +201,7 @@ STATE_BLANK = " "
 def _state_line(ways, path_a, path_b):
     """The sync menu's line of whether the two are in sync, by what each way found (a
     picker.Skipped), the replicas by their short names (the breadcrumbs')"""
-    names = paths.short_names([path_a, path_b])
+    names = replicanames.short_names([path_a, path_b])
     path_a, path_b = names[path_a], names[path_b]
     futures = [way.missing for way in ways]
     if not all(future.done() for future in futures):
@@ -239,28 +246,29 @@ class _Way(object):
 
 
 class _Action(object):
-    """A main menu option: the files of a way (interactive_dir_sync), nothing saying that there are
-    none, when it can't be picked"""
-    def __init__(self, label, way, nothing, changes=None):
-        self.label = label
+    """A main menu option: the files of a way (interactive_dir_sync), from the replica at src_path to
+    the one at dst_path. Their names are worked out each time, as a replica may be labeled meanwhile."""
+    def __init__(self, src_path, dst_path, way, changes=None):
+        self.src_path = src_path
+        self.dst_path = dst_path
         self.way = way
-        self.nothing = nothing
         self.changes = changes
 
     def shown_as(self):
         """The label, with how many files it's about, or that they're still being found. With none,
         it can't be picked (a picker.Disabled): it would only say so. Once the files are found
         again (after a live action), it may be picked again."""
+        label = "Files only in %s" % (replicanames.full(self.src_path),)
         missing = self.way.missing
         if not missing.done():
             dots = int(time.monotonic() / DOTS_INTERVAL) % 4
-            return "%s (loading%s)" % (self.label, '.' * dots)
+            return "%s (loading%s)" % (label, '.' * dots)
         if missing.exception() is not None:
-            return "%s (couldn't count the files)" % (self.label,)
+            return "%s (couldn't count the files)" % (label,)
         count = len(missing.result().relpaths)
         if count == 0:
-            return picker.Disabled("%s: %s" % (self.label, self.nothing))
-        return "%s (%s)" % (self.label, _files(count))
+            return picker.Disabled("%s: none, %s has them all" % (label, replicanames.full(self.dst_path)))
+        return "%s (%s)" % (label, _files(count))
 
     def run(self):
         """Returns whether the replicas' files changed meanwhile (see InteractiveDirSync)"""
@@ -268,8 +276,7 @@ class _Action(object):
         sync = interactive_dir_sync.InteractiveDirSync(way.src, way.dst, way.missing,
                                                        way.indexes[way.src], way.indexes[way.dst],
                                                        way.checked, self.changes)
-        names = paths.short_names([way.src.displayname(), way.dst.displayname()])
-        with picker.place("Files in %s, not in %s" % (names[way.src.displayname()], names[way.dst.displayname()])):
+        with picker.place("Files in %s" % (replicanames.full(self.src_path),)):
             sync.browse()
         return sync.has_changed
 

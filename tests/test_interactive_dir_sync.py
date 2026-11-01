@@ -167,7 +167,7 @@ class InteractiveDirSyncTest(unittest.TestCase):
             self._browse([None], [])
             kwargs = self.pick_files.call_args.kwargs
             self.assertEqual(kwargs['notify_keys'], '\x18')
-            self.assertIn(('Ctrl-X', 'open'), kwargs['key_hints'])
+            self.assertIn("  %-17s%s" % ('Ctrl-X', 'open'), kwargs['help_lines'])
             kwargs['on_notify']('\x18', 'sub/c.txt', [])
             kwargs['on_notify']('\x18', 'sub/c.txt', ['sub/b.txt', 'sub/c.txt'])
         files = {'sub/b.txt', 'sub/c.txt'}
@@ -293,9 +293,9 @@ class InteractiveDirSyncTest(unittest.TestCase):
         # Not by its path in Drive (/mein), which reads like a local dir
         src = clouddirtree.CloudDirTree('cloud/mein')
         src.add_file_by_relpath('song.mp3')
-        self._browse([['song.mp3'], None], ['Remove', NO], src, dirtree.DirTree('/local'))
-        self.assertEqual(self.pick_files.call_args.args[0], 'cloud/mein')
-        self.assertIn('Files in cloud/mein', self.pick_files.call_args.kwargs['header'])
+        with mock.patch('dirdelta.drivecache.user', return_value='me'):
+            self._browse([['song.mp3'], None], ['Remove', NO], src, dirtree.DirTree('/local'))
+        self.assertEqual(self.pick_files.call_args.args[0], 'Cloud(me):/mein')
         header = self.pick_option.call_args.kwargs['header'].splitlines()
         self.assertEqual(header[0], 'Remove 1 file from cloud/mein?')
 
@@ -436,7 +436,7 @@ class RefreshKeyTest(unittest.TestCase):
         self.assertFalse(self.sync.src_index.is_built())
         # And the replicas dashboard's
         self.assertEqual(calls[0].kwargs['keys'], Sync.REFRESH_KEY + '#a:e')
-        self.assertIn(('Ctrl-R', 'read the folder anew from Drive'), calls[0].kwargs['key_hints'])
+        self.assertIn("  %-17s%s" % ('Ctrl-R', 'read the folder anew from Drive'), calls[0].kwargs['help_lines'])
         self.assertIsNone(calls[0].kwargs['selected'])
         # What's still missing, what's still picked of it, where it was
         self.assertEqual(calls[1].args[1], ['a/1.mp3', 'b/3.mp3'])
@@ -589,6 +589,69 @@ class AskAITest(_TwoDirsTestCase):
                 mock.patch('dirdelta.interactive_dir_sync.hashes_screen.jobs_of', return_value=[]):
             self.sync.browse()
         ask.assert_called_once_with(['b.txt'], ['b.txt'])
+
+
+class ActInDstTest(_TwoDirsTestCase):
+    """Enter in the tree beside the picker, dst's"""
+
+    def setUp(self):
+        super().setUp()
+        helpers.make_files(self.dst_path, ['repo/x.txt', 'repo/y.txt', 'meta/hashes.sqlite'])
+
+    def enter(self, side_selected, confirmations=('Yes', 'Yes, remove them'), is_dry_run=False):
+        """browse(), Enter in the side tree at side_selected, then choosing to remove it, confirming
+        with confirmations"""
+        answers = iter(confirmations)
+
+        def pick_option(options, **kwargs):
+            if options[-1].startswith('Remove'):
+                self.options, self.shown = options, kwargs['shown_as']()
+                return options[-1]
+            return next(answers)
+        picks = iter([picker.Picked(picker.SIDE_KEY, 'a.txt', [], side_selected), None])
+        with helpers.scripted_files_picker(lambda relpaths: next(picks)) as pick_files, \
+                mock.patch('dirdelta.picker.pick_option', side_effect=pick_option), \
+                mock.patch('dirdelta.interactive_dir_sync.hashes_screen.jobs_of', return_value=[]), \
+                mock.patch('dirdelta.dryrun.DRYRUN', is_dry_run):
+            self.sync.browse()
+        return pick_files
+
+    def test_enter_ends_picking_there(self):
+        pick_files = self.enter('')
+        self.assertTrue(pick_files.call_args.kwargs['side'].is_enter_picking)
+
+    def test_a_dir_is_removed_and_the_replicas_diffed_anew(self):
+        self.enter('repo')
+        self.assertFalse(os.path.exists(os.path.join(self.dst_path, 'repo', 'x.txt')))
+        self.assertFalse(os.path.exists(os.path.join(self.dst_path, 'repo', 'y.txt')))
+        self.assertTrue(os.path.exists(os.path.join(self.dst_path, 'old', 'd.txt')))
+        self.assertTrue(self.sync.has_changed)
+
+    def test_src_lacks_nothing_more_after_removing_from_dst_of_what_it_has(self):
+        helpers.make_files(self.src_path, ['repo/x.txt'])
+        pick_files = self.enter('repo')
+        # dst had src's repo/x.txt: now it's what dst lacks
+        self.assertIn('repo/x.txt', pick_files.call_args.args[1])
+
+    def test_it_says_where_it_removes_from_and_asks_twice(self):
+        self.enter('repo', ('No',))
+        self.assertTrue(os.path.exists(os.path.join(self.dst_path, 'repo', 'x.txt')))
+        self.assertFalse(self.sync.has_changed)
+
+    def test_a_dry_run_changes_nothing(self):
+        self.enter('repo', is_dry_run=True)
+        self.assertTrue(os.path.exists(os.path.join(self.dst_path, 'repo', 'x.txt')))
+        self.assertFalse(self.sync.has_changed)
+
+    def test_not_all_of_dst(self):
+        self.enter('')
+        self.assertEqual(interactive_dir_sync.messages.show.call_args.args[0], "That's all of %s" % (self.dst_path,))
+        self.assertTrue(os.path.exists(os.path.join(self.dst_path, 'repo', 'x.txt')))
+
+    def test_a_read_only_one_cant(self):
+        with mock.patch('dirdelta.interactive_dir_sync.is_writable', return_value=False):
+            self.enter('repo', ('No',))
+        self.assertIsInstance(self.shown[self.options[-1]], picker.Disabled)
 
 
 class ExploreTest(_TwoDirsTestCase):

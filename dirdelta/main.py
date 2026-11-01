@@ -9,6 +9,7 @@ from dirdelta import drivecache
 from dirdelta import inbox
 from dirdelta import mounts
 from dirdelta import programs
+from dirdelta import replicanames
 from dirdelta import replicas
 from dirdelta import utils
 
@@ -76,6 +77,8 @@ def _ready(*replica_paths):
     for path in replica_paths:
         if not mounts.ensure_mounted(path):
             return False
+    # What they're on may be another disk now
+    replicanames.forget()
     for path in replica_paths:
         if os.path.isdir(path):
             mounts.remember(path)

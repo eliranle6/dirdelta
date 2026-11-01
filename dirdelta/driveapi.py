@@ -30,6 +30,12 @@ _shared_credentials = None
 _login_lock = threading.Lock()
 
 
+def user_name():
+    """The name of the account logged in to, as its email address's first part (or its whole name)"""
+    user = service().about().get(fields='user(emailAddress,displayName)').execute(num_retries=3).get('user', {})
+    return (user.get('emailAddress') or '').split('@')[0] or user.get('displayName')
+
+
 def service():
     """The Drive API (v3) service of this thread, logging in first if needed (once, for all threads:
     in the browser, unless there's a saved login with SCOPES)"""

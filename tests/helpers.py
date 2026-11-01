@@ -9,6 +9,7 @@ from dirdelta import downloads
 from dirdelta import hashcache
 from dirdelta import mounts
 from dirdelta import picker
+from dirdelta import replicas
 
 # The tests never keep hashes in the real hash cache (~/.cache/dirdelta/hashes.sqlite): every test
 # module that hashes files imports this one, and unittest imports them all before running any
@@ -20,6 +21,8 @@ atexit.register(shutil.rmtree, _hash_cache_dir, ignore_errors=True)
 _mounts_dir = tempfile.mkdtemp(prefix='dirdelta-test-mounts-')
 mounts.MOUNTS_FILE = os.path.join(_mounts_dir, 'mounts.json')
 atexit.register(shutil.rmtree, _mounts_dir, ignore_errors=True)
+# Nor go by the real labels (~/.config/dirdelta/replicas.json), which say what screens call a replica
+replicas.REPLICAS_FILE = os.path.join(_mounts_dir, 'replicas.json')
 # Nor write the real errors' log (~/.cache/dirdelta/errors.log)
 picker.ERRORS_LOG = os.path.join(_hash_cache_dir, 'errors.log')
 # Nor download into the real downloads' cache (~/.cache/dirdelta/downloads): test_inbox and

@@ -307,6 +307,12 @@ def pick_under_dir(dirpath, max_depth=None, dirs_only=False, lazy=False, header=
     return (key, path) if keys or twice_keys else path
 
 
+def key_help_lines(key_hints):
+    """help_lines (see pick_files()) for keys that work but aren't in the keys row, which has little
+    room: [(key, what it does here)], as treepicker's ? help lists the row's"""
+    return ["  %-17s%s" % hint for hint in key_hints]
+
+
 def _keys_args(keys, twice_keys=''):
     """A one-node picker's args for keys that end picking too (and twice_keys, pressed twice):
     they're printed first, then the selected node (for Enter, the picked one)"""

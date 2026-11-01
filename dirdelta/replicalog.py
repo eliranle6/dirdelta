@@ -26,6 +26,7 @@ from dirdelta import mounts
 from dirdelta import messages
 from dirdelta import paths
 from dirdelta import picker
+from dirdelta import replicanames
 from dirdelta import replicas
 
 LOG_NAME = 'last_update.txt'
@@ -83,16 +84,8 @@ def with_entry(text, line):
     return text + line + '\n'
 
 
-def identity(path):
-    """The replica at path's identity (see the module's doc), a string"""
-    if paths.is_cloud_path(path):
-        return 'drive:%s:/%s' % (drivecache.root_id() or '?', '/'.join(paths.components(path)[1:]))
-    path = os.path.realpath(path)
-    mount = mounts.current_mount(path)
-    if mount is not None and mount.uuid:
-        relpath = os.path.relpath(path, mount.target)
-        return 'uuid:%s:/%s' % (mount.uuid, '' if relpath == '.' else relpath)
-    return 'path:%s' % (path,)
+# The replica at a path's identity (see the module's doc), a string
+identity = replicanames.identity
 
 
 def disk_uuid(replica_identity):

@@ -12,6 +12,7 @@ from dirdelta import hashing
 from dirdelta import interactive_dir_sync
 from dirdelta import localdiskdirtree
 from dirdelta import picker
+from dirdelta import replicanames
 from dirdelta import replicas
 
 
@@ -45,11 +46,13 @@ class MainMenuTest(unittest.TestCase):
     def setUp(self):
         # The local dirs are writable unless a test says otherwise, and no message waits for Enter
         self.writable = {'/a', '/b'}
-        for patcher in (mock.patch('dirdelta.interactive_dir_sync.os.access',
+        for patcher in (mock.patch('dirdelta.replicanames.mounts.current_mount', return_value=None),
+                        mock.patch('dirdelta.interactive_dir_sync.os.access',
                                    side_effect=lambda path, mode: path in self.writable),
                         mock.patch('dirdelta.messages.show')):
             self.addCleanup(patcher.stop)
             self.show = patcher.start()
+        replicanames.forget()
         # Each dir's files that the other lacks: /a's 3, /b's 1
         self.missing = {'/a': ['x', 'y', 'z'], '/b': ['w']}
         self.find_missing_calls = []
@@ -82,7 +85,7 @@ class MainMenuTest(unittest.TestCase):
     def test_each_way_gets_its_files(self):
         for b in (localdiskdirtree.LocalDiskDirTree('/b', silent=True), dirtree.DirTree('cloud/b')):
             a = localdiskdirtree.LocalDiskDirTree('/a', silent=True)
-            self.assertEqual(self.options(a, b), ['Files in /a, not in /b', 'Files in /b, not in /a', 'Replicas dashboard', dirsync_main.BACK])
+            self.assertEqual(self.options(a, b), ['Files only in /a', 'Files only in /b', 'Replicas dashboard', dirsync_main.BACK])
 
     def test_back_and_q_go_back_to_the_start_menu(self):
         a = localdiskdirtree.LocalDiskDirTree('/a', silent=True)
@@ -157,28 +160,28 @@ class MainMenuTest(unittest.TestCase):
         return syncs
 
     def test_the_chosen_way_is_browsed_and_the_menu_comes_back(self):
-        syncs = self.browse(['Files in /b, not in /a', dirsync_main.BACK])
+        syncs = self.browse(['Files only in /b', dirsync_main.BACK])
         self.assertEqual(len(syncs), 1)
         self.assertEqual(syncs[0]._src.fullpath(), '/b')
         # A dry run changes nothing, so each way's files are found once
         self.assertEqual(sorted(self.find_missing_calls), ['/a', '/b'])
 
     def test_each_replicas_files_by_name_are_kept_between_ways(self):
-        syncs = self.browse(['Files in /a, not in /b', 'Files in /b, not in /a', dirsync_main.BACK])
+        syncs = self.browse(['Files only in /a', 'Files only in /b', dirsync_main.BACK])
         self.assertIs(syncs[0].dst_index, syncs[1].src_index)
         self.assertIs(syncs[0].src_index, syncs[1].dst_index)
         self.assertEqual(syncs[0].dst_index.replica.fullpath(), '/b')
 
     def test_a_change_while_browsing_finds_each_ways_files_again(self):
         # E.g. a live action, or a refresh in the file picker
-        self.browse(['Files in /a, not in /b', dirsync_main.BACK], has_changed=True)
+        self.browse(['Files only in /a', dirsync_main.BACK], has_changed=True)
         self.assertEqual(sorted(self.find_missing_calls), ['/a', '/a', '/b', '/b'])
 
     def test_read_only_replicas_are_said_to_be_before_the_menu(self):
         self.writable = set()
         a = localdiskdirtree.LocalDiskDirTree('/a', silent=True)
         b = dirtree.DirTree('cloud/b')
-        self.assertEqual(self.options(a, b), ['Files in /a, not in /b', 'Files in /b, not in /a', 'Replicas dashboard', dirsync_main.BACK])
+        self.assertEqual(self.options(a, b), ['Files only in /a', 'Files only in /b', 'Replicas dashboard', dirsync_main.BACK])
         title, lines, _ = self.show.call_args.args
         self.assertEqual(title, 'Read-only')
         self.assertEqual(len(lines), 1)
@@ -201,8 +204,8 @@ class MainMenuTest(unittest.TestCase):
         a = localdiskdirtree.LocalDiskDirTree('/a', silent=True)
         b = localdiskdirtree.LocalDiskDirTree('/b', silent=True)
         self.assertEqual(self.shown(a, b), [
-            'Files in /a, not in /b (3 files)',
-            'Files in /b, not in /a (1 file)',
+            'Files only in LocalDisk:/a (3 files)',
+            'Files only in LocalDisk:/b (1 file)',
             'Replicas dashboard: files, last updates, hashes',
             dirsync_main.BACK,
         ])
@@ -236,32 +239,31 @@ class MainMenuTest(unittest.TestCase):
         a = localdiskdirtree.LocalDiskDirTree('/a', silent=True)
         b = localdiskdirtree.LocalDiskDirTree('/b', silent=True)
         self.assertEqual(self.shown(a, b)[1],
-                         picker.Disabled('Files in /b, not in /a: none, /a has them all'))
+                         picker.Disabled('Files only in LocalDisk:/b: none, LocalDisk:/a has them all'))
 
     def test_options_are_loading_until_their_files_are_found(self):
         way = dirsync_main._Way(None, None, {})
         way.missing = concurrent.futures.Future()
-        action = dirsync_main._Action('Files', way, 'none')
+        action = dirsync_main._Action('/a', '/b', way)
         shown = set()
         for now in (0, 0.4, 0.8, 1.2, 1.6):
             with mock.patch('dirdelta.dirsync_main.time.monotonic', return_value=now + 0.1):
                 shown.add(action.shown_as())
-        self.assertEqual(shown, {'Files (loading)', 'Files (loading.)', 'Files (loading..)',
-                                 'Files (loading...)'})
+        self.assertEqual(shown, {'Files only in LocalDisk:/a (loading%s)' % (dots,) for dots in ('', '.', '..', '...')})
         way.missing.set_result(interactive_dir_sync.Missing(['x', 'y'], []))
-        self.assertEqual(action.shown_as(), 'Files (2 files)')
+        self.assertEqual(action.shown_as(), 'Files only in LocalDisk:/a (2 files)')
 
     def test_an_option_whose_files_couldnt_be_found_says_so(self):
         way = dirsync_main._Way(None, None, {})
         way.missing = concurrent.futures.Future()
         way.missing.set_exception(RuntimeError('dirdiff failed'))
-        action = dirsync_main._Action('Files', way, 'none')
-        self.assertEqual(action.shown_as(), "Files (couldn't count the files)")
+        action = dirsync_main._Action('/a', '/b', way)
+        self.assertEqual(action.shown_as(), "Files only in LocalDisk:/a (couldn't count the files)")
 
     def test_browsing_uses_the_files_found_in_the_background(self):
         a = localdiskdirtree.LocalDiskDirTree('/a', silent=True)
         b = localdiskdirtree.LocalDiskDirTree('/b', silent=True)
-        answers = ['Files in /a, not in /b', 'Files in /a, not in /b', dirsync_main.BACK]
+        answers = ['Files only in /a', 'Files only in /a', dirsync_main.BACK]
         with mock.patch('dirdelta.picker.pick_option', side_effect=lambda *_, **__: answers.pop(0)), \
                 mock.patch('dirdelta.picker.pick_files', return_value=None) as pick_files:
             dirsync_main._sync(a, b, '/a', '/b')
@@ -275,7 +277,7 @@ class MainMenuTest(unittest.TestCase):
         answers = ['Add to favorites', 'Remove from favorites', dirsync_main.BACK]
         menus, saved = [], []
         def pick_option(options, **_):
-            menus.append(options[-2:])
+            menus.append(options[-3:-2] + options[-1:])
             return answers.pop(0)
         with mock.patch('dirdelta.picker.pick_option', side_effect=pick_option), \
                 mock.patch('dirdelta.replicas.save',

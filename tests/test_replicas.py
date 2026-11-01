@@ -63,6 +63,19 @@ class ReplicasTest(unittest.TestCase):
         self.assertEqual(known.recent(), [('/c', '/d')])
 
 
+class ReplicasFileLabelsTest(unittest.TestCase):
+    def test_labels_are_kept(self):
+        with tempfile.TemporaryDirectory() as tmpdir, mock.patch('dirdelta.replicas.REPLICAS_FILE',
+                                                                 os.path.join(tmpdir, 'replicas.json')):
+            known = replicas.Replicas()
+            known.set_label('uuid:1', 'laptop')
+            replicas.save(known)
+            self.assertEqual(replicas.load().labels, {'uuid:1': 'laptop'})
+            known.set_label('uuid:1', None)
+            replicas.save(known)
+            self.assertEqual(replicas.load().labels, {})
+
+
 class ReplicasFileTest(unittest.TestCase):
     def setUp(self):
         self.tmpdir = tempfile.mkdtemp()
@@ -100,7 +113,7 @@ class ReplicasFileTest(unittest.TestCase):
                                             'history': [['/a', 'cloud/b']],
                                             'sorts': [['cloud/unsorted', 'cloud/me']],
                                             'recent_dirs': {'cloud/me': ['photos/2026']},
-                                            'known': {}, 'compared': []})
+                                            'known': {}, 'compared': [], 'labels': {}})
 
     def test_a_pairs_comparison_loads_back_either_way_around(self):
         known = replicas.Replicas()

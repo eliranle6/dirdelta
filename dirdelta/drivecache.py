@@ -144,10 +144,11 @@ def _times():
         with open(_times_path()) as times_file:
             times = json.load(times_file)
         if isinstance(times, dict):
-            return {'updated': dict(times.get('updated') or {}), 'uploaded': dict(times.get('uploaded') or {})}
+            return {'updated': dict(times.get('updated') or {}), 'uploaded': dict(times.get('uploaded') or {}),
+                    'user': times.get('user')}
     except (OSError, ValueError):
         pass
-    return {'updated': {}, 'uploaded': {}}
+    return {'updated': {}, 'uploaded': {}, 'user': None}
 
 
 def _save_times(times):
@@ -156,6 +157,18 @@ def _save_times(times):
     with open(tmp_path, 'w') as times_file:
         json.dump(times, times_file, indent=1)
     os.replace(tmp_path, _times_path())
+
+
+def note_user(name):
+    """Note the Drive account's user name, to say it on the screens"""
+    times = _times()
+    times['user'] = name
+    _save_times(times)
+
+
+def user():
+    """The Drive account's user name, if it's known"""
+    return _times()['user']
 
 
 def note_updated(folder_path, when=None):

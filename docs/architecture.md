@@ -769,6 +769,14 @@ stdout, all `\0`-separated (`-0`). Exit code 1 means the user quit (→
 Names are passed as bytes with `surrogateescape`, so non-UTF-8 file names
 round-trip. Tests (`tests/test_picker.py`) run a fake treepicker script.
 
+## What replicas are called: `replicanames.py`, `label_screen.py`
+
+`replicanames.full()` says which disk or account a replica is on (`LocalDisk(ABC):/path`, `Cloud(user):/path`), or
+its label; `short_names()` and `labeled()` are for where there's less room, or the paths are what's listed. Labels are
+in `Replicas.labels`, by `label_key()`: a local replica's is its disk's UUID, a Drive one's its identity. It reads
+them from the file when it changed, so nothing need be passed around; `drivemeta.check()` notes the account's user
+name in `files.txt.times`, so naming a replica asks nothing of Drive. `identity()` moved here from `replicalog.py`.
+
 ## The file pickers' `:` menu: `contextmenu.py`
 
 With nothing picked, `:` shows a menu of `Entry`s (a key's name, what it does, what's returned), which

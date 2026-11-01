@@ -22,5 +22,12 @@ class ItemsTest(unittest.TestCase):
         self.assertEqual(sidetree.items('cloud/me', tree), ['d photos', 'f photos/a.jpg'])
 
 
+class MetaTest(unittest.TestCase):
+    def test_a_replicas_meta_dir_isnt_listed(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            helpers.make_files(tmpdir, ['a.txt', 'meta/hashes.sqlite'])
+            self.assertEqual(sidetree.items(tmpdir), ['f a.txt'])
+
+
 if __name__ == '__main__':
     unittest.main()

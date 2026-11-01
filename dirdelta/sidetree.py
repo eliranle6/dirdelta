@@ -27,6 +27,8 @@ def items(path, tree=None, excluded=None):
         found = [item for item in result.stdout.decode('utf-8', 'surrogateescape').split('\0') if item]
         # Each dir's together, its dirs and files by name (find's order is the disk's)
         found.sort(key=lambda item: item[2:].split('/'))
+    # What dirdelta keeps in a replica isn't one of its files
+    found = [item for item in found if not paths.is_meta(item[2:])]
     if excluded:
         found = [item for item in found if not paths.is_at_or_under(item[2:], excluded)]
     return found

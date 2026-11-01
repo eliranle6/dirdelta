@@ -20,6 +20,7 @@ from dirdelta import replicainfo
 from dirdelta import replicalog
 from dirdelta import replicas
 from dirdelta import syncstate
+from dirdelta import replicanames
 from dirdelta import text
 
 # The file pickers' key that shows the dashboard
@@ -92,7 +93,7 @@ def offer(jobs):
             left.append((job, progress))
     if not left:
         return True
-    names = paths.short_names([job.root for job, _ in left])
+    names = replicanames.short_names([job.root for job, _ in left])
     lines = ["Hash unhashed files?", ""]
     lines += ["%s unhashed in %s." % (_files(progress.nr_files - progress.nr_done), names[job.root])
               for job, progress in left]
@@ -202,7 +203,7 @@ def dashboard(replica_trees=(), known=None, other_paths=()):
              [item for item in items if item[0] in inboxes and item[0] not in roots])
     inbox_names = {name for name, _ in items if name in inboxes and name not in roots}
     jobs = list(_jobs_by_name(items).values())
-    names = paths.short_names([name for name, _ in items])
+    names = replicanames.short_names([name for name, _ in items])
     options, shown = [], {}
     sections = [(REPLICAS_HEADING, [item for item in items if item[0] not in inbox_names]),
                 (INBOXES_HEADING, [item for item in items if item[0] in inbox_names])]
@@ -354,7 +355,7 @@ def _cache_age(path):
 
 def _jobs_shown(items, names):
     """The dashboard's options of the local replicas' (of items, [(name, tree or None)]) files and
-    hashing, as they're shown now; names: their short names, by name (see paths.short_names())"""
+    hashing, as they're shown now; names: their short names, by name (see replicanames.short_names())"""
     shown = {}
     for name, job in _jobs_by_name(items).items():
         progress = job.progress()

@@ -168,6 +168,19 @@ the picked files itself (text, images, PDFs; a Drive file is downloaded first, a
 with the file when it's moved or copied. Descriptions and
 recommendations are both asked of `claude-haiku-5-5`.
 
+### What replicas are called, and labels
+
+Screens say which disk or Drive account a replica is on, e.g. `LocalDisk(ABC):/mnt/eliran` (the end of the
+filesystem's UUID) or `Cloud(me):/eliran` (the account's user name, once dirdelta has asked Drive). "Label the
+replicas" in the sync menu names them: a local replica's label is its disk's, so all the replicas on that
+disk have it (`blue WD ext. disk:/mnt/eliran`), and a Drive one's is its own, by the account and the path.
+
+### Removing from the other replica
+
+In a sync's file picker the other replica's tree is at the top right. `Ctrl-L` moves into it, and Enter on a file
+or dir there offers to remove it (after confirming twice), so you needn't go to the other direction's picker. Removing
+one version of a repository this way makes the other replica's version show up as missing, ready to copy.
+
 ### The menu of the keys (`:`)
 
 In a sync's and a sort's file pickers, `:` with nothing picked opens a menu of what can be done there with
