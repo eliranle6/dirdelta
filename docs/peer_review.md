@@ -32,7 +32,7 @@ for an empty `dirpath` (root contains everything), dirtree's doesn't; drivecache
 trailing '/'. Same name, different answers is a trap. One `paths.is_at_or_under(path, dir)`
 with the root case explicit.
 
-## 3. Drive's "stale" marker stays set after a failed request (S, bug + simplification) — the bug fixed 2026-11-01 (the context manager not done)
+## 3. Drive's "stale" marker stays set after a failed request (S, bug + simplification) — fixed 2026-11-01 (the bug, then `drivecache.changing()` in place of the six hand-written ones)
 `mark_stale()` / `if is_newly_stale: unmark_stale()` is hand-written in 6 places in
 `clouddirtree.py`. In `_move_file`, `_move_dir`, `_copy_within` and `_trash`, an `HttpError`
 returns before the unmark, so a request that changed nothing leaves the folder marked stale, and

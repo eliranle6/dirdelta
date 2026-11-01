@@ -204,8 +204,12 @@ class CloudDirTree(dirtree.DirTree):
         cache here, on this thread, as it ends. Ctrl-C starts no more, and waits for the ones under
         way, so the cache has them (and Ctrl-C again doesn't wait: they end on their own)."""
         # Stale until the changes are in the cache, in case it's cut off in the middle
-        is_newly_stale = drivecache.mark_stale(self.fullpath())
-        self._make_folders(os.path.dirname(file_entry.relpath) for file_entry in files)
+        with drivecache.changing(self.fullpath()) as changes:
+            self._make_folders(os.path.dirname(file_entry.relpath) for file_entry in files)
+            self._upload_files(files, starting, copied, changes)
+
+    def _upload_files(self, files, starting, copied, changes):
+        """_copy_files()'s uploads, into the folders made (changes: drivecache.changing()'s)"""
         not_started = iter(files)
         under_way = {}
         executor = concurrent.futures.ThreadPoolExecutor(UPLOAD_THREADS)
@@ -236,13 +240,11 @@ class CloudDirTree(dirtree.DirTree):
                     messages.print_line("Waiting for the %d uploads under way..." % (len(under_way),))
                     for future in concurrent.futures.as_completed(under_way):
                         copied(self._uploaded(under_way[future], future))
-                if is_newly_stale:
-                    drivecache.unmark_stale(self.fullpath())
+                # All that was started is in the cache
+                changes.settled = True
                 raise
         finally:
             executor.shutdown(wait=False)
-        if is_newly_stale:
-            drivecache.unmark_stale(self.fullpath())
 
     def _copy_file(self, file_entry, source):
         """Upload file_entry, as _copy_files() does"""
@@ -267,19 +269,17 @@ class CloudDirTree(dirtree.DirTree):
         """Make the file at relpath (in a folder the tree has) the local file's contents: a new
         version of it, if it's there (keeping its id), else a new file; and note it in the cache.
         Raises HttpError or OSError if it can't."""
-        is_newly_stale = drivecache.mark_stale(self.fullpath())
-        parent_id = self._cloud_ids[os.path.dirname(relpath)]
-        if self.has_file(relpath):
-            md = driveapi.service().files().update(
-                fileId=self._cloud_ids[relpath], media_body=MediaFileUpload(local_path),
-                fields=drivecache.FILE_FIELDS).execute(num_retries=NUM_RETRIES)
-            md = dict(md, parents=[parent_id])
-        else:
-            md = self._upload(entries.FileEntry(os.path.basename(relpath), relpath, local_path), parent_id)
-            self.add_file_by_relpath(relpath)
-        self._cache_add(md, relpath)
-        if is_newly_stale:
-            drivecache.unmark_stale(self.fullpath())
+        with drivecache.changing(self.fullpath()):
+            parent_id = self._cloud_ids[os.path.dirname(relpath)]
+            if self.has_file(relpath):
+                md = driveapi.service().files().update(
+                    fileId=self._cloud_ids[relpath], media_body=MediaFileUpload(local_path),
+                    fields=drivecache.FILE_FIELDS).execute(num_retries=NUM_RETRIES)
+                md = dict(md, parents=[parent_id])
+            else:
+                md = self._upload(entries.FileEntry(os.path.basename(relpath), relpath, local_path), parent_id)
+                self.add_file_by_relpath(relpath)
+            self._cache_add(md, relpath)
         self._cloud_ids[relpath] = md['id']
         if 'size' in md:
             self._sizes[relpath] = int(md['size'])
@@ -401,24 +401,19 @@ class CloudDirTree(dirtree.DirTree):
             messages.print_line("Skipped %s: %s" % (relpath, reason), "yellow")
             return False
         # Stale until the change is in the cache, in case it's cut off in the middle
-        is_newly_stale = drivecache.mark_stale(self.fullpath())
         try:
-            parent_id = self._folder_id(os.path.dirname(new_relpath))
-            old_parent_id = self._cloud_ids[os.path.dirname(relpath)]
-            md = driveapi.service().files().update(
-                fileId=self._cloud_ids[relpath], body={'name': os.path.basename(new_relpath)},
-                addParents=parent_id, removeParents=old_parent_id,
-                fields=drivecache.FILE_FIELDS).execute(num_retries=NUM_RETRIES)
+            with drivecache.changing(self.fullpath()):
+                parent_id = self._folder_id(os.path.dirname(new_relpath))
+                old_parent_id = self._cloud_ids[os.path.dirname(relpath)]
+                md = driveapi.service().files().update(
+                    fileId=self._cloud_ids[relpath], body={'name': os.path.basename(new_relpath)},
+                    addParents=parent_id, removeParents=old_parent_id,
+                    fields=drivecache.FILE_FIELDS).execute(num_retries=NUM_RETRIES)
+                # The file again, by its id: the cache's later line is the one it has
+                self._cache_add(dict(md, parents=[parent_id]))
         except HttpError as error:
             messages.print_line("Move failed: %s" % (error,), "red")
-            # Nothing changed in Drive: the cache isn't stale for it
-            if is_newly_stale:
-                drivecache.unmark_stale(self.fullpath())
             return False
-        # The file again, by its id: the cache's later line is the one it has
-        self._cache_add(dict(md, parents=[parent_id]))
-        if is_newly_stale:
-            drivecache.unmark_stale(self.fullpath())
         self.remove_node(relpath)
         self.add_file_by_relpath(new_relpath)
         self._cloud_ids[new_relpath] = self._cloud_ids.pop(relpath)
@@ -435,22 +430,17 @@ class CloudDirTree(dirtree.DirTree):
             messages.print_line("Skipped %s/: Drive's id of it isn't known" % (dirpath,), "yellow")
             return False
         # Stale until the change is in the cache, in case it's cut off in the middle
-        is_newly_stale = drivecache.mark_stale(self.fullpath())
         try:
-            parent_id = self._folder_id(os.path.dirname(new_dirpath))
-            md = driveapi.service().files().update(
-                fileId=self._cloud_ids[dirpath], body={'name': os.path.basename(new_dirpath)},
-                addParents=parent_id, removeParents=self._cloud_ids[os.path.dirname(dirpath)],
-                fields=drivecache.FILE_FIELDS).execute(num_retries=NUM_RETRIES)
+            with drivecache.changing(self.fullpath()):
+                parent_id = self._folder_id(os.path.dirname(new_dirpath))
+                md = driveapi.service().files().update(
+                    fileId=self._cloud_ids[dirpath], body={'name': os.path.basename(new_dirpath)},
+                    addParents=parent_id, removeParents=self._cloud_ids[os.path.dirname(dirpath)],
+                    fields=drivecache.FILE_FIELDS).execute(num_retries=NUM_RETRIES)
+                self._cache_add(dict(md, parents=[parent_id], mimeType=drivecache.FOLDER_MIME_TYPE))
         except HttpError as error:
             messages.print_line("Move failed: %s" % (error,), "red")
-            # Nothing changed in Drive: the cache isn't stale for it
-            if is_newly_stale:
-                drivecache.unmark_stale(self.fullpath())
             return False
-        self._cache_add(dict(md, parents=[parent_id], mimeType=drivecache.FOLDER_MIME_TYPE))
-        if is_newly_stale:
-            drivecache.unmark_stale(self.fullpath())
         for relpath, new_relpath in self._move_subtree(dirpath, new_dirpath):
             for by_relpath in (self._cloud_ids, self._sizes, self._dates_taken, self._hashes, self._modified):
                 if relpath in by_relpath:
@@ -470,23 +460,18 @@ class CloudDirTree(dirtree.DirTree):
         if new_relpath in self:
             messages.print_line("Skipped %s: %s is there already" % (relpath, new_relpath), "yellow")
             return False
-        is_newly_stale = drivecache.mark_stale(self.fullpath())
         try:
-            parent_id = self._folder_id(os.path.dirname(new_relpath))
-            body = {'name': os.path.basename(new_relpath), 'parents': [parent_id]}
-            md = driveapi.service().files().copy(
-                fileId=self._cloud_ids[relpath], body=body,
-                fields=drivecache.FILE_FIELDS).execute(num_retries=NUM_RETRIES)
+            with drivecache.changing(self.fullpath()):
+                parent_id = self._folder_id(os.path.dirname(new_relpath))
+                body = {'name': os.path.basename(new_relpath), 'parents': [parent_id]}
+                md = driveapi.service().files().copy(
+                    fileId=self._cloud_ids[relpath], body=body,
+                    fields=drivecache.FILE_FIELDS).execute(num_retries=NUM_RETRIES)
+                md = dict(body, **md)
+                self._cache_add(md)
         except HttpError as error:
             messages.print_line("Copy failed: %s" % (error,), "red")
-            # Nothing changed in Drive: the cache isn't stale for it
-            if is_newly_stale:
-                drivecache.unmark_stale(self.fullpath())
             return False
-        md = dict(body, **md)
-        self._cache_add(md)
-        if is_newly_stale:
-            drivecache.unmark_stale(self.fullpath())
         self.add_file_by_relpath(new_relpath)
         self._cloud_ids[new_relpath] = md['id']
         for by_relpath in (self._sizes, self._dates_taken, self._hashes, self._modified):
@@ -669,20 +654,15 @@ class CloudDirTree(dirtree.DirTree):
         """Move the file or folder with cloud_id to Drive's trash (where it can be restored from, for
         30 days), and note it in the cache. Returns whether it was moved (if not, says why)."""
         # Stale until the change is in the cache, in case it's cut off in the middle
-        is_newly_stale = drivecache.mark_stale(self.fullpath())
         try:
-            driveapi.service().files().update(fileId=cloud_id, body={'trashed': True}).execute(
-                num_retries=NUM_RETRIES)
+            with drivecache.changing(self.fullpath()):
+                driveapi.service().files().update(fileId=cloud_id, body={'trashed': True}).execute(
+                    num_retries=NUM_RETRIES)
+                drivecache.trash(cloud_id)
+                drivecache.note_updated(self.fullpath())
         except HttpError as error:
             messages.print_line("Remove failed: %s" % (error,), "red")
-            # Nothing changed in Drive: the cache isn't stale for it
-            if is_newly_stale:
-                drivecache.unmark_stale(self.fullpath())
             return False
-        drivecache.trash(cloud_id)
-        drivecache.note_updated(self.fullpath())
-        if is_newly_stale:
-            drivecache.unmark_stale(self.fullpath())
         return True
 
 

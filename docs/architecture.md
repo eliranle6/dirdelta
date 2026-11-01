@@ -475,7 +475,9 @@ which `_parsefile()` drops it for (and with a folder, all that's in it, which
 the walk from the root no longer reaches). So the cache stays up to date, and the
 next run needn't refresh it. Around each change (an upload's: around all of
 them) the replica's folder is marked stale
-(`drivecache.mark_stale(path)`, a line with its path in Drive in a
+(`with drivecache.changing(path):`, which unmarks it when the change ends, or
+fails cleanly, e.g. an `HttpError`, but not on a Ctrl-C unless the work under
+way was `settled` first; `mark_stale(path)`, a line with its path in Drive in a
 `files.txt.stale` file next to the cache), and the mark is taken away once
 the change is in the cache (`unmark_stale()`), unless it was there before: a
 change cut off in the middle (e.g. Ctrl-C during an upload, when Drive may

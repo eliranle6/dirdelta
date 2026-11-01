@@ -7,6 +7,7 @@ What dirdelta changes in Drive is added to it as it goes (add(), trash()), so it
 a line per file or folder made, and a line with the id of each file moved to the trash. What's under
 a folder is replaced with what Drive lists there now (replace_under()) when it's refreshed."""
 import collections
+import contextlib
 import datetime
 import json
 import os
@@ -61,6 +62,35 @@ def mark_stale(folder_path):
     with open(_stale_marker_path(), 'a') as marker:
         marker.write(folder_path + '\n')
     return True
+
+
+class _Changing(object):
+    """What changing() gives: settled says the cache has what was done, even if a Ctrl-C comes"""
+    def __init__(self):
+        self.settled = False
+
+
+@contextlib.contextmanager
+def changing(folder_path):
+    """Around a change dirdelta makes under folder_path in Drive (and adds to the cache): it's marked
+    stale (mark_stale()) while it's made, and unmarked after (unless it was marked before): when it
+    ends, or fails with an exception (e.g. an HttpError: Drive changed nothing), but not when it's
+    cut off by Ctrl-C (Drive may or may not have the change), unless what it gives (a _Changing) was
+    made settled first (e.g. the uploads under way were waited for)"""
+    is_newly_stale = mark_stale(folder_path)
+    changes = _Changing()
+    try:
+        yield changes
+    except KeyboardInterrupt:
+        if is_newly_stale and changes.settled:
+            unmark_stale(folder_path)
+        raise
+    except BaseException:
+        if is_newly_stale:
+            unmark_stale(folder_path)
+        raise
+    if is_newly_stale:
+        unmark_stale(folder_path)
 
 
 def unmark_stale(folder_path):

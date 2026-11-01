@@ -138,6 +138,27 @@ class StaleTest(unittest.TestCase):
         drivecache.mark_fresh()
         self.assertFalse(drivecache.is_stale())
 
+    def test_changing_is_stale_only_while_its_made_or_when_its_cut_off(self):
+        with drivecache.changing('/a'):
+            self.assertEqual(drivecache.stale_paths(), ['/a'])
+        self.assertFalse(drivecache.is_stale())
+        # A failure changed nothing in Drive
+        with self.assertRaises(ValueError), drivecache.changing('/a'):
+            raise ValueError
+        self.assertFalse(drivecache.is_stale())
+        # Ctrl-C may have changed it, unless what was done was settled first
+        with self.assertRaises(KeyboardInterrupt), drivecache.changing('/a') as changes:
+            changes.settled = True
+            raise KeyboardInterrupt
+        self.assertFalse(drivecache.is_stale())
+        with self.assertRaises(KeyboardInterrupt), drivecache.changing('/a'):
+            raise KeyboardInterrupt
+        self.assertEqual(drivecache.stale_paths(), ['/a'])
+        # Marked before: left for whoever marked it
+        with drivecache.changing('/a'):
+            pass
+        self.assertEqual(drivecache.stale_paths(), ['/a'])
+
     def test_a_marker_from_before_the_paths_is_all_of_drive(self):
         with open(self.cache + '.stale', 'w') as marker:
             marker.write("dirdelta changed Google Drive after this cache was made\n")
