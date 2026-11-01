@@ -62,8 +62,8 @@ class OfferTest(unittest.TestCase):
         with helpers.answering_option_picker([hashes_screen.NOT_NOW]) as pick:
             self.assertTrue(hashes_screen.offer([job]))
         header = pick.call_args.kwargs['header']
-        self.assertIn("  6 of 10 files left (1.0 KB of 2.0 KB): /photos", header)
-        self.assertIn("recommended", header)
+        self.assertEqual(header, "Hash unhashed files?\n\n6 files unhashed in photos.\n"
+                                 "It helps compare files, but may slow down the machine.")
         # Not now: not started
         self.assertEqual(job.started, 0)
 

@@ -34,9 +34,9 @@ HELP_LINES = ["Tags after a file's name (/ searches them too):",
               "  %-24s unreadable, or it changed while it was read" % (hashing.FAILED_TAG,)]
 
 NOTHING = "Nothing: go back"
-NOT_NOW = "Not now: go on, matching files by their names and sizes (%s in the file pickers starts it)" % (KEY,)
-HASH_AND_WAIT = "Hash them now, and wait (recommended; Ctrl-C goes on, hashing in the background)"
-HASH_IN_BACKGROUND = "Hash them in the background, and go on"
+NOT_NOW = "Not now (%s starts it later)" % (KEY,)
+HASH_AND_WAIT = "Hash now, and wait"
+HASH_IN_BACKGROUND = "Hash in the background, and go on"
 # How often the wait's progress line changes, in seconds
 WAIT_INTERVAL = 0.5
 
@@ -92,20 +92,13 @@ def offer(jobs):
             left.append((job, progress))
     if not left:
         return True
-    # A brief question first, then why, below it
-    lines = ["Hash the files? (%s)" % (", ".join(paths.short_names([job.root for job, _ in left]).values()),), "",
-             "Hashes find a file by its contents: moved or renamed (any size), or a copy.",
-             "Each file is read once, and its hash kept for next time. Not hashed yet:"]
-    for job, progress in left:
-        # The path last, so a long one doesn't hide the rest
-        lines.append("  %s of %s left (%s of %s): %s" % (
-            "{:,}".format(progress.nr_files - progress.nr_done), _files(progress.nr_files),
-            text.format_size(progress.size - progress.size_done), text.format_size(progress.size),
-            job.root))
-    lines += ["Waiting for it before comparing is recommended. Until it's done, files are matched",
-              "by their names and sizes, and compared when selected."]
+    names = paths.short_names([job.root for job, _ in left])
+    lines = ["Hash unhashed files?", ""]
+    lines += ["%s unhashed in %s." % (_files(progress.nr_files - progress.nr_done), names[job.root])
+              for job, progress in left]
+    lines.append("It helps compare files, but may slow down the machine.")
     answer = picker.pick_option([NOTHING, NOT_NOW, HASH_AND_WAIT, HASH_IN_BACKGROUND],
-                                header='\n'.join(lines), title="Hash the files?")
+                                header='\n'.join(lines), title="Hash files?")
     if answer in (None, NOTHING):
         return False
     if answer in (HASH_AND_WAIT, HASH_IN_BACKGROUND):
