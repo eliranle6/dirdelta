@@ -3,6 +3,7 @@ import os
 import shutil
 import tempfile
 import unittest
+import zipfile
 from unittest import mock
 
 import helpers
@@ -434,7 +435,7 @@ class RefreshKeyTest(unittest.TestCase):
         # Its files by name are listed again, when they're next needed
         self.assertFalse(self.sync.src_index.is_built())
         # And the replicas dashboard's
-        self.assertEqual(calls[0].kwargs['keys'], Sync.REFRESH_KEY + '#a:')
+        self.assertEqual(calls[0].kwargs['keys'], Sync.REFRESH_KEY + '#a:e')
         self.assertIn(('Ctrl-R', 'read the folder anew from Drive'), calls[0].kwargs['key_hints'])
         self.assertIsNone(calls[0].kwargs['selected'])
         # What's still missing, what's still picked of it, where it was
@@ -468,7 +469,7 @@ class RefreshKeyTest(unittest.TestCase):
         other = dirtree.DirTree('/other')
         other.add_file_by_relpath('a.mp3')
         calls = self.browse(other, self.local, [None])
-        self.assertEqual(calls[0].kwargs['keys'], '#a:')
+        self.assertEqual(calls[0].kwargs['keys'], '#a:e')
         self.assertNotIn('r', [key for key, _ in calls[0].kwargs['key_hints']])
         self.assertFalse(self.sync.has_changed)
 
@@ -558,26 +559,72 @@ class AskAITest(_TwoDirsTestCase):
                   {'action': Sync.COPY, 'number': 3, 'reason': ''}])
         self.assertEqual(self.items, ['Copy to destination/c.txt'])
 
-    def test_it_reads_nothing(self):
+    def test_with_no_focus_it_reads_nothing(self):
         self.ask([{'action': Sync.COPY, 'number': 1, 'reason': ''}])
         prompt, readable_dirs = self.query.call_args.args[:2]
         self.assertEqual(readable_dirs, [])
         self.assertIn('a.txt', prompt)
         self.assertIn('do it', prompt)
 
+    def test_it_may_read_the_files_of_its_focus(self):
+        with mock.patch('dirdelta.ai._run_query', return_value={'summary': '', 'answer': 'It says hi', 'steps': []}) as query, \
+                mock.patch('dirdelta.messages.show') as show:
+            self.assertIsNone(self.sync._ask_ai(['a.txt', 'b.txt'], ['b.txt']))
+        prompt, readable_dirs = query.call_args.args[:2]
+        self.assertEqual(readable_dirs, [self.src_path])
+        self.assertIn("read it at %s" % (os.path.join(self.src_path, 'b.txt'),), prompt)
+        self.assertNotIn(os.path.join(self.src_path, 'a.txt'), prompt)
+        self.assertEqual(show.call_args.args[:2], ('The AI says', ['It says hi']))
+
     def test_the_key_with_nothing_picked_asks_about_all_the_files(self):
         with mock.patch.object(Sync, '_ask_ai', return_value=None) as ask, helpers.scripted_files_picker(
                 mock.Mock(side_effect=[picker.Picked('a', '', []), None])), \
                 mock.patch('dirdelta.interactive_dir_sync.hashes_screen.jobs_of', return_value=[]):
             self.sync.browse()
-        ask.assert_called_once_with(['a.txt', 'b.txt', 'c.txt'])
+        ask.assert_called_once_with(['a.txt', 'b.txt', 'c.txt'], [])
 
     def test_the_key_asks_about_the_picked_ones(self):
         with mock.patch.object(Sync, '_ask_ai', return_value=None) as ask, helpers.scripted_files_picker(
                 mock.Mock(side_effect=[picker.Picked('a', '', ['b.txt']), None])), \
                 mock.patch('dirdelta.interactive_dir_sync.hashes_screen.jobs_of', return_value=[]):
             self.sync.browse()
-        ask.assert_called_once_with(['b.txt'])
+        ask.assert_called_once_with(['b.txt'], ['b.txt'])
+
+
+class ExploreTest(_TwoDirsTestCase):
+    """e and the menus' Explore, on a zip"""
+
+    def setUp(self):
+        super().setUp()
+        self.zip_path = os.path.join(self.src_path, 'z.zip')
+        with zipfile.ZipFile(self.zip_path, 'w') as archive:
+            archive.writestr('in/side.txt', 'hello')
+
+    def browse(self, picks):
+        results = iter(picks + [None])
+        with helpers.scripted_files_picker(lambda relpaths: next(results)), \
+                mock.patch('dirdelta.interactive_dir_sync.hashes_screen.jobs_of', return_value=[]), \
+                mock.patch('dirdelta.picker.view_files') as view:
+            self.sync.browse()
+        return view
+
+    def test_the_key_shows_whats_in_it(self):
+        view = self.browse([picker.Picked('e', 'z.zip', [])])
+        self.assertEqual(view.call_args.args[:2], ('z.zip', ['in/side.txt']))
+
+    def test_the_key_elsewhere_says_it_isnt_one(self):
+        view = self.browse([picker.Picked('e', 'a.txt', [])])
+        view.assert_not_called()
+        self.assertEqual(interactive_dir_sync.messages.show.call_args.args[0], 'Not a zip')
+
+    def test_the_menu_offers_it_on_a_zip_only(self):
+        with mock.patch('dirdelta.picker.view_files') as view, helpers.answering_option_picker(['Explore']) as options:
+            self.sync._act(['z.zip'])
+        self.assertTrue(any(option.startswith('Explore') for option in options.call_args.args[0]))
+        self.assertEqual(view.call_args.args[1], ['in/side.txt'])
+        with helpers.answering_option_picker([None]) as options:
+            self.sync._act(['a.txt'])
+        self.assertFalse(any(option.startswith('Explore') for option in options.call_args.args[0]))
 
 
 class ContextMenuTest(_TwoDirsTestCase):
@@ -616,7 +663,7 @@ class ContextMenuTest(_TwoDirsTestCase):
     def test_ask_ai_is_about_all_the_files(self):
         with mock.patch.object(Sync, '_ask_ai', return_value=None) as ask:
             self.press([picker.Picked(':', 'a.txt', [])], 'Ask AI')
-        ask.assert_called_once_with(['a.txt', 'b.txt', 'c.txt'])
+        ask.assert_called_once_with(['a.txt', 'b.txt', 'c.txt'], ['a.txt'])
 
     def test_pick_comes_back_picked(self):
         pick_files = self.press([picker.Picked(':', 'b.txt', [])], 'Pick')

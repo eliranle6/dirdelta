@@ -70,7 +70,7 @@ what's to be read in between (warnings, "Nothing to copy", an action's
 report) is on a full screen that waits for Enter (`messages.show()`,
 `messages.progress_screen()`); plain progress lines ("Scanning...") just
 print. Asking AI (`a`, or the file menu's "Ask AI": `aiplan.py`, `aiplan_screen.py`) has it answer what the user
-says with a plan of those same actions, to review and confirm. Copy, Remove and Rename (chosen after picking files in a
+asks, or says to do with a plan of those same actions, to review and confirm. `e` explores a selected zip (`archives.py`, `archive_screen.py`). Copy, Remove and Rename (chosen after picking files in a
 direction's picker, which then comes back) run on the progress screen,
 stoppable with Ctrl-C, and ask for confirmation first (Remove twice). A "cloud" path is any path whose
 first component is literally `cloud` (see `paths.py`).
@@ -154,7 +154,7 @@ module:
 PYTHONPATH=tests bin/python -m unittest test_interactive_dir_sync -v
 ```
 
-Every module has a test file (664 tests, all passing as of 2026-11-01) except
+Every module has a test file (688 tests, all passing as of 2026-11-01) except
 the thin wiring in `main.py`/`dirsync_main.py`, covered only by running the
 app. Shared fakes:
 - `tests/helpers.py`: `scripted_option_picker` / `scripted_tree_picker` /

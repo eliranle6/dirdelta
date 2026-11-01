@@ -176,12 +176,19 @@ reading anew from Drive, the dashboard (and in a sort, Claude's description), an
 the keys that only work in the list itself (search, a range, the side tree...). With files picked, `:` opens
 the same menu as Enter, of what to do with them.
 
-### Asking AI what to do
+### Exploring a zip
+
+`e` on a selected `.zip` in a sync's or sort's file picker (or "Explore" in the `:` and Enter menus) shows
+what's in it as a tree, with each file's size and date beside it. Nothing's unpacked; a zip in Drive is
+downloaded first.
+
+### Asking AI
 
 In a sync's and a sort's file pickers, `a` asks the AI (Claude, for now) about the picked files, or with
-none picked, about all of them; the menu that Enter opens has "Ask AI" too, for what it's about. You
-say what to do in your own words, e.g. "copy the 2019 photos, and remove the unfinished downloads". It
-picks the files, and answers with a plan: in a sync, copying, removing from the source (to the trash),
+none picked, about all of them; the menu that Enter opens has "Ask AI" too, for what it's about. A
+question ("what's in this zip file?") it just answers, "this" being what you're on: the picked files, or
+else the selected one. Asked to do something, in your own words, e.g. "copy the 2019 photos, and remove
+the unfinished downloads", it picks the files, and answers with a plan: in a sync, copying, removing from the source (to the trash),
 and renaming in either replica; in a sort, moving or copying into the sorted tree, moving or renaming
 in the inbox, and removing (to the trash).
 
@@ -189,7 +196,8 @@ Nothing's done until you approve it. The plan is shown as a tree, by kind, with 
 why beside it: Space unpicks a file or a whole kind, Enter goes on, `q` goes back. Each kind is then
 confirmed as it is from the menu (a removal twice), and a dry run changes nothing. It's told the files'
 paths and sizes, and what's known of them (e.g. Claude's descriptions, or that the other replica has a
-copy), never their contents. What can't be done (a file it wasn't told of, a path that's taken) is left
+copy). Of the files you're on (at most 10, and 20 MB each if they're in Drive), it's told the list of files in a zip
+(it can't read what's inside them), and may read the others, which sends their contents to it; the screen says which. What can't be done (a file it wasn't told of, a path that's taken) is left
 out of the plan, and said. At most 5000 files at once.
 
 ### Picker mode (one path)

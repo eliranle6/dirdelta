@@ -5,6 +5,7 @@ import shutil
 import subprocess
 import tempfile
 import unittest
+import zipfile
 from unittest import mock
 
 import helpers
@@ -342,6 +343,24 @@ class InboxSortTest(unittest.TestCase):
                      {'action': Sort.MOVE_TO, 'number': 2, 'path': 'photos/b.jpg', 'reason': ''}],
                     [picker.Picked('a', '', []), None], [YES])
         self.assertEqual(self.reviewed, ['Move to the sorted tree/b.jpg'])
+
+    def test_a_zip_is_explored(self):
+        with zipfile.ZipFile(os.path.join(self.inbox, 'z.zip'), 'w') as archive:
+            archive.writestr('in/side.txt', 'hello')
+        self.sort([picker.Picked('e', 'z.zip', []), None], [])
+        self.assertEqual(self.view_files.call_args.args[1], ['in/side.txt'])
+
+    def test_ask_ai_is_told_whats_in_the_zip_its_on(self):
+        with zipfile.ZipFile(os.path.join(self.inbox, 'z.zip'), 'w') as archive:
+            archive.writestr('in/side.txt', 'hello')
+        with mock.patch('dirdelta.ai._run_query', return_value={'summary': '', 'answer': 'A text file', 'steps': []}) as query, \
+                mock.patch('dirdelta.messages.ask', return_value="what's in this zip?"):
+            self.sort([picker.Picked('a', 'z.zip', []), None], [])
+        prompt, readable_dirs = query.call_args.args[:2]
+        self.assertIn("They're on z.zip", prompt)
+        self.assertIn('in/side.txt', prompt)
+        self.assertEqual(readable_dirs, [])
+        self.assertEqual(self.show.call_args.args[:2], ('The AI says', ['A text file']))
 
     def test_the_context_menu_with_nothing_picked(self):
         self.sort([picker.Picked(':', 'a.txt', []), None], [NOTHING])

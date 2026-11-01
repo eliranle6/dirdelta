@@ -778,12 +778,19 @@ comes back as its key, and the picker's loop goes on as if it was pressed. What 
 a range...) can't be done from a menu, so it's shown as lines that can't be chosen. With files picked, it's
 Enter's menu.
 
+## Exploring a zip: `archives.py`, `archive_screen.py`
+
+`archives.members()` lists a zip's files (`Member`s) without unpacking it, and shows nothing;
+`archive_screen.explore()` shows them with `picker.view_files()`. The sync and the sort offer it on a selected
+`.zip`: their `e` key, and their `:` and Enter menus. A Drive zip is downloaded first (`Opener.local_path()`).
+
 ## Asking AI: `aiplan.py`, `aiplan_screen.py`
 
 The user says what to do with files in their own words, and the AI answers with a plan to review.
 `aiplan.py` has no UI, so another GUI can use it as it is: a `Task` (the `File`s to choose from, what's
 known of each, the `Action`s the caller offers, others it may act on) and what the user said make a
-`Plan` (`Step`s, and what was `left_out` and why). The AI answers by the files' numbers, and all it says is
+`Plan` (its `answer` to a question, `Step`s, and what was `left_out` and why). `Task.focus` is what the user is
+on: of those, `aiplan` tells it what's in a zip (`archives.py`) and lets it read the others, with the Read tool. The AI answers by the files' numbers, and all it says is
 checked: only actions offered, only files it was told of, one step per file, no target that's taken, in
 `meta/`, outside the tree, or the target of another step, and each `Action.check` the caller gives.
 It goes through `ai.ask()`, so another provider is a change there. It reads nothing.

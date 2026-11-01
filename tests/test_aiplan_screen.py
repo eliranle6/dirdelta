@@ -1,3 +1,5 @@
+import os
+import threading
 import unittest
 from unittest import mock
 
@@ -17,7 +19,9 @@ class AskTest(unittest.TestCase):
         for name, patcher in (('show', mock.patch('dirdelta.messages.show')),
                               ('typed', mock.patch('dirdelta.messages.ask', return_value='do it')),
                               ('make', mock.patch('dirdelta.aiplan.make', return_value=PLAN)),
-                              ('pick', mock.patch('dirdelta.picker.pick_files'))):
+                              ('pick', mock.patch('dirdelta.picker.pick_files')),
+                              ('line', mock.patch('dirdelta.messages.print_line')),
+                              ('progress', mock.patch('dirdelta.messages.print_progress'))):
             setattr(self, name, patcher.start())
             self.addCleanup(patcher.stop)
         self.pick.side_effect = lambda root, items, **_: picker.Picked('', '', list(items))
@@ -54,6 +58,42 @@ class AskTest(unittest.TestCase):
         self.make.return_value = PLAN._replace(left_out=[('copy z', 'no such file')])
         aiplan_screen.ask(TASK)
         self.assertIn('  copy z: no such file', self.show.call_args.args[1])
+
+    def test_an_answer_is_shown_and_theres_nothing_to_review(self):
+        self.make.return_value = aiplan.Plan('', [], [], 'It has two photos.')
+        self.assertEqual(aiplan_screen.ask(TASK), ('do it', None))
+        self.assertEqual(self.show.call_args.args[:2], ('The AI says', ['It has two photos.']))
+        self.pick.assert_not_called()
+
+    def test_a_long_answer_takes_several_screens(self):
+        self.make.return_value = aiplan.Plan('', [], [], '\n'.join(str(number) for number in range(100)))
+        with mock.patch('shutil.get_terminal_size', return_value=os.terminal_size((80, 26))):
+            aiplan_screen.ask(TASK)
+        titles = [call.args[0] for call in self.show.call_args_list]
+        self.assertEqual(titles[0], 'The AI says (1 of 5)')
+        self.assertEqual(sum(len(call.args[1]) for call in self.show.call_args_list), 100)
+
+    def test_it_says_its_waiting(self):
+        is_said = threading.Event()
+        self.progress.side_effect = lambda line: is_said.set()
+
+        def make(task, instruction):
+            self.assertTrue(is_said.wait(5))
+            return PLAN
+        self.make.side_effect = make
+        self.assertEqual(aiplan_screen.ask(TASK)[1], PLAN.steps)
+        self.assertIn('Waiting for the AI', self.line.call_args_list[-1].args[0])
+        self.assertTrue(self.progress.call_args.args[0].startswith('Waited'))
+
+    def test_the_screen_says_whats_read(self):
+        aiplan_screen.ask(TASK)
+        self.assertIn('not their contents', ' '.join(self.typed.call_args.args[1]))
+        aiplan_screen.ask(TASK._replace(focus=['a.txt'], fetch=lambda relpath: None))
+        self.assertIn('It may read a.txt', ' '.join(self.typed.call_args.args[1]))
+        aiplan_screen.ask(TASK._replace(focus=['z.zip'], fetch=lambda relpath: None))
+        said = ' '.join(self.typed.call_args.args[1])
+        self.assertIn('the list of files in z.zip', said)
+        self.assertNotIn('It may read', said)
 
     def test_too_many_isnt_asked(self):
         many = TASK._replace(files=[aiplan.File('x')] * (aiplan.MAX_FILES + 1))

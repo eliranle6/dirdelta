@@ -1,4 +1,7 @@
+import os
+import tempfile
 import unittest
+import zipfile
 from unittest import mock
 
 from dirdelta import ai
@@ -61,6 +64,36 @@ class MakeTest(unittest.TestCase):
                      'Some context.'):
             self.assertIn(said, prompt)
         self.assertEqual(query.call_args.kwargs['model'], ai.PLAN_MODEL)
+
+    def test_the_answer_to_a_question(self):
+        with mock.patch('dirdelta.ai._run_query', return_value={'summary': '', 'answer': ' A photo. ', 'steps': []}):
+            made = aiplan.make(TASK, 'what is it?')
+        self.assertEqual((made.answer, made.steps), ('A photo.', []))
+
+    def test_the_focus_is_read_and_a_zip_is_listed(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            text_path, zip_path = os.path.join(tmpdir, 'a.txt'), os.path.join(tmpdir, 'z.zip')
+            with zipfile.ZipFile(zip_path, 'w') as archive:
+                archive.writestr('in/side.txt', 'hello')
+            task = TASK._replace(files=[aiplan.File('a.txt', 3), aiplan.File('z.zip', 9), aiplan.File('big.txt', ai.MAX_READ_SIZE + 1),
+                                        aiplan.File('drive.txt', 3)],
+                                 focus=['a.txt', 'z.zip', 'big.txt', 'drive.txt'],
+                                 fetch=lambda relpath: None if relpath == 'drive.txt' else os.path.join(tmpdir, relpath))
+            with mock.patch('dirdelta.ai._run_query', return_value={'summary': '', 'steps': []}) as query:
+                aiplan.make(task, 'what is it?')
+        prompt, readable_dirs = query.call_args.args[:2]
+        self.assertEqual(readable_dirs, [tmpdir])
+        self.assertIn("read it at %s" % (text_path,), prompt)
+        self.assertIn("in/side.txt", prompt)
+        self.assertNotIn("read it at %s" % (zip_path,), prompt)
+        self.assertNotIn("read it at %s" % (os.path.join(tmpdir, 'big.txt'),), prompt)
+        self.assertNotIn("read it at %s" % (os.path.join(tmpdir, 'drive.txt'),), prompt)
+        self.assertIn("They're on a.txt, z.zip", prompt)
+        self.assertEqual(query.call_args.kwargs['max_turns'], 7)
+
+    def test_at_most_so_many_of_the_focus(self):
+        focus = ['f%d' % (number,) for number in range(aiplan.MAX_FOCUS + 3)]
+        self.assertEqual(len(aiplan.focus_of(TASK._replace(focus=focus))), aiplan.MAX_FOCUS)
 
     def test_too_many(self):
         self.assertFalse(aiplan.too_many(TASK))

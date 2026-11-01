@@ -212,6 +212,17 @@ class Opener(object):
             text += "; opened %s" % (opened[0] if len(opened) == 1 else _files(len(opened)),)
         return text
 
+    def local_path(self, relpath, max_size=None):
+        """Where the file at relpath is on this machine, to read it there: a Drive file's downloaded
+        (unless it was), on this thread; None if it's one that can't be, or is bigger than max_size.
+        Raises OSError if it can't be downloaded."""
+        if not isinstance(self._tree, localdiskdirtree.LocalDiskDirTree):
+            full = self._full(relpath)
+            if self._tree.cant_fetch(full) is not None or (max_size is not None and
+                                                           (self._tree.file_size(full) or 0) > max_size):
+                return None
+        return self._local_path(relpath, True)
+
     def _local_path(self, relpath, is_file):
         """The local path to open relpath at: a Drive file's downloaded (its progress kept, for
         the status bar and its tag). Raises OSError if it can't be."""

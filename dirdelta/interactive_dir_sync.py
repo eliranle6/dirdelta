@@ -5,8 +5,11 @@ import os
 
 from googleapiclient.errors import HttpError
 
+from dirdelta import ai
 from dirdelta import aiplan
 from dirdelta import aiplan_screen
+from dirdelta import archive_screen
+from dirdelta import archives
 from dirdelta import clouddirtree
 from dirdelta import contextmenu
 from dirdelta import dirdiff
@@ -102,9 +105,10 @@ class InteractiveDirSync(object):
     OPEN = 'open'
     READ_ANEW = 'read anew'
     ASK_AI = 'ask AI'
+    EXPLORE = 'explore'
     # The picker's keys that do an option of the menu, shown before it
     # (Ctrl-X opens the selected one, not the picked ones: Open has no key)
-    SHORTCUTS = {READ_ANEW: 'Ctrl-R', ASK_AI: aiplan_screen.KEY_NAME}
+    SHORTCUTS = {READ_ANEW: 'Ctrl-R', ASK_AI: aiplan_screen.KEY_NAME, EXPLORE: archive_screen.KEY_NAME}
     # The label of each action's confirmation, so what it's for shows at a glance (magenta, not
     # red: red is LIVE's)
     LABELS = {COPY: ('COPY', 'blue'), REMOVE: ('REMOVE', 'magenta'),
@@ -162,8 +166,8 @@ class InteractiveDirSync(object):
         jobs = hashes_screen.jobs_of([self._src, self._dst])
         header = ("Files in %s, which are not in %s. Pick some, then choose what to do with them." %
                   (self._src.displayname(), self._dst.displayname()))
-        keys = (self.REFRESH_KEY if clouds else '') + hashes_screen.KEY + aiplan_screen.KEY + contextmenu.KEY
-        key_hints = ([('Enter', 'choose what to do'), contextmenu.KEY_HINT, aiplan_screen.KEY_HINT, opening.KEY_HINT, renaming.KEY_HINT,
+        keys = (self.REFRESH_KEY if clouds else '') + hashes_screen.KEY + aiplan_screen.KEY + contextmenu.KEY + archive_screen.KEY
+        key_hints = ([('Enter', 'choose what to do'), contextmenu.KEY_HINT, aiplan_screen.KEY_HINT, archive_screen.KEY_HINT, opening.KEY_HINT, renaming.KEY_HINT,
                       ('Ctrl-L', 'look through %s' % (self._dst.displayname(),))] +
                      ([(self.REFRESH_KEY_NAME, 'read the folder anew from Drive')] if clouds else []) +
                      [hashes_screen.KEY_HINT])
@@ -218,6 +222,10 @@ class InteractiveDirSync(object):
                 chosen = chosen._replace(key='' if answer == contextmenu.WHAT_TO_DO else answer,
                                          files=contextmenu.under(missing, selected)
                                          if answer == contextmenu.WHAT_TO_DO else chosen.files)
+            if chosen.key == archive_screen.KEY:
+                self._explore(selected, files)
+                picked = chosen.files
+                continue
             if chosen.key == hashes_screen.KEY:
                 hashes_screen.dashboard([self._src, self._dst])
                 picked = chosen.files
@@ -242,8 +250,10 @@ class InteractiveDirSync(object):
                 selected = _shown(new_relpath, missing)
                 continue
             if key == aiplan_screen.KEY:
-                # About the picked ones, or with none picked, all of them: the AI picks
-                done = self._ask_ai(chosen.files or missing)
+                # About the picked ones, or with none picked, all of them: the AI picks (and it's told
+                # where the selection is)
+                done = self._ask_ai(chosen.files or missing,
+                                    chosen.files or (contextmenu.under(missing, selected) if selected else []))
             elif not key:
                 done = self._act(chosen.files, selected)
                 if done == self.REFRESH_KEY:
@@ -292,6 +302,8 @@ class InteractiveDirSync(object):
                    contextmenu.Entry('Space', "Pick %s" % (name,), contextmenu.PICK),
                    contextmenu.Entry(aiplan_screen.KEY_NAME, "Ask AI what to do with all the files, and review its plan",
                                      aiplan_screen.KEY)]
+        if is_file and archives.is_archive(selected):
+            entries.append(contextmenu.Entry(archive_screen.KEY_NAME, "Explore %s" % (name,), archive_screen.KEY))
         if is_file:
             entries.append(contextmenu.Entry(opening.KEY_HINT[0], "Open %s with its program" % (name,), opening.KEY))
         if selected:
@@ -301,6 +313,10 @@ class InteractiveDirSync(object):
                 os.path.dirname(selected) if is_file else selected or '.',), self.REFRESH_KEY))
         entries.append(contextmenu.Entry(hashes_screen.KEY, "Replicas dashboard", hashes_screen.KEY))
         return contextmenu.choose(entries, contextmenu.nothing_picked(len(missing)), side=self._dst.displayname())
+
+    def _explore(self, relpath, files):
+        """e: look in src's zip at relpath (see archive_screen.py)"""
+        archive_screen.explore(relpath, files, lambda: self._opener.local_path(relpath))
 
     def _rename_selected(self, selected):
         """cc: rename src's file or dir at selected (see renaming.py). Returns (its new relpath, the
@@ -391,6 +407,8 @@ class InteractiveDirSync(object):
         }
         options[self.ASK_AI] = ("Ask AI what to do with %s, and review its plan" %
                                 ("it" if len(relpaths) == 1 else "the " + count,), None)
+        if len(relpaths) == 1 and archives.is_archive(relpaths[0]):
+            options[self.EXPLORE] = ("Explore it: what's in the zip", None)
         options[self.OPEN] = ("Open %s with %s program%s" %
                               ("it" if len(relpaths) == 1 else "the " + count,
                                "its" if len(relpaths) == 1 else "their", "" if len(relpaths) == 1 else "s"),
@@ -409,7 +427,7 @@ class InteractiveDirSync(object):
                     for label, reason in options.values()}
         disabled[self.NOTHING] = prefixes[self.NOTHING] + self.NOTHING
         # Similar actions together, a blank line between each kind
-        kinds = [[self.ASK_AI], [self.COPY], [self.REMOVE], [self.RENAME_IN_DST, self.RENAME_IN_SRC], [self.OPEN, self.READ_ANEW]]
+        kinds = [[self.ASK_AI], [self.COPY], [self.REMOVE], [self.RENAME_IN_DST, self.RENAME_IN_SRC], [self.EXPLORE, self.OPEN, self.READ_ANEW]]
         labels, blanks = picker.grouped([[self.NOTHING]] + [[options[action][0] for action in kind if action in options]
                                                              for kind in kinds])
         disabled.update(blanks)
@@ -429,7 +447,10 @@ class InteractiveDirSync(object):
             moves = self._renames(action, may_be_there)
             return None if moves is None else self._rename(action, moves)
         if action == self.ASK_AI:
-            return self._ask_ai(relpaths)
+            return self._ask_ai(relpaths, relpaths)
+        if action == self.EXPLORE:
+            self._explore(relpaths[0], set(relpaths))
+            return None
         return self._copy_or_remove(action, relpaths)
 
     def _copy_or_remove(self, action, relpaths, to_trash=False):
@@ -469,9 +490,10 @@ class InteractiveDirSync(object):
             self._note(self._src, 'removed', len(done))
         return done
 
-    def _ai_task(self, relpaths):
-        """What to ask the AI about src's files at relpaths (see aiplan.py): dst's files are told too,
-        to rename them, and each's copies there, as far as it's known"""
+    def _ai_task(self, relpaths, focus):
+        """What to ask the AI about src's files at relpaths, the user being on those of focus (see
+        aiplan.py): dst's files are told too, to rename them, and each's copies there, as far as it's
+        known"""
         src_name, dst_name = self._src.displayname(), self._dst.displayname()
 
         def can_rename(replica):
@@ -504,16 +526,18 @@ class InteractiveDirSync(object):
         others = sorted(relpath for relpath in self.dst_index.relpaths() if not paths.is_meta(relpath))
         return aiplan.Task("These are files in the source, %s, which the destination, %s, lacks at the same paths." %
                            (src_name, dst_name),
-                           files, actions, others)
+                           files, actions, others, focus=focus,
+                           fetch=lambda relpath: self._opener.local_path(relpath, ai.MAX_READ_SIZE))
 
-    def _ask_ai(self, relpaths):
-        """Ask the AI what to do with src's files at relpaths, and do what the user approves of its plan
-        (each kind once they confirm it, as if they chose it). Returns the files done (in a dry run,
+    def _ask_ai(self, relpaths, focus=()):
+        """Ask the AI about src's files at relpaths, the user being on those of focus, and do what the
+        user approves of its plan, if it answers with one (each kind once they confirm it, as if they
+        chose it). Returns the files done (in a dry run,
         the ones it would have done), or None if none were."""
         messages.print_line("Looking through %s and %s..." % (self._src.displayname(), self._dst.displayname()))
         self.src_index.build()
         self.dst_index.build()
-        self._last_instruction, steps = aiplan_screen.ask(self._ai_task(relpaths), self._last_instruction)
+        self._last_instruction, steps = aiplan_screen.ask(self._ai_task(relpaths, focus), self._last_instruction)
         if not steps:
             return None
         done = []

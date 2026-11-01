@@ -22,6 +22,8 @@ import time
 from dirdelta import ai
 from dirdelta import aiplan
 from dirdelta import aiplan_screen
+from dirdelta import archive_screen
+from dirdelta import archives
 from dirdelta import clouddirtree
 from dirdelta import contextmenu
 from dirdelta import drivecache
@@ -132,9 +134,10 @@ class InboxSort(object):
     DESCRIBE = 'describe'
     RECOMMEND = 'recommend'
     ASK_AI = 'ask AI'
+    EXPLORE = 'explore'
     # The picker's keys that do an option of the menu, shown before it
     # (Ctrl-X opens the selected one, not the picked ones: Open has no key)
-    SHORTCUTS = {ASK_AI: aiplan_screen.KEY_NAME, RECOMMEND: 'Ctrl-I', READ_ANEW: 'Ctrl-R'}
+    SHORTCUTS = {ASK_AI: aiplan_screen.KEY_NAME, EXPLORE: archive_screen.KEY_NAME, RECOMMEND: 'Ctrl-I', READ_ANEW: 'Ctrl-R'}
     # Moving: to Claude's dir, or to a dir the user picks; under the file's name, Claude's, or one
     # the user types
     MOVE_RECOMMENDED = 'move to the recommendations'
@@ -283,8 +286,8 @@ class InboxSort(object):
         and back to the picker, where they were, until they quit, or the inbox is empty"""
         header = ("Files in %s, to sort into %s. Pick some, then choose what to do with them." %
                   (self.inbox_path, self.root_path))
-        keys = (self.REFRESH_KEY if self.inbox_is_cloud else '') + hashes_screen.KEY + aiplan_screen.KEY + contextmenu.KEY
-        key_hints = ([('Enter', 'what to do (none picked: the selected one)'), contextmenu.KEY_HINT, aiplan_screen.KEY_HINT,
+        keys = (self.REFRESH_KEY if self.inbox_is_cloud else '') + hashes_screen.KEY + aiplan_screen.KEY + contextmenu.KEY + archive_screen.KEY
+        key_hints = ([('Enter', 'what to do (none picked: the selected one)'), contextmenu.KEY_HINT, aiplan_screen.KEY_HINT, archive_screen.KEY_HINT,
                       ('Ctrl-I', 'Claude: describe, and say where they go'), opening.KEY_HINT,
                       renaming.KEY_HINT, ('Ctrl-L', 'the sorted tree')] +
                      ([(self.REFRESH_KEY_NAME, 'read the folder anew from Drive')] if self.inbox_is_cloud else []) +
@@ -334,6 +337,10 @@ class InboxSort(object):
                 chosen = chosen._replace(key='' if answer == contextmenu.WHAT_TO_DO else answer,
                                          files=contextmenu.under(files, selected)
                                          if answer == contextmenu.WHAT_TO_DO else chosen.files)
+            if chosen.key == archive_screen.KEY:
+                self._explore(selected, files)
+                picked = chosen.files
+                continue
             if chosen.key == hashes_screen.KEY:
                 hashes_screen.dashboard(self._views(), self._known_replicas)
                 picked = chosen.files
@@ -354,8 +361,10 @@ class InboxSort(object):
                                           [relpath for relpath in files if _is_at_or_under(relpath, selected)],
                                           chosen.side_selected)
             elif chosen.key == aiplan_screen.KEY:
-                # About the picked ones, or with none picked, all of them: the AI picks
-                done = self._ask_ai(chosen.files or files)
+                # About the picked ones, or with none picked, all of them: the AI picks (and it's told
+                # where the selection is)
+                done = self._ask_ai(chosen.files or files,
+                                    chosen.files or (contextmenu.under(files, selected) if selected else []))
             else:
                 done = self._act(chosen.files, selected)
             if done == self.REFRESH_KEY:
@@ -385,6 +394,8 @@ class InboxSort(object):
                                      aiplan_screen.KEY),
                    contextmenu.Entry('Ctrl-I', "Have Claude describe %s and say where it goes, while you go on" % (name,),
                                      DESCRIBE_KEY)]
+        if is_file and archives.is_archive(selected):
+            entries.append(contextmenu.Entry(archive_screen.KEY_NAME, "Explore %s" % (name,), archive_screen.KEY))
         if is_file:
             entries.append(contextmenu.Entry(opening.KEY_HINT[0], "Open %s with its program" % (name,), OPEN_KEY))
         if selected:
@@ -394,6 +405,10 @@ class InboxSort(object):
                 posixpath.dirname(selected) if is_file else selected or '.',), self.REFRESH_KEY))
         entries.append(contextmenu.Entry(hashes_screen.KEY, "Replicas dashboard", hashes_screen.KEY))
         return contextmenu.choose(entries, contextmenu.nothing_picked(len(files)), LABEL, side=self.root_path)
+
+    def _explore(self, relpath, files):
+        """e: look in the inbox's zip at relpath (see archive_screen.py)"""
+        archive_screen.explore(relpath, files, lambda: self._opener.local_path(relpath), LABEL)
 
     def _rename_selected(self, selected):
         """cc: rename the inbox's file or dir at selected (see renaming.py), what's known of its
@@ -698,6 +713,8 @@ class InboxSort(object):
                            "the same as removing the copies" if len(removable) == len(relpaths) else
                            "the same as removing the junk" if self.inbox_is_cloud and len(junky) == len(relpaths) else
                            None, REMOVE, [])),
+            (self.EXPLORE, ("Explore it: what's in the zip", None if is_one and archives.is_archive(relpaths[0]) else
+                            "not a zip", OPEN, [])),
             (self.OPEN, ("Open %s with %s program%s" %
                          (they, "its" if is_one else "their", "" if is_one else "s"),
                          None if len(relpaths) <= opening.MAX_OPENED else "too many", OPEN, [])),
@@ -725,13 +742,19 @@ class InboxSort(object):
                  for action, (label, _, verb, parts) in options.items()}
         lines[options[self.ASK_AI][0]] = [picker.segments([(" %s " % (ASK.upper(),), VERB_COLORS[ASK]),
                                                            (" tell it what to do; it answers with a plan to review", None)])]
+        if self.EXPLORE in options:
+            lines[options[self.EXPLORE][0]] = [picker.segments([(" %s " % (OPEN.upper(),), VERB_COLORS[OPEN]),
+                                                                (" look in it, unpacking nothing", None)])]
         header = ("%s, in %s: what to do with it?" % (name, posixpath.dirname(posixpath.join(self.inbox_path, relpaths[0])))
                   if is_one else "%s picked in %s. What to do with them?" % (count, self.inbox_path))
         answer = picker.pick_option(labels, header=header, title="What to do", shown_as=lambda: colors, label=LABEL,
                                     previews_below=lines)
         action = next((action for action, (label, _, _, _) in options.items() if label == answer), None)
         if action == self.ASK_AI:
-            return self._ask_ai(relpaths)
+            return self._ask_ai(relpaths, relpaths)
+        if action == self.EXPLORE:
+            self._explore(relpaths[0], set(relpaths))
+            return None
         if action == self.OPEN:
             if opening.confirm(self._opener, relpaths, relpaths, LABEL):
                 self.open_in_background(relpaths, relpaths)
@@ -1201,9 +1224,9 @@ class InboxSort(object):
             return None
         return relpath
 
-    def _ai_task(self, relpaths):
-        """What to ask the AI about the inbox's files at relpaths (see aiplan.py): what's known of
-        each, and the sorted tree's dirs"""
+    def _ai_task(self, relpaths, focus):
+        """What to ask the AI about the inbox's files at relpaths, the user being on those of focus (see
+        aiplan.py): what's known of each, and the sorted tree's dirs"""
         def in_sorted_tree(relpath, target):
             full = _join(self._root_rel, target)
             if self.is_one_tree and _is_at_or_under(full, self._inbox_rel):
@@ -1236,13 +1259,15 @@ class InboxSort(object):
                   for dirpath in sorted(dirs)[:ai.MAX_DIRS_GIVEN]]
         return aiplan.Task("These are files in the inbox %s, of files waiting to be sorted into the sorted tree %s." %
                            (self.inbox_path, self.root_path), files, actions,
-                           context=["The sorted tree's dirs, with a few of the names of the files in each:"] + listed)
+                           context=["The sorted tree's dirs, with a few of the names of the files in each:"] + listed,
+                           focus=focus, fetch=lambda relpath: self._opener.local_path(relpath, ai.MAX_READ_SIZE))
 
-    def _ask_ai(self, relpaths):
-        """Ask the AI what to do with the inbox's files at relpaths, and do what the user approves of
-        its plan (each kind once they confirm it, as if they chose it). Returns the ones done (in a
+    def _ask_ai(self, relpaths, focus=()):
+        """Ask the AI about the inbox's files at relpaths, the user being on those of focus, and do what
+        the user approves of its plan, if it answers with one (each kind once they confirm it, as if
+        they chose it). Returns the ones done (in a
         dry run, the ones it would have done), or None if none were."""
-        self._last_instruction, steps = aiplan_screen.ask(self._ai_task(relpaths), self._last_instruction, LABEL)
+        self._last_instruction, steps = aiplan_screen.ask(self._ai_task(relpaths, focus), self._last_instruction, LABEL)
         if not steps:
             return None
         done = []
