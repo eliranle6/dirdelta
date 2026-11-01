@@ -434,7 +434,7 @@ class RefreshKeyTest(unittest.TestCase):
         # Its files by name are listed again, when they're next needed
         self.assertFalse(self.sync.src_index.is_built())
         # And the replicas dashboard's
-        self.assertEqual(calls[0].kwargs['keys'], Sync.REFRESH_KEY + '#a')
+        self.assertEqual(calls[0].kwargs['keys'], Sync.REFRESH_KEY + '#a:')
         self.assertIn(('Ctrl-R', 'read the folder anew from Drive'), calls[0].kwargs['key_hints'])
         self.assertIsNone(calls[0].kwargs['selected'])
         # What's still missing, what's still picked of it, where it was
@@ -468,7 +468,7 @@ class RefreshKeyTest(unittest.TestCase):
         other = dirtree.DirTree('/other')
         other.add_file_by_relpath('a.mp3')
         calls = self.browse(other, self.local, [None])
-        self.assertEqual(calls[0].kwargs['keys'], '#a')
+        self.assertEqual(calls[0].kwargs['keys'], '#a:')
         self.assertNotIn('r', [key for key, _ in calls[0].kwargs['key_hints']])
         self.assertFalse(self.sync.has_changed)
 
@@ -490,8 +490,8 @@ class RefreshKeyTest(unittest.TestCase):
         self.assertEqual(calls[1].kwargs['picked'], ['b/3.mp3'])
 
 
-class AskAITest(unittest.TestCase):
-    """Asking the AI, in a sync of two local dirs, with what it answers scripted"""
+class _TwoDirsTestCase(unittest.TestCase):
+    """A sync of two local dirs"""
 
     def setUp(self):
         self.tmpdir = os.path.realpath(tempfile.mkdtemp(prefix='dirdelta-ask-'))
@@ -505,6 +505,10 @@ class AskAITest(unittest.TestCase):
             self.addCleanup(patcher.stop)
         self.sync = Sync(localdiskdirtree.LocalDiskDirTree(self.src_path, silent=True),
                          localdiskdirtree.LocalDiskDirTree(self.dst_path, silent=True))
+
+
+class AskAITest(_TwoDirsTestCase):
+    """Asking the AI, with what it answers scripted"""
 
     def ask(self, steps, review=None, is_dry_run=False):
         """_ask_ai() of all src's files, the AI answering steps, the review answering review(items)
@@ -574,6 +578,66 @@ class AskAITest(unittest.TestCase):
                 mock.patch('dirdelta.interactive_dir_sync.hashes_screen.jobs_of', return_value=[]):
             self.sync.browse()
         ask.assert_called_once_with(['b.txt'])
+
+
+class ContextMenuTest(_TwoDirsTestCase):
+    """: in the sync's picker"""
+
+    def press(self, picks, answer):
+        """browse(), ':' being pressed on the Picked of picks, then quitting; the menu answering answer
+        (what its options start with). The options are self.options."""
+        def pick_option(options, **kwargs):
+            self.options = options
+            self.shown = kwargs['shown_as']()
+            return next(option for option in options if option.startswith(answer))
+        results = iter(picks + [None])
+        with helpers.scripted_files_picker(lambda relpaths: next(results)) as pick_files, mock.patch('dirdelta.picker.pick_option', side_effect=pick_option), \
+                mock.patch('dirdelta.interactive_dir_sync.hashes_screen.jobs_of', return_value=[]):
+            self.sync.browse()
+        return pick_files
+
+    def test_its_options_are_whats_there_with_their_keys(self):
+        self.press([picker.Picked(':', 'a.txt', [])], 'Nothing')
+        shown = [picker.unstyled(self.shown[option]) for option in self.options
+                 if not isinstance(self.shown[option], picker.Skipped)]
+        self.assertTrue(any(line.startswith('[Space]') and 'Pick a.txt' in line for line in shown))
+        self.assertTrue(any(line.startswith('[a]') for line in shown))
+        self.assertTrue(any(line.startswith('[Ctrl-X]') for line in shown))
+        self.assertTrue(any(line.startswith('[cc]') for line in shown))
+        self.assertTrue(any(line.startswith('[#]') for line in shown))
+        # What only the picker does is shown, and can't be chosen
+        self.assertTrue(any(isinstance(self.shown[option], picker.Skipped) and 'search' in self.shown[option].text
+                            for option in self.options))
+
+    def test_on_the_root_theres_nothing_to_open_or_rename(self):
+        self.press([picker.Picked(':', '', [])], 'Nothing')
+        self.assertFalse(any(option.startswith(('Open', 'Rename')) for option in self.options))
+
+    def test_ask_ai_is_about_all_the_files(self):
+        with mock.patch.object(Sync, '_ask_ai', return_value=None) as ask:
+            self.press([picker.Picked(':', 'a.txt', [])], 'Ask AI')
+        ask.assert_called_once_with(['a.txt', 'b.txt', 'c.txt'])
+
+    def test_pick_comes_back_picked(self):
+        pick_files = self.press([picker.Picked(':', 'b.txt', [])], 'Pick')
+        self.assertEqual(pick_files.call_args.kwargs['picked'], ['b.txt'])
+
+    def test_what_to_do_is_enters_menu_of_the_selected_one(self):
+        with mock.patch.object(Sync, '_act', return_value=None) as act:
+            self.press([picker.Picked(':', 'b.txt', [])], 'Choose what to do')
+        act.assert_called_once_with(['b.txt'], 'b.txt')
+
+    def test_open_opens_the_selected_one(self):
+        with mock.patch('dirdelta.opening.Opener.press') as press:
+            self.press([picker.Picked(':', 'b.txt', [])], 'Open')
+        self.assertEqual(press.call_args.args[0], ['b.txt'])
+
+    def test_with_files_picked_its_enters_menu(self):
+        with mock.patch.object(Sync, '_act', return_value=None) as act, \
+                mock.patch.object(Sync, '_context_menu') as menu:
+            self.press([picker.Picked(':', 'a.txt', ['b.txt'])], 'Nothing')
+        act.assert_called_once_with(['b.txt'], 'a.txt')
+        menu.assert_not_called()
 
 
 class ShownTest(unittest.TestCase):

@@ -23,6 +23,7 @@ from dirdelta import ai
 from dirdelta import aiplan
 from dirdelta import aiplan_screen
 from dirdelta import clouddirtree
+from dirdelta import contextmenu
 from dirdelta import drivecache
 from dirdelta import downloads
 from dirdelta import drivemeta
@@ -282,8 +283,8 @@ class InboxSort(object):
         and back to the picker, where they were, until they quit, or the inbox is empty"""
         header = ("Files in %s, to sort into %s. Pick some, then choose what to do with them." %
                   (self.inbox_path, self.root_path))
-        keys = (self.REFRESH_KEY if self.inbox_is_cloud else '') + hashes_screen.KEY + aiplan_screen.KEY
-        key_hints = ([('Enter', 'what to do (none picked: the selected one)'), aiplan_screen.KEY_HINT,
+        keys = (self.REFRESH_KEY if self.inbox_is_cloud else '') + hashes_screen.KEY + aiplan_screen.KEY + contextmenu.KEY
+        key_hints = ([('Enter', 'what to do (none picked: the selected one)'), contextmenu.KEY_HINT, aiplan_screen.KEY_HINT,
                       ('Ctrl-I', 'Claude: describe, and say where they go'), opening.KEY_HINT,
                       renaming.KEY_HINT, ('Ctrl-L', 'the sorted tree')] +
                      ([(self.REFRESH_KEY_NAME, 'read the folder anew from Drive')] if self.inbox_is_cloud else []) +
@@ -317,6 +318,22 @@ class InboxSort(object):
                 self._finish_describing()
                 return
             selected = chosen.selected
+            if chosen.key == contextmenu.KEY:
+                # With files picked, Enter's menu of them; else one of what the keys do
+                answer = '' if chosen.files else self._context_menu(selected, files)
+                if answer is None:
+                    picked = chosen.files
+                    continue
+                if answer == contextmenu.PICK:
+                    picked = contextmenu.under(files, selected)
+                    continue
+                if answer in (OPEN_KEY, DESCRIBE_KEY):
+                    self._on_key(answer, selected, chosen.files, files)
+                    picked = chosen.files
+                    continue
+                chosen = chosen._replace(key='' if answer == contextmenu.WHAT_TO_DO else answer,
+                                         files=contextmenu.under(files, selected)
+                                         if answer == contextmenu.WHAT_TO_DO else chosen.files)
             if chosen.key == hashes_screen.KEY:
                 hashes_screen.dashboard(self._views(), self._known_replicas)
                 picked = chosen.files
@@ -356,6 +373,27 @@ class InboxSort(object):
             picked = [relpath for relpath in chosen.files if relpath not in done]
             left = [relpath for relpath in self._inbox_files()]
             selected = _shown(selected, left, files)
+
+    def _context_menu(self, selected, files):
+        """What to do with nothing picked, on the picker's selected relpath (see contextmenu.py): what
+        its keys do, as the key's returned, a contextmenu.PICK or WHAT_TO_DO, or None"""
+        name = contextmenu.selected_name(selected)
+        is_file = selected in set(files)
+        entries = [contextmenu.Entry('Enter', "Choose what to do with %s" % (name,), contextmenu.WHAT_TO_DO),
+                   contextmenu.Entry('Space', "Pick %s" % (name,), contextmenu.PICK),
+                   contextmenu.Entry(aiplan_screen.KEY_NAME, "Ask AI what to do with all the files, and review its plan",
+                                     aiplan_screen.KEY),
+                   contextmenu.Entry('Ctrl-I', "Have Claude describe %s and say where it goes, while you go on" % (name,),
+                                     DESCRIBE_KEY)]
+        if is_file:
+            entries.append(contextmenu.Entry(opening.KEY_HINT[0], "Open %s with its program" % (name,), OPEN_KEY))
+        if selected:
+            entries.append(contextmenu.Entry(renaming.KEY_HINT[0], "Rename %s" % (name,), renaming.PRESSED))
+        if self.inbox_is_cloud:
+            entries.append(contextmenu.Entry(self.REFRESH_KEY_NAME, "Read %s/ anew from Google Drive" % (
+                posixpath.dirname(selected) if is_file else selected or '.',), self.REFRESH_KEY))
+        entries.append(contextmenu.Entry(hashes_screen.KEY, "Replicas dashboard", hashes_screen.KEY))
+        return contextmenu.choose(entries, contextmenu.nothing_picked(len(files)), LABEL, side=self.root_path)
 
     def _rename_selected(self, selected):
         """cc: rename the inbox's file or dir at selected (see renaming.py), what's known of its

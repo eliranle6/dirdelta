@@ -168,6 +168,14 @@ the picked files itself (text, images, PDFs; a Drive file is downloaded first, a
 with the file when it's moved or copied. Descriptions and
 recommendations are both asked of `claude-haiku-5-5`.
 
+### The menu of the keys (`:`)
+
+In a sync's and a sort's file pickers, `:` with nothing picked opens a menu of what can be done there with
+the selected file or dir, each with its key: what to do with it, picking it, asking AI, opening, renaming,
+reading anew from Drive, the dashboard (and in a sort, Claude's description), and below them, to read,
+the keys that only work in the list itself (search, a range, the side tree...). With files picked, `:` opens
+the same menu as Enter, of what to do with them.
+
 ### Asking AI what to do
 
 In a sync's and a sort's file pickers, `a` asks the AI (Claude, for now) about the picked files, or with

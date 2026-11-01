@@ -769,6 +769,15 @@ stdout, all `\0`-separated (`-0`). Exit code 1 means the user quit (→
 Names are passed as bytes with `surrogateescape`, so non-UTF-8 file names
 round-trip. Tests (`tests/test_picker.py`) run a fake treepicker script.
 
+## The file pickers' `:` menu: `contextmenu.py`
+
+With nothing picked, `:` shows a menu of `Entry`s (a key's name, what it does, what's returned), which
+`InteractiveDirSync._context_menu()` and `InboxSort._context_menu()` make for the selected relpath, leaving
+out what doesn't apply (opening a dir, renaming the root, reading anew what isn't Drive's). What's chosen
+comes back as its key, and the picker's loop goes on as if it was pressed. What only treepicker does (search,
+a range...) can't be done from a menu, so it's shown as lines that can't be chosen. With files picked, it's
+Enter's menu.
+
 ## Asking AI: `aiplan.py`, `aiplan_screen.py`
 
 The user says what to do with files in their own words, and the AI answers with a plan to review.

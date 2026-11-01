@@ -343,6 +343,28 @@ class InboxSortTest(unittest.TestCase):
                     [picker.Picked('a', '', []), None], [YES])
         self.assertEqual(self.reviewed, ['Move to the sorted tree/b.jpg'])
 
+    def test_the_context_menu_with_nothing_picked(self):
+        self.sort([picker.Picked(':', 'a.txt', []), None], [NOTHING])
+        options = self.pick_option.call_args.args[0]
+        for start in ("Choose what to do with a.txt", "Pick a.txt", "Ask AI", "Have Claude describe a.txt",
+                      "Open a.txt", "Rename a.txt", "Replicas dashboard"):
+            self.assertTrue(any(option.startswith(start) for option in options), start)
+
+    def test_the_context_menu_can_ask_claude(self):
+        with mock.patch.object(Sort, '_on_key') as on_key:
+            self.sort([picker.Picked(':', 'trip', []), None], ["Have Claude describe"])
+        self.assertEqual(on_key.call_args.args[:3], (inbox.DESCRIBE_KEY, 'trip', []))
+
+    def test_the_context_menu_goes_to_enters_menu_of_the_selected_one(self):
+        with mock.patch.object(Sort, '_act', return_value=None) as act:
+            self.sort([picker.Picked(':', 'trip', []), None], ["Choose what to do"])
+        act.assert_called_once_with(['trip/c.jpg'], 'trip')
+
+    def test_with_files_picked_the_key_is_enters_menu(self):
+        with mock.patch.object(Sort, '_act', return_value=None) as act:
+            self.sort([picker.Picked(':', 'a.txt', ['b.jpg']), None], [])
+        act.assert_called_once_with(['b.jpg'], 'a.txt')
+
     def test_the_menu_starts_with_nothing(self):
         self.sort([['a.txt'], None], [NOTHING])
         # Each kind of action apart, after a blank line (skipped when moving)

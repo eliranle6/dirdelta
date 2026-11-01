@@ -8,6 +8,7 @@ from googleapiclient.errors import HttpError
 from dirdelta import aiplan
 from dirdelta import aiplan_screen
 from dirdelta import clouddirtree
+from dirdelta import contextmenu
 from dirdelta import dirdiff
 from dirdelta import drivecache
 from dirdelta import elsewhere
@@ -161,8 +162,8 @@ class InteractiveDirSync(object):
         jobs = hashes_screen.jobs_of([self._src, self._dst])
         header = ("Files in %s, which are not in %s. Pick some, then choose what to do with them." %
                   (self._src.displayname(), self._dst.displayname()))
-        keys = (self.REFRESH_KEY if clouds else '') + hashes_screen.KEY + aiplan_screen.KEY
-        key_hints = ([('Enter', 'choose what to do'), aiplan_screen.KEY_HINT, opening.KEY_HINT, renaming.KEY_HINT,
+        keys = (self.REFRESH_KEY if clouds else '') + hashes_screen.KEY + aiplan_screen.KEY + contextmenu.KEY
+        key_hints = ([('Enter', 'choose what to do'), contextmenu.KEY_HINT, aiplan_screen.KEY_HINT, opening.KEY_HINT, renaming.KEY_HINT,
                       ('Ctrl-L', 'look through %s' % (self._dst.displayname(),))] +
                      ([(self.REFRESH_KEY_NAME, 'read the folder anew from Drive')] if clouds else []) +
                      [hashes_screen.KEY_HINT])
@@ -201,6 +202,22 @@ class InteractiveDirSync(object):
             if chosen is None:
                 return
             selected = chosen.selected
+            if chosen.key == contextmenu.KEY:
+                # With files picked, Enter's menu of them; else one of what the keys do
+                answer = '' if chosen.files else self._context_menu(selected, missing, clouds)
+                if answer is None:
+                    picked = chosen.files
+                    continue
+                if answer == contextmenu.PICK:
+                    picked = contextmenu.under(missing, selected)
+                    continue
+                if answer == opening.KEY:
+                    self._opener.press([selected], files)
+                    picked = chosen.files
+                    continue
+                chosen = chosen._replace(key='' if answer == contextmenu.WHAT_TO_DO else answer,
+                                         files=contextmenu.under(missing, selected)
+                                         if answer == contextmenu.WHAT_TO_DO else chosen.files)
             if chosen.key == hashes_screen.KEY:
                 hashes_screen.dashboard([self._src, self._dst])
                 picked = chosen.files
@@ -265,6 +282,25 @@ class InteractiveDirSync(object):
             done = set(done)
             picked = [relpath for relpath in chosen.files if relpath in still_missing and relpath not in done]
             selected = _shown(selected, missing, shown_before)
+
+    def _context_menu(self, selected, missing, clouds):
+        """What to do with nothing picked, on the picker's selected relpath (see contextmenu.py): what
+        its keys do, as the key's returned, a contextmenu.PICK or WHAT_TO_DO, or None"""
+        name = contextmenu.selected_name(selected)
+        is_file = selected in set(missing)
+        entries = [contextmenu.Entry(None, "Choose what to do with %s" % (name,), contextmenu.WHAT_TO_DO),
+                   contextmenu.Entry('Space', "Pick %s" % (name,), contextmenu.PICK),
+                   contextmenu.Entry(aiplan_screen.KEY_NAME, "Ask AI what to do with all the files, and review its plan",
+                                     aiplan_screen.KEY)]
+        if is_file:
+            entries.append(contextmenu.Entry(opening.KEY_HINT[0], "Open %s with its program" % (name,), opening.KEY))
+        if selected:
+            entries.append(contextmenu.Entry(renaming.KEY_HINT[0], "Rename %s" % (name,), renaming.PRESSED))
+        if clouds:
+            entries.append(contextmenu.Entry(self.REFRESH_KEY_NAME, "Read %s/ anew from Google Drive" % (
+                os.path.dirname(selected) if is_file else selected or '.',), self.REFRESH_KEY))
+        entries.append(contextmenu.Entry(hashes_screen.KEY, "Replicas dashboard", hashes_screen.KEY))
+        return contextmenu.choose(entries, contextmenu.nothing_picked(len(missing)), side=self._dst.displayname())
 
     def _rename_selected(self, selected):
         """cc: rename src's file or dir at selected (see renaming.py). Returns (its new relpath, the
