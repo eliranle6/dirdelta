@@ -790,7 +790,7 @@ class InboxSortTest(unittest.TestCase):
         # Marked as hashed in the picker, with how far each got on the bottom line
         shown = sorter._shown_as(['a.txt'])
         self.assertEqual(picker.unstyled(shown['a.txt']), 'a.txt  ' + inbox.hashing.HASHED_TAG)
-        self.assertIn('inbox: hashed', shown[''])
+        self.assertIn('inbox: 100% hashed', shown[''])
 
     def test_claude_is_told_of_copies_and_its_removals_are_offered(self):
         self.copy_in_the_inbox()

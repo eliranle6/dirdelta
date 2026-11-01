@@ -189,7 +189,7 @@ class DashboardTest(unittest.TestCase):
         self.assertIn("now a (and 1 more)", state)
         self.assertIn("2 files couldn't be hashed", state)
         self.assertEqual(shown[hashes_screen._TOGGLE % ('/photos',)], "  Pause hashing photos")
-        self.assertEqual(shown[''], picker.status([("photos: 50% hashed", 'orange')]))
+        self.assertEqual(shown[''], picker.status([("photos: 50% hashed (4/10)", 'orange')]))
 
     def test_a_done_one_cant_be_paused(self):
         job = _Job('/photos', _progress(state=hashing.DONE))
@@ -252,7 +252,7 @@ class MarksTest(unittest.TestCase):
                          {'a/x': 'x  ' + hashing.NOT_HASHED_TAG, 'z': 'z  ' + hashing.NOT_HASHED_TAG})
         # Its tag in its style
         self.assertEqual(first['z'], picker.styled([('z', None), ('  ', None), (hashing.NOT_HASHED_TAG, 'grey')]))
-        self.assertEqual(first[''], picker.status([("photos: 0% hashed (not hashing)", 'red')]))
+        self.assertEqual(first[''], picker.status([("photos: 0% hashed (0/3, not hashing)", 'red')]))
         # z is hashed: only it changes
         self.job._hashes['z'] = 'H'
         marks._on_hashed('z', {'sha1': 'H'})
@@ -271,7 +271,7 @@ class MarksTest(unittest.TestCase):
 
     def test_more_status_after_the_jobs(self):
         marks = hashes_screen.Marks(None, ['a'], [self.job], lambda: [("Claude: describing 1 file", 'yellow')])
-        self.assertEqual(marks(), {'': picker.status([("photos: 0% hashed (not hashing)", 'red'),
+        self.assertEqual(marks(), {'': picker.status([("photos: 0% hashed (0/3, not hashing)", 'red'),
                                                       ("Claude: describing 1 file", 'yellow')])})
 
 

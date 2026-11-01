@@ -34,6 +34,9 @@ HELP_LINES = ["Tags after a file's name (/ searches them too):",
               "  %-24s matched by its name and size only, for now" % (hashing.NOT_HASHED_TAG,),
               "  %-24s unreadable, or it changed while it was read" % (hashing.FAILED_TAG,)]
 
+# Every menu says how far hashing got, as it goes on behind them
+picker.set_ambient_status(lambda: hashing.status_parts(hashing.active_jobs()))
+
 NOTHING = "Nothing: go back"
 NOT_NOW = "Not now (%s starts it later)" % (KEY,)
 HASH_AND_WAIT = "Hash now, and wait"

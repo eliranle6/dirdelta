@@ -532,18 +532,29 @@ def color(progress):
 
 
 def status_text(job, progress=None, name=None):
-    """A job's status, short, for a picker's bottom line: e.g. 'photos: 63% hashed (paused)'; name:
-    the replica's name there (default: its dir's name)"""
+    """A job's status, short, for a picker's status bar: e.g. 'photos: 63% hashed (1,204/1,911, paused)',
+    the percentage by size, and how many files of how many; name: the replica's name there (default: its
+    dir's name)"""
     progress = progress or job.progress()
     name = name or job.name()
     if progress.state in (NOT_SCANNED, SCANNING):
         return "%s: listing its files..." % (name,)
+    count = "{:,}/{:,}".format(progress.nr_done, progress.nr_files)
     if progress.state == DONE:
-        return "%s: hashed \u2713" % (name,)
-    text = "%s: %d%% hashed" % (name, percent(progress))
+        return "%s: 100%% hashed \u2713 (%s)" % (name, count)
     if not progress.is_started:
-        text += " (paused)" if progress.is_paused else " (not hashing)"
-    return text
+        count += ", paused" if progress.is_paused else ", not hashing"
+    return "%s: %d%% hashed (%s)" % (name, percent(progress), count)
+
+
+def active_jobs():
+    """The jobs hashing now, or paused, with files left: what every menu's status bar says"""
+    found = []
+    for job_ in jobs():
+        progress = job_.progress()
+        if progress.state != DONE and (progress.is_started or progress.is_paused):
+            found.append(job_)
+    return found
 
 
 def status_parts(jobs):

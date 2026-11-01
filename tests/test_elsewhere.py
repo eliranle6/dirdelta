@@ -572,7 +572,7 @@ class HashedReplicasTest(unittest.TestCase):
                 self.assertRaises(picker.PickerClosed):
             elsewhere.find_previews(['small.txt'], self.src, self.dst_index, sent,
                                     src_index=elsewhere.Index(self.src))
-        self.assertIn("  contents not hashed yet (src: 0% hashed (not hashing))", sent.previews['small.txt'])
+        self.assertIn("  contents not hashed yet (src: 0% hashed (0/2, not hashing))", sent.previews['small.txt'])
         self.hash('src')
         sent = _Sent()
         with mock.patch('dirdelta.elsewhere.time.sleep', side_effect=picker.PickerClosed):

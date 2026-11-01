@@ -390,6 +390,35 @@ def _help_args(key_hints, help_lines):
     return args
 
 
+# What gives the status of what goes on behind the pickers (set_ambient_status())
+_ambient_status = None
+
+
+def set_ambient_status(parts):
+    """parts() is [(text, color)] of what goes on behind the pickers, each on the status bar of every
+    picker that says nothing else there, as it changes (see status())"""
+    global _ambient_status
+    _ambient_status = parts
+
+
+def _with_ambient_status(shown_as):
+    """shown_as (or None), with the ambient status as its '', unless it has one. Only if there's such
+    a status now, or shown_as is sent anyway: a picker with neither needs no updates."""
+    if _ambient_status is None or (shown_as is None and not _ambient_status()):
+        return shown_as
+    was_shown = []
+
+    def shown():
+        now = dict(shown_as()) if shown_as is not None else {}
+        if '' not in now:
+            parts = _ambient_status()
+            if parts or was_shown:
+                now[''] = status(parts)
+                was_shown.append(True)
+        return now
+    return shown
+
+
 def _run(args, input_items, shown_as=None, label=None, previews=None, on_selection=None, notify=None,
          side=None):
     """Run treepicker with args and the items (or None) on its stdin, and with shown_as (see
@@ -398,6 +427,7 @@ def _run(args, input_items, shown_as=None, label=None, previews=None, on_selecti
     to do on its keys, and side (a Side) the tree beside it. Returns what was picked, or None if the
     user quit.
     Every picker shows whether it's a dry run, and then label (text, color), if given."""
+    shown_as = _with_ambient_status(shown_as)
     command = [_find_program(), '-0']
     for text, color in [dryrun.label()] + ([label] if label else []):
         command += ['--label', text, '--label-color', color]

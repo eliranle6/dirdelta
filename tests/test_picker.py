@@ -532,5 +532,35 @@ class StyledTest(unittest.TestCase):
         self.assertEqual(picker.styled([('a', None), ('b', '')]), 'ab')
 
 
+
+class AmbientStatusTest(unittest.TestCase):
+    def setUp(self):
+        self.addCleanup(picker.set_ambient_status, picker._ambient_status)
+
+    def test_its_shown_by_a_picker_with_nothing_else_to_show(self):
+        picker.set_ambient_status(lambda: [('hashing', 'orange')])
+        self.assertEqual(picker._with_ambient_status(None)(), {'': picker.status([('hashing', 'orange')])})
+        self.assertEqual(picker._with_ambient_status(lambda: {'x': 'y'})(),
+                         {'x': 'y', '': picker.status([('hashing', 'orange')])})
+
+    def test_a_pickers_own_status_comes_first(self):
+        picker.set_ambient_status(lambda: [('hashing', 'orange')])
+        self.assertEqual(picker._with_ambient_status(lambda: {'': 'mine'})(), {'': 'mine'})
+
+    def test_with_nothing_going_on_no_updates_are_needed(self):
+        picker.set_ambient_status(lambda: [])
+        self.assertIsNone(picker._with_ambient_status(None))
+        shown_as = lambda: {'x': 'y'}
+        self.assertEqual(picker._with_ambient_status(shown_as)(), {'x': 'y'})
+
+    def test_its_cleared_once_its_over(self):
+        parts = [[('hashing', 'orange')], []]
+        picker.set_ambient_status(lambda: parts[0])
+        shown = picker._with_ambient_status(None)
+        self.assertEqual(shown(), {'': picker.status(parts[0])})
+        parts.pop(0)
+        self.assertEqual(shown(), {'': ''})
+
+
 if __name__ == '__main__':
     unittest.main()

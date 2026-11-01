@@ -92,7 +92,7 @@ class JobTest(unittest.TestCase):
         self.assertEqual(self.job.progress().nr_done, nr_done)
         if nr_done < 3:
             self.assertTrue(self.job.progress().is_paused)
-            self.assertIn("(paused)", hashing.status_text(self.job))
+            self.assertIn(", paused)", hashing.status_text(self.job))
         self.job.start()
         self.wait_done()
 
@@ -190,14 +190,29 @@ class StatusTest(unittest.TestCase):
                          ['red', 'orange', 'yellow'])
         self.assertEqual(hashing.color(_progress(state=hashing.DONE, size_done=1000)), 'green')
 
+    def test_the_count_says_thousands(self):
+        self.assertEqual(hashing.status_text(hashing.Job('/photos'), _progress(nr_done=1204, nr_files=1911, size_done=500)),
+                         "photos: 50% hashed (1,204/1,911)")
+
+    def test_active_jobs_are_the_ones_hashing_or_paused_with_files_left(self):
+        states = {'/hashing': _progress(), '/paused': _progress(is_started=False, is_paused=True),
+                  '/idle': _progress(is_started=False), '/done': _progress(state=hashing.DONE)}
+        made = []
+        for root, progress in states.items():
+            job = hashing.Job(root)
+            job.progress = lambda progress=progress: progress
+            made.append(job)
+        with mock.patch('dirdelta.hashing.jobs', return_value=made):
+            self.assertEqual([job.root for job in hashing.active_jobs()], ['/hashing', '/paused'])
+
     def test_its_text_by_its_state(self):
         job = hashing.Job('/photos')
         self.assertEqual(hashing.status_text(job, _progress(state=hashing.SCANNING)), "photos: listing its files...")
-        self.assertEqual(hashing.status_text(job, _progress(size_done=630)), "photos: 63% hashed")
+        self.assertEqual(hashing.status_text(job, _progress(size_done=630)), "photos: 63% hashed (0/10)")
         self.assertEqual(hashing.status_text(job, _progress(size_done=630, is_started=False, is_paused=True)),
-                         "photos: 63% hashed (paused)")
-        self.assertEqual(hashing.status_text(job, _progress(is_started=False)), "photos: 0% hashed (not hashing)")
-        self.assertEqual(hashing.status_text(job, _progress(state=hashing.DONE)), "photos: hashed ✓")
+                         "photos: 63% hashed (0/10, paused)")
+        self.assertEqual(hashing.status_text(job, _progress(is_started=False)), "photos: 0% hashed (0/10, not hashing)")
+        self.assertEqual(hashing.status_text(job, _progress(state=hashing.DONE, nr_done=10)), "photos: 100% hashed ✓ (10/10)")
 
     def test_a_bar(self):
         self.assertEqual(hashing.bar(_progress(size_done=500), width=4), '[██░░]')
