@@ -19,13 +19,12 @@ from dirdelta import utils
 from dirdelta import text
 
 
-# What run() returns when the user chose Quit (rather than going back)
-QUIT = 'quit'
+# The sync menu's last option: it doesn't quit dirdelta, the start menu shows again (as with q)
+BACK = "Back to the start menu"
 
 
 def run(args):
-    """Sync the replicas at args' paths. Returns QUIT if the user chose to quit dirdelta, else None
-    (they went back)"""
+    """Sync the replicas at args' paths, until the user goes back (to the start menu)"""
     names = paths.short_names([args.dir_a_path, args.dir_b_path])
     with picker.place("Sync %s \u21c4 %s" % (names[args.dir_a_path], names[args.dir_b_path])):
         return _run(args)
@@ -75,7 +74,6 @@ def _sync(replica_a, replica_b, replica_a_path, replica_b_path, known_replicas=N
     """The main menu, until the user quits. With known_replicas (a Replicas, saved when changed),
     it also makes the pair a favorite, or not. changes: where the files changed live are noted (a
     replicalog.Changes), if anywhere."""
-    QUIT_OPTION = "Quit"
     ADD_FAVORITE = "Add to favorites"
     REMOVE_FAVORITE = "Remove from favorites"
     DASHBOARD = hashes_screen.TITLE
@@ -121,11 +119,11 @@ def _sync(replica_a, replica_b, replica_a_path, replica_b_path, known_replicas=N
         if known_replicas is not None:
             is_favorite = known_replicas.is_favorite(replica_a_path, replica_b_path)
             favorite_options = [REMOVE_FAVORITE if is_favorite else ADD_FAVORITE]
-        option = picker.pick_option(list(actions) + list(refreshes) + [DASHBOARD] + favorite_options + [QUIT_OPTION],
+        option = picker.pick_option(list(actions) + list(refreshes) + [DASHBOARD] + favorite_options + [BACK],
                                     shown_as=shown_as)
-        if option in (None, QUIT_OPTION):
-            # q goes back (to the start menu, if there's one); Quit quits
-            return QUIT if option == QUIT_OPTION else None
+        if option in (None, BACK):
+            # Back to the start menu (q too)
+            return None
         if option == DASHBOARD:
             hashes_screen.dashboard([replica_a, replica_b], known_replicas)
             continue

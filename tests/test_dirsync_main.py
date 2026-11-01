@@ -66,13 +66,13 @@ class MainMenuTest(unittest.TestCase):
             while any('loading' in shown for shown in shown_as().values()):
                 time.sleep(0.01)
             self.shown_options = [shown_as().get(option, option) for option in options]
-            return 'Quit'
+            return dirsync_main.BACK
         with mock.patch('dirdelta.picker.pick_option', side_effect=pick_option):
             dirsync_main._sync(replica_a, replica_b, '/a', '/b')
         return self.shown_options
 
     def options(self, replica_a, replica_b):
-        with mock.patch('dirdelta.picker.pick_option', return_value='Quit') as pick_option:
+        with mock.patch('dirdelta.picker.pick_option', return_value=dirsync_main.BACK) as pick_option:
             dirsync_main._sync(replica_a, replica_b, '/a', '/b')
         options, = pick_option.call_args.args
         return options
@@ -80,20 +80,20 @@ class MainMenuTest(unittest.TestCase):
     def test_each_way_gets_its_files(self):
         for b in (localdiskdirtree.LocalDiskDirTree('/b', silent=True), dirtree.DirTree('cloud/b')):
             a = localdiskdirtree.LocalDiskDirTree('/a', silent=True)
-            self.assertEqual(self.options(a, b), ['Files in /a, not in /b', 'Files in /b, not in /a', 'Replicas dashboard', 'Quit'])
+            self.assertEqual(self.options(a, b), ['Files in /a, not in /b', 'Files in /b, not in /a', 'Replicas dashboard', dirsync_main.BACK])
 
-    def test_quit_quits_and_q_goes_back(self):
+    def test_back_and_q_go_back_to_the_start_menu(self):
         a = localdiskdirtree.LocalDiskDirTree('/a', silent=True)
         b = localdiskdirtree.LocalDiskDirTree('/b', silent=True)
-        for answer, result in (('Quit', dirsync_main.QUIT), (None, None)):
+        for answer in (dirsync_main.BACK, None):
             with mock.patch('dirdelta.picker.pick_option', return_value=answer):
-                self.assertEqual(dirsync_main._sync(a, b, '/a', '/b'), result)
+                self.assertIsNone(dirsync_main._sync(a, b, '/a', '/b'))
 
     def test_a_hashed_replicas_hashes_are_an_option_and_on_the_bottom_line(self):
         a = localdiskdirtree.LocalDiskDirTree('/a', silent=True)
         b = dirtree.DirTree('cloud/b')
         job = hashing.Job('/a')
-        answers = ['Replicas dashboard', 'Quit']
+        answers = ['Replicas dashboard', dirsync_main.BACK]
         shown = []
 
         def pick_option(options, shown_as):
@@ -111,12 +111,12 @@ class MainMenuTest(unittest.TestCase):
     def test_a_cloud_replica_can_be_refreshed_from_drive(self):
         a = localdiskdirtree.LocalDiskDirTree('/a', silent=True)
         b = clouddirtree.CloudDirTree('cloud/b')
-        self.assertEqual(self.options(a, b)[-3:], ['Refresh /b from Google Drive', 'Replicas dashboard', 'Quit'])
+        self.assertEqual(self.options(a, b)[-3:], ['Refresh /b from Google Drive', 'Replicas dashboard', dirsync_main.BACK])
 
     def test_a_refresh_finds_each_ways_files_again_and_lists_its_files_anew(self):
         a = localdiskdirtree.LocalDiskDirTree('/a', silent=True)
         b = clouddirtree.CloudDirTree('cloud/b')
-        answers = ['Refresh /b from Google Drive', 'Quit']
+        answers = ['Refresh /b from Google Drive', dirsync_main.BACK]
         with mock.patch('dirdelta.picker.pick_option', side_effect=lambda *_, **__: answers.pop(0)), \
                 mock.patch.object(b, 'refresh_from_drive') as refresh, \
                 mock.patch.object(elsewhere.Index, 'invalidate', autospec=True) as invalidate:
@@ -128,7 +128,7 @@ class MainMenuTest(unittest.TestCase):
     def test_a_failed_refresh_says_why_and_finds_nothing_again(self):
         a = localdiskdirtree.LocalDiskDirTree('/a', silent=True)
         b = clouddirtree.CloudDirTree('cloud/b')
-        answers = ['Refresh /b from Google Drive', 'Quit']
+        answers = ['Refresh /b from Google Drive', dirsync_main.BACK]
         with mock.patch('dirdelta.picker.pick_option', side_effect=lambda *_, **__: answers.pop(0)), \
                 mock.patch.object(b, 'refresh_from_drive', side_effect=OSError('no network')):
             dirsync_main._sync(a, b, '/a', '/b')
@@ -155,28 +155,28 @@ class MainMenuTest(unittest.TestCase):
         return syncs
 
     def test_the_chosen_way_is_browsed_and_the_menu_comes_back(self):
-        syncs = self.browse(['Files in /b, not in /a', 'Quit'])
+        syncs = self.browse(['Files in /b, not in /a', dirsync_main.BACK])
         self.assertEqual(len(syncs), 1)
         self.assertEqual(syncs[0]._src.fullpath(), '/b')
         # A dry run changes nothing, so each way's files are found once
         self.assertEqual(sorted(self.find_missing_calls), ['/a', '/b'])
 
     def test_each_replicas_files_by_name_are_kept_between_ways(self):
-        syncs = self.browse(['Files in /a, not in /b', 'Files in /b, not in /a', 'Quit'])
+        syncs = self.browse(['Files in /a, not in /b', 'Files in /b, not in /a', dirsync_main.BACK])
         self.assertIs(syncs[0].dst_index, syncs[1].src_index)
         self.assertIs(syncs[0].src_index, syncs[1].dst_index)
         self.assertEqual(syncs[0].dst_index.replica.fullpath(), '/b')
 
     def test_a_change_while_browsing_finds_each_ways_files_again(self):
         # E.g. a live action, or a refresh in the file picker
-        self.browse(['Files in /a, not in /b', 'Quit'], has_changed=True)
+        self.browse(['Files in /a, not in /b', dirsync_main.BACK], has_changed=True)
         self.assertEqual(sorted(self.find_missing_calls), ['/a', '/a', '/b', '/b'])
 
     def test_read_only_replicas_are_said_to_be_before_the_menu(self):
         self.writable = set()
         a = localdiskdirtree.LocalDiskDirTree('/a', silent=True)
         b = dirtree.DirTree('cloud/b')
-        self.assertEqual(self.options(a, b), ['Files in /a, not in /b', 'Files in /b, not in /a', 'Replicas dashboard', 'Quit'])
+        self.assertEqual(self.options(a, b), ['Files in /a, not in /b', 'Files in /b, not in /a', 'Replicas dashboard', dirsync_main.BACK])
         title, lines, _ = self.show.call_args.args
         self.assertEqual(title, 'Read-only')
         self.assertEqual(len(lines), 1)
@@ -202,7 +202,7 @@ class MainMenuTest(unittest.TestCase):
             'Files in /a, not in /b (3 files)',
             'Files in /b, not in /a (1 file)',
             'Replicas dashboard: files, last updates, hashes',
-            'Quit',
+            dirsync_main.BACK,
         ])
 
     def test_a_way_with_no_files_cant_be_picked(self):
@@ -235,7 +235,7 @@ class MainMenuTest(unittest.TestCase):
     def test_browsing_uses_the_files_found_in_the_background(self):
         a = localdiskdirtree.LocalDiskDirTree('/a', silent=True)
         b = localdiskdirtree.LocalDiskDirTree('/b', silent=True)
-        answers = ['Files in /a, not in /b', 'Files in /a, not in /b', 'Quit']
+        answers = ['Files in /a, not in /b', 'Files in /a, not in /b', dirsync_main.BACK]
         with mock.patch('dirdelta.picker.pick_option', side_effect=lambda *_, **__: answers.pop(0)), \
                 mock.patch('dirdelta.picker.pick_files', return_value=None) as pick_files:
             dirsync_main._sync(a, b, '/a', '/b')
@@ -246,7 +246,7 @@ class MainMenuTest(unittest.TestCase):
         a = localdiskdirtree.LocalDiskDirTree('/a', silent=True)
         b = localdiskdirtree.LocalDiskDirTree('/b', silent=True)
         known = replicas.Replicas()
-        answers = ['Add to favorites', 'Remove from favorites', 'Quit']
+        answers = ['Add to favorites', 'Remove from favorites', dirsync_main.BACK]
         menus, saved = [], []
         def pick_option(options, **_):
             menus.append(options[-2:])
@@ -255,8 +255,8 @@ class MainMenuTest(unittest.TestCase):
                 mock.patch('dirdelta.replicas.save',
                            side_effect=lambda known: saved.append(list(known.favorites))):
             dirsync_main._sync(a, b, '/a', '/b', known)
-        self.assertEqual(menus, [['Add to favorites', 'Quit'], ['Remove from favorites', 'Quit'],
-                                 ['Add to favorites', 'Quit']])
+        self.assertEqual(menus, [['Add to favorites', dirsync_main.BACK], ['Remove from favorites', dirsync_main.BACK],
+                                 ['Add to favorites', dirsync_main.BACK]])
         self.assertEqual(saved, [[('/a', '/b')], []])
 
     def test_run_records_the_pair(self):

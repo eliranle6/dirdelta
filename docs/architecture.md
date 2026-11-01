@@ -221,7 +221,7 @@ main keys, the caller's (`key_hints=[(key, what it does)]`: `--key`), `/`, `?`
 (with `help_lines`, e.g. the tags' legend: `--help-line`) and `q`, which
 `picker._run()` names "quit" on the start menu and "back" anywhere else (going
 back from a sync or a sort, or "Nothing: go back" before one, returns to the
-start menu: `main._run()`'s loop; Quit quits). What a picker's threads raise
+start menu: `main._run()`'s loop; only the start menu's Quit quits). What a picker's threads raise
 goes to `picker.ERRORS_LOG`, not the screen, and a failing `shown_as` puts a red
 label on the status bar.
 
@@ -547,7 +547,7 @@ it in `replicas.json` (`Replicas.note_seen()`, by `replicalog.identity()`: a loc
 replica's filesystem UUID, `mounts.current_mount()`, and its path in it; a Drive
 one's My Drive root id, `drivecache.root_id()`, and its path). The ways note
 what they change live in a `replicalog.Changes` (`InteractiveDirSync(changes=...)`:
-copied, removed, moved, added up per replica), and after Quit,
+copied, removed, moved, added up per replica), and after going back,
 `replicalog.offer_entries()` offers each changed replica an entry for its log
 (`replicalog.entry_line()`: today's date and `Changes.summary()`): added to its
 log, only its (`replicalog.write()`: a local file replaced at once, a
@@ -568,7 +568,9 @@ both `DirTree`s, warn (`scan_errors_warning`, shown with
 since its diff may then be wrong,
 present a top-level menu (`_sync`: a loop of `picker.pick_option()` over
 `_Action`s, each way's "Files in A, not in B", an `InteractiveDirSync(src,
-dst, missing, src_index, dst_index)`'s `browse()`, until Quit). Each
+dst, missing, src_index, dst_index)`'s `browse()`, until "Back to the start
+menu" or `q`: a sync never quits dirdelta, and one given two paths shows the start
+menu after it too). Each
 replica's `elsewhere.Index` (its files by name) is made here once and shared
 by both ways' screens, so it's listed once and kept up to date as they act.
 Before the menu, a "Read-only" screen (`messages.show()`) says which replicas
@@ -591,7 +593,7 @@ since the cache was made: `interactive_dir_sync.refresh_replica()`, which runs
 a screen if it fails (an `HttpError`, an `OSError` such as no network, a
 `DriveCacheError`, or Ctrl-C), else it drops that replica's `Index` and both
 ways are found again. Given a `Replicas` (as `run` does), the menu also has
-"Add to favorites" (or "Remove from favorites") before Quit, which saves the
+"Add to favorites" (or "Remove from favorites") before Back, which saves the
 change.
 `dirpick_main.run` returns the picked path: for a local dir it lets
 treepicker scan the dir itself (`picker.pick_under_dir`, much faster than
