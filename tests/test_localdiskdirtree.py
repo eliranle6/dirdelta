@@ -402,5 +402,48 @@ class LocalDiskDirTreeTest(unittest.TestCase):
         self.assertIsNotNone(tree.get_node(name))
 
 
+
+class RescanTest(unittest.TestCase):
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp(prefix='dirdelta-rescan-')
+        self.addCleanup(shutil.rmtree, self.tmpdir, ignore_errors=True)
+        helpers.make_files(self.tmpdir, ['a.txt', 'd/b.txt'])
+
+    def files(self, tree):
+        return sorted(entry.relpath for entry in tree.iter_files())
+
+    def test_a_scanned_tree_sees_whats_on_disk_now(self):
+        tree = localdiskdirtree.factory(self.tmpdir, silent=True)
+        os.remove(os.path.join(self.tmpdir, 'a.txt'))
+        helpers.make_files(self.tmpdir, ['new/c.txt'])
+        tree.rescan()
+        self.assertEqual(self.files(tree), ['d/b.txt', 'new/c.txt'])
+        self.assertEqual(sorted(tree.file_stamps), ['d/b.txt', 'new/c.txt'])
+
+    def test_one_not_scanned_stays_so(self):
+        tree = localdiskdirtree.LocalDiskDirTree(self.tmpdir, True)
+        tree.rescan()
+        self.assertIsNone(tree.file_stamps)
+        self.assertEqual(self.files(tree), [])
+
+    def test_stopped_or_gone_its_as_it_was(self):
+        tree = localdiskdirtree.factory(self.tmpdir, silent=True)
+        with mock.patch.object(localdiskdirtree.LocalDiskDirTree, 'update_from_filesystem', side_effect=KeyboardInterrupt):
+            with self.assertRaises(KeyboardInterrupt):
+                tree.rescan()
+        self.assertEqual(self.files(tree), ['a.txt', 'd/b.txt'])
+        shutil.rmtree(self.tmpdir)
+        with self.assertRaises(OSError):
+            tree.rescan()
+        self.assertEqual(self.files(tree), ['a.txt', 'd/b.txt'])
+
+    def test_it_can_trash_as_before(self):
+        tree = localdiskdirtree.factory(self.tmpdir, silent=True)
+        with tree.trashing():
+            tree.rescan()
+            self.assertTrue(tree._is_trashing)
+        self.assertFalse(tree._is_trashing)
+
+
 if __name__ == '__main__':
     unittest.main()

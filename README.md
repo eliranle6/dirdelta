@@ -175,6 +175,11 @@ filesystem's UUID) or `Cloud(me):/eliran` (the account's user name, once dirdelt
 replicas" in the sync menu names them: a local replica's label is its disk's, so all the replicas on that
 disk have it (`blue WD ext. disk:/mnt/eliran`), and a Drive one's is its own, by the account and the path.
 
+### Rescanning a replica
+
+"Rescan X" in the sync menu sees what's on a local replica's disk now, if you changed something while dirdelta was
+running, and the menu's counts and state follow. (For a Drive replica, that's "Refresh X file list from Google Drive".)
+
 ### Removing from the other replica
 
 In a sync's file picker the other replica's tree is at the top right. `Ctrl-W l` moves into it, as in vim (`Ctrl-W h`

@@ -100,6 +100,21 @@ class LocalDiskDirTree(dirtree.DirTree):
                 self.create_dir_node_from_fullpath_if_not_exists(path)
         self.file_stamps = stamps
 
+    def rescan(self):
+        """See what's on disk now, if the tree was scanned (one that wasn't has nothing to go stale): the
+        tree is replaced only once the new scan is done, so it's as it was if it's stopped. Raises OSError
+        if the dir isn't there anymore (e.g. it was unmounted), and then too."""
+        if not os.path.isdir(self._rootpath):
+            raise OSError("%s isn't there anymore" % (self._rootpath,))
+        if self.file_stamps is None:
+            self.scan_errors = []
+            return
+        scanned = LocalDiskDirTree(self._rootpath, True, self.max_depth)
+        scanned.update_from_filesystem()
+        is_trashing, silent = self._is_trashing, self._silent
+        self.__dict__.update(scanned.__dict__)
+        self._is_trashing, self._silent = is_trashing, silent
+
     def file_size(self, relpath):
         try:
             return os.lstat(os.path.join(self._rootpath, relpath)).st_size

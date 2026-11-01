@@ -107,6 +107,9 @@ def _sync(replica_a, replica_b, replica_a_path, replica_b_path, known_replicas=N
     refreshes = {"Refresh %s file list from Google Drive" % (path,): replica
                  for replica, path in ((replica_a, replica_a_path), (replica_b, replica_b_path))
                  if isinstance(replica, clouddirtree.CloudDirTree)}
+    # A local one can be scanned anew, if its files changed meanwhile, outside dirdelta
+    rescans = {"Rescan %s" % (path,): replica for replica, path in ((replica_a, replica_a_path), (replica_b, replica_b_path))
+               if hashes_screen.is_local(replica)}
     for way in ways:
         way.find_missing()
     jobs = hashes_screen.jobs_of([replica_a, replica_b])
@@ -146,7 +149,7 @@ def _sync(replica_a, replica_b, replica_a_path, replica_b_path, known_replicas=N
         if known_replicas is not None:
             is_favorite = known_replicas.is_favorite(replica_a_path, replica_b_path)
             favorite_options = [REMOVE_FAVORITE if is_favorite else ADD_FAVORITE]
-        option = picker.pick_option([STATE, STATE_BLANK] + list(actions) + list(refreshes) + [DASHBOARD] +
+        option = picker.pick_option([STATE, STATE_BLANK] + list(actions) + list(rescans) + list(refreshes) + [DASHBOARD] +
                                     favorite_options + ([LABELS] if known_replicas is not None else []) + [BACK],
                                     shown_as=shown_as, selected=list(actions)[0],
                                     help_lines=syncstate.help_lines())
@@ -172,6 +175,16 @@ def _sync(replica_a, replica_b, replica_a_path, replica_b_path, known_replicas=N
         if not all(way.missing.done() for way in ways):
             messages.print_line("Finding the files that each lacks...")
         concurrent.futures.wait([way.missing for way in ways])
+        if option in rescans:
+            if _rescan(rescans[option]):
+                indexes[rescans[option]].invalidate()
+                for way in ways:
+                    # Its files may have other contents now
+                    way.checked.clear()
+                    way.find_missing()
+                for job in hashes_screen.jobs_of([rescans[option]]):
+                    job.scan_in_background()
+            continue
         if option in refreshes:
             if interactive_dir_sync.refresh_replica(refreshes[option]):
                 indexes[refreshes[option]].invalidate()
@@ -279,6 +292,25 @@ class _Action(object):
         with picker.place("Files in %s" % (replicanames.full(self.src_path),)):
             sync.browse()
         return sync.has_changed
+
+
+def _rescan(replica):
+    """Scan the local replica anew, on a screen, saying if it couldn't read everything. Returns whether
+    it was; if not (stopped, or it isn't there), it's as it was."""
+    name = replica.fullpath()
+    is_done, error = False, None
+    with messages.progress_screen("Rescanning %s" % (name,), dryrun.label(), wait=False):
+        try:
+            replica.rescan()
+            is_done = True
+        except OSError as failure:
+            error = failure
+    if error is not None:
+        messages.show("Couldn't rescan it", [str(error)], dryrun.label(), 'red')
+    warning = scan_errors_warning(replica) if is_done else []
+    if warning:
+        messages.show("Warning: find couldn't read everything", warning, dryrun.label(), 'red')
+    return is_done
 
 
 def _read_only_lines(replica, replica_path):

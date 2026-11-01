@@ -83,9 +83,10 @@ class MainMenuTest(unittest.TestCase):
         return options[2:]
 
     def test_each_way_gets_its_files(self):
-        for b in (localdiskdirtree.LocalDiskDirTree('/b', silent=True), dirtree.DirTree('cloud/b')):
+        for b, rescans in ((localdiskdirtree.LocalDiskDirTree('/b', silent=True), ['Rescan /a', 'Rescan /b']),
+                           (dirtree.DirTree('cloud/b'), ['Rescan /a'])):
             a = localdiskdirtree.LocalDiskDirTree('/a', silent=True)
-            self.assertEqual(self.options(a, b), ['Files only in /a', 'Files only in /b', 'Replicas dashboard', dirsync_main.BACK])
+            self.assertEqual(self.options(a, b), ['Files only in /a', 'Files only in /b'] + rescans + ['Replicas dashboard', dirsync_main.BACK])
 
     def test_back_and_q_go_back_to_the_start_menu(self):
         a = localdiskdirtree.LocalDiskDirTree('/a', silent=True)
@@ -181,7 +182,7 @@ class MainMenuTest(unittest.TestCase):
         self.writable = set()
         a = localdiskdirtree.LocalDiskDirTree('/a', silent=True)
         b = dirtree.DirTree('cloud/b')
-        self.assertEqual(self.options(a, b), ['Files only in /a', 'Files only in /b', 'Replicas dashboard', dirsync_main.BACK])
+        self.assertEqual(self.options(a, b), ['Files only in /a', 'Files only in /b', 'Rescan /a', 'Replicas dashboard', dirsync_main.BACK])
         title, lines, _ = self.show.call_args.args
         self.assertEqual(title, 'Read-only')
         self.assertEqual(len(lines), 1)
@@ -206,6 +207,8 @@ class MainMenuTest(unittest.TestCase):
         self.assertEqual(self.shown(a, b), [
             'Files only in LocalDisk:/a (3 files)',
             'Files only in LocalDisk:/b (1 file)',
+            'Rescan /a',
+            'Rescan /b',
             'Replicas dashboard: files, last updates, hashes',
             dirsync_main.BACK,
         ])
@@ -220,6 +223,37 @@ class MainMenuTest(unittest.TestCase):
         self.missing['/b'] = []
         self.shown(a, b)
         self.assertIn("a is ahead: it has 3 files that b lacks", picker.unstyled(self.state_line.text))
+
+    def test_rescanning_finds_each_ways_files_again(self):
+        a = localdiskdirtree.LocalDiskDirTree('/a', silent=True)
+        b = localdiskdirtree.LocalDiskDirTree('/b', silent=True)
+        answers = ['Rescan /b', dirsync_main.BACK]
+        with mock.patch('dirdelta.picker.pick_option', side_effect=lambda *_, **__: answers.pop(0)), \
+                mock.patch.object(localdiskdirtree.LocalDiskDirTree, 'rescan') as rescan, \
+                mock.patch('dirdelta.elsewhere.Index.invalidate', autospec=True) as invalidate:
+            calls_before = len(self.find_missing_calls)
+            dirsync_main._sync(a, b, '/a', '/b')
+        rescan.assert_called_once_with()
+        self.assertIs(invalidate.call_args.args[0].replica, b)
+        # Each way, at first and again
+        self.assertGreaterEqual(len(self.find_missing_calls) - calls_before, 2)
+
+    def test_a_rescan_that_fails_says_so_and_finds_nothing_again(self):
+        a = localdiskdirtree.LocalDiskDirTree('/a', silent=True)
+        b = localdiskdirtree.LocalDiskDirTree('/b', silent=True)
+        answers = ['Rescan /b', dirsync_main.BACK]
+        with mock.patch('dirdelta.picker.pick_option', side_effect=lambda *_, **__: answers.pop(0)), \
+                mock.patch.object(localdiskdirtree.LocalDiskDirTree, 'rescan', side_effect=OSError('/b is gone')), \
+                mock.patch('dirdelta.elsewhere.Index.invalidate', autospec=True) as invalidate:
+            dirsync_main._sync(a, b, '/a', '/b')
+        invalidate.assert_not_called()
+        self.assertEqual(self.show.call_args.args[0], "Couldn't rescan it")
+
+    def test_a_cloud_replica_has_no_rescan(self):
+        a = localdiskdirtree.LocalDiskDirTree('/a', silent=True)
+        b = clouddirtree.CloudDirTree('/b')
+        self.assertNotIn('Rescan /b', self.options(a, b))
+        self.assertIn('Rescan /a', self.options(a, b))
 
     def test_what_was_found_is_noted_for_the_start_menu(self):
         a = localdiskdirtree.LocalDiskDirTree('/a', silent=True)
