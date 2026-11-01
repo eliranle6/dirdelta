@@ -74,6 +74,13 @@ def trail(title=None):
 HIGHLIGHT_MARK = '\x01'
 
 
+def _marked(parts):
+    """parts ([(text, color)]: a --label-color, or None or '' for plain) in treepicker's labels'
+    markup: each after HIGHLIGHT_MARK, its color, HIGHLIGHT_MARK; the empty ones left out. The one
+    way it's made, for highlighted(), status() and segments()."""
+    return ''.join('%s%s%s%s' % (HIGHLIGHT_MARK, color or '', HIGHLIGHT_MARK, text) for text, color in parts if text)
+
+
 def highlighted(text, color='green'):
     """A pick_files() preview's line, shown bold on color (a --label-color), across the column"""
     return '%s%s%s%s' % (HIGHLIGHT_MARK, color, HIGHLIGHT_MARK, text)
@@ -82,13 +89,13 @@ def highlighted(text, color='green'):
 def status(parts):
     """A status for shown_as's '' (see pick_files()) of several labels, each in its color: parts is
     [(text, color)] (a --label-color, or 'orange'); the empty ones are left out"""
-    return ''.join('%s%s%s%s' % (HIGHLIGHT_MARK, color, HIGHLIGHT_MARK, text) for text, color in parts if text)
+    return _marked(parts)
 
 
 def segments(parts):
     """A line of pick_option(previews_below=...)'s in parts: parts is [(text, color)], each on a
     label color (or plain, for None or '')"""
-    return ''.join('%s%s%s%s' % (HIGHLIGHT_MARK, color or '', HIGHLIGHT_MARK, text) for text, color in parts if text)
+    return _marked(parts)
 
 
 # A text of a tree's node (shown_as's) or of a preview's line is in styled parts with it (see

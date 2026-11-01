@@ -169,7 +169,7 @@ run twice for a recent pair (`choose_replicas._mounted`, then `main._ready`). `c
 has the same "missing dir" block twice (sorts and pairs). `utils.py` is a two-function grab bag
 (`create_dirtree_from_arg` belongs in a replica factory).
 
-## 20. The picker's in-band markup is defined six times (S→M, low-moderate)
+## 20. The picker's in-band markup is defined six times (S→M, low-moderate) — the Python side in part 2026-11-01: `status()` and `segments()` made by one `_marked()`; the C++ parsers not done
 `\x01color\x01text` is produced by three Python functions (`picker.highlighted`, `status`,
 `segments`) and parsed by three C++ ones (`parse_status`, `parse_preview_line`,
 `parse_preview_segments`), with slightly different rules (default colors, line vs. segment).
