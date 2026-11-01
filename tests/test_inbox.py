@@ -244,21 +244,26 @@ class InboxSortTest(unittest.TestCase):
         known = replicas.Replicas()
         picks = [['a.txt'], None]
         with helpers.scripted_files_picker(lambda relpaths: picks.pop(0)), \
-                helpers.answering_option_picker(['Move it to a dir you pick', YES]) as pick, \
+                helpers.answering_option_picker(['Move it to a dir you pick', YES, 'Add it to its', replicalog.NO_ENTRY]) as pick, \
                 mock.patch('dirdelta.picker.pick_under_dir', return_value=('', os.path.join(self.root, 'docs'))), \
                 mock.patch('dirdelta.picker.view_files', return_value=True), \
                 mock.patch('dirdelta.replicas.save'), mock.patch('dirdelta.dryrun.DRYRUN', False), \
                 mock.patch('dirdelta.replicalog.identity', side_effect=lambda path: 'id:' + path), \
                 mock.patch.object(Sort, 'prepare_hashing'), self.synchronously():
             inbox.run(self.inbox, self.root, known)
-        # Seen at the start, its log read (none is added anymore: no question after it)
+        # Seen at the start, and its log's last entry is the one added since
         self.assertIsNotNone(known.known['id:' + self.root]['seen'])
-        self.assertEqual(known.known['id:' + self.root]['last_entry']['text'], "removed old money.ods")
-        self.assertIsNotNone(known.known['id:' + self.root]['changed'])
+        self.assertEqual(known.known['id:' + self.root]['last_entry']['text'], "added 1 file from %s" % (self.inbox,))
+        # An inbox has no log: it isn't a replica kept track of
         self.assertNotIn('id:' + self.inbox, known.known)
-        self.assertEqual(len(pick.call_args_list), 2)
+        self.assertFalse(self.exists('inbox', 'last_update.txt'))
+        # Then offered for the changed one: the sorted tree (it's added the file), not the inbox the
+        # file left
+        headers = [call.kwargs['header'] for call in pick.call_args_list[2:]]
+        self.assertIn("added 1 file from %s" % (self.inbox,), headers[0])
+        self.assertFalse(any(self.inbox + '?' in header or 'moved 1 file' in header for header in headers))
         with open(os.path.join(self.root, 'last_update.txt')) as log:
-            self.assertEqual(log.read(), "17.05.2026 - removed old money.ods\n")
+            self.assertTrue(log.read().endswith(" - added 1 file from %s\n" % (self.inbox,)))
 
     def test_remove_is_asked_twice(self):
         self.sort([['a.txt'], None], ['Remove it from', YES, SURE])

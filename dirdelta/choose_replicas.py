@@ -19,7 +19,7 @@ NOT_CHOSEN = '<none: press Enter to choose one>'
 LOCAL = 'Local disk'
 CLOUD = 'Google Drive'
 QUIT = 'Quit'
-KNOWN_LIST = '  Replicas dashboard: every known replica (when synced, files, hashes)'
+KNOWN_LIST = '  Replicas dashboard: every known replica (last updates, files, hashes)'
 SORT = '  New sort: choose an inbox, and the sorted tree its files go to (with Claude\'s help)'
 # The menu's sections' headings (shown in grey, and skipped when moving: they can't be picked)
 SYNC_SECTION = '\u2500\u2500 Sync two replicas \u2500\u2500'
@@ -261,7 +261,8 @@ def known_lines(info, styled=False):
                                                 ' - ' + text[0] if text[0] else '',
                                                 ' (+%d more line%s)' % (len(text) - 1, 's' if len(text) > 2 else '')
                                                 if len(text) > 1 else ''))
-    # (None said without a log: dirdelta keeps none)
+    else:
+        lines.append('  Last update: (no %s)' % (replicalog.LOG_NAME,))
     synced = ['synced %s' % (_time(info['seen']),)] if info.get('seen') else []
     synced += ['changed by dirdelta %s' % (_time(info['changed']),)] if info.get('changed') else []
     if synced:

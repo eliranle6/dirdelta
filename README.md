@@ -224,9 +224,13 @@ in it (so a disk is the same replica wherever it's mounted), a Drive one by the 
 The menu of a run without paths says when each was last updated (`/mnt/win/eliran (updated
 17.05.2026) <-> cloud/eliran`), and its "Replicas dashboard" lists them all, with their last
 entry, when they were last synced and changed by dirdelta, which disks aren't connected now, and
-their files' hashes (in a sync or a sort, the same dashboard is in its menu and behind `#`). dirdelta no longer writes logs (since 2026-11-01): a sync or a sort
-only notes, in `replicas.json`, when it changed a replica; a `last_update.txt` you keep is still
-read. An inbox's isn't read either: it's where files wait to be sorted, not a replica.
+their files' hashes (in a sync or a sort, the same dashboard is in its menu and behind `#`). When you quit a sync that changed files (live: copied, removed or moved), it offers
+an entry for each changed replica, e.g. `30.10.2026 - copied 12 files from cloud/eliran` for the one
+copied into: added to its log (only its: the other's log is of the other's changes), edited first,
+or not (a log is made if there's none).
+An inbox's sort does the same for the sorted tree, when you quit it: e.g. `30.10.2026 - added 12
+files from cloud/unsorted`. An inbox has no log (no `last_update.txt` is made or read in it): it's
+where files wait to be sorted, not a replica to keep track of.
 
 The fixtures are a small music library. Both have 106 files in common; only `alpha` has 364 (e.g.
 `podcasts/`, `music/Nina Simone/` and `first/infirst/ininfirst/huh/99.mp3`), and only `bravo` has 31

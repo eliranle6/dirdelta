@@ -191,13 +191,33 @@ EDIT_ENTRY = "Edit it first"
 
 
 def offer_entries(changes, replicas_and_paths, known_replicas):
-    """After a sync or an inbox's sort, note in known_replicas (a replicas.Replicas, saved) when
-    each replica it changed (changes, a Changes) was changed. No entry is added to its log anymore
-    (since 2026-11-01: the user doesn't want last_update.txt kept), though one there is still read
-    (see note_seen()). replicas_and_paths: [(the replica's tree, its path)], as before."""
-    by_name = {tree.displayname(): path for tree, path in replicas_and_paths}
+    """After a sync or an inbox's sort, for each replica it changed (changes, a Changes: what was
+    copied into it, removed from it, moved in it), offer to add an entry saying so to its log
+    (only its: the other replica's log is of the other's changes), today's: e.g. '30.10.2026 -
+    copied 12 files from cloud/eliran'. replicas_and_paths: [(the replica's tree, whose
+    displayname() changes has it by, its path)]. Notes in known_replicas (a replicas.Replicas,
+    saved) when each was changed, and its log's last entry."""
+    today = datetime.date.today()
+    by_name = {tree.displayname(): (tree, path) for tree, path in replicas_and_paths}
     for name in changes.paths():
-        known_replicas.note_changed(identity(by_name[name]), datetime.datetime.now())
+        tree, path = by_name[name]
+        text = changes.summary(name)
+        known_replicas.note_changed(identity(path), datetime.datetime.now())
+        while True:
+            line = entry_line(today, text)
+            add = ADD_ENTRY % (LOG_NAME, path)
+            header = "Add to %s? (%s)\n\n  %s" % (LOG_NAME, path, line)
+            answer = picker.pick_option([NO_ENTRY, add, EDIT_ENTRY], header=header, title="Log entry")
+            if answer == EDIT_ENTRY:
+                edited = messages.ask("The entry of %s's %s" % (path, LOG_NAME),
+                                      ["What changed in %s (after its date, %s):" % (
+                                          path, today.strftime(DATE_FORMAT))],
+                                      "> ", text, dryrun.label())
+                text = edited or text
+                continue
+            if answer == add:
+                _add_entry(tree, path, line, Entry(today, text), known_replicas)
+            break
     if changes.paths():
         replicas.save(known_replicas)
 

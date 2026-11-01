@@ -103,7 +103,7 @@ def _sync(replica_a, replica_b, replica_a_path, replica_b_path, known_replicas=N
 
     def shown_as():
         shown = {label: action.shown_as() for label, action in actions.items()}
-        shown[DASHBOARD] = "%s: files, when synced, hashes%s" % (
+        shown[DASHBOARD] = "%s: files, last updates, hashes%s" % (
             DASHBOARD, " (%s)" % ("; ".join(text for text, _ in hashing.status_parts(jobs)),) if jobs else "")
         if jobs:
             shown[''] = hashes_screen.picker_status([replica_a, replica_b])
