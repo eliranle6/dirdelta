@@ -18,10 +18,13 @@ class FindTest(unittest.TestCase):
         self.build_dir = os.path.join(self.tmpdir, 'build')
         for directory in (self.python_dir, self.build_dir):
             os.makedirs(directory)
-        for patcher in (mock.patch('sys.executable', os.path.join(self.python_dir, 'python3')),
-                        mock.patch('dirdelta.programs.SOURCE_TREE_BUILD', self.build_dir)):
-            patcher.start()
-            self.addCleanup(patcher.stop)
+        patcher = mock.patch('sys.executable', os.path.join(self.python_dir, 'python3'))
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        patcher = mock.patch.dict(os.environ)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        os.environ.pop(programs.PROGRAMS_DIR_VARIABLE, None)
 
     def make_program(self, directory):
         path = os.path.join(directory, 'prog')
@@ -39,14 +42,16 @@ class FindTest(unittest.TestCase):
             self.find()
         self.assertIn('make build', str(context.exception))
 
-    def test_next_to_python_comes_first(self):
-        # Where make install and make deploy put it
-        expected = self.make_program(self.python_dir)
-        self.make_program(self.build_dir)
+    def test_the_build_said_comes_first(self):
+        # bin/python's and make's, when running from source
+        os.environ[programs.PROGRAMS_DIR_VARIABLE] = self.build_dir
+        expected = self.make_program(self.build_dir)
+        self.make_program(self.python_dir)
         self.assertEqual(self.find(on_path='/bin/prog'), expected)
 
-    def test_source_tree_build_comes_before_path(self):
-        expected = self.make_program(self.build_dir)
+    def test_next_to_python_comes_before_path(self):
+        # Where make install and make deploy put it
+        expected = self.make_program(self.python_dir)
         self.assertEqual(self.find(on_path='/bin/prog'), expected)
 
     def test_on_path(self):

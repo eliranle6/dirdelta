@@ -1,0 +1,12 @@
+#!/bin/sh
+# Prints where everything generated for this copy of the repo goes (so the repo itself stays clean, and
+# can be copied as it is): the programs built, the bytecode, what's made while installing; ../venv, one
+# level up, is shared by all the copies. DIRDELTA_BUILD_DIR overrides it. By the user's real home, so a
+# run with a scratch HOME still finds them.
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+if [ -n "$DIRDELTA_BUILD_DIR" ]; then
+    echo "$DIRDELTA_BUILD_DIR"
+else
+    HOME_DIR="$(getent passwd "$(id -u)" | cut -d: -f6)"
+    echo "${HOME_DIR:-$HOME}/.cache/dirdelta-build/$(echo "$ROOT" | tr / _)"
+fi

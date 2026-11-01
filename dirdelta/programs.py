@@ -3,9 +3,8 @@ import os
 import shutil
 import sys
 
-# Where make build puts them, when running from the source tree
-SOURCE_TREE_BUILD = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-                                 'lib', 'treepicker', 'build')
+# Where make build put them, when running from the source tree (bin/python and make set it)
+PROGRAMS_DIR_VARIABLE = 'DIRDELTA_PROGRAMS_DIR'
 
 
 class ProgramError(Exception):
@@ -13,16 +12,17 @@ class ProgramError(Exception):
 
 
 def find(name):
-    """The program: next to the Python running dirdelta, where make install and make deploy put it;
-    else the source tree's build (make build), for running from source; else on PATH."""
+    """The program: in this copy's build, when running from source (make build; bin/python says
+    where); else next to the Python running dirdelta, where make install and make deploy put it;
+    else on PATH."""
     # Not resolving sys.executable's links: a venv's python links to the system's
-    for candidate in (os.path.join(os.path.dirname(sys.executable), name),
-                      os.path.join(SOURCE_TREE_BUILD, name)):
-        if os.access(candidate, os.X_OK):
+    for directory in (os.environ.get(PROGRAMS_DIR_VARIABLE), os.path.dirname(sys.executable)):
+        candidate = os.path.join(directory, name) if directory else None
+        if candidate and os.access(candidate, os.X_OK):
             return candidate
     program = shutil.which(name)
     if not program:
         raise ProgramError(
-            '%s was not found. Build it with make build, or install it with make install or make '
-            'deploy.' % name)
+            '%s was not found. Build it with make build (and run dirdelta with bin/python), or install it '
+            'with make install or make deploy.' % name)
     return program

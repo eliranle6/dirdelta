@@ -1,0 +1,12 @@
+#!/bin/sh
+# The Python to run dirdelta from source with: make venv's (else whichever python3 is on PATH), finding
+# this copy's modules and programs, and writing no bytecode into the repo. Any arguments go to it, e.g.
+# bin/python -m dirdelta
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+OUT="$("$ROOT/bin/builddir")"
+PY="$(dirname "$OUT")/venv/bin/python3"
+[ -x "$PY" ] || PY=python3
+PYTHONPATH="$ROOT${PYTHONPATH:+:$PYTHONPATH}" \
+PYTHONPYCACHEPREFIX="$OUT/pycache" \
+DIRDELTA_PROGRAMS_DIR="$OUT/treepicker" \
+    exec "$PY" "$@"
