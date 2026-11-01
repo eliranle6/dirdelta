@@ -643,6 +643,29 @@ class ActInDstTest(_TwoDirsTestCase):
         self.assertTrue(os.path.exists(os.path.join(self.dst_path, 'repo', 'x.txt')))
         self.assertFalse(self.sync.has_changed)
 
+    def test_d_there_goes_straight_to_confirming(self):
+        with mock.patch('dirdelta.picker.pick_option', side_effect=['Yes', 'Yes, remove them']) as pick_option, \
+                mock.patch('dirdelta.dryrun.DRYRUN', False):
+            self.sync._act_in_dst('repo', True)
+        self.assertTrue(pick_option.call_args_list[0].args[0][-1] == 'Yes')
+        self.assertFalse(os.path.exists(os.path.join(self.dst_path, 'repo', 'x.txt')))
+
+    def test_d_on_a_read_only_one_says_so(self):
+        with mock.patch('dirdelta.interactive_dir_sync.is_writable', return_value=False), \
+                mock.patch('dirdelta.picker.pick_option') as pick_option:
+            self.assertIsNone(self.sync._act_in_dst('repo', True))
+        pick_option.assert_not_called()
+        self.assertEqual(interactive_dir_sync.messages.show.call_args.args[0], "Can't remove it")
+
+    def test_the_picker_is_told_the_keys_there(self):
+        pick_files = self.enter('')
+        side = pick_files.call_args.kwargs['side']
+        self.assertIn('d', side.keys)
+        self.assertIn(':', side.keys)
+        self.assertIn(('d', 'remove'), side.key_hints)
+        self.assertTrue(pick_files.call_args.kwargs['enter_picks_selection'])
+        self.assertEqual(pick_files.call_args.kwargs['none_picked_key_hints'], [('Enter', 'Pick & choose what to do')])
+
     def test_not_all_of_dst(self):
         self.enter('')
         self.assertEqual(interactive_dir_sync.messages.show.call_args.args[0], "That's all of %s" % (self.dst_path,))

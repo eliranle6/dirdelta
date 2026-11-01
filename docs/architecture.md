@@ -468,7 +468,7 @@ files are removed (`removal_notes()`), or which Google files a copy skips
 loops around these (progress lines, dry run, Ctrl-C, the report) are
 `DirTree`'s `copy_inner_entries_from_dirtree()` and `remove_files()`, shared
 with `LocalDiskDirTree`. A file that fails is said in red, and the rest go on.
-The same refresh is the main menu's "Refresh cloud/X from Google Drive"
+The same refresh is the main menu's "Refresh cloud/X file list from Google Drive"
 (all of the replica) and the file picker's `Ctrl-R` key (the selected folder, or
 the folder of the selected file: `CloudDirTree.refresh_from_drive(relpath)`,
 which goes up to the closest folder the tree has, e.g. for a dir only the
@@ -639,7 +639,7 @@ saying why ("none, B has them all", a `picker.Disabled`). Choosing an option
 waits for both ways (an action may change what the other is diffing), and
 after a screen that changed the files (`InteractiveDirSync.has_changed`: a
 live action, or a refresh in its picker) both are found again. Each cloud
-replica also gets "Refresh cloud/X from Google Drive", for when Drive changed
+replica also gets "Refresh cloud/X file list from Google Drive", for when Drive changed
 since the cache was made: `interactive_dir_sync.refresh_replica()`, which runs
 `CloudDirTree.refresh_from_drive()` (see `clouddirtree.py` above), and says on
 a screen if it fails (an `HttpError`, an `OSError` such as no network, a

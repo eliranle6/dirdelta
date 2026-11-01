@@ -17,7 +17,7 @@ IN_THE_PICKER = "These keys work in the file list itself:"
 # What only treepicker does, so can't be done from a menu
 PICKER_KEYS = [('V', 'pick a range'), ('/', 'search'), ('f', 'only the matches of a search, or all'),
                ('p', 'show or hide the preview column'), ('?', 'all the keys')]
-SIDE_KEY_NAME = 'Ctrl-L'
+SIDE_KEY_NAME = 'Ctrl-W l'
 
 # An option: its key's name (None: it has none), what it does, and what's returned if it's chosen
 Entry = collections.namedtuple('Entry', ['key_name', 'label', 'result'])
@@ -37,7 +37,7 @@ def under(relpaths, selected):
 def choose(entries, header, label=None, side=None):
     """Let the user choose one of entries, below which the picker's own keys are shown (with side, what
     the tree beside the picker is, its key's too). Returns its result, or None to go back."""
-    keys = list(PICKER_KEYS) + ([(SIDE_KEY_NAME, 'move in %s, beside it' % (side,))] if side else [])
+    keys = list(PICKER_KEYS) + ([(SIDE_KEY_NAME, 'move to %s, on the right (Ctrl-W h: back)' % (side,))] if side else [])
     results = {entry.label: entry.result for entry in entries}
     # The keys' lines are options too, though they can't be chosen, so each is unique
     lines = ["%s %s" % key for key in keys]

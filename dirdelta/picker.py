@@ -156,8 +156,9 @@ def display_width(text):
 
 # What pick_files() returns: the key that ended picking ('' for Enter), the selected node's relpath
 # ('' for the root), to show it again there, and the files picked
-Picked = collections.namedtuple('Picked', ['key', 'selected', 'files', 'side_selected'],
-                                defaults=(None,))
+# (After Enter or another of its keys in the side tree, side_pressed says which: '' for Enter)
+Picked = collections.namedtuple('Picked', ['key', 'selected', 'files', 'side_selected', 'side_pressed'],
+                                defaults=(None, ''))
 
 # Another tree beside a pick_files() picker's, in the lower part of its right column, to look
 # through (Ctrl-L moves in it, Ctrl-H back), e.g. where its files would go: its root's name, its
@@ -165,9 +166,10 @@ Picked = collections.namedtuple('Picked', ['key', 'selected', 'files', 'side_sel
 # ends picking (then the Picked's key is SIDE_KEY, and its side_selected the side tree's selected
 # relpath, '' the root), and follow, if given: called with the picker's selected relpath each time
 # it moves (on a thread of its own), returning the side tree's relpath to select (or its closest
-# dir there), or None to leave it where it is
-Side = collections.namedtuple('Side', ['root_name', 'items', 'is_enter_picking', 'follow'],
-                              defaults=(False, None))
+# dir there), or None to leave it where it is; keys: other keys that end picking there, as Enter;
+# key_hints: the keys row while moving in it ([(key, what it does)])
+Side = collections.namedtuple('Side', ['root_name', 'items', 'is_enter_picking', 'follow', 'keys', 'key_hints'],
+                              defaults=(False, None, '', ()))
 # What a Picked's key is when Enter in the side tree ended it (a byte no key prints)
 SIDE_KEY = '\x1d'
 
@@ -193,7 +195,8 @@ def pick_from_tree(tree, header='', dirs_only=False, root_name=None, keys='', ke
 
 def pick_files(rootpath, relpaths, header='', picked=None, label=None, keys='', selected=None,
                previews=None, on_selection=None, shown_as=None, notify_keys='', on_notify=None,
-               enter_picks_selection=False, key_hints=(), help_lines=(), twice_keys='', side=None):
+               enter_picks_selection=False, key_hints=(), help_lines=(), twice_keys='', side=None,
+               none_picked_key_hints=()):
     """Let the user pick some of the files at relpaths (relative to rootpath, each dir's files and
     subdirs together, in the order to show them, as dirdiff lists them). Picking a dir picks the
     files under it. Returns a Picked: the picked ones (of relpaths), in that order, and where the
@@ -228,13 +231,16 @@ def pick_files(rootpath, relpaths, header='', picked=None, label=None, keys='', 
 
     key_hints: [(key, what it does here)] for the keys row at the bottom (the caller's keys, or
     treepicker's, e.g. ('Enter', 'choose what to do')); help_lines: lines for its ? help (e.g. what
-    the tags mean).
+    the tags mean); none_picked_key_hints: what the keys row says instead of those while nothing's
+    picked.
 
     Only the files are sent: treepicker adds their dirs, so no tree is built here."""
     args = (['--typed', '--root', rootpath, '-m', '--print-selection'] + _header_args(header) +
             _help_args(key_hints, help_lines))
     if enter_picks_selection:
         args.append('--enter-picks-selection')
+    for key, text in none_picked_key_hints:
+        args += ['--key-if-none-picked', key, text]
     if keys:
         args += ['--expect', keys]
     if twice_keys:
@@ -263,14 +269,16 @@ def pick_files(rootpath, relpaths, header='', picked=None, label=None, keys='', 
         key, picked_paths = _twice(picked_paths[0], twice_keys), picked_paths[1:]
     # Then the selected node, and after Enter in the side tree, its selected one
     selected, picked_paths = picked_paths[0], picked_paths[1:]
-    side_selected = None
+    side_selected, side_pressed = None, ''
     if key == SIDE_KEY:
         side_selected, picked_paths = picked_paths[0], picked_paths[1:]
         side_selected = '' if side_selected == '.' else side_selected
+        if side.keys:
+            side_pressed, picked_paths = picked_paths[0], picked_paths[1:]
     # What's picked includes the dirs whose files all are
     files = set(relpaths)
     return Picked(key, '' if selected == '.' else selected,
-                  [path for path in picked_paths if path in files], side_selected)
+                  [path for path in picked_paths if path in files], side_selected, side_pressed)
 
 
 def view_files(rootpath, relpaths, header='', previews=None, label=None, shown_as=None, on_selection=None,
@@ -459,6 +467,10 @@ def _run(args, input_items, shown_as=None, label=None, previews=None, on_selecti
         command.extend(['--side', side_file.name, '--side-root', side.root_name])
         if side.is_enter_picking:
             command.extend(['--side-key', SIDE_KEY])
+        if side.keys:
+            command.extend(['--side-expect', side.keys])
+        for key, text in side.key_hints:
+            command.extend(['--side-hint', key, text])
         if side.follow is not None:
             selections.append(Selection())
             jobs.append(functools.partial(_follow, selections[-1], side.follow, pipe('--side-select', True)))

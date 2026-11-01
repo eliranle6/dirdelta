@@ -289,9 +289,10 @@ class InboxSort(object):
                   (replicanames.full(self.inbox_path), replicanames.full(self.root_path)))
         keys = (self.REFRESH_KEY if self.inbox_is_cloud else '') + hashes_screen.KEY + aiplan_screen.KEY + contextmenu.KEY + archive_screen.KEY
         # The keys row has little room: the rest are in the menu (:), and ?
-        key_hints = [('Enter', 'what to do (none picked: the selected one)'), contextmenu.KEY_HINT]
+        key_hints = [('Enter', 'choose what to do'), contextmenu.KEY_HINT]
         more_keys = ([aiplan_screen.KEY_HINT, archive_screen.KEY_HINT, ('Ctrl-I', 'Claude: describe, and say where they go'),
-                      opening.KEY_HINT, renaming.KEY_HINT, ('Ctrl-L', 'the sorted tree')] +
+                      opening.KEY_HINT, renaming.KEY_HINT,
+                      ('Ctrl-W l', 'move to the sorted tree, on the right (Ctrl-W h: back)')] +
                      ([(self.REFRESH_KEY_NAME, 'read the folder anew from Drive')] if self.inbox_is_cloud else []) +
                      [hashes_screen.KEY_HINT])
         help_lines = (picker.key_help_lines(more_keys) + ["Tags after a file's name (/ searches them too):",
@@ -314,7 +315,9 @@ class InboxSort(object):
                 previews=lambda send, files=files: self._send_previews(files, send),
                 shown_as=lambda files=files: self._shown_as(files),
                 notify_keys=DESCRIBE_KEY + OPEN_KEY, enter_picks_selection=True, twice_keys=renaming.KEY,
-                side=picker.Side(self.root_path, self._side_items(), True, self._side_follow),
+                side=picker.Side(self.root_path, self._side_items(), True, self._side_follow,
+                                 key_hints=[('Enter', 'move the files here')]),
+                none_picked_key_hints=[('Enter', 'Pick & choose what to do')],
                 on_notify=lambda key, selected, picked, files=files: self._on_key(key, selected, picked, files),
                 on_selection=functools.partial(elsewhere.check_contents, files, self._inbox_view,
                                                self._inbox_index, self._root_index, self._checked,

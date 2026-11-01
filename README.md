@@ -177,8 +177,9 @@ disk have it (`blue WD ext. disk:/mnt/eliran`), and a Drive one's is its own, by
 
 ### Removing from the other replica
 
-In a sync's file picker the other replica's tree is at the top right. `Ctrl-L` moves into it, and Enter on a file
-or dir there offers to remove it (after confirming twice), so you needn't go to the other direction's picker. Removing
+In a sync's file picker the other replica's tree is at the top right. `Ctrl-W l` moves into it, as in vim (`Ctrl-W h`
+back; `Ctrl-L` and `Ctrl-H` do too). `d` there removes the selected file or dir, after confirming twice, and Enter or `:`
+offers it, so you needn't go to the other direction's picker. Removing
 one version of a repository this way makes the other replica's version show up as missing, ready to copy.
 
 ### The menu of the keys (`:`)

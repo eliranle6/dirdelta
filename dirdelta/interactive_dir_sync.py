@@ -128,6 +128,8 @@ class InteractiveDirSync(object):
     # Ctrl-R
     REFRESH_KEY = '\x12'
     REFRESH_KEY_NAME = 'Ctrl-R'
+    # The key that removes what's selected in the tree beside the picker (dst's)
+    SIDE_REMOVE_KEY = 'd'
 
     def __init__(self, src, dst, missing=None, src_index=None, dst_index=None, checked=None, changes=None):
         """missing: a future (concurrent.futures.Future) of find_missing(src, dst), e.g. found in
@@ -172,7 +174,9 @@ class InteractiveDirSync(object):
         # The keys row has little room: the rest are in the menu (:), and ?
         key_hints = [('Enter', 'choose what to do'), contextmenu.KEY_HINT]
         more_keys = ([aiplan_screen.KEY_HINT, archive_screen.KEY_HINT, opening.KEY_HINT, renaming.KEY_HINT,
-                      ('Ctrl-L', 'move in %s' % (dst_name,)), ('Enter there', 'remove what\'s selected there')] +
+                      ('Ctrl-W l', 'move to %s, on the right (Ctrl-W h: back)' % (dst_name,)),
+                      (self.SIDE_REMOVE_KEY + ' there', 'remove what\'s selected there'),
+                      ('Enter, : there', 'choose what to do with it')] +
                      ([(self.REFRESH_KEY_NAME, 'read the folder anew from Drive')] if clouds else []) +
                      [hashes_screen.KEY_HINT])
         picked, selected = [], None
@@ -196,7 +200,11 @@ class InteractiveDirSync(object):
                     keys=keys, selected=selected, key_hints=key_hints,
                     shown_as=shown_as, notify_keys=opening.KEY, twice_keys=renaming.KEY,
                     # dst beside it, to look through (e.g. for a newer version of a file)
-                    side=picker.Side(dst_name, self._side_items(), True, self._side_follow),
+                    side=picker.Side(dst_name, self._side_items(), True, self._side_follow,
+                                     self.SIDE_REMOVE_KEY + contextmenu.KEY,
+                                     [('Enter', 'choose what to do'), (self.SIDE_REMOVE_KEY, 'remove'), contextmenu.KEY_HINT]),
+                    enter_picks_selection=True,
+                    none_picked_key_hints=[('Enter', 'Pick & choose what to do')],
                     # Ctrl-X opens the selected one (the picked ones: the menu's Open)
                     on_notify=lambda key, selected, picked: self._opener.press([selected], files),
                     help_lines=picker.key_help_lines(more_keys) + (hashes_screen.HELP_LINES if jobs else []),
@@ -259,7 +267,7 @@ class InteractiveDirSync(object):
                 done = self._ask_ai(chosen.files or missing,
                                     chosen.files or (contextmenu.under(missing, selected) if selected else []))
             elif key == picker.SIDE_KEY:
-                done = self._act_in_dst(chosen.side_selected)
+                done = self._act_in_dst(chosen.side_selected, chosen.side_pressed == self.SIDE_REMOVE_KEY)
             elif not key:
                 done = self._act(chosen.files, selected)
                 if done == self.REFRESH_KEY:
@@ -320,10 +328,10 @@ class InteractiveDirSync(object):
         entries.append(contextmenu.Entry(hashes_screen.KEY, "Replicas dashboard", hashes_screen.KEY))
         return contextmenu.choose(entries, contextmenu.nothing_picked(len(missing)), side=self._dst.displayname())
 
-    def _act_in_dst(self, relpath):
-        """Enter in the tree beside the picker, dst's, on the file or dir at relpath: choose what to do
-        with it there, e.g. to remove a version of a repository that src has another of, then copy that
-        one. Returns the files done (none in a dry run), or None if none were: then dst is diffed anew,
+    def _act_in_dst(self, relpath, is_removed=False):
+        """Enter (or :) in the tree beside the picker, dst's, on the file or dir at relpath: choose what
+        to do with it there, e.g. to remove a version of a repository that src has another of, then
+        copy that one; with is_removed (d there), it's to remove it. Returns the files done (none in a dry run), or None if none were: then dst is diffed anew,
         as its files changed."""
         name = self._dst.displayname()
         if not relpath:
@@ -339,8 +347,12 @@ class InteractiveDirSync(object):
             return None
         remove = "Remove %s (%s) from %s" % (relpath, _files(len(files)), name)
         shown = {} if is_writable(self._dst) else {remove: picker.Disabled("%s: can't, it's read-only" % (remove,))}
-        answer = picker.pick_option([self.NOTHING, remove], header="%s, in %s: what to do with it?" % (relpath, name),
-                                    shown_as=lambda: shown, title="What to do")
+        if is_removed and shown:
+            messages.show("Can't remove it", ["%s is read-only." % (name,)], dryrun.label())
+            return None
+        answer = remove if is_removed else picker.pick_option(
+            [self.NOTHING, remove], header="%s, in %s: what to do with it?" % (relpath, name),
+            shown_as=lambda: shown, title="What to do")
         if answer != remove or not self._confirm(self.REMOVE, files, replica=self._dst):
             return None
         title = "Removing %s from %s%s" % (_files(len(files)), name, " (a dry run)" if dryrun.DRYRUN else "")
