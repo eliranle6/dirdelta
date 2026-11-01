@@ -27,6 +27,7 @@ from dirdelta import downloads
 from dirdelta import dryrun
 from dirdelta import elsewhere
 from dirdelta import entries
+from dirdelta import hashcache
 from dirdelta import hashes_screen
 from dirdelta import hashing
 from dirdelta import interactive_dir_sync
@@ -446,7 +447,11 @@ class InboxSort(object):
 
     def prepare_hashing(self):
         """Look for the hashes of the local inbox's and sorted tree's files, and offer to hash the
-        rest (see hashes_screen.offer()). Returns whether to go on."""
+        rest (see hashes_screen.offer()). Returns whether to go on. A local sorted tree's hashes are
+        kept in it (see hashcache.use_replica()); the inbox's, if it's not in it, aren't (it's no
+        replica)."""
+        if not self.root_is_cloud:
+            hashcache.use_replica(self.root_path)
         return hashes_screen.offer(hashes_screen.prepare(self._views()))
 
     def _shown_as(self, relpaths):

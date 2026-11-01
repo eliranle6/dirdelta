@@ -2,6 +2,15 @@
 'cloud' (e.g. cloud/mein/music), a local one is any other."""
 import os
 
+# The dir at a local replica's root where dirdelta keeps what it knows of it (its files' hashes, see
+# hashcache.py): not one of its files, so it's left out of syncs
+META_DIR = 'meta'
+
+
+def is_meta(relpath):
+    """Whether relpath (in a replica) is its META_DIR, or in it"""
+    return relpath == META_DIR or relpath.startswith(META_DIR + '/')
+
 
 def components(path):
     """path's components, without empty ones (so '/cloud//mein/' is ['cloud', 'mein'])"""

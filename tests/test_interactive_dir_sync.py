@@ -514,5 +514,15 @@ class ShownTest(unittest.TestCase):
 
 
 
+
+class FindMissingTest(unittest.TestCase):
+    def test_what_dirdelta_keeps_in_a_replica_isnt_one_of_its_files(self):
+        roots = [tempfile.mkdtemp(prefix='dirdelta-missing-') for _ in range(2)]
+        for root in roots:
+            self.addCleanup(shutil.rmtree, root)
+        helpers.make_files(roots[0], ['a.txt', 'meta/hashes.sqlite', 'metal/b.txt'])
+        a, b = [localdiskdirtree.LocalDiskDirTree(root, silent=True) for root in roots]
+        self.assertEqual(interactive_dir_sync.find_missing(a, b).relpaths, ['a.txt', 'metal/b.txt'])
+
 if __name__ == '__main__':
     unittest.main()

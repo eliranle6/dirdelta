@@ -9,13 +9,17 @@ import helpers
 from dirdelta import hashcache
 
 
-class HashCacheTest(unittest.TestCase):
+class _CacheTestCase(unittest.TestCase):
     def setUp(self):
         self.tmpdir = tempfile.mkdtemp(prefix='dirdelta-hashcache-')
         self.addCleanup(shutil.rmtree, self.tmpdir)
         self.cache = os.path.join(self.tmpdir, 'cache', 'hashes.sqlite')
         # A database of its own (opened again, as CACHE_FILE changed), and back to the tests' one
         patcher = mock.patch('dirdelta.hashcache.CACHE_FILE', self.cache)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        # No replica's own database, but the ones a test makes
+        patcher = mock.patch.dict('dirdelta.hashcache._replicas', clear=True)
         patcher.start()
         self.addCleanup(patcher.stop)
         self.path = self.make('x', 'x')
@@ -27,6 +31,8 @@ class HashCacheTest(unittest.TestCase):
             f.write(contents)
         return path
 
+
+class HashCacheTest(_CacheTestCase):
     def test_a_hash_is_kept_until_the_file_changes(self):
         hashcache.put(self.path, {'sha1': 'H'})
         self.assertEqual(hashcache.get(self.path, 'sha1'), 'H')
@@ -79,6 +85,64 @@ class HashCacheTest(unittest.TestCase):
         self.assertEqual(hashcache.get(os.path.join(self.tmpdir, 'e', 'a', 'y'), 'sha1'), 'Y')
         # Not d2, which only starts like d
         self.assertEqual(hashcache.get(os.path.join(self.tmpdir, 'd2', 'z'), 'sha1'), 'Z')
+
+
+class ReplicaDatabaseTest(_CacheTestCase):
+    """A replica's hashes kept in it (META_DIR/META_NAME)"""
+    def setUp(self):
+        super().setUp()
+        self.root = os.path.join(self.tmpdir, 'replica')
+        self.file = self.make('replica/a/f', 'ff')
+        hashcache.put(self.file, {'sha1': 'F'})
+        hashcache.put(self.path, {'sha1': 'H'})
+
+    def use(self):
+        with mock.patch('dirdelta.dryrun.DRYRUN', False):
+            return hashcache.use_replica(self.root)
+
+    def test_its_made_in_the_replica_with_the_hashes_kept_of_its_files(self):
+        self.assertEqual(self.use(), os.path.join(self.root, 'meta', 'hashes.sqlite'))
+        hashcache.save()
+        with sqlite3.connect(os.path.join(self.root, 'meta', 'hashes.sqlite')) as db:
+            # By their paths in the replica
+            self.assertEqual(db.execute('SELECT path, hashes FROM files').fetchall(), [('a/f', '{"sha1": "F"}')])
+        with sqlite3.connect(self.cache) as db:
+            # Moved out of CACHE_FILE; the others stay
+            self.assertEqual(db.execute('SELECT path FROM files').fetchall(), [(self.path,)])
+        self.assertEqual(hashcache.get(self.file, 'sha1'), 'F')
+        self.assertEqual(list(hashcache.known_under(self.root)), ['a/f'])
+        self.assertEqual(list(hashcache.known_under(os.path.join(self.root, 'a'))), ['f'])
+        self.assertEqual(hashcache.count_under(self.root), 1)
+        # Put there from now on
+        other = self.make('replica/g', 'g')
+        hashcache.put(other, {'sha1': 'G'})
+        self.assertEqual(sorted(hashcache.known_under(self.root)), ['a/f', 'g'])
+
+    def test_not_made_in_a_dry_run(self):
+        with mock.patch('dirdelta.dryrun.DRYRUN', True):
+            self.assertIsNone(hashcache.use_replica(self.root))
+        self.assertFalse(os.path.exists(os.path.join(self.root, 'meta')))
+        self.assertEqual(hashcache.get(self.file, 'sha1'), 'F')
+
+    def test_one_there_is_used_in_a_dry_run_and_counted_before(self):
+        self.use()
+        hashcache.save()
+        hashcache._replicas.clear()
+        hashcache.put(self.file, {'sha1': 'OLD'})
+        # Counted from the replica's own, before it's used
+        self.assertEqual(hashcache.count_under(self.root), 1)
+        with mock.patch('dirdelta.dryrun.DRYRUN', True):
+            self.assertIsNotNone(hashcache.use_replica(self.root))
+        # The replica's own is kept, rather than what CACHE_FILE had since
+        self.assertEqual(hashcache.get(self.file, 'sha1'), 'F')
+
+    def test_a_file_moved_into_the_replica_keeps_its_hashes(self):
+        self.use()
+        new_path = os.path.join(self.root, 'x')
+        os.rename(self.path, new_path)
+        hashcache.move(self.path, new_path)
+        self.assertEqual(hashcache.get(new_path, 'sha1'), 'H')
+        self.assertEqual(sorted(hashcache.known_under(self.root)), ['a/f', 'x'])
 
 
 if __name__ == '__main__':

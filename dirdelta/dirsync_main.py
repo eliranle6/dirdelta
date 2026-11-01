@@ -7,6 +7,7 @@ from dirdelta import choose_replicas
 from dirdelta import clouddirtree
 from dirdelta import dryrun
 from dirdelta import elsewhere
+from dirdelta import hashcache
 from dirdelta import hashes_screen
 from dirdelta import hashing
 from dirdelta import interactive_dir_sync
@@ -58,7 +59,10 @@ def _run(args):
     replicalog.note_seen(trees, known_replicas)
     replicas.save(known_replicas)
     # The local replicas' files' hashes, which find a file by its contents: hashed in the
-    # background, if the user wants
+    # background, if the user wants, and kept in each (see hashcache.use_replica())
+    for tree in (dirtree_a, dirtree_b):
+        if hashes_screen.is_local(tree):
+            hashcache.use_replica(tree.fullpath())
     if not hashes_screen.offer(hashes_screen.prepare([dirtree_a, dirtree_b])):
         return
     changes = replicalog.Changes()

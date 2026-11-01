@@ -213,8 +213,16 @@ green; `_bracket()` takes the longest name that fits, `_fitting()` cuts a long
 sorted tree's root to `.../its-name/`).
 
 ### `hashcache.py`
-Local files' contents' hashes, in `~/.cache/dirdelta/hashes.sqlite`
-(`CACHE_FILE`, SQLite in WAL mode: a table `files(path, size, mtime_ns,
+Local files' contents' hashes. A local replica's are kept in it, in
+`meta/hashes.sqlite` (`paths.META_DIR`, `META_NAME`; by their paths in the
+replica, so they're found wherever its disk is mounted), from when
+`use_replica(root)` is called (a sync's local replicas, a sort's local sorted
+tree): it makes the database there unless it's a dry run or the replica is
+read-only, and moves `CACHE_FILE`'s hashes of its files into it (once: they're
+deleted there). `meta/` is left out of the diffs (`interactive_dir_sync.find_missing()`)
+and of hashing (`Job.scan()`). Others' (an inbox not in its sorted tree, a
+read-only replica) are in `~/.cache/dirdelta/hashes.sqlite`
+(`CACHE_FILE`, by absolute paths; `_where()` picks the database). Each is SQLite in WAL mode: a table `files(path, size, mtime_ns,
 hashes)`, the hashes as JSON), by path, with the size and mtime (ns) they were
 of: a hash of a file changed since isn't given. `LocalDiskDirTree.content_hashes()` reads
 it first and keeps what it works out; `elsewhere._same_contents()` compares

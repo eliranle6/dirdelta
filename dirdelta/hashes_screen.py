@@ -317,7 +317,8 @@ def _finish_dashboard(items, options, shown, names, jobs):
     options.append(BACK)
     header = ("Replicas: when synced, and their files' hashes\n\n"
               "A local one's hashes are worked out here (SHA-1, as Drive's), each file read once, at the lowest "
-              "priority, and kept in %s." % (hashcache.CACHE_FILE,))
+              "priority, and kept in it, in %s (until it has one, in a dry run or if it's read-only: in %s)." % (
+                  os.path.join(paths.META_DIR, hashcache.META_NAME), hashcache.CACHE_FILE))
 
     def shown_now():
         now = dict(shown, **_jobs_shown(items, names))

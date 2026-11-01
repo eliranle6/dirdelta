@@ -98,6 +98,8 @@ class Job(object):
                 self.error = str(error)
                 self._is_scanning = False
             return
+        # What dirdelta keeps in the replica isn't its files (its hashes are in it, see hashcache.py)
+        listed = {relpath: stamp for relpath, stamp in listed.items() if not paths.is_meta(relpath)}
         kept = hashcache.known_under(self.root)
         hashes, left, size_done = {}, [], 0
         for relpath, stamp in listed.items():

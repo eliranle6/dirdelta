@@ -14,6 +14,7 @@ from dirdelta import dryrun
 from dirdelta import hashes_screen
 from dirdelta import hashing
 from dirdelta import localdiskdirtree
+from dirdelta import paths
 from dirdelta import messages
 from dirdelta import opening
 from dirdelta import picker
@@ -31,7 +32,12 @@ def find_missing(src, dst):
     """The files of src that dst lacks (Missing), each dir's together, sorted. Two local dirs are
     diffed with dirdiff, which scans them anew (so dirdelta needn't keep their trees, and its diff
     isn't from a stale scan); other trees are diffed as they are. Shows nothing, so it can run in
-    the background."""
+    the background. What dirdelta keeps in a replica (its paths.META_DIR) isn't one of its files."""
+    missing = _find_missing(src, dst)
+    return Missing([relpath for relpath in missing.relpaths if not paths.is_meta(relpath)], missing.warning)
+
+
+def _find_missing(src, dst):
     if not (isinstance(src, localdiskdirtree.LocalDiskDirTree) and
             isinstance(dst, localdiskdirtree.LocalDiskDirTree)):
         missing = dst.get_unknown_entries_in_given_dirtree(src)
