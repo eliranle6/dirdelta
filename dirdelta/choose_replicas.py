@@ -216,8 +216,14 @@ def freshness(when):
     return RECENT if when.date() > today - datetime.timedelta(days=7) else OLD
 
 
-def cache_time():
-    """When Drive's file list was last read (its cache last written), or None"""
+def cache_time(path=None):
+    """When Drive's file list was last read (its cache last written), or None; with path (a cloud
+    path), when the cache's list of that folder was last updated, if that's known
+    (drivecache.updated(): read from Drive, changed by dirdelta, or its copy in it used)"""
+    if path is not None:
+        updated = drivecache.updated(paths.path_in_cloud(path))
+        if updated is not None:
+            return datetime.datetime.fromtimestamp(updated)
     try:
         return datetime.datetime.fromtimestamp(os.path.getmtime(drivecache.FILE_LIST_CACHE))
     except OSError:
@@ -247,7 +253,7 @@ def styled_pair(label, path_a, path_b, known):
         info = known.info_at(path) if known is not None else None
         parts = [(SYNCED_MARK + " ", freshness((info or {}).get('seen')) or 'grey')]
         if paths.is_cloud_path(path):
-            parts.append((CACHE_MARK + " ", freshness(cache_time()) or 'grey'))
+            parts.append((CACHE_MARK + " ", freshness(cache_time(path)) or 'grey'))
         return parts
     pair = pair_label(path_a, path_b, known)
     head = label[:len(label) - len(pair)] if label.endswith(pair) else label

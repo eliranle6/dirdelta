@@ -209,7 +209,11 @@ picked; Yes goes ahead. Its progress fills the screen under a top line saying wh
 stopped, `Enter` goes back to the picker, where you were, without the files done; `q` goes back
 to the main menu. With a cloud replica, the menu also has "Refresh cloud/X from Google
 Drive", which reads that folder anew from Drive (as the refresh offered at the start does), for when
-it changed outside dirdelta, and in the file picker `Ctrl-R` reads just the selected folder anew. Unless
+it changed outside dirdelta, and in the file picker `Ctrl-R` reads just the selected folder anew.
+A Drive replica's file list is kept in it too, in `meta/files.jsonl`: uploaded while a sync (or a
+sort into it) goes on, a minute at most after it changed, and once more at the end (not in a dry
+run). At the start, if the copy there is newer than this machine's cache (another machine's), it's
+used instead of reading the folder again. Unless
 `DRYRUN=0` is set, both are dry
 runs: they change nothing on disk (not even the dirs copied files would go into), and say what they
 would have done. Every screen says which it is, at the start of its status bar (its bottom line but

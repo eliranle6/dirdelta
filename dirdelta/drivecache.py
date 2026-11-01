@@ -11,6 +11,7 @@ import datetime
 import json
 import os
 import posixpath
+import time
 
 from dirdelta import exif
 from dirdelta import paths
@@ -94,6 +95,88 @@ def _keep_stale_paths(keep):
             marker.write(''.join(path + '\n' for path in dict.fromkeys(paths)))
     elif os.path.exists(_stale_marker_path()):
         os.remove(_stale_marker_path())
+
+
+def _times_path():
+    # Next to the cache (wherever it is, e.g. in tests)
+    return FILE_LIST_CACHE + '.times'
+
+
+def _times():
+    """What's kept of when the cache's folders were updated: {'updated': {folder path: when (seconds
+    since the epoch) the cache's list of what's under it was last made as Drive has it (read, or
+    changed by dirdelta)}, 'uploaded': {folder path: {'modified': the modifiedTime of the copy of
+    it last uploaded to Drive, or used from there (see drivemeta.py), 'as_of': the cache's updated()
+    of it then}}}"""
+    try:
+        with open(_times_path()) as times_file:
+            times = json.load(times_file)
+        if isinstance(times, dict):
+            return {'updated': dict(times.get('updated') or {}), 'uploaded': dict(times.get('uploaded') or {})}
+    except (OSError, ValueError):
+        pass
+    return {'updated': {}, 'uploaded': {}}
+
+
+def _save_times(times):
+    tmp_path = _times_path() + '.tmp'
+    os.makedirs(os.path.dirname(tmp_path), exist_ok=True)
+    with open(tmp_path, 'w') as times_file:
+        json.dump(times, times_file, indent=1)
+    os.replace(tmp_path, _times_path())
+
+
+def note_updated(folder_path, when=None):
+    """Note that the cache has what's under folder_path (a path in Drive) as Drive had it at when
+    (seconds since the epoch; default: now): read anew, or changed by dirdelta"""
+    times = _times()
+    times['updated'][_clean(folder_path)] = time.time() if when is None else when
+    _save_times(times)
+
+
+def updated(folder_path):
+    """When the cache's list of folder_path was last updated (see note_updated()), by the latest of
+    its own, a folder's above it (read with it) or under it (a change in it): seconds since the
+    epoch, or None if it's not known"""
+    folder_path = _clean(folder_path)
+    found = [when for path, when in _times()['updated'].items()
+             if _is_at_or_under(path, folder_path) or _is_at_or_under(folder_path, path)]
+    return max(found) if found else None
+
+
+def note_uploaded(folder_path, modified, as_of):
+    """Note that the copy of folder_path's list in Drive (see drivemeta.py) has Drive's modifiedTime
+    modified, the one this cache made (or used), when the cache's list was updated as of as_of (see
+    updated())"""
+    times = _times()
+    times['uploaded'][_clean(folder_path)] = {'modified': modified, 'as_of': as_of}
+    _save_times(times)
+
+
+def uploaded(folder_path):
+    """What note_uploaded() noted of folder_path: {'modified': ..., 'as_of': ...}, or None"""
+    found = _times()['uploaded'].get(_clean(folder_path))
+    return found if isinstance(found, dict) else None
+
+
+def _clean(folder_path):
+    return '/' + '/'.join(paths.components(folder_path))
+
+
+def under(folder_id, left_out=()):
+    """The metadata of what the cache has under the folder with folder_id (the files and folders in
+    it, and in those, ...), each folder before what's in it, without what's under the folders whose
+    ids are in left_out (nor them)"""
+    id_child_map, id_md_map, _ = _parsefile(FILE_LIST_CACHE)
+    found = []
+    stack = [folder_id]
+    while stack:
+        for child_id in id_child_map.get(stack.pop(), []):
+            if child_id in left_out:
+                continue
+            found.append(id_md_map[child_id])
+            stack.append(child_id)
+    return found
 
 
 def add(md):

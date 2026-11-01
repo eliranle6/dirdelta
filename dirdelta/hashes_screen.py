@@ -297,7 +297,7 @@ def _add_replica(item, options, shown, known, names):
         # When Drive's file list was read, in its freshness's color
         shown[_INFO % (name,)] = picker.Skipped(picker.styled([
             ("  %s, %s" % (_files(nr_files), elsewhere.format_size(size)), None),
-            (_cache_age(), choose_replicas.freshness(choose_replicas.cache_time()))]))
+            (_cache_age(name), choose_replicas.freshness(choose_replicas.cache_time(name)))]))
         options += [_DRIVE % (name,), _DRIVE_NOTE % (name,)]
         shown[_DRIVE % (name,)] = picker.Skipped(first)
         shown[_DRIVE_NOTE % (name,)] = picker.Skipped(note)
@@ -355,13 +355,11 @@ def _job_of(name, tree):
     return hashing.job_for(tree.fullpath() if tree is not None else name)
 
 
-def _cache_age():
-    """'; Drive's file list read DD.MM.YYYY HH:MM' (when the cache was last written), or ''"""
-    try:
-        written = os.path.getmtime(drivecache.FILE_LIST_CACHE)
-    except OSError:
-        return ""
-    return "; Drive's file list cached %s" % (time.strftime('%d.%m.%Y %H:%M', time.localtime(written)),)
+def _cache_age(path):
+    """'; Drive's file list cached DD.MM.YYYY HH:MM' (when the cache's list of the Drive replica at
+    path was last updated, see choose_replicas.cache_time()), or ''"""
+    read = choose_replicas.cache_time(path)
+    return "; Drive's file list cached %s" % (read.strftime('%d.%m.%Y %H:%M'),) if read else ""
 
 
 def _jobs_shown(items, names):

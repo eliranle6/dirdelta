@@ -5,6 +5,7 @@ import time
 
 from dirdelta import choose_replicas
 from dirdelta import clouddirtree
+from dirdelta import drivemeta
 from dirdelta import dryrun
 from dirdelta import elsewhere
 from dirdelta import hashcache
@@ -66,7 +67,9 @@ def _run(args):
     if not hashes_screen.offer(hashes_screen.prepare([dirtree_a, dirtree_b])):
         return
     changes = replicalog.Changes()
-    result = _sync(dirtree_a, dirtree_b, args.dir_a_path, args.dir_b_path, known_replicas, changes)
+    # A Drive replica's file list is kept in it too, as it changes (see drivemeta.py)
+    with drivemeta.kept([(args.dir_a_path, dirtree_a), (args.dir_b_path, dirtree_b)]):
+        result = _sync(dirtree_a, dirtree_b, args.dir_a_path, args.dir_b_path, known_replicas, changes)
     replicalog.offer_entries(changes, trees, known_replicas)
     return result
 
@@ -125,8 +128,8 @@ def _sync(replica_a, replica_b, replica_a_path, replica_b_path, known_replicas=N
         if jobs:
             shown[''] = hashes_screen.picker_status([replica_a, replica_b])
         # When Drive's file list was read, in its freshness's color (today, this week, before)
-        read = choose_replicas.cache_time()
         for label in refreshes:
+            read = choose_replicas.cache_time(refreshes[label].displayname())
             shown[label] = picker.styled([(label + " ", None), (
                 "(%s list read %s)" % (choose_replicas.CACHE_MARK, read.strftime('%d.%m.%Y %H:%M')) if read else "",
                 choose_replicas.freshness(read))])

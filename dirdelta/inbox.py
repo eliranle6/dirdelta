@@ -24,6 +24,7 @@ from dirdelta import clouddirtree
 from dirdelta import dirtree
 from dirdelta import drivecache
 from dirdelta import downloads
+from dirdelta import drivemeta
 from dirdelta import dryrun
 from dirdelta import elsewhere
 from dirdelta import entries
@@ -1398,6 +1399,13 @@ def run(inbox_path, root_path, known_replicas=None):
     replicas.Replicas, saved) remembering them as a recent sort, and what's known of each (its log,
     see replicalog.py); once it's done, offer an entry for the sorted tree's log, if it changed
     (an inbox has no log)"""
+    # A Drive sorted tree's file list is kept in it too, as it changes (see drivemeta.py): the copy
+    # there is checked before its tree is made
+    with drivemeta.kept([(root_path, None)]):
+        _run(inbox_path, root_path, known_replicas)
+
+
+def _run(inbox_path, root_path, known_replicas):
     sort = InboxSort(inbox_path, root_path, known_replicas)
     if known_replicas is not None:
         known_replicas.record_sort(sort.inbox_path, sort.root_path)

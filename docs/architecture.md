@@ -485,6 +485,25 @@ there, and a refresh of that folder (or above it) clears the mark
 (`mark_fresh(path)`). A marker from before the paths were written is all of
 Drive (`/`).
 
+When each folder's list in the cache was last made as Drive has it is kept in
+`files.txt.times` (`drivecache.note_updated()`/`updated()`: a refresh of it,
+or a change dirdelta made in it, `CloudDirTree._cache_add()`, but not in its
+`meta/`), with the copy last uploaded to it (`note_uploaded()`/`uploaded()`:
+its modifiedTime, and `updated()` as of then). `drivemeta.py` keeps a Drive
+replica's list in it, `meta/files.jsonl` (a header line, `HEADER_KEY`, with the
+folder's path and id and My Drive's root id, then the cache's lines under the
+folder, `drivecache.under()`, without `meta/`): `drivemeta.kept([(path,
+tree)])`, around a sync's menu and an inbox's sort (for its sorted tree),
+first `check()`s it (two `files().list` requests: `meta/`, then the file in
+it) and, if it's newer than `updated()` and not this cache's own upload,
+downloads it into the cache (`replace_under()`) and rebuilds the tree
+(`reload_from_cache()`); then an `Uploader` (a thread) uploads it every
+`UPLOAD_INTERVAL` (60s) if `updated()` is later than the last upload's, and
+`kept()` uploads it once more at the end (not in a dry run). Its errors go to
+`picker.ERRORS_LOG`; the last one is said on a screen. The start menu's and the
+dashboard's ☁ freshness is the folder's `updated()`, if known
+(`choose_replicas.cache_time(path)`).
+
 Logging in to Drive (`token.json`/`credentials.json`, `SCOPES=[drive]`: all of
 Drive, to change files too) is `driveapi.service()`, which also makes the
 service once per thread (the client's HTTP connection isn't thread-safe), with

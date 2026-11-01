@@ -496,6 +496,10 @@ def _log_error():
         pass
 
 
+# For other threads' errors too (e.g. drivemeta.Uploader's)
+log_error = _log_error
+
+
 def _send_updates(fd, shown_as, is_done):
     """Send treepicker what shown_as() says to show the items as, as it changes, until is_done (or
     treepicker is gone)"""

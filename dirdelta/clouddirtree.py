@@ -102,15 +102,17 @@ class CloudDirTree(dirtree.DirTree):
                     self._modified[relpath] = modified
             self._cloud_ids[relpath] = cloud_id
 
-    def refresh_from_drive(self, relpath=''):
-        """Read the folder at relpath (default: the tree's root) anew from Drive, into the cache
-        (refresh_cache()), and rebuild the tree from it. A relpath the tree has no folder at (e.g.
-        a dir only the other replica has) refreshes the closest folder above it that it has.
-        Returns the relpath refreshed. Raises as refresh_cache() does, or DriveCacheError if what's
-        there can't be a tree; either way (and on Ctrl-C), the tree is as it was."""
-        while relpath and not isinstance(getattr(self.get_node(relpath), 'data', None), entries.DirEntry):
-            relpath = os.path.dirname(relpath)
-        refresh_cache(posixpath.join(self.fullpath(), relpath))
+    def _cache_add(self, md, relpath=None):
+        """Add what dirdelta made or changed in Drive (its metadata) to the cache, noting that the
+        cache has the tree as Drive has it now (drivecache.note_updated()), unless it's in
+        paths.META_DIR: what dirdelta keeps there isn't the tree's files"""
+        drivecache.add(md)
+        if relpath is None or not paths.is_meta(relpath):
+            drivecache.note_updated(self.fullpath())
+
+    def reload_from_cache(self):
+        """Rebuild the tree from the cache (e.g. after what's under it was replaced there). Raises
+        DriveCacheError if what's there can't be a tree; then the tree is as it was."""
         # Read before the tree is emptied, so it's kept if they can't be a tree
         found = list(drivecache.entries(self.fullpath()))
         super(CloudDirTree, self).__init__(rootpath=self.fullpath())
@@ -121,6 +123,17 @@ class CloudDirTree(dirtree.DirTree):
         self._hashes = {}
         self._modified = {}
         self.update_from_cache(found)
+
+    def refresh_from_drive(self, relpath=''):
+        """Read the folder at relpath (default: the tree's root) anew from Drive, into the cache
+        (refresh_cache()), and rebuild the tree from it. A relpath the tree has no folder at (e.g.
+        a dir only the other replica has) refreshes the closest folder above it that it has.
+        Returns the relpath refreshed. Raises as refresh_cache() does, or DriveCacheError if what's
+        there can't be a tree; either way (and on Ctrl-C), the tree is as it was."""
+        while relpath and not isinstance(getattr(self.get_node(relpath), 'data', None), entries.DirEntry):
+            relpath = os.path.dirname(relpath)
+        refresh_cache(posixpath.join(self.fullpath(), relpath))
+        self.reload_from_cache()
         return relpath
 
     def file_size(self, relpath):
@@ -264,7 +277,7 @@ class CloudDirTree(dirtree.DirTree):
         else:
             md = self._upload(entries.FileEntry(os.path.basename(relpath), relpath, local_path), parent_id)
             self.add_file_by_relpath(relpath)
-        drivecache.add(md)
+        self._cache_add(md, relpath)
         if is_newly_stale:
             drivecache.unmark_stale(self.fullpath())
         self._cloud_ids[relpath] = md['id']
@@ -282,7 +295,7 @@ class CloudDirTree(dirtree.DirTree):
         except (HttpError, OSError) as error:
             messages.print_line("Copy failed: %s" % (error,), "red")
             return False
-        drivecache.add(md)
+        self._cache_add(md)
         self.add_file_by_relpath(file_entry.relpath)
         self._cloud_ids[file_entry.relpath] = md['id']
         if 'size' in md:
@@ -341,7 +354,7 @@ class CloudDirTree(dirtree.DirTree):
                 messages.print_line("Couldn't make folder %s (%s): trying again with its files" %
                                     (relpath, error), "red")
                 return
-            drivecache.add(dict(body, **response))
+            self._cache_add(dict(body, **response))
             self.create_dir_node_from_relpath_if_not_exists(relpath)
             self._cloud_ids[relpath] = response['id']
 
@@ -368,7 +381,7 @@ class CloudDirTree(dirtree.DirTree):
                     'parents': [parent_id]}
             created = driveapi.service().files().create(
                 body=body, fields=drivecache.FILE_FIELDS).execute(num_retries=NUM_RETRIES)
-            drivecache.add(dict(body, **created))
+            self._cache_add(dict(body, **created), relpath)
             self.create_dir_node_from_relpath_if_not_exists(relpath)
             self._cloud_ids[relpath] = created['id']
         return self._cloud_ids[relpath]
@@ -403,7 +416,7 @@ class CloudDirTree(dirtree.DirTree):
                 drivecache.unmark_stale(self.fullpath())
             return False
         # The file again, by its id: the cache's later line is the one it has
-        drivecache.add(dict(md, parents=[parent_id]))
+        self._cache_add(dict(md, parents=[parent_id]))
         if is_newly_stale:
             drivecache.unmark_stale(self.fullpath())
         self.remove_node(relpath)
@@ -435,7 +448,7 @@ class CloudDirTree(dirtree.DirTree):
             if is_newly_stale:
                 drivecache.unmark_stale(self.fullpath())
             return False
-        drivecache.add(dict(md, parents=[parent_id], mimeType=drivecache.FOLDER_MIME_TYPE))
+        self._cache_add(dict(md, parents=[parent_id], mimeType=drivecache.FOLDER_MIME_TYPE))
         if is_newly_stale:
             drivecache.unmark_stale(self.fullpath())
         for relpath, new_relpath in self._move_subtree(dirpath, new_dirpath):
@@ -471,7 +484,7 @@ class CloudDirTree(dirtree.DirTree):
                 drivecache.unmark_stale(self.fullpath())
             return False
         md = dict(body, **md)
-        drivecache.add(md)
+        self._cache_add(md)
         if is_newly_stale:
             drivecache.unmark_stale(self.fullpath())
         self.add_file_by_relpath(new_relpath)
@@ -667,6 +680,7 @@ class CloudDirTree(dirtree.DirTree):
                 drivecache.unmark_stale(self.fullpath())
             return False
         drivecache.trash(cloud_id)
+        drivecache.note_updated(self.fullpath())
         if is_newly_stale:
             drivecache.unmark_stale(self.fullpath())
         return True
@@ -722,6 +736,7 @@ def refresh_cache(folder_path):
 
     drivecache.replace_under(folder_id, on_the_way + items, root_id)
     drivecache.mark_fresh(folder_path)
+    drivecache.note_updated(folder_path)
 
 
 def _read_progress(count, expected_count):
