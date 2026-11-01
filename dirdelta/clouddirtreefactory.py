@@ -1,4 +1,5 @@
 import os.path
+import time
 
 from dirdelta import clouddirtree
 from dirdelta import drivecache
@@ -8,8 +9,8 @@ from dirdelta import picker
 
 # The refresh question's options: the first, selected at first, does nothing
 OPTION_NOTHING = 'Nothing: go back'
-OPTION_REFRESH = 'Refresh %s from Google Drive'
-OPTION_NO_REFRESH = 'Not now: go on with the cloud files list cache'
+OPTION_REFRESH = 'Refresh now'
+OPTION_NO_REFRESH = 'Not now'
 
 
 def factory_interactive(rootpath):
@@ -19,9 +20,9 @@ def factory_interactive(rootpath):
         clouddirtree.refresh_cache(paths.path_in_cloud(rootpath))
     else:
         answer = _ask_whether_to_refresh(rootpath)
-        if answer not in (OPTION_REFRESH % (rootpath,), OPTION_NO_REFRESH):
+        if answer not in (OPTION_REFRESH, OPTION_NO_REFRESH):
             return None
-        if answer == OPTION_REFRESH % (rootpath,):
+        if answer == OPTION_REFRESH:
             clouddirtree.refresh_cache(paths.path_in_cloud(rootpath))
     return clouddirtree.factory(rootpath)
 
@@ -29,15 +30,18 @@ def factory_interactive(rootpath):
 def _ask_whether_to_refresh(rootpath):
     """The user's answer (one of the options), or None if they quit"""
     # Nothing first (selected at first), then going on without refreshing
-    options = [OPTION_NOTHING, OPTION_NO_REFRESH, OPTION_REFRESH % (rootpath,)]
-    header = ''
-    stale = [path for path in drivecache.stale_paths()
-             if _overlap(path, paths.path_in_cloud(rootpath))]
+    options = [OPTION_NOTHING, OPTION_NO_REFRESH, OPTION_REFRESH]
+    folder = paths.path_in_cloud(rootpath)
+    updated = drivecache.updated(folder)
+    lines = ["Refresh %s from Google Drive?" % (rootpath,), "",
+             ("Its file list is from %s." % (time.strftime('%Y-%m-%d %H:%M', time.localtime(updated)),)
+              if updated is not None else "Its file list is from an earlier run.") +
+             " Refreshing shows changes made elsewhere, but takes a while."]
+    stale = [path for path in drivecache.stale_paths() if _overlap(path, folder)]
     if stale:
-        header = ("The cloud files list cache may be out of date in %s: dirdelta was cut off while "
-                  "changing it in Google Drive.\nRefresh it to see those changes." %
-                  (', '.join(paths.join_cloud(path) for path in stale),))
-    return picker.pick_option(options, header=header, title="Google Drive's file list")
+        lines.append("It may be out of date in %s: dirdelta was cut off there." %
+                     (', '.join(paths.join_cloud(path) for path in stale),))
+    return picker.pick_option(options, header='\n'.join(lines), title="Refresh?")
 
 
 def _overlap(path, other):

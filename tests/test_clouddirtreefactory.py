@@ -1,13 +1,14 @@
 import os
 import shutil
 import tempfile
+import time
 import unittest
 from unittest import mock
 
 from dirdelta import clouddirtreefactory
 import helpers
 
-REFRESH = 'Refresh cloud/mein from Google Drive'
+REFRESH = clouddirtreefactory.OPTION_REFRESH
 NO_REFRESH = clouddirtreefactory.OPTION_NO_REFRESH
 
 
@@ -61,13 +62,21 @@ class CloudDirTreeFactoryTest(unittest.TestCase):
             clouddirtreefactory.factory_interactive('cloud/mein')
         return pick_option.call_args.kwargs['header']
 
+    def test_the_refresh_prompt_is_brief_and_says_how_old_the_list_is(self):
+        self.make_cache()
+        when = time.mktime((2026, 10, 26, 9, 33, 0, 0, 0, -1))
+        clouddirtreefactory.drivecache.note_updated('/mein', when)
+        self.assertEqual(self.header().splitlines()[:3], [
+            "Refresh cloud/mein from Google Drive?", "",
+            "Its file list is from 2026-10-26 09:33. Refreshing shows changes made elsewhere, but takes a while."])
+
     def test_the_refresh_prompt_says_if_the_cache_is_stale_in_the_folder(self):
         self.make_cache()
         self.addCleanup(clouddirtreefactory.drivecache.mark_fresh)
-        self.assertEqual(self.header(), '')
+        self.assertNotIn('out of date', self.header())
         # Elsewhere in Drive: not this folder's business
         clouddirtreefactory.drivecache.mark_stale('/other')
-        self.assertEqual(self.header(), '')
+        self.assertNotIn('out of date', self.header())
         for path in ('/mein/album', '/'):
             clouddirtreefactory.drivecache.mark_stale(path)
             self.assertIn('out of date in cloud/mein/album', self.header())
