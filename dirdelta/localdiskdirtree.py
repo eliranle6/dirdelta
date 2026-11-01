@@ -13,6 +13,7 @@ from dirdelta import exif
 from dirdelta import hashcache
 from dirdelta import hashing
 from dirdelta import messages
+from dirdelta import text
 
 
 # How many of find's error messages a scan warning lists
@@ -29,6 +30,11 @@ def factory(filesystem_dirpath, max_depth=None, silent=False):
     return dirtree
 
 
+def is_local(tree):
+    """Whether the tree is a local replica's (else, e.g., a Drive one's)"""
+    return isinstance(tree, LocalDiskDirTree)
+
+
 def scan_warning(where, errors):
     """A warning's lines if scanning where (a dir, or a description of dirs) couldn't read everything,
     given find's error messages, since then a diff may list files as missing that are there, or
@@ -37,10 +43,7 @@ def scan_warning(where, errors):
         return []
     lines = ["find couldn't read everything in %s (%d errors), so the diff may be wrong:" %
              (where, len(errors))]
-    lines += ["  " + error for error in errors[:MAX_SCAN_ERRORS_SHOWN]]
-    if len(errors) > MAX_SCAN_ERRORS_SHOWN:
-        lines.append("  (and %d more)" % (len(errors) - MAX_SCAN_ERRORS_SHOWN,))
-    return lines
+    return lines + text.listed(["  " + error for error in errors], MAX_SCAN_ERRORS_SHOWN)
 
 
 class LocalDiskDirTree(dirtree.DirTree):

@@ -117,8 +117,7 @@ def _of(count, total):
     return "%d of the %s" % (count, _files(total))
 
 
-def _join(*relpaths):
-    return posixpath.join(*[relpath for relpath in relpaths if relpath]) if any(relpaths) else ''
+_join = paths.join
 
 
 class InboxSort(object):

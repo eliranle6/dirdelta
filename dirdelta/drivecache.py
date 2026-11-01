@@ -16,6 +16,7 @@ import time
 
 from dirdelta import exif
 from dirdelta import paths
+from dirdelta import text
 
 FILE_LIST_CACHE = os.path.expanduser('~/.cache/dirman/files.txt')
 
@@ -359,9 +360,7 @@ def entries(inner_rootpath):
                 dfs_stack.append((md['id'], posixpath.join(folder_path, md['name'])))
 
     if problems:
-        lines = problems[:MAX_PROBLEMS_SHOWN]
-        if len(problems) > MAX_PROBLEMS_SHOWN:
-            lines.append("(and %d more)" % (len(problems) - MAX_PROBLEMS_SHOWN,))
+        lines = text.listed(problems, MAX_PROBLEMS_SHOWN, indent='')
         raise DriveCacheError(
             "Some names in Google Drive can't be paths. Rename them in Drive, then run dirdelta "
             "again and refresh the cloud files list cache:\n%s" % ('\n'.join("  " + line for line in lines),))

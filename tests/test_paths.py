@@ -35,5 +35,13 @@ class IsAtOrUnderTest(unittest.TestCase):
         self.assertFalse(paths.is_at_or_under('/xy', '/x'))
 
 
+
+class JoinTest(unittest.TestCase):
+    def test_empty_parts_are_left_out(self):
+        self.assertEqual(paths.join('cloud/me', '', 'a/b.txt'), 'cloud/me/a/b.txt')
+        self.assertEqual(paths.join('', 'a'), 'a')
+        self.assertEqual(paths.join('', ''), '')
+        self.assertEqual(paths.join('cloud/me/', 'last_update.txt'), 'cloud/me/last_update.txt')
+
 if __name__ == '__main__':
     unittest.main()

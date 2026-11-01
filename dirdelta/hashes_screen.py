@@ -47,8 +47,7 @@ def _files(count):
     return text.files(count, grouped=True)
 
 
-def is_local(replica):
-    return isinstance(replica, localdiskdirtree.LocalDiskDirTree)
+is_local = localdiskdirtree.is_local
 
 
 def prepare(replicas):

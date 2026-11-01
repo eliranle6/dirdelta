@@ -116,7 +116,7 @@ def read(tree):
         if isinstance(tree, clouddirtree.CloudDirTree):
             if not tree.has_file(LOG_NAME):
                 return None
-            local_path = downloads.get(posix_join(tree.displayname(), LOG_NAME), tree.file_size(LOG_NAME),
+            local_path = downloads.get(paths.join(tree.displayname(), LOG_NAME), tree.file_size(LOG_NAME),
                                        lambda path: tree.fetch_file(LOG_NAME, path))
         else:
             local_path = os.path.join(tree.fullpath(), LOG_NAME)
@@ -141,10 +141,6 @@ def write(tree, text):
     with open(temp_path, 'w', encoding='utf-8') as log:
         log.write(text)
     os.replace(temp_path, path)
-
-
-def posix_join(cloud_path, name):
-    return cloud_path.rstrip('/') + '/' + name
 
 
 class Changes(object):

@@ -13,6 +13,7 @@ from dirdelta import dryrun
 from dirdelta import entries
 from dirdelta import messages
 from dirdelta import paths
+from dirdelta import text
 
 # How many files are uploaded at once. A few: Drive limits how fast a user makes files (about 2-3 a
 # second), so more would only meet its rate limit errors.
@@ -752,8 +753,4 @@ def _is_under(relpath, folder):
 
 def _listed(items):
     """Lines listing the first MAX_LISTED of items, indented, and how many more there are"""
-    items = list(items)
-    lines = ["  %s" % (item,) for item in items[:MAX_LISTED]]
-    if len(items) > MAX_LISTED:
-        lines.append("  (and %d more)" % (len(items) - MAX_LISTED,))
-    return lines
+    return text.listed(["  %s" % (item,) for item in items], MAX_LISTED)

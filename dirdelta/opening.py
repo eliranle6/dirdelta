@@ -17,6 +17,7 @@ import time
 from dirdelta import downloads
 from dirdelta import elsewhere
 from dirdelta import localdiskdirtree
+from dirdelta import paths
 from dirdelta import picker
 from dirdelta import text
 
@@ -293,7 +294,7 @@ class Opener(object):
 
     def _full(self, relpath):
         """relpath's relpath in the tree"""
-        return posixpath.join(self._root_rel, relpath) if self._root_rel and relpath else self._root_rel or relpath
+        return paths.join(self._root_rel, relpath)
 
     def _path(self, relpath=''):
         """relpath's path, the tree's (local, or a cloud path)"""

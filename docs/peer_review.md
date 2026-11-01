@@ -40,7 +40,7 @@ the user is told to refresh. A `with drivecache.changing(path):` context manager
 success or on a clean failure, keep only if interrupted mid-way) fixes it and removes the
 repetition.
 
-## 4. Copy-pasted small helpers (S, moderate value) — done in part 2026-11-01: `dryrun.NOTE`, `text.files()`; the listings and joins not yet
+## 4. Copy-pasted small helpers (S, moderate value) — done 2026-11-01: `dryrun.NOTE`, `text.files()`, `text.listed()` (but `elsewhere`'s matches, lines a match), `paths.join()`, `localdiskdirtree.is_local()`
 - `_files(count)` defined 6 times (dirsync_main, elsewhere, hashes_screen (with `{:,}`),
   interactive_dir_sync, inbox, opening), plus inline in `replicalog.Changes.summary`.
 - `is_local(replica)` twice (interactive_dir_sync, hashes_screen).

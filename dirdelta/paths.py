@@ -1,10 +1,17 @@
 """Replica paths, as given on the command line: a cloud (Google Drive) one starts with the component
 'cloud' (e.g. cloud/mein/music), a local one is any other."""
 import os
+import posixpath
 
 # The dir at a local replica's root where dirdelta keeps what it knows of it (its files' hashes, see
 # hashcache.py): not one of its files, so it's left out of syncs
 META_DIR = 'meta'
+
+
+def join(*parts):
+    """The parts ('/'-separated paths: a replica's path, relpaths in it, names) joined by '/', the
+    empty ones (a root's relpath) left out: '' if all are"""
+    return posixpath.join(*[part for part in parts if part]) if any(parts) else ''
 
 
 def is_meta(relpath):

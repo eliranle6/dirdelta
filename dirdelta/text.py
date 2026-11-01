@@ -12,6 +12,8 @@ def files(count, grouped=False):
 MAX_LISTED = 10
 
 
-def listed(lines, most=MAX_LISTED):
-    """The first most of lines (e.g. one a file), then '  (and N more)' for the rest, if any"""
-    return list(lines[:most]) + (["  (and %d more)" % (len(lines) - most,)] if len(lines) > most else [])
+def listed(lines, most=MAX_LISTED, indent='  '):
+    """The first most of lines (e.g. one a file), then '(and N more)' for the rest, if any, after
+    indent"""
+    lines = list(lines)
+    return lines[:most] + (["%s(and %d more)" % (indent, len(lines) - most)] if len(lines) > most else [])

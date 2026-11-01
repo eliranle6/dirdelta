@@ -66,8 +66,7 @@ def refresh_replica(replica, relpath=''):
     return False
 
 
-def is_local(replica):
-    return isinstance(replica, localdiskdirtree.LocalDiskDirTree)
+is_local = localdiskdirtree.is_local
 
 
 def is_writable(replica):
