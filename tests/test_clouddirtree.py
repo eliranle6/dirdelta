@@ -374,7 +374,7 @@ class CloudDirTreeChangesTest(unittest.TestCase):
         self.assertFalse(clouddirtree.drivecache.is_stale())
 
     def test_a_removed_files_size_is_forgotten_with_it(self):
-        self.tree._sizes['song.mp3'] = 123
+        self.tree._infos['song.mp3'] = self.tree._info('song.mp3')._replace(size=123)
         self.tree.remove_files([self.tree.get_node('song.mp3').data])
         self.assertNotIn('song.mp3', self.tree)
         self.assertIsNone(self.tree.file_size('song.mp3'))
@@ -706,7 +706,7 @@ class CloudDirTreeChangesTest(unittest.TestCase):
         self.assertEqual(made['chunksize'], clouddirtree.PROGRESS_CHUNK_SIZE)
 
     def test_a_download_gets_drives_modification_time(self):
-        self.tree._modified['album/track.mp3'] = 1719842602
+        self.tree._infos['album/track.mp3'] = self.tree._info('album/track.mp3')._replace(modified=1719842602)
         def downloader(local_file, request):
             local_file.write(b'track content')
             return mock.Mock(next_chunk=mock.Mock(return_value=(None, True)))
@@ -717,7 +717,7 @@ class CloudDirTreeChangesTest(unittest.TestCase):
     def test_a_google_file_isnt_copied_to_a_dir_and_the_rest_are(self):
         self.tree.add_file_by_relpath('Budget.gsheet')
         self.tree._cloud_ids['Budget.gsheet'] = 'sheet'
-        self.tree._google_files.add('Budget.gsheet')
+        self.tree._infos['Budget.gsheet'] = clouddirtree.FileInfo(None, None, {}, None, True)
         def downloader(local_file, request):
             local_file.write(b'content')
             return mock.Mock(next_chunk=mock.Mock(return_value=(None, True)))

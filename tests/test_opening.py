@@ -39,7 +39,7 @@ class OpenerTest(unittest.TestCase):
         tree = clouddirtree.CloudDirTree('cloud/me')
         for name, size in sizes.items():
             tree.add_file_by_relpath('in/' + name)
-            tree._sizes['in/' + name] = size
+            tree._infos['in/' + name] = clouddirtree.FileInfo(size, None, {}, None, False)
         self.midway = []
         opener = opening.Opener(tree, 'in')
 

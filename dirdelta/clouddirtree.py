@@ -46,6 +46,19 @@ def factory(rootpath):
     return tree
 
 
+# What's known of a Drive file, from its metadata: its size in bytes (None for a Google file), a
+# photo's date taken (or None), its contents' hashes ({algorithm: hex}, drivecache.hashes()), when it
+# was last modified (seconds since the epoch, or None), and whether it's a Google file (a Doc, ...)
+FileInfo = collections.namedtuple('FileInfo', ['size', 'date_taken', 'hashes', 'modified', 'is_google'])
+_NO_INFO = FileInfo(None, None, {}, None, False)
+
+
+def _info_of(md):
+    """The FileInfo of a file's metadata, as Drive gives it"""
+    return FileInfo(int(md['size']) if 'size' in md else None, drivecache.date_taken(md), drivecache.hashes(md),
+                    drivecache.modified_time(md), drivecache.is_google_file(md))
+
+
 class CloudDirTree(dirtree.DirTree):
     """A dir tree representing a directory on the cloud (Google Drive). Files are copied into it by
     uploading them, out of it by downloading them, and removed from it to Drive's trash: a folder all
@@ -58,17 +71,23 @@ class CloudDirTree(dirtree.DirTree):
 
     def __init__(self, rootpath):
         super(CloudDirTree, self).__init__(rootpath=paths.path_in_cloud(rootpath))
+        self._forget_all()
+
+    def _forget_all(self):
         # Each file's and folder's Drive id, by its relpath (the root's is '')
         self._cloud_ids = {}
-        # The relpaths of the Google files
-        self._google_files = set()
-        # Each file's size, by its relpath (none for a Google file), and a photo's date taken
-        self._sizes = {}
-        self._dates_taken = {}
-        # Each file's contents' hashes, as Drive gives them (drivecache.hashes()), and when it was last
-        # modified, by its relpath
-        self._hashes = {}
-        self._modified = {}
+        # What's known of each file, from Drive's metadata (a FileInfo), by its relpath
+        self._infos = {}
+
+    def _info(self, relpath):
+        return self._infos.get(relpath, _NO_INFO)
+
+    def _rekey(self, relpath, new_relpath):
+        """What's kept of the file or folder at relpath is new_relpath's now (it was moved)"""
+        if relpath in self._cloud_ids:
+            self._cloud_ids[new_relpath] = self._cloud_ids.pop(relpath)
+        if relpath in self._infos:
+            self._infos[new_relpath] = self._infos.pop(relpath)
 
     def displayname(self):
         """The cloud path, as given (cloud/mein), rather than the path in Drive (/mein), which
@@ -91,16 +110,7 @@ class CloudDirTree(dirtree.DirTree):
                 self.create_dir_node_from_relpath_if_not_exists(relpath)
             else:
                 self.add_file_by_relpath(relpath)
-                if is_google_file:
-                    self._google_files.add(relpath)
-                if size is not None:
-                    self._sizes[relpath] = size
-                if date_taken is not None:
-                    self._dates_taken[relpath] = date_taken
-                if hashes:
-                    self._hashes[relpath] = hashes
-                if modified is not None:
-                    self._modified[relpath] = modified
+                self._infos[relpath] = FileInfo(size, date_taken, hashes or {}, modified, is_google_file)
             self._cloud_ids[relpath] = cloud_id
 
     def _cache_add(self, md, relpath=None):
@@ -117,12 +127,7 @@ class CloudDirTree(dirtree.DirTree):
         # Read before the tree is emptied, so it's kept if they can't be a tree
         found = list(drivecache.entries(self.fullpath()))
         super(CloudDirTree, self).__init__(rootpath=self.fullpath())
-        self._cloud_ids = {}
-        self._google_files = set()
-        self._sizes = {}
-        self._dates_taken = {}
-        self._hashes = {}
-        self._modified = {}
+        self._forget_all()
         self.update_from_cache(found)
 
     def refresh_from_drive(self, relpath=''):
@@ -138,20 +143,20 @@ class CloudDirTree(dirtree.DirTree):
         return relpath
 
     def file_size(self, relpath):
-        return self._sizes.get(relpath)
+        return self._info(relpath).size
 
     def date_taken(self, relpath):
-        return self._dates_taken.get(relpath)
+        return self._info(relpath).date_taken
 
     def content_hash(self, relpath, algorithm, should_stop=None):
         # Drive's, so nothing's read
-        return self._hashes.get(relpath, {}).get(algorithm)
+        return self._info(relpath).hashes.get(algorithm)
 
     def known_hashes(self, relpath):
-        return tuple(self._hashes.get(relpath, {}))
+        return tuple(self._info(relpath).hashes)
 
     def modified_time(self, relpath):
-        return self._modified.get(relpath)
+        return self._info(relpath).modified
 
     def files_by_name(self, progress=None):
         # A same-named file's relpath has a DUP_SUFFIX, its name doesn't
@@ -161,12 +166,12 @@ class CloudDirTree(dirtree.DirTree):
         return found
 
     def cant_fetch(self, relpath):
-        if relpath in self._google_files:
+        if self._info(relpath).is_google:
             return "a Google file, which is only in Drive, so it can't be copied to a dir"
         return None
 
     def copy_notes(self, relpaths):
-        google_files = [relpath for relpath in relpaths if relpath in self._google_files]
+        google_files = [relpath for relpath in relpaths if self._info(relpath).is_google]
         if not google_files:
             return []
         return (["%s Google files (Docs, Sheets, ...), which are only in Drive, so they can't be "
@@ -282,11 +287,7 @@ class CloudDirTree(dirtree.DirTree):
                 self.add_file_by_relpath(relpath)
             self._cache_add(md, relpath)
         self._cloud_ids[relpath] = md['id']
-        if 'size' in md:
-            self._sizes[relpath] = int(md['size'])
-        self._hashes[relpath] = drivecache.hashes(md)
-        if drivecache.modified_time(md) is not None:
-            self._modified[relpath] = drivecache.modified_time(md)
+        self._infos[relpath] = _info_of(md)
 
     def _uploaded(self, file_entry, future):
         """Add file_entry, whose upload (future, of _upload()) ended, to the tree and the cache.
@@ -299,14 +300,7 @@ class CloudDirTree(dirtree.DirTree):
         self._cache_add(md)
         self.add_file_by_relpath(file_entry.relpath)
         self._cloud_ids[file_entry.relpath] = md['id']
-        if 'size' in md:
-            self._sizes[file_entry.relpath] = int(md['size'])
-        if drivecache.date_taken(md) is not None:
-            self._dates_taken[file_entry.relpath] = drivecache.date_taken(md)
-        if drivecache.hashes(md):
-            self._hashes[file_entry.relpath] = drivecache.hashes(md)
-        if drivecache.modified_time(md) is not None:
-            self._modified[file_entry.relpath] = drivecache.modified_time(md)
+        self._infos[file_entry.relpath] = _info_of(md)
         return True
 
     def _make_folders(self, dir_relpaths):
@@ -388,7 +382,7 @@ class CloudDirTree(dirtree.DirTree):
         return self._cloud_ids[relpath]
 
     def cant_move(self, relpath):
-        if relpath in self._google_files:
+        if self._info(relpath).is_google:
             return "a Google file, whose name in Drive has no extension"
         if DUP_SUFFIX in relpath:
             return "one of several files of the same name in its folder"
@@ -417,10 +411,7 @@ class CloudDirTree(dirtree.DirTree):
             return False
         self.remove_node(relpath)
         self.add_file_by_relpath(new_relpath)
-        self._cloud_ids[new_relpath] = self._cloud_ids.pop(relpath)
-        for by_relpath in (self._sizes, self._dates_taken, self._hashes, self._modified):
-            if relpath in by_relpath:
-                by_relpath[new_relpath] = by_relpath.pop(relpath)
+        self._rekey(relpath, new_relpath)
         return True
 
     def _move_dir(self, dirpath, new_dirpath):
@@ -443,12 +434,7 @@ class CloudDirTree(dirtree.DirTree):
             messages.print_line("Move failed: %s" % (error,), "red")
             return False
         for relpath, new_relpath in self._move_subtree(dirpath, new_dirpath):
-            for by_relpath in (self._cloud_ids, self._sizes, self._dates_taken, self._hashes, self._modified):
-                if relpath in by_relpath:
-                    by_relpath[new_relpath] = by_relpath.pop(relpath)
-            if relpath in self._google_files:
-                self._google_files.discard(relpath)
-                self._google_files.add(new_relpath)
+            self._rekey(relpath, new_relpath)
         return True
 
     def _copy_within(self, relpath, new_relpath):
@@ -475,9 +461,9 @@ class CloudDirTree(dirtree.DirTree):
             return False
         self.add_file_by_relpath(new_relpath)
         self._cloud_ids[new_relpath] = md['id']
-        for by_relpath in (self._sizes, self._dates_taken, self._hashes, self._modified):
-            if relpath in by_relpath:
-                by_relpath[new_relpath] = by_relpath[relpath]
+        # The same contents (and so size, hashes, photo's date)
+        if relpath in self._infos:
+            self._infos[new_relpath] = self._infos[relpath]
         return True
 
     def _moved(self, moves):
@@ -519,7 +505,7 @@ class CloudDirTree(dirtree.DirTree):
             lines.append("Trashing %d folders whole, all of whose files are picked (checked with "
                          "Drive first, for files the cache doesn't have):" % (len(folders),))
             lines += _listed(folder + '/' for folder in folders)
-        google_files = [relpath for relpath in relpaths if relpath in self._google_files]
+        google_files = [relpath for relpath in relpaths if self._info(relpath).is_google]
         if google_files:
             lines.append("Including %d Google files (Docs, Sheets, ...), which are only in Drive:" %
                          (len(google_files),))
@@ -647,9 +633,8 @@ class CloudDirTree(dirtree.DirTree):
     def _forget(self, relpath):
         """Drop what's kept of the file or folder at relpath, once it's gone: its id, and its size,
         hashes and times, so a later one of its path isn't taken for it"""
-        for by_relpath in (self._cloud_ids, self._sizes, self._dates_taken, self._hashes, self._modified):
-            by_relpath.pop(relpath, None)
-        self._google_files.discard(relpath)
+        self._cloud_ids.pop(relpath, None)
+        self._infos.pop(relpath, None)
 
     def _trash(self, cloud_id):
         """Move the file or folder with cloud_id to Drive's trash (where it can be restored from, for
