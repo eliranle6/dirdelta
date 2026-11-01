@@ -119,8 +119,8 @@ class InteractiveDirSyncTest(unittest.TestCase):
     def test_picked_files_are_copied_from_src(self):
         # Their entries are made from the picked relpaths only
         copied = []
-        with mock.patch('dirdelta.localdiskdirtree.LocalDiskDirTree.copy_inner_entries_from_dirtree',
-                        side_effect=lambda tree, source: copied.extend(tree.iter_files())):
+        with mock.patch('dirdelta.localdiskdirtree.LocalDiskDirTree.copy_in',
+                        side_effect=lambda files, source: copied.extend(files)):
             self._browse([['sub/b.txt'], None], ['Copy', YES])
         self.assertEqual([(entry.relpath, entry.full_filesystem_path()) for entry in copied],
                          [('sub/b.txt', os.path.join(self.src_root, 'sub/b.txt'))])

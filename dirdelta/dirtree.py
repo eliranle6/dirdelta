@@ -122,10 +122,15 @@ class DirTree(object):
         return file_entry.data
 
     def copy_inner_entries_from_dirtree(self, dirtree, source=None):
-        """Copy dirtree's files into this tree's dir, at the same relative paths, and add them to
-        the tree (so the next diff doesn't list them): from source (a tree, by its fetch_file()), or
-        else from their entries' full paths on the local disk. A dry run changes neither."""
-        files = list(dirtree.iter_files())
+        """copy_in() dirtree's files"""
+        self.copy_in(list(dirtree.iter_files()), source)
+
+    def copy_in(self, files, source=None):
+        """Copy files (FileEntry's) into this tree's dir, each at its relpath, and add them to the
+        tree (so the next diff doesn't list them): from source (a tree, by its fetch_file()), or
+        else from their entries' full paths on the local disk (which may be elsewhere than at their
+        relpaths, e.g. an inbox's files going to other dirs). A dry run changes neither."""
+        files = list(files)
         # In a dry run nothing changes: no files or dirs, and not the tree
         verb = "Dry run, not copying" if dryrun.DRYRUN else "Copying"
         nr_started = nr_copied = 0

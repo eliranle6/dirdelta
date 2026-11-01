@@ -7,7 +7,6 @@ from googleapiclient.errors import HttpError
 from dirdelta import clouddirtree
 from dirdelta import dirdiff
 from dirdelta import drivecache
-from dirdelta import dirtree
 from dirdelta import elsewhere
 from dirdelta import entries
 from dirdelta import dryrun
@@ -527,9 +526,8 @@ class InteractiveDirSync(object):
         return True
 
     def _copy(self, files):
-        _dirtree = dirtree.DirTree.from_file_entries(files, self._src.fullpath())
         # It adds what it copies to dst's tree, so the next diff doesn't list them
-        self._dst.copy_inner_entries_from_dirtree(_dirtree, self._src)
+        self._dst.copy_in(files, self._src)
 
     def _remove(self, files):
         self._src.remove_files(files)

@@ -79,7 +79,7 @@ One `localscan.scan(root, max_depth, types) -> {relpath: (kind, size, mtime_ns)}
 progress) would serve all Python callers; `LocalDiskDirTree.file_size()`/`modified_time()` could
 read `file_stamps` instead of an `lstat` per call.
 
-## 8. The four batch operations in DirTree repeat one skeleton (S→M, moderate value)
+## 8. The four batch operations in DirTree repeat one skeleton (S→M, moderate value) — the related part done 2026-11-01: `copy_in(files, source)` takes the entries (which fixed a bug: a local inbox's file moved into a Drive sorted tree was uploaded from inbox/<its relpath in the sorted tree>, not from where it is); the one skeleton not done
 `copy_inner_entries_from_dirtree`, `remove_files`, `move_files`, `copy_files_within` each build
 a verb, count, catch `KeyboardInterrupt`, call `note_stopped()`, and print a dry-run or live
 summary. Dry-run handling also sits in different layers (copy: top level; remove: inside

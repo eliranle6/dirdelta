@@ -20,7 +20,7 @@ dirdelta command (or python -m dirdelta)
               → picker.pick_files(src, missing_relpaths)         (selection UI, with
                 elsewhere.find_previews() beside it, on a thread)
               → picker.pick_option([Nothing, Copy, Remove, Rename x2])   (the action menu)
-              → copy_inner_entries_from_dirtree() / .remove_files() / .move_files()
+              → copy_in() / .remove_files() / .move_files()
 ```
 
 ## `dirdelta/` — the application
@@ -118,7 +118,7 @@ kind (`is_one_tree`): its files move within one tree that has both, their
 common dir (`LocalDiskDirTree`, unscanned) or Drive's (`CloudDirTree` of
 their common cloud path), so a move is a rename (`InboxError` if the sorted
 tree is in the inbox). One of each: a tree each, and a move is
-`_transfer()`: the sorted tree's `copy_inner_entries_from_dirtree()` (an
+`_transfer()`: the sorted tree's `copy_in(files)` (an
 upload; or a download, from a `_Renamed` source that maps each file's new
 relpath to the inbox's), then the inbox's `remove_files()` of the files
 copied. Either way the inbox and the root are `keep_dirs()` (never removed
@@ -357,7 +357,7 @@ aren't UTF-8 work). find's error messages (paths it couldn't read, e.g.
 `Permission denied`) are kept in `scan_errors`. Building the tree, not
 find, is most of the time (~2.8s for /usr/share's 119k entries).
 
-`copy_inner_entries_from_dirtree(dirtree)` — for each file in the given
+`copy_in(files)` (or `copy_inner_entries_from_dirtree(dirtree)`, of its files) — for each of the given
 sub-tree, calls `add_file_by_relpath` to add the node to `self`'s tree, then
 ensures the destination directory exists (`os.makedirs`, tolerant of
 already-exists, path derived from `full_filesystem_path()`), then calls

@@ -244,6 +244,14 @@ class CloudDirTreeChangesTest(unittest.TestCase):
         self.assertEqual(self.creates(), [{'name': 'new.mp3', 'parents': ['album']}])
         self.assertIn('album/new.mp3', self.tree)
 
+    def test_a_file_is_uploaded_from_its_own_path_whatever_its_relpath(self):
+        # E.g. an inbox's file going to another dir of the sorted tree
+        helpers.make_files(self.local_dir, ['inbox/a.mp3'])
+        self.tree.copy_in([entries.FileEntry('a.mp3', 'album/a.mp3', os.path.join(self.local_dir, 'inbox/a.mp3'))])
+        self.assertEqual(self.creates(), [{'name': 'a.mp3', 'parents': ['album']}])
+        clouddirtree.MediaFileUpload.assert_called_once_with(os.path.join(self.local_dir, 'inbox/a.mp3'),
+                                                             resumable=False)
+
     def test_an_upload_keeps_its_time(self):
         helpers.make_files(self.local_dir, ['new.mp3'])
         os.utime(os.path.join(self.local_dir, 'new.mp3'), (1719842602, 1719842602))

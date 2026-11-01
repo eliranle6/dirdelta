@@ -21,7 +21,6 @@ import time
 
 from dirdelta import ai
 from dirdelta import clouddirtree
-from dirdelta import dirtree
 from dirdelta import drivecache
 from dirdelta import downloads
 from dirdelta import drivemeta
@@ -1306,8 +1305,8 @@ class InboxSort(object):
                                    os.path.join(self.inbox_path, relpath))
                  for relpath, new_relpath in moves]
         source = None if self.root_is_cloud else _Renamed(self._inbox_tree, source_of)
-        self._root_tree.copy_inner_entries_from_dirtree(
-            dirtree.DirTree.from_file_entries(files, self.inbox_path), source)
+        # (Each uploaded from its own path in the inbox, not from its relpath in the sorted tree)
+        self._root_tree.copy_in(files, source)
         if dryrun.DRYRUN:
             if is_move:
                 self._inbox_tree.remove_files(self._entries(relpath for relpath, _ in moves))
@@ -1368,7 +1367,7 @@ class InboxSort(object):
 
 
 class _Renamed(object):
-    """A tree to copy from (a copy_inner_entries_from_dirtree() source) whose files are asked for by
+    """A tree to copy from (a copy_in() source) whose files are asked for by
     where they go (relpaths in the tree copied into), each where source_of says it is in tree"""
     def __init__(self, tree, source_of):
         self._tree = tree
