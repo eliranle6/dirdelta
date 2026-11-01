@@ -291,7 +291,7 @@ class DirTree(object):
 
     def dir_moves(self, moves):
         """Of moves (relpath, new_relpath), the ones that move a whole dir: [(dirpath, new_dirpath,
-        its moves)], the topmost, each a dir all of whose files (_files_under()) are moved into
+        its moves)], the topmost, each a dir all of whose files (files_under()) are moved into
         new_dirpath at the same relative paths, where there's nothing yet; and the other moves"""
         new_of = dict(moves)
         pairs = set()
@@ -308,14 +308,14 @@ class DirTree(object):
                     _is_at_or_under(new_dirpath, dirpath) or _is_at_or_under(dirpath, new_dirpath) or
                     self._is_kept(dirpath)):
                 continue
-            files = self._files_under(dirpath)
-            if (files and not self._exists(new_dirpath) and
+            files = self.files_under(dirpath)
+            if (files and not self.exists(new_dirpath) and
                     all(new_of.get(relpath) == new_dirpath + relpath[len(dirpath):] for relpath in files)):
                 found.append((dirpath, new_dirpath, [(relpath, new_of[relpath]) for relpath in files]))
         in_dirs = {relpath for _, _, its_moves in found for relpath, _ in its_moves}
         return found, [move for move in moves if move[0] not in in_dirs]
 
-    def _files_under(self, dirpath):
+    def files_under(self, dirpath):
         """The relpaths of what's under the dir at dirpath that isn't a dir (none if it isn't one)"""
         node = self.get_node(dirpath)
         if node is None or not isinstance(node.data, entries.DirEntry):
@@ -323,7 +323,11 @@ class DirTree(object):
         return [node.identifier for node in self._tree.subtree(dirpath).all_nodes_itr()
                 if isinstance(node.data, entries.FileEntry)]
 
-    def _exists(self, relpath):
+    def nodes_under(self, dirpath):
+        """The nodes at and under dirpath (the dir's, and all in it), each before what's in it"""
+        return list(self._tree.subtree(dirpath).all_nodes_itr())
+
+    def exists(self, relpath):
         """Whether there's a file or dir at relpath"""
         return relpath in self
 

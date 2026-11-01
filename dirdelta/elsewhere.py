@@ -293,7 +293,7 @@ class Index(object):
                 self._add_hashes(new_relpath, hashes)
 
 
-def _same_sized(relpath, size, index):
+def matches_of_size(relpath, size, index):
     """The candidates of src's file at relpath of its size (in index): of its name, and if it's big
     enough, of other names (at most MAX_RENAMED of them), each with whether it's of another name"""
     if size is None:
@@ -355,7 +355,7 @@ class _Matcher(object):
         checked = dict(self._checked.get(relpath, {}))
         if self.src_index is not None:
             if same_sized is None:
-                same_sized = _same_sized(relpath, self._src.file_size(relpath), self._index)
+                same_sized = matches_of_size(relpath, self._src.file_size(relpath), self._index)
             for match_relpath, is_same in known_same(relpath, self.src_index, self._index, same_sized).items():
                 checked.setdefault(match_relpath, is_same)
         return checked
@@ -371,7 +371,7 @@ class _Matcher(object):
         dirpath, name = os.path.split(relpath)
         size = self._src.file_size(relpath)
         candidates = dict(self._index.files_named(name))
-        same_sized = _same_sized(relpath, size, self._index)
+        same_sized = matches_of_size(relpath, size, self._index)
         renamed = {match_relpath for match_relpath, is_other_name in same_sized.items() if is_other_name}
         checked = self.compared(relpath, same_sized)
         # And the ones of other names (any size) found by the file's hash
@@ -549,7 +549,7 @@ def check_contents(relpaths, src, src_index, index, checked, selection, send, se
         if relpath not in missing:
             continue
         matcher = matcher or _Matcher(relpaths, src, index, checked, src_index)
-        candidates = _same_sized(relpath, src.file_size(relpath), index)
+        candidates = matches_of_size(relpath, src.file_size(relpath), index)
         if relpath in checked or not (candidates or index.hash_algorithms()):
             send({relpath: _preview(relpath, src, dst_name, matcher)})
             continue
@@ -573,7 +573,7 @@ def to_check(relpaths, src, index, checked):
     index.build()
     return [relpath for relpath in relpaths
             if relpath not in checked and (index.hash_algorithms() or
-                                           _same_sized(relpath, src.file_size(relpath), index))]
+                                           matches_of_size(relpath, src.file_size(relpath), index))]
 
 
 def check_all(relpaths, src, src_index, index, checked, progress=None):
@@ -585,7 +585,7 @@ def check_all(relpaths, src, src_index, index, checked, progress=None):
     for number, relpath in enumerate(needed, 1):
         if progress is not None:
             progress(number, len(needed), relpath)
-        _check(relpath, _same_sized(relpath, src.file_size(relpath), index), src, src_index, index,
+        _check(relpath, matches_of_size(relpath, src.file_size(relpath), index), src, src_index, index,
                checked, lambda: False)
 
 

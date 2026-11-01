@@ -52,7 +52,7 @@ class InteractiveDirSyncTest(unittest.TestCase):
             self.sync.browse()
         return self.sync
 
-    def _exists(self, root, relpath):
+    def exists(self, root, relpath):
         return os.path.exists(os.path.join(root, relpath))
 
     def _offered(self):
@@ -64,7 +64,7 @@ class InteractiveDirSyncTest(unittest.TestCase):
             self._browse([picker.Picked('', 'sub/b.txt', ['sub/b.txt']), None], ['Copy', YES])
         with open(os.path.join(self.dst_root, 'sub/b.txt')) as f:
             self.assertEqual(f.read(), 'sub/b.txt')
-        self.assertFalse(self._exists(self.dst_root, 'sub/c.txt'))
+        self.assertFalse(self.exists(self.dst_root, 'sub/c.txt'))
         # Back where it was (on the next file, as the file's gone), with the file left, nothing picked
         self.assertEqual(self._offered()[1], (['sub/c.txt'], []))
         self.assertEqual(self.pick_files.call_args.kwargs['selected'], 'sub/c.txt')
@@ -98,7 +98,7 @@ class InteractiveDirSyncTest(unittest.TestCase):
     def test_dry_run_copy_changes_nothing_and_drops_the_picks(self):
         with mock.patch('dirdelta.dryrun.DRYRUN', True):
             self._browse([['sub/b.txt', 'sub/c.txt'], None], ['Copy', YES])
-        self.assertFalse(self._exists(self.dst_root, 'sub'))
+        self.assertFalse(self.exists(self.dst_root, 'sub'))
         self.assertEqual(self._offered()[1], (['sub/b.txt', 'sub/c.txt'], []))
         self.assertFalse(self.sync.has_changed)
         self.assertIn('Dry run, not copying sub/b.txt (1 out of 2)', self.messages)
@@ -128,7 +128,7 @@ class InteractiveDirSyncTest(unittest.TestCase):
     def test_remove_is_confirmed_twice_then_removes(self):
         with mock.patch('dirdelta.dryrun.DRYRUN', False):
             self._browse([['sub/b.txt'], None], ['Remove', YES, SURE])
-        self.assertFalse(self._exists(self.src_root, 'sub/b.txt'))
+        self.assertFalse(self.exists(self.src_root, 'sub/b.txt'))
         self.assertEqual(self._offered()[1], (['sub/c.txt'], []))
         self.assertIn('Remove complete: removed 1 of 1 files from %s' % (self.src_root,), self.messages)
         # The second time: are you sure, No first
@@ -140,14 +140,14 @@ class InteractiveDirSyncTest(unittest.TestCase):
     def test_no_to_are_you_sure_removes_nothing_and_keeps_the_picks(self):
         with mock.patch('dirdelta.dryrun.DRYRUN', False):
             self._browse([['sub/b.txt'], None], ['Remove', YES, NO])
-        self.assertTrue(self._exists(self.src_root, 'sub/b.txt'))
+        self.assertTrue(self.exists(self.src_root, 'sub/b.txt'))
         self.assertEqual(self._offered()[1], (['sub/b.txt', 'sub/c.txt'], ['sub/b.txt']))
         self.assertFalse(self.sync.has_changed)
 
     def test_dry_run_remove_leaves_disk_untouched(self):
         with mock.patch('dirdelta.dryrun.DRYRUN', True):
             self._browse([['sub/b.txt'], None], ['Remove', YES, SURE])
-        self.assertTrue(self._exists(self.src_root, 'sub/b.txt'))
+        self.assertTrue(self.exists(self.src_root, 'sub/b.txt'))
         self.assertIn('Dry run, not removing sub/b.txt (1 out of 1)', self.messages)
 
     def test_the_action_menu_starts_with_nothing_which_goes_back_to_the_picks(self):
@@ -192,7 +192,7 @@ class InteractiveDirSyncTest(unittest.TestCase):
         for answers in ([None], ['Copy', None], ['Copy', NO]):
             with mock.patch('dirdelta.dryrun.DRYRUN', False):
                 self._browse([['sub/b.txt'], None], answers)
-            self.assertFalse(self._exists(self.dst_root, 'sub'))
+            self.assertFalse(self.exists(self.dst_root, 'sub'))
             self.assertEqual(self._offered()[1][1], ['sub/b.txt'])
 
     def test_the_confirmation_starts_with_no_and_says_what_it_will_do(self):
@@ -228,7 +228,7 @@ class InteractiveDirSyncTest(unittest.TestCase):
         with mock.patch('dirdelta.messages.ask', return_value='a.txt'), mock.patch('dirdelta.dryrun.DRYRUN', False):
             # sub/b.txt renamed to a.txt there: still missing (dst has a.txt, not sub/a.txt)
             self._browse([picker.Picked('cc', 'sub/b.txt', ['sub/b.txt']), None], [])
-        self.assertTrue(self._exists(self.src_root, 'sub/a.txt'))
+        self.assertTrue(self.exists(self.src_root, 'sub/a.txt'))
         kwargs = self.pick_files.call_args.kwargs
         self.assertEqual(self.pick_files.call_args.args[1], ['sub/a.txt', 'sub/c.txt'])
         self.assertEqual(kwargs['selected'], 'sub/a.txt')

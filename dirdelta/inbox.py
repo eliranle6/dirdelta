@@ -248,7 +248,7 @@ class InboxSort(object):
     def _inbox_files(self):
         """The inbox's files' relpaths (in it), each dir's together, sorted"""
         if self.inbox_is_cloud:
-            full = self._inbox_tree._files_under(self._inbox_rel)
+            full = self._inbox_tree.files_under(self._inbox_rel)
             relpaths = [_relpath_in(relpath, self._inbox_rel) for relpath in full]
         else:
             found = localdiskdirtree.LocalDiskDirTree(self.inbox_path, silent=True).files_by_name()
@@ -571,7 +571,7 @@ class InboxSort(object):
         removable = [relpath for relpath in relpaths if self._copies(relpath)]
         junky = [relpath for relpath in relpaths if self._junk(relpath) is not None]
         uncompared = [relpath for relpath in relpaths if relpath not in self._checked and self._root_index.is_built()
-                      and elsewhere._same_sized(relpath, self._size(relpath), self._root_index)]
+                      and elsewhere.matches_of_size(relpath, self._size(relpath), self._root_index)]
         not_yet = " (%d not compared yet: Ctrl-I compares them)" % (len(uncompared),) if uncompared else ""
         destinations = sorted({os.path.dirname(self._target(relpath)) for relpath in recommended})
         renamed = [relpath for relpath in recommended
@@ -811,7 +811,7 @@ class InboxSort(object):
             return ["", picker.styled([title, ("No", 'bold,red'), (" (contents compared)", 'grey')])]
         if not self._root_index.is_built():
             return ["", picker.styled([title]), _grey("  Looking through the sorted tree...")]
-        candidates = elsewhere._same_sized(relpath, self._size(relpath), self._root_index)
+        candidates = elsewhere.matches_of_size(relpath, self._size(relpath), self._root_index)
         if candidates:
             return ["", picker.styled([title]), _grey("  %s of its size there:" % (_files(len(candidates)),)),
                     _grey("  compared when it's selected")]
@@ -1002,7 +1002,7 @@ class InboxSort(object):
         if self.root_is_cloud:
             node = self._root_tree.get_node(self._root_rel)
             found = [(_relpath_in(child.identifier, self._root_rel), isinstance(child.data, entries.DirEntry))
-                     for child in self._root_tree._tree.subtree(node.identifier).all_nodes_itr()
+                     for child in self._root_tree.nodes_under(node.identifier)
                      if child.identifier != self._root_rel]
         else:
             result = subprocess.run(['find', self.root_path, '-mindepth', '1', '(', '-type', 'd', '-o', '-type', 'f',
@@ -1170,11 +1170,11 @@ class InboxSort(object):
             return None
         destinations = sorted({os.path.dirname(target) for _, target in plan})
         new_dirs = [destination for destination in destinations
-                    if not self._root_tree._exists(_join(self._root_rel, destination))]
+                    if not self._root_tree.exists(_join(self._root_rel, destination))]
         previews = {}
         for target, (relpath,) in targets.items():
             lines = ["From: %s" % (posixpath.join(self.inbox_path, relpath),)]
-            if self._root_tree._exists(_join(self._root_rel, target)):
+            if self._root_tree.exists(_join(self._root_rel, target)):
                 lines += ["", "There's a file there already:", "it's skipped."]
             if os.path.dirname(target) in new_dirs:
                 lines += ["", "In a new dir."]
@@ -1250,7 +1250,7 @@ class InboxSort(object):
         moved (in a dry run, the ones it would move), or None if none were."""
         plan = [(relpath, _join(destination, posixpath.basename(relpath))) for relpath in relpaths
                 if posixpath.dirname(relpath) != destination]
-        there = [target for _, target in plan if self._inbox_tree._exists(self._full(target))]
+        there = [target for _, target in plan if self._inbox_tree.exists(self._full(target))]
         if not plan or there:
             messages.show("Can't move them there",
                           ["%s/ has them already." % (_join(self.inbox_path, destination),)] if not plan else

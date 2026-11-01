@@ -250,7 +250,7 @@ class LocalDiskDirTree(dirtree.DirTree):
     def removal_notes(self, relpaths):
         return ["Dirs left empty are removed too."]
 
-    def _files_under(self, dirpath):
+    def files_under(self, dirpath):
         # On disk: the tree may not be scanned (see dirdiff.py). A symlink to a dir is one too, so a
         # dir with one isn't moved whole (it isn't one of the moves).
         path = os.path.join(self._rootpath, dirpath)
@@ -264,7 +264,7 @@ class LocalDiskDirTree(dirtree.DirTree):
                       if os.path.islink(os.path.join(walked, name))]
         return found
 
-    def _exists(self, relpath):
+    def exists(self, relpath):
         return os.path.lexists(os.path.join(self._rootpath, relpath))
 
     def _move_dir(self, dirpath, new_dirpath):
