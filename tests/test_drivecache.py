@@ -106,6 +106,26 @@ class EntriesTest(unittest.TestCase):
         open(self.cache, 'w').close()
 
 
+class ParseTest(unittest.TestCase):
+    def setUp(self):
+        self.cache = os.path.join(tempfile.mkdtemp(prefix='dirstuff-drive-cache-'), 'files.txt')
+        with open(self.cache, 'w') as f:
+            f.write(json.dumps({drivecache.ROOT_ID_KEY: 'ROOT'}) + '\n')
+            f.write(json.dumps({'id': 'a', 'name': 'a', 'parents': ['ROOT'], 'mimeType': drivecache.FOLDER_MIME_TYPE}) + '\n')
+        patcher = mock.patch('dirdelta.drivecache.FILE_LIST_CACHE', self.cache)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def test_parsed_once_until_the_file_changes(self):
+        with mock.patch('dirdelta.drivecache._parse', wraps=drivecache._parse) as parse:
+            list(drivecache.entries('/a'))
+            list(drivecache.entries('/a'))
+            self.assertEqual(parse.call_count, 1)
+            drivecache.add({'id': 'f', 'name': 'f.txt', 'parents': ['a']})
+            self.assertEqual([entry.relpath for entry in drivecache.entries('/a')], ['', 'f.txt'])
+            self.assertEqual(parse.call_count, 2)
+
+
 class StaleTest(unittest.TestCase):
     def setUp(self):
         self.cache = os.path.join(tempfile.mkdtemp(prefix='dirstuff-drive-cache-'), 'files.txt')

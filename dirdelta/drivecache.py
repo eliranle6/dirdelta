@@ -12,6 +12,7 @@ import datetime
 import json
 import os
 import posixpath
+import threading
 import time
 
 from dirdelta import exif
@@ -412,10 +413,27 @@ def root_id():
     return None
 
 
+# The last parse of each cache file, by its file: (its (inode, size, mtime), what _parsefile() gave)
+_parsed = {}
+_parsed_lock = threading.Lock()
+
+
 def _parsefile(filename):
     """Read the cache into an id->children map, an id->metadata map and My Drive's root folder's id.
     What isn't in My Drive is left out (files shared with the user, which have no parents, or whose
-    parent folder the user can't see)."""
+    parent folder the user can't see). Parsed again only once the file changed (by its inode, size
+    and modification time): what's given is shared, not to be changed."""
+    stat = os.stat(filename)
+    stamp = (stat.st_ino, stat.st_size, stat.st_mtime_ns)
+    with _parsed_lock:
+        if filename in _parsed and _parsed[filename][0] == stamp:
+            return _parsed[filename][1]
+        parsed = _parse(filename)
+        _parsed[filename] = (stamp, parsed)
+        return parsed
+
+
+def _parse(filename):
     id_child_map = collections.defaultdict(list)
     id_md_map = {}
     trashed_ids = set()
