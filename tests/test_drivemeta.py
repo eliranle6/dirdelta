@@ -129,6 +129,10 @@ class DriveMetaTest(unittest.TestCase):
             tree._cache_add(_item('x', 'x', 'mein'), 'meta/x')
             self.assertFalse(uploader.is_changed())
 
+    def test_one_never_uploaded_is(self):
+        with mock.patch('dirdelta.dryrun.DRYRUN', False):
+            self.assertTrue(drivemeta.Uploader('/mein').upload_if_changed())
+
     def test_nothing_is_uploaded_in_a_dry_run(self):
         drivecache.note_updated('/mein')
         with mock.patch('dirdelta.dryrun.DRYRUN', True):

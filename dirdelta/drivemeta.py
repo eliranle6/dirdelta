@@ -153,10 +153,12 @@ class Uploader(object):
                 picker.log_error()
 
     def is_changed(self):
-        """Whether the cache's list changed since it was last uploaded"""
+        """Whether the cache's list changed since it was last uploaded (or it never was)"""
         updated = drivecache.updated(self.folder_path)
-        as_of = (drivecache.uploaded(self.folder_path) or {}).get('as_of')
-        return updated is not None and (as_of is None or updated > as_of)
+        uploaded = drivecache.uploaded(self.folder_path)
+        if uploaded is None:
+            return True
+        return updated is not None and (uploaded.get('as_of') is None or updated > uploaded['as_of'])
 
     def upload_if_changed(self):
         """Upload it, if it changed since (not in a dry run). Returns whether it was uploaded."""
