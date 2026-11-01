@@ -104,7 +104,7 @@ def _sync(replica_a, replica_b, replica_a_path, replica_b_path, known_replicas=N
         label = "Files only in %s" % (src_path,)
         actions[label] = _Action(src_path, dst_path, way, changes)
     # A cloud replica's folder can be read anew from Drive, if Drive changed since the cache was made
-    refreshes = {"Refresh %s from Google Drive" % (path,): replica
+    refreshes = {"Refresh %s file list from Google Drive" % (path,): replica
                  for replica, path in ((replica_a, replica_a_path), (replica_b, replica_b_path))
                  if isinstance(replica, clouddirtree.CloudDirTree)}
     for way in ways:

@@ -116,12 +116,12 @@ class MainMenuTest(unittest.TestCase):
     def test_a_cloud_replica_can_be_refreshed_from_drive(self):
         a = localdiskdirtree.LocalDiskDirTree('/a', silent=True)
         b = clouddirtree.CloudDirTree('cloud/b')
-        self.assertEqual(self.options(a, b)[-3:], ['Refresh /b from Google Drive', 'Replicas dashboard', dirsync_main.BACK])
+        self.assertEqual(self.options(a, b)[-3:], ['Refresh /b file list from Google Drive', 'Replicas dashboard', dirsync_main.BACK])
 
     def test_a_refresh_finds_each_ways_files_again_and_lists_its_files_anew(self):
         a = localdiskdirtree.LocalDiskDirTree('/a', silent=True)
         b = clouddirtree.CloudDirTree('cloud/b')
-        answers = ['Refresh /b from Google Drive', dirsync_main.BACK]
+        answers = ['Refresh /b file list from Google Drive', dirsync_main.BACK]
         with mock.patch('dirdelta.picker.pick_option', side_effect=lambda *_, **__: answers.pop(0)), \
                 mock.patch.object(b, 'refresh_from_drive') as refresh, \
                 mock.patch.object(elsewhere.Index, 'invalidate', autospec=True) as invalidate:
@@ -133,7 +133,7 @@ class MainMenuTest(unittest.TestCase):
     def test_a_failed_refresh_says_why_and_finds_nothing_again(self):
         a = localdiskdirtree.LocalDiskDirTree('/a', silent=True)
         b = clouddirtree.CloudDirTree('cloud/b')
-        answers = ['Refresh /b from Google Drive', dirsync_main.BACK]
+        answers = ['Refresh /b file list from Google Drive', dirsync_main.BACK]
         with mock.patch('dirdelta.picker.pick_option', side_effect=lambda *_, **__: answers.pop(0)), \
                 mock.patch.object(b, 'refresh_from_drive', side_effect=OSError('no network')):
             dirsync_main._sync(a, b, '/a', '/b')
