@@ -36,12 +36,12 @@ class CreateDirtreeFromArgTest(unittest.TestCase):
 
     def test_path_merely_containing_cloud_is_local(self):
         with mock.patch('dirdelta.clouddirtreefactory.factory_interactive') as factory, \
-             self.assertRaises(SystemExit):
+             self.assertRaises(utils.NotADirError):
             utils.create_dirtree_from_arg('not-cloud/cloud')
         factory.assert_not_called()
 
-    def test_missing_dir_exits(self):
-        with self.assertRaises(SystemExit):
+    def test_a_missing_dir_raises(self):
+        with self.assertRaises(utils.NotADirError):
             utils.create_dirtree_from_arg(self.root + '/does-not-exist')
 
 

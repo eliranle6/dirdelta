@@ -10,6 +10,7 @@ from dirdelta import inbox
 from dirdelta import mounts
 from dirdelta import programs
 from dirdelta import replicas
+from dirdelta import utils
 
 
 def parse_args():
@@ -31,7 +32,7 @@ def main():
     try:
         picked_path = _run(args)
     except (programs.ProgramError, drivecache.DriveCacheError, replicas.ReplicasError,
-            inbox.InboxError, mounts.MountsError) as error:
+            inbox.InboxError, mounts.MountsError, utils.NotADirError) as error:
         sys.exit('dirdelta: %s' % (error,))
 
     if picked_path is not None:

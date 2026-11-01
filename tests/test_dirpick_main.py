@@ -7,6 +7,7 @@ from unittest import mock
 
 from dirdelta import dirpick_main
 from dirdelta import dirtree
+from dirdelta import utils
 import helpers
 
 
@@ -38,9 +39,9 @@ class DirpickMainTest(unittest.TestCase):
         with helpers.scripted_dir_picker(None):
             self.assertIsNone(dirpick_main.run(self.args))
 
-    def test_missing_dir_exits(self):
+    def test_a_missing_dir_raises(self):
         self.args.dir_a_path = os.path.join(self.root, 'no-such-dir')
-        with self.assertRaises(SystemExit):
+        with self.assertRaises(utils.NotADirError):
             dirpick_main.run(self.args)
 
     def test_cloud_tree_is_picked_from_its_dirtree(self):
