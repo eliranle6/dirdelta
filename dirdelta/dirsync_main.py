@@ -122,7 +122,9 @@ def _sync(replica_a, replica_b, replica_a_path, replica_b_path, known_replicas=N
 
     def shown_as():
         shown = {label: action.shown_as() for label, action in actions.items()}
+        # Only to read: moving goes past them
         shown[STATE] = _state_line(ways, replica_a_path, replica_b_path)
+        shown[STATE_BLANK] = picker.Skipped('')
         shown[DASHBOARD] = "%s: files, last updates, hashes%s" % (
             DASHBOARD, " (%s)" % ("; ".join(text for text, _ in hashing.status_parts(jobs)),) if jobs else "")
         if jobs:
@@ -145,6 +147,9 @@ def _sync(replica_a, replica_b, replica_a_path, replica_b_path, known_replicas=N
                                     favorite_options + [BACK], shown_as=shown_as, selected=list(actions)[0],
                                     help_lines=syncstate.help_lines())
         note_compared()
+        if option in (STATE, STATE_BLANK):
+            # Picked before the menu was told they can't be
+            continue
         if option in (None, BACK):
             # Back to the start menu (q too)
             return None
