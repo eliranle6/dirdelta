@@ -327,7 +327,7 @@ class MainMenuTest(unittest.TestCase):
     def test_run_records_the_pair(self):
         known = replicas.Replicas()
         args = mock.Mock(dir_a_path='/a', dir_b_path='/b', max_depth=None)
-        with mock.patch('dirdelta.utils.validate_dir'), \
+        with mock.patch('dirdelta.replicafactory.validate_dir'), \
                 mock.patch('dirdelta.replicas.load', return_value=known), \
                 mock.patch('dirdelta.replicas.save') as save, \
                 mock.patch('dirdelta.dirsync_main._sync') as sync:

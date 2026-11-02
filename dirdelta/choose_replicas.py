@@ -9,13 +9,12 @@ from dirdelta import drivecache
 from dirdelta import hashes_screen
 from dirdelta import dryrun
 from dirdelta import messages
-from dirdelta import mounts
 from dirdelta import paths
 from dirdelta import picker
 from dirdelta import replicanames
 from dirdelta import replicainfo
 from dirdelta import syncstate
-from dirdelta import utils
+from dirdelta import replicafactory
 
 NOT_CHOSEN = '<none: press Enter to choose one>'
 LOCAL = 'Local disk'
@@ -49,7 +48,8 @@ def blank_line(number):
 def run(replicas):
     """Let the user choose two replicas, from replicas' (a Replicas) favorites and history or each
     on its own. Returns their paths (a, b); or a Sort, if they chose an inbox to sort (a new one, or
-    one of replicas' sorts); or None if the user quit."""
+    one of replicas' sorts); or None if the user quit. Whether they can be used now is the caller's
+    to check (main: their volumes, then are_there()), back to this menu if not."""
     chosen = [None, None]
     while True:
         slots = {slot_label(name, path): index for index, (name, path) in enumerate(zip('AB', chosen))}
@@ -86,13 +86,9 @@ def run(replicas):
                 return sort
             continue
         if option in sorts:
-            if _are_there(sorts[option]):
-                return sorts[option]
-            continue
+            return sorts[option]
         if option in pairs:
-            if _are_there(pairs[option]):
-                return pairs[option]
-            continue
+            return pairs[option]
         index = slots[option]
         path = _choose_replica('Replica %s' % ('AB'[index],))
         if path is None:
@@ -120,24 +116,16 @@ def _choose_sort(replicas):
     return Sort(inbox, root)
 
 
-def _are_there(replica_paths):
-    """Whether the replicas at replica_paths (a sort's or a pair's) can be used: their volumes are
-    mounted (see _mounted()), and their local dirs there, which may be gone since (a cloud one is
-    checked when its Drive file list is read); if not, it's said why"""
-    if not _mounted(replica_paths):
-        return False
+def are_there(replica_paths):
+    """Whether the local dirs of what was chosen (a sort's or a pair's replicas), on volumes that are
+    mounted by now, are there: they may be gone since (a cloud one is checked when its Drive file
+    list is read); if not, it's said why"""
     missing = [path for path in replica_paths if not paths.is_cloud_path(path) and not os.path.isdir(path)]
     if missing:
         messages.show("No such directory", ["%s is not a directory (anymore?)." % (path,) for path in missing],
                       dryrun.label(), 'red')
         return False
     return True
-
-
-def _mounted(replica_paths):
-    """Whether the replicas' volumes are mounted (the user is asked to mount one that isn't, see
-    mounts.py); if not, the user goes back to the menu"""
-    return all(mounts.ensure_mounted(path) for path in replica_paths)
 
 
 def known_replicas(replicas):
@@ -239,7 +227,7 @@ def _choose_replica(name, known=()):
         return picker.pick_under_dir(LOCAL_ROOT, dirs_only=True, lazy=True, header=header, key_hints=key_hints)
     if where == CLOUD:
         try:
-            tree = utils.create_dirtree_from_arg(CLOUD_ROOT)
+            tree = replicafactory.create_dirtree_from_arg(CLOUD_ROOT)
         except drivecache.DriveCacheError as error:
             messages.show("Cannot read Google Drive's file list", str(error).splitlines(),
                           dryrun.label(), 'red')

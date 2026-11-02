@@ -162,7 +162,7 @@ function to dodge the cycle. `known_lines()` belongs with `replicas.py`; the for
 More private reach-ins from `inbox.py`: `_root_tree._exists`, `_inbox_tree._files_under`,
 `_root_tree._tree.subtree`, `elsewhere._same_sized`. Make the ones it needs public.
 
-## 19. Small wiring oddities in main/sync (S, low) — in part 2026-11-01: a copy of the Namespace, one missing-dir check, `validate_dir()` raises (`utils.NotADirError`, main says it); the double mount check and `utils.py`'s place not done
+## 19. Small wiring oddities in main/sync (S, low) — fixed 2026-11-02: a copy of the Namespace, one missing-dir check, `validate_dir()` raises (`replicafactory.NotADirError`, main says it); volumes checked once, by `main._ready()`, then `choose_replicas.are_there()`; `utils.py` is now `replicafactory.py`
 `main._run` mutates the argparse `Namespace` in a loop to pass paths into `dirsync_main.run(args)`;
 pass paths. `utils.validate_dir()` calls `sys.exit` from a helper, deep in the sync. Mount checks
 run twice for a recent pair (`choose_replicas._mounted`, then `main._ready`). `choose_replicas.run`

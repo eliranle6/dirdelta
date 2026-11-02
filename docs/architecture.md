@@ -9,8 +9,8 @@ dirdelta command (or python -m dirdelta)
      (no curses: each picker is a treepicker run, which has the terminal while
       it's open; messages in between are plain lines, via messages.print_line)
        dirpick_main: local dir → picker.pick_under_dir(dir)   (treepicker scans it)
-                     cloud    → utils.create_dirtree_from_arg() → picker.pick_from_tree()
-       dirsync_main: utils.create_dirtree_from_arg(path)   for each replica path
+                     cloud    → replicafactory.create_dirtree_from_arg() → picker.pick_from_tree()
+       dirsync_main: replicafactory.create_dirtree_from_arg(path)   for each replica path
             → clouddirtreefactory.factory_interactive()   if path starts with "cloud"
             → localdiskdirtree.factory()                   otherwise
        → picker.pick_option([...])                         (the top-level menu, in _sync)
@@ -33,8 +33,9 @@ Argparse: `dir_a_path`, `dir_b_path` (both optional), `-x/--execute`,
 `dirpick_main.run`; two → `dirsync_main.run`, or with `--sort`, `inbox.run`
 (the first path the inbox, the second the sorted tree). Before any of them,
 `_ready()` checks that the local paths' volumes are mounted
-(`mounts.ensure_mounted()`; if the user won't mount one, it quits) and remembers
-how they are (`mounts.remember()`). No curses setup: a `picker.PickerError` (treepicker
+(`mounts.ensure_mounted()`; if the user won't mount one, it quits, or goes back to
+the start menu) and remembers how they are (`mounts.remember()`); what the start
+menu chose is then checked to be there (`choose_replicas.are_there()`). No curses setup: a `picker.PickerError` (treepicker
 missing or failing), `DriveCacheError`, `replicas.ReplicasError` or
 `mounts.MountsError` exits with its message.
 
@@ -312,13 +313,13 @@ files' cache entries are copied to their new paths' keys (`ai.carry()`). Answers
 (recommendations also by the sorted tree), `AIError` if Claude can't be
 asked.
 
-### `utils.py`
+### `replicafactory.py`
 `create_dirtree_from_arg(rootpath)` is the single dispatch point deciding
 cloud vs local, with `paths.is_cloud_path()`: a path is "cloud" iff its
 first path component is literally the string `"cloud"` (`paths.py`, which
 also has `path_in_cloud()`, used by `CloudDirTree`). `validate_dir` checks
-the path is an existing directory for the local case, exiting with a
-message (via `messages.print_line`) otherwise.
+the path is an existing directory for the local case, raising `NotADirError`
+otherwise (`main` says it and exits).
 
 ### `entries.py`, `dirtree.py` — the core data structure
 `DirTree` models a filesystem tree, holding a `treelib.Tree` (it offers
@@ -379,7 +380,7 @@ fixed, see known-issues.md #2 — and is now covered by
 
 ### `clouddirtree.py` / `drivecache.py` / `clouddirtreefactory.py`
 Cloud state is never queried live per-scan. Instead:
-1. `utils.create_dirtree_from_arg` calls `factory_interactive(rootpath)`
+1. `replicafactory.create_dirtree_from_arg` calls `factory_interactive(rootpath)`
    for any path whose first component is `cloud`. It ensures a cache file exists at
    `drivecache.FILE_LIST_CACHE` (`~/.cache/dirman/files.txt`), prompting
    the user (`picker.pick_option`) to refresh the replica's folder in it if it

@@ -1,3 +1,4 @@
+"""The tree of a replica, made from its path: a local dir's or a Drive folder's"""
 import os
 
 from dirdelta import clouddirtreefactory

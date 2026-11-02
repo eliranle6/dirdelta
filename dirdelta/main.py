@@ -11,7 +11,7 @@ from dirdelta import mounts
 from dirdelta import programs
 from dirdelta import replicanames
 from dirdelta import replicas
-from dirdelta import utils
+from dirdelta import replicafactory
 
 
 def parse_args():
@@ -33,7 +33,7 @@ def main():
     try:
         picked_path = _run(args)
     except (programs.ProgramError, drivecache.DriveCacheError, replicas.ReplicasError,
-            inbox.InboxError, mounts.MountsError, utils.NotADirError) as error:
+            inbox.InboxError, mounts.MountsError, replicafactory.NotADirError) as error:
         sys.exit('dirdelta: %s' % (error,))
 
     if picked_path is not None:
@@ -55,12 +55,12 @@ def _run(args):
             if chosen is None:
                 return None
             if isinstance(chosen, choose_replicas.Sort):
-                if _ready(chosen.inbox, chosen.root):
+                if _ready(chosen.inbox, chosen.root) and choose_replicas.are_there(chosen):
                     inbox.run(chosen.inbox, chosen.root, known_replicas)
                 continue
             # The chosen paths in a copy of args (args itself is left as it was parsed)
             chosen_args = argparse.Namespace(**dict(vars(args), dir_a_path=chosen[0], dir_b_path=chosen[1]))
-            if _ready(*chosen):
+            if _ready(*chosen) and choose_replicas.are_there(chosen):
                 dirsync_main.run(chosen_args)
     elif args.sort:
         if args.dir_b_path is None:

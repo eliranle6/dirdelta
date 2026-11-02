@@ -21,7 +21,7 @@ from dirdelta import replicalog
 from dirdelta import replicanames
 from dirdelta import replicas
 from dirdelta import syncstate
-from dirdelta import utils
+from dirdelta import replicafactory
 from dirdelta import text
 
 
@@ -41,14 +41,14 @@ def _run(args):
         # Two local dirs: each action diffs them with dirdiff, which scans them anew, so there's
         # nothing to scan here
         for path in (args.dir_a_path, args.dir_b_path):
-            utils.validate_dir(path)
+            replicafactory.validate_dir(path)
         dirtree_a = localdiskdirtree.LocalDiskDirTree(args.dir_a_path, True, args.max_depth)
         dirtree_b = localdiskdirtree.LocalDiskDirTree(args.dir_b_path, True, args.max_depth)
     else:
-        dirtree_a = utils.create_dirtree_from_arg(args.dir_a_path, args.max_depth)
+        dirtree_a = replicafactory.create_dirtree_from_arg(args.dir_a_path, args.max_depth)
         if dirtree_a is None:
             return
-        dirtree_b = utils.create_dirtree_from_arg(args.dir_b_path, args.max_depth)
+        dirtree_b = replicafactory.create_dirtree_from_arg(args.dir_b_path, args.max_depth)
         if dirtree_b is None:
             return
         warnings = scan_errors_warning(dirtree_a) + scan_errors_warning(dirtree_b)

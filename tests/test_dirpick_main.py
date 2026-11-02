@@ -7,7 +7,7 @@ from unittest import mock
 
 from dirdelta import dirpick_main
 from dirdelta import dirtree
-from dirdelta import utils
+from dirdelta import replicafactory
 import helpers
 
 
@@ -41,20 +41,20 @@ class DirpickMainTest(unittest.TestCase):
 
     def test_a_missing_dir_raises(self):
         self.args.dir_a_path = os.path.join(self.root, 'no-such-dir')
-        with self.assertRaises(utils.NotADirError):
+        with self.assertRaises(replicafactory.NotADirError):
             dirpick_main.run(self.args)
 
     def test_cloud_tree_is_picked_from_its_dirtree(self):
         tree = dirtree.DirTree('cloud/mein')
         tree.add_file_by_relpath('music/song.mp3')
         self.args.dir_a_path = 'cloud/mein'
-        with mock.patch('dirdelta.utils.create_dirtree_from_arg', return_value=tree), \
+        with mock.patch('dirdelta.replicafactory.create_dirtree_from_arg', return_value=tree), \
                 helpers.scripted_tree_picker(helpers.all_files):
             self.assertEqual(dirpick_main.run(self.args), 'cloud/mein/music/song.mp3')
 
     def test_cloud_tree_quit(self):
         self.args.dir_a_path = 'cloud/mein'
-        with mock.patch('dirdelta.utils.create_dirtree_from_arg', return_value=dirtree.DirTree('cloud/mein')), \
+        with mock.patch('dirdelta.replicafactory.create_dirtree_from_arg', return_value=dirtree.DirTree('cloud/mein')), \
                 helpers.scripted_tree_picker(lambda tree: None):
             self.assertIsNone(dirpick_main.run(self.args))
 
