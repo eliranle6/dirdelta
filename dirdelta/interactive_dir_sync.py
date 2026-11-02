@@ -361,8 +361,6 @@ class InteractiveDirSync(object):
         if dryrun.DRYRUN:
             return []
         done = [path for path in files if not self._dst.has_file(path)]
-        for path in done:
-            self.dst_index.remove(path)
         # What src's files were compared with may be gone
         self.checked.clear()
         self._note(self._dst, 'removed', len(done))
@@ -380,7 +378,6 @@ class InteractiveDirSync(object):
             return None
         new_relpath, moves = renamed
         for relpath, new in moves:
-            self.src_index.move(relpath, new)
             # Compared under its old path
             self.checked.pop(relpath, None)
         self._note(self._src, 'moved', len(moves))
@@ -532,13 +529,9 @@ class InteractiveDirSync(object):
             return relpaths
         if action == self.COPY:
             done = [relpath for relpath in relpaths if self._dst.has_file(relpath)]
-            for relpath in done:
-                self.dst_index.add(relpath, self._src.file_size(relpath))
             self._note(self._dst, 'copied', len(done), self._src.displayname())
         else:
             done = [relpath for relpath in relpaths if not self._src.has_file(relpath)]
-            for relpath in done:
-                self.src_index.remove(relpath)
             self._note(self._src, 'removed', len(done))
         return done
 
@@ -662,8 +655,7 @@ class InteractiveDirSync(object):
         """Move files, each of moves (relpath, new_relpath), in dst (RENAME_IN_DST) or src, once the
         user confirms. Returns the picked files done (or that would have been, in a dry run), or None
         if the user didn't confirm."""
-        replica, index = ((self._dst, self.dst_index) if action == self.RENAME_IN_DST else
-                          (self._src, self.src_index))
+        replica = self._dst if action == self.RENAME_IN_DST else self._src
         # The picked file of each move
         picked_of = {move: move[1] if action == self.RENAME_IN_DST else move[0] for move in moves}
         lines = ["Move %s in %s?" % (_files(len(moves)), replica.displayname())]
@@ -688,8 +680,6 @@ class InteractiveDirSync(object):
             done = replica.move_files(moves)
         if dryrun.DRYRUN:
             return [picked_of[move] for move in moves]
-        for relpath, new_relpath in done:
-            index.move(relpath, new_relpath)
         self._note(replica, 'moved', len(done))
         return [picked_of[move] for move in done]
 

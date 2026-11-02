@@ -121,7 +121,7 @@ in-memory tree, asks the filesystem) and the in-memory tree only where a tree is
 (the cloud, and the local side of a cloud sync, or not even there: dirdiff could diff a dir
 against a list of Drive paths on stdin).
 
-## 13. `elsewhere.Index` is a second copy of each replica, synced by hand (M, moderate)
+## 13. `elsewhere.Index` is a second copy of each replica, synced by hand (M, moderate) — fixed 2026-11-02: an index listens to its replica (`DirTree.add_listener()`), told of each file made, removed or moved, and no caller says it. Invalidation after a replica's read anew stays explicit
 After every action, callers must remember `dst_index.add(...)`, `src_index.remove(...)`,
 `index.move(...)` (interactive_dir_sync, inbox); forgetting one silently gives wrong
 "surely moved" previews. Have trees notify listeners of add/remove/move, or rebuild the

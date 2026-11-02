@@ -47,7 +47,8 @@ def scan_warning(where, errors):
 class LocalReplica(dirtree.DirTree):
     """A local dir, whose files are asked of the disk, not of a tree of them (it has none: dirdiff
     diffs two local dirs, and an inbox's are listed): what it says is as things are now. What keeps a
-    tree too is LocalDiskDirTree, told of each change by the _file_added() and the like."""
+    tree too is LocalDiskDirTree, told of each change by _file_added() and the like; what listens
+    (see DirTree.add_listener()) is told by them."""
     def __init__(self, filesystem_dirpath, silent=True, max_depth=None):
         """Down to max_depth levels below it"""
         filesystem_dirpath = os.path.realpath(filesystem_dirpath)
@@ -63,18 +64,25 @@ class LocalReplica(dirtree.DirTree):
 
     def _file_added(self, relpath):
         """A file was just made at relpath"""
+        self._tell_added(relpath)
 
     def _file_removed(self, relpath):
         """The file at relpath was just removed"""
+        self._tell_removed(relpath)
 
     def _file_moved(self, relpath, new_relpath):
-        """The file at relpath was just moved to new_relpath"""
+        """The file at relpath was just moved to new_relpath, in this tree"""
+        self._tell_moved(relpath, new_relpath, self)
 
     def _dir_removed(self, relpath):
         """The (empty) dir at relpath was just removed"""
 
     def _dir_moved(self, dirpath, new_dirpath, to):
         """The dir at dirpath was just moved, with all in it, to new_dirpath in to (maybe this one)"""
+        if self._listeners or to._listeners:
+            for new_relpath in to.files_under(new_dirpath):
+                if to.has_file(new_relpath):
+                    self._tell_moved(dirpath + new_relpath[len(new_dirpath):], new_relpath, to)
 
     @contextlib.contextmanager
     def trashing(self):
@@ -344,27 +352,31 @@ class LocalDiskDirTree(LocalReplica):
         super(LocalDiskDirTree, self).rescan()
         scanned = LocalDiskDirTree(self._rootpath, True, self.max_depth)
         scanned.update_from_filesystem()
-        is_trashing, silent = self._is_trashing, self._silent
+        is_trashing, silent, listeners = self._is_trashing, self._silent, self._listeners
         self.__dict__.update(scanned.__dict__)
-        self._is_trashing, self._silent = is_trashing, silent
+        self._is_trashing, self._silent, self._listeners = is_trashing, silent, listeners
 
     def _file_added(self, relpath):
         self.add_file_by_relpath(relpath)
+        super(LocalDiskDirTree, self)._file_added(relpath)
 
     def _file_removed(self, relpath):
         if relpath in self:
             self.remove_node(relpath)
+        super(LocalDiskDirTree, self)._file_removed(relpath)
 
     def _file_moved(self, relpath, new_relpath):
         if relpath in self:
             self.remove_node(relpath)
             self.add_file_by_relpath(new_relpath)
+        super(LocalDiskDirTree, self)._file_moved(relpath, new_relpath)
 
     def _dir_removed(self, relpath):
         if relpath in self:
             self.remove_node(relpath)
 
     def _dir_moved(self, dirpath, new_dirpath, to):
+        super(LocalDiskDirTree, self)._dir_moved(dirpath, new_dirpath, to)
         if isinstance(to, LocalDiskDirTree):
             self._move_subtree(dirpath, new_dirpath, to)
         elif dirpath in self:

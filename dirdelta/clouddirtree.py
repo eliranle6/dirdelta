@@ -127,7 +127,9 @@ class CloudDirTree(dirtree.DirTree):
         DriveCacheError if what's there can't be a tree; then the tree is as it was."""
         # Read before the tree is emptied, so it's kept if they can't be a tree
         found = list(drivecache.entries(self.fullpath()))
+        listeners = self._listeners
         super(CloudDirTree, self).__init__(rootpath=self.fullpath())
+        self._listeners = listeners
         self._forget_all()
         self.update_from_cache(found)
 
@@ -305,6 +307,7 @@ class CloudDirTree(dirtree.DirTree):
         self.add_file_by_relpath(file_entry.relpath)
         self._cloud_ids[file_entry.relpath] = md['id']
         self._infos[file_entry.relpath] = _info_of(md)
+        self._tell_added(file_entry.relpath)
         return True
 
     def _make_folders(self, dir_relpaths):
@@ -429,6 +432,7 @@ class CloudDirTree(dirtree.DirTree):
         self.remove_node(relpath)
         to.add_file_by_relpath(new_relpath)
         self._handed_over(relpath, new_relpath, to)
+        self._tell_moved(relpath, new_relpath, to)
         return True
 
     def _move_dir(self, dirpath, new_dirpath, to=None):
@@ -453,6 +457,8 @@ class CloudDirTree(dirtree.DirTree):
             return False
         for relpath, new_relpath in self._move_subtree(dirpath, new_dirpath, to):
             self._handed_over(relpath, new_relpath, to)
+            if to.has_file(new_relpath):
+                self._tell_moved(relpath, new_relpath, to)
         return True
 
     def _copy_within(self, relpath, new_relpath, to=None):
@@ -483,6 +489,7 @@ class CloudDirTree(dirtree.DirTree):
         # The same contents (and so size, hashes, photo's date)
         if relpath in self._infos:
             to._infos[new_relpath] = self._infos[relpath]
+        to._tell_added(new_relpath)
         return True
 
     def _moved(self, moves):
@@ -636,9 +643,12 @@ class CloudDirTree(dirtree.DirTree):
         tree. Returns whether it was moved."""
         if not self._trash(self._cloud_ids[relpath]):
             return False
+        files = self.files_under(relpath)
         for node in self._tree.subtree(relpath).all_nodes_itr():
             self._forget(node.identifier)
         self.remove_node(relpath)
+        for file_relpath in files:
+            self._tell_removed(file_relpath)
         return True
 
     def _remove_file(self, file_entry):
@@ -647,6 +657,7 @@ class CloudDirTree(dirtree.DirTree):
             return False
         self.remove_node(file_entry.relpath)
         self._forget(file_entry.relpath)
+        self._tell_removed(file_entry.relpath)
         return True
 
     def _forget(self, relpath):

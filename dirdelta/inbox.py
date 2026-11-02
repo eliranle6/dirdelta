@@ -426,7 +426,6 @@ class InboxSort(object):
                               self._junk_by_name):
                     if relpath in known:
                         known[new] = known.pop(relpath)
-                self._inbox_index.move(relpath, new)
         # What Claude said of each, in its cache, under its new path (the same size)
         sizes = {new: self._size(new) for new in moved.values()}
         ai.carry({self._path_key(relpath, sizes[new]): self._path_key(new, sizes[new]) for relpath, new in moved.items()})
@@ -1158,8 +1157,6 @@ class InboxSort(object):
         if renamed is None or dryrun.DRYRUN:
             return
         _, moves = renamed
-        for relpath_there, new_relpath in moves:
-            self._root_index.move(relpath_there, new_relpath)
         self.changes.note(self.root_path, 'moved', len(moves))
 
     def _new_dir(self, parent, verb, count, base=None):
@@ -1325,10 +1322,6 @@ class InboxSort(object):
         done = [relpath for relpath, _ in plan if relpath in done_sources]
         # What Claude said of each goes with it, to its new path
         ai.carry(dict(keys[relpath] for relpath in done))
-        # The sorted tree has them now: a later file of the inbox may be a copy of one
-        targets = dict(plan)
-        for relpath in done:
-            self._root_index.add(targets[relpath], sizes[relpath])
         if action == self.MOVE_TO:
             # Only the sorted tree's log says so: files leaving the inbox for it is what an inbox is
             # for, not a change of the inbox to keep in its own log

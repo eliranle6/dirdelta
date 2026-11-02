@@ -55,9 +55,10 @@ Match = collections.namedtuple('Match', ['relpath', 'size', 'date_taken', 'modif
 
 class Index(object):
     """A replica's files by name (and the big ones by size), built once (in the background, by
-    find_previews(), or by sure_matches()), and then kept up to date as files are copied into the
-    replica, removed from it or moved in it (add(), remove(), move()), rather than built again; or
-    built again after the replica is read anew (invalidate()).
+    find_previews(), or by sure_matches()), and then kept up to date by the replica, which tells it
+    of the files copied into it, removed from it or moved in it (add(), remove(), move(); see
+    DirTree.add_listener()), rather than built again; or built again after the replica is read anew
+    (invalidate()).
 
     Its files by their contents' hashes too, the ones known without reading the files: Drive's (once
     built), and a local replica's that its hashing job (hashing.py) has hashed, which come as they're
@@ -67,6 +68,7 @@ class Index(object):
         """excluded: a dir (relpath) of the replica whose files aren't in it (e.g. an inbox in a
         sorted tree, whose files would be their own matches)"""
         self.replica = replica
+        replica.add_listener(self)
         self._excluded = excluded
         # {name: {relpath: size}}, the names in each dir, and {size: relpaths} of the big ones
         # (RENAMED_MIN_SIZE), once built

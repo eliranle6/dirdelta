@@ -8,6 +8,7 @@ from unittest import mock
 from dirdelta import text
 from dirdelta import dirtree
 from dirdelta import elsewhere
+from dirdelta import entries
 from dirdelta import hashing
 from dirdelta import localdiskdirtree
 from dirdelta import picker
@@ -495,6 +496,60 @@ class FormatSizeTest(unittest.TestCase):
         self.assertEqual(text.format_size(3 * 1024 ** 2), "3.0 MB")
         self.assertEqual(text.format_size(5 * 1024 ** 4), "5120.0 GB")
 
+
+
+class KeptUpToDateTest(unittest.TestCase):
+    """An index needn't be told by hand: its replica tells it"""
+    def setUp(self):
+        self.root = tempfile.mkdtemp(prefix='dirdelta-index-')
+        self.addCleanup(shutil.rmtree, self.root, ignore_errors=True)
+        helpers.make_files(self.root, ['a/x', 'b/y', 'gone'])
+        self.replica = localdiskdirtree.LocalReplica(self.root)
+        self.index = elsewhere.Index(self.replica)
+        self.index.build()
+        patcher = mock.patch('dirdelta.dryrun.DRYRUN', False)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        patcher = mock.patch('dirdelta.messages.print_line')
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def test_a_moved_file_and_dir(self):
+        self.replica.move_files([('a/x', 'c/z')])
+        self.assertEqual(list(self.index.files_named('z')), ['c/z'])
+        self.assertEqual(self.index.files_named('x'), {})
+        self.replica.move_files([('b/y', 'd/y')])
+        self.assertEqual(list(self.index.files_named('y')), ['d/y'])
+
+    def test_a_removed_file(self):
+        self.replica.remove_files([entries.FileEntry('gone', 'gone', os.path.join(self.root, 'gone'))])
+        self.assertEqual(self.index.files_named('gone'), {})
+
+    def test_a_copy_within_and_to_another_replica(self):
+        self.replica.copy_files_within([('gone', 'copy')])
+        self.assertEqual(self.index.files_named('copy'), {'copy': 4})
+        other_root = tempfile.mkdtemp(prefix='dirdelta-index-other-')
+        self.addCleanup(shutil.rmtree, other_root, ignore_errors=True)
+        other = localdiskdirtree.LocalReplica(other_root)
+        other_index = elsewhere.Index(other)
+        other_index.build()
+        self.replica.move_files([('gone', 'there')], other)
+        self.assertEqual(self.index.files_named('gone'), {})
+        self.assertEqual(other_index.files_named('there'), {'there': 4})
+
+    def test_a_dry_run_changes_nothing(self):
+        with mock.patch('dirdelta.dryrun.DRYRUN', True):
+            self.replica.move_files([('a/x', 'c/z')])
+        self.assertEqual(list(self.index.files_named('x')), ['a/x'])
+
+    def test_a_trees_rescan_keeps_who_listens(self):
+        tree = localdiskdirtree.LocalDiskDirTree(self.root, True)
+        tree.update_from_filesystem()
+        index = elsewhere.Index(tree)
+        index.build()
+        tree.rescan()
+        tree.move_files([('a/x', 'c/z')])
+        self.assertEqual(list(index.files_named('z')), ['c/z'])
 
 
 class HashedReplicasTest(unittest.TestCase):

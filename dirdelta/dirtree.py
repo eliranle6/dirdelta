@@ -44,6 +44,8 @@ class DirTree(object):
 
     def __init__(self, rootpath, silent=False):
         self._silent = silent
+        # What's told of each file changed (see add_listener())
+        self._listeners = []
         # The dirs (relpaths) never removed, nor moved whole, nor trashed whole (keep_dirs())
         self._kept_dirs = set()
 
@@ -52,6 +54,31 @@ class DirTree(object):
         self._tree = treelib.Tree()
         root = entries.DirEntry(name='/', relpath='', fullpath=self._rootpath)
         self._root = self._tree.create_node(identifier='', tag=root.name, data=root)
+
+    def add_listener(self, listener):
+        """From now on, listener is told of each file dirdelta makes, removes or moves here: its
+        add(relpath, size), remove(relpath) and move(relpath, new_relpath) are called (e.g. an
+        elsewhere.Index's), once it's done; not in a dry run"""
+        self._listeners.append(listener)
+
+    def _tell_added(self, relpath):
+        if self._listeners:
+            size = self.file_size(relpath)
+            for listener in self._listeners:
+                listener.add(relpath, size)
+
+    def _tell_removed(self, relpath):
+        for listener in self._listeners:
+            listener.remove(relpath)
+
+    def _tell_moved(self, relpath, new_relpath, to):
+        """The file was moved to new_relpath in to (maybe this tree)"""
+        if to is self:
+            for listener in self._listeners:
+                listener.move(relpath, new_relpath)
+        else:
+            self._tell_removed(relpath)
+            to._tell_added(new_relpath)
 
     def keep_dirs(self, relpaths):
         """Never remove the dirs at relpaths when a removal or a move leaves them empty, nor move
