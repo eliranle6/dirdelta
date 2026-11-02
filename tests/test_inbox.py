@@ -77,7 +77,7 @@ class InboxSortTest(unittest.TestCase):
         def stopped(*_, **__):
             raise KeyboardInterrupt()
         with mock.patch.object(Sort, '_transfer', side_effect=stopped), \
-                mock.patch('dirdelta.localdiskdirtree.LocalDiskDirTree.move_files', side_effect=stopped):
+                mock.patch('dirdelta.localdiskdirtree.LocalReplica.move_files', side_effect=stopped):
             self.sort([['a.txt'], None], ['Move it to a dir you pick', YES], dirs=[os.path.join(self.root, 'docs')],
                       is_dry_run=False)
         self.assertTrue(self.exists('inbox', 'a.txt'))
@@ -311,7 +311,7 @@ class InboxSortTest(unittest.TestCase):
                 mock.patch('dirdelta.messages.ask', return_value='sort them'), \
                 mock.patch('dirdelta.picker.pick_files', side_effect=pick_files), \
                 helpers.answering_option_picker(answers), mock.patch('dirdelta.dryrun.DRYRUN', False), \
-                mock.patch('dirdelta.localdiskdirtree.LocalDiskDirTree.trashing', return_value=contextlib.nullcontext()), \
+                mock.patch('dirdelta.localdiskdirtree.LocalReplica.trashing', return_value=contextlib.nullcontext()), \
                 mock.patch('dirdelta.picker.view_files') as self.view_files:
             self.sorter = Sort(self.inbox, self.root)
             self.sorter.run()

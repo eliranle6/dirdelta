@@ -112,7 +112,7 @@ hashed), a moved or copied file keeps its description for free, and duplicates s
 Also: the cache is a whole-JSON read-modify-write, done from the Claude worker thread
 (`_ask`) and the main thread (`carry`) with no lock, so one can overwrite the other's entries.
 
-## 12. `LocalDiskDirTree` is sometimes a tree and sometimes an empty shell (L, high value)
+## 12. `LocalDiskDirTree` is sometimes a tree and sometimes an empty shell (L, high value) — fixed 2026-11-02: `LocalReplica` asks the disk and has no tree; `LocalDiskDirTree`, a `LocalReplica` that keeps one as well, for a diff with a Drive replica, is told of each change (`_file_added()` and the like). dirdiff on a list of Drive's paths not done
 For local↔local syncs and for the inbox, the tree is never scanned (dirdiff does the diff), so
 `has_file`, `_files_under`, `_exists`, `files_by_name`, `_move_file`, `_remove_file`,
 `_copy_within` all check the disk or say "the tree may not have it, if it wasn't scanned".

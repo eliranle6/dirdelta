@@ -139,7 +139,7 @@ class Index(object):
 
     def _take_hashes(self):
         """Take in what its hashing job hashed since (subscribing to it, once there's one)"""
-        if self._job is None and isinstance(self.replica, localdiskdirtree.LocalDiskDirTree):
+        if self._job is None and localdiskdirtree.is_local(self.replica):
             job = hashing.job_for(self.replica.fullpath())
             if job is not None:
                 with self._lock:

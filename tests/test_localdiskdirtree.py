@@ -420,8 +420,8 @@ class RescanTest(unittest.TestCase):
         self.assertEqual(self.files(tree), ['d/b.txt', 'new/c.txt'])
         self.assertEqual(sorted(tree.file_stamps), ['d/b.txt', 'new/c.txt'])
 
-    def test_one_not_scanned_stays_so(self):
-        tree = localdiskdirtree.LocalDiskDirTree(self.tmpdir, True)
+    def test_a_replica_without_a_tree_stays_so(self):
+        tree = localdiskdirtree.LocalReplica(self.tmpdir)
         tree.rescan()
         self.assertIsNone(tree.file_stamps)
         self.assertEqual(self.files(tree), [])

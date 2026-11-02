@@ -97,7 +97,7 @@ class Opener(object):
     def to_download(self, relpaths, files):
         """[(relpath, size)] of relpaths (of files: the rest are dirs) that are Drive files not
         downloaded yet"""
-        if isinstance(self._tree, localdiskdirtree.LocalDiskDirTree):
+        if localdiskdirtree.is_local(self._tree):
             return []
         found = []
         for relpath in relpaths:
@@ -216,7 +216,7 @@ class Opener(object):
         """Where the file at relpath is on this machine, to read it there: a Drive file's downloaded
         (unless it was), on this thread; None if it's one that can't be, or is bigger than max_size.
         Raises OSError if it can't be downloaded."""
-        if not isinstance(self._tree, localdiskdirtree.LocalDiskDirTree):
+        if not localdiskdirtree.is_local(self._tree):
             full = self._full(relpath)
             if self._tree.cant_fetch(full) is not None or (max_size is not None and
                                                            (self._tree.file_size(full) or 0) > max_size):
@@ -226,7 +226,7 @@ class Opener(object):
     def _local_path(self, relpath, is_file):
         """The local path to open relpath at: a Drive file's downloaded (its progress kept, for
         the status bar and its tag). Raises OSError if it can't be."""
-        if isinstance(self._tree, localdiskdirtree.LocalDiskDirTree):
+        if localdiskdirtree.is_local(self._tree):
             return os.path.join(self._tree.fullpath(), self._full(relpath))
         if not is_file:
             raise OSError("a Google Drive folder can't be opened here")

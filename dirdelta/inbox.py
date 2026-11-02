@@ -198,7 +198,7 @@ class InboxSort(object):
                 self._inbox_rel, self._root_rel = '/'.join(inbox[len(common):]), '/'.join(root[len(common):])
             else:
                 common = os.path.commonpath([self.inbox_path, self.root_path])
-                tree = localdiskdirtree.LocalDiskDirTree(common, silent=True)
+                tree = localdiskdirtree.LocalReplica(common)
                 self._inbox_rel, self._root_rel = _relpath(self.inbox_path, common), _relpath(self.root_path, common)
             if _is_at_or_under(self._root_rel, self._inbox_rel):
                 raise InboxError("The sorted tree %s can't be in the inbox %s" % (self.root_path, self.inbox_path))
@@ -1524,7 +1524,7 @@ def _tree(path):
     (not scanned)"""
     if paths.is_cloud_path(path):
         return clouddirtree.factory(path)
-    return localdiskdirtree.LocalDiskDirTree(path, silent=True)
+    return localdiskdirtree.LocalReplica(path)
 
 
 # One way for all (see paths.normalized())

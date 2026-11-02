@@ -30,7 +30,7 @@ def factory(filesystem_dirpath, max_depth=None, silent=False):
 
 def is_local(tree):
     """Whether the tree is a local replica's (else, e.g., a Drive one's)"""
-    return isinstance(tree, LocalDiskDirTree)
+    return isinstance(tree, LocalReplica)
 
 
 def scan_warning(where, errors):
@@ -44,20 +44,37 @@ def scan_warning(where, errors):
     return lines + text.listed(["  " + error for error in errors], MAX_SCAN_ERRORS_SHOWN)
 
 
-class LocalDiskDirTree(dirtree.DirTree):
-    def __init__(self, filesystem_dirpath, silent, max_depth=None):
-        """A tree of the dir, which is empty until update_from_filesystem(), which scans down to
-        max_depth levels below it."""
+class LocalReplica(dirtree.DirTree):
+    """A local dir, whose files are asked of the disk, not of a tree of them (it has none: dirdiff
+    diffs two local dirs, and an inbox's are listed): what it says is as things are now. What keeps a
+    tree too is LocalDiskDirTree, told of each change by the _file_added() and the like."""
+    def __init__(self, filesystem_dirpath, silent=True, max_depth=None):
+        """Down to max_depth levels below it"""
         filesystem_dirpath = os.path.realpath(filesystem_dirpath)
-        super(LocalDiskDirTree, self).__init__(rootpath=filesystem_dirpath, silent=silent)
+        super(LocalReplica, self).__init__(rootpath=filesystem_dirpath, silent=silent)
         self.max_depth = max_depth
-        # find's messages about what it couldn't read in the last scan, so the tree may lack
+        # What a listing couldn't read in the last scan (see LocalDiskDirTree), so a tree may lack
         self.scan_errors = []
         # {relpath: (size, mtime_ns)} of its files, as of the last scan (None: not scanned), so
         # its hashing job needn't list them again (hashing.Job.scan())
         self.file_stamps = None
         # Whether removing a file moves it to the desktop's trash (see trashing())
         self._is_trashing = False
+
+    def _file_added(self, relpath):
+        """A file was just made at relpath"""
+
+    def _file_removed(self, relpath):
+        """The file at relpath was just removed"""
+
+    def _file_moved(self, relpath, new_relpath):
+        """The file at relpath was just moved to new_relpath"""
+
+    def _dir_removed(self, relpath):
+        """The (empty) dir at relpath was just removed"""
+
+    def _dir_moved(self, dirpath, new_dirpath):
+        """The dir at dirpath was just moved, with all in it, to new_dirpath"""
 
     @contextlib.contextmanager
     def trashing(self):
@@ -71,33 +88,12 @@ class LocalDiskDirTree(dirtree.DirTree):
             self._is_trashing = False
             del self.REMOVED_TO
 
-    def update_from_filesystem(self):
-        """Add the dirs and files on disk (hidden ones too), down to max_depth levels below the root."""
-        if not self._silent:
-            messages.print_line("Scanning directory %s..." % (self._rootpath,))
-        scan = localscan.scan(self._rootpath, self.max_depth)
-        self.scan_errors = scan.errors
-        for relpath, (kind, _, _) in scan.entries.items():
-            if kind == localscan.FILE:
-                self.add_file_by_relpath(relpath)
-            else:
-                self.create_dir_node_from_relpath_if_not_exists(relpath)
-        self.file_stamps = scan.files()
-
     def rescan(self):
-        """See what's on disk now, if the tree was scanned (one that wasn't has nothing to go stale): the
-        tree is replaced only once the new scan is done, so it's as it was if it's stopped. Raises OSError
-        if the dir isn't there anymore (e.g. it was unmounted), and then too."""
+        """See what's on disk now: it's asked anyway, so only whether it's there. Raises OSError if the
+        dir isn't there anymore (e.g. it was unmounted)."""
         if not os.path.isdir(self._rootpath):
             raise OSError("%s isn't there anymore" % (self._rootpath,))
-        if self.file_stamps is None:
-            self.scan_errors = []
-            return
-        scanned = LocalDiskDirTree(self._rootpath, True, self.max_depth)
-        scanned.update_from_filesystem()
-        is_trashing, silent = self._is_trashing, self._silent
-        self.__dict__.update(scanned.__dict__)
-        self._is_trashing, self._silent = is_trashing, silent
+        self.scan_errors = []
 
     def file_size(self, relpath):
         try:
@@ -146,13 +142,11 @@ class LocalDiskDirTree(dirtree.DirTree):
         return dict(found, **computed)
 
     def has_file(self, relpath):
-        # On disk: the tree may not be scanned (see dirdiff.py)
         return os.path.isfile(os.path.join(self._rootpath, relpath))
 
     def files_by_name(self, progress=None):
         """As DirTree's, but from a listing of the dir (down to max_depth levels), with its files'
-        sizes: the tree may not be scanned (see dirdiff.py), or be from an older scan. If progress
-        raises, the listing is stopped."""
+        sizes. If progress raises, the listing is stopped."""
         found = collections.defaultdict(list)
         for relpath, (size, _) in localscan.scan(self._rootpath, self.max_depth, progress).files().items():
             found[os.path.basename(relpath)].append((relpath, size))
@@ -163,8 +157,7 @@ class LocalDiskDirTree(dirtree.DirTree):
         if reason is not None:
             messages.print_line("Skipped %s: %s" % (file_entry.relpath, reason), "yellow")
             return False
-        new_file_entry = self.add_file_by_relpath(file_entry.relpath)
-        dest_path = new_file_entry.full_filesystem_path()
+        dest_path = os.path.join(self._rootpath, file_entry.relpath)
         did_dest_exist = os.path.exists(dest_path)
         try:
             dest_dirpath = os.path.dirname(dest_path)
@@ -175,33 +168,30 @@ class LocalDiskDirTree(dirtree.DirTree):
                     os.makedirs(dest_dirpath)
                 except OSError as ex:
                     messages.print_line("Copy failed: %s" % (str(ex),), "red")
-                    self.remove_node(new_file_entry.relpath)
                     return False
             if source is not None:
                 source.fetch_file(file_entry.relpath, dest_path)
             else:
                 self._copy_local_file_to_tree_with_path(file_entry.full_filesystem_path(), dest_path)
-            return True
         except OSError as ex:
             messages.print_line("Copy failed: %s" % (str(ex),), "red")
-            self._drop_copy(new_file_entry, dest_path, did_dest_exist)
+            self._drop_copy(dest_path, did_dest_exist)
             return False
         except BaseException:
-            self._drop_copy(new_file_entry, dest_path, did_dest_exist)
+            self._drop_copy(dest_path, did_dest_exist)
             raise
+        self._file_added(file_entry.relpath)
+        return True
 
-    def _drop_copy(self, new_file_entry, dest_path, did_dest_exist):
-        """Undo a copy that failed or was cut off (e.g. by Ctrl-C), if it started"""
-        if new_file_entry.relpath in self:
-            self.remove_node(new_file_entry.relpath)
-        # A copy cut off in the middle leaves part of the file: drop it, unless it's a file that
-        # was there before
+    def _drop_copy(self, dest_path, did_dest_exist):
+        """Undo a copy that failed or was cut off (e.g. by Ctrl-C), if it started: a copy cut off in
+        the middle leaves part of the file, dropped unless it's a file that was there before"""
         if not did_dest_exist and os.path.exists(dest_path):
             os.unlink(dest_path)
 
     def _remove_files(self, file_entries, starting, removed):
         """Remove the files, and then the dirs that removing them left empty"""
-        super(LocalDiskDirTree, self)._remove_files(file_entries, starting, removed)
+        super(LocalReplica, self)._remove_files(file_entries, starting, removed)
         if not dryrun.DRYRUN:
             self._remove_emptied_dirs(file_entries)
 
@@ -220,9 +210,7 @@ class LocalDiskDirTree(dirtree.DirTree):
                 except OSError:
                     break
                 nr_removed += 1
-                relpath = os.path.relpath(dirpath, self._rootpath)
-                if relpath in self:
-                    self.remove_node(relpath)
+                self._dir_removed(os.path.relpath(dirpath, self._rootpath))
                 dirpath = os.path.dirname(dirpath)
         if nr_removed:
             messages.print_line("Removed %d dirs left empty" % (nr_removed,))
@@ -231,8 +219,7 @@ class LocalDiskDirTree(dirtree.DirTree):
         return ["Dirs left empty are removed too."]
 
     def files_under(self, dirpath):
-        # On disk: the tree may not be scanned (see dirdiff.py). A symlink to a dir is one too, so a
-        # dir with one isn't moved whole (it isn't one of the moves).
+        # A symlink to a dir is one too, so a dir with one isn't moved whole (it isn't one of the moves).
         path = os.path.join(self._rootpath, dirpath)
         if not dirpath or os.path.islink(path) or not os.path.isdir(path):
             return []
@@ -262,7 +249,7 @@ class LocalDiskDirTree(dirtree.DirTree):
         # Its files' hashes, under their new paths (between filesystems, a copy may have other times,
         # and then they're hashed again)
         hashcache.move(path, new_path)
-        self._move_subtree(dirpath, new_dirpath)
+        self._dir_moved(dirpath, new_dirpath)
         # The dirs it was in, if it leaves them empty, as a removal does
         self._remove_emptied_dirs([entries.FileEntry(os.path.basename(dirpath), dirpath, path)])
         return True
@@ -280,10 +267,7 @@ class LocalDiskDirTree(dirtree.DirTree):
             messages.print_line("Move failed: %s" % (error,), "red")
             return False
         hashcache.move(path, new_path)
-        # The tree may not have it, if it wasn't scanned (see dirdiff.py)
-        if relpath in self:
-            self.remove_node(relpath)
-            self.add_file_by_relpath(new_relpath)
+        self._file_moved(relpath, new_relpath)
         # As a removal does
         self._remove_emptied_dirs([entries.FileEntry(os.path.basename(relpath), relpath, path)])
         return True
@@ -301,9 +285,7 @@ class LocalDiskDirTree(dirtree.DirTree):
             # Said, and the others go on (it's kept, in the tree too)
             messages.print_line("Remove failed: %s" % (error,), "red")
             return False
-        # The tree may not have it, if it wasn't scanned (see dirdiff.py)
-        if file_entry.relpath in self:
-            self.remove_node(file_entry.relpath)
+        self._file_removed(file_entry.relpath)
         return True
 
     def _copy_within(self, relpath, new_relpath):
@@ -317,9 +299,7 @@ class LocalDiskDirTree(dirtree.DirTree):
         except OSError as error:
             messages.print_line("Copy failed: %s" % (error,), "red")
             return False
-        # The tree may not have them, if it wasn't scanned (see dirdiff.py)
-        if relpath in self:
-            self.add_file_by_relpath(new_relpath)
+        self._file_added(new_relpath)
         return True
 
     def fetch_file(self, relpath, local_path):
@@ -332,6 +312,53 @@ class LocalDiskDirTree(dirtree.DirTree):
         hashes = hashcache.get_all(src)
         if hashes:
             hashcache.put(dst, hashes)
+
+
+class LocalDiskDirTree(LocalReplica):
+    """A LocalReplica with a tree of its files too (which is empty until update_from_filesystem(), which
+    scans down to max_depth levels below it), as a diff with a Drive replica's tree needs"""
+    def update_from_filesystem(self):
+        """Add the dirs and files on disk (hidden ones too), down to max_depth levels below the root."""
+        if not self._silent:
+            messages.print_line("Scanning directory %s..." % (self._rootpath,))
+        scan = localscan.scan(self._rootpath, self.max_depth)
+        self.scan_errors = scan.errors
+        for relpath, (kind, _, _) in scan.entries.items():
+            if kind == localscan.FILE:
+                self.add_file_by_relpath(relpath)
+            else:
+                self.create_dir_node_from_relpath_if_not_exists(relpath)
+        self.file_stamps = scan.files()
+
+    def rescan(self):
+        """See what's on disk now: the tree is replaced only once the new scan is done, so it's as it
+        was if it's stopped. Raises OSError if the dir isn't there anymore (e.g. it was unmounted), and
+        then too."""
+        super(LocalDiskDirTree, self).rescan()
+        scanned = LocalDiskDirTree(self._rootpath, True, self.max_depth)
+        scanned.update_from_filesystem()
+        is_trashing, silent = self._is_trashing, self._silent
+        self.__dict__.update(scanned.__dict__)
+        self._is_trashing, self._silent = is_trashing, silent
+
+    def _file_added(self, relpath):
+        self.add_file_by_relpath(relpath)
+
+    def _file_removed(self, relpath):
+        if relpath in self:
+            self.remove_node(relpath)
+
+    def _file_moved(self, relpath, new_relpath):
+        if relpath in self:
+            self.remove_node(relpath)
+            self.add_file_by_relpath(new_relpath)
+
+    def _dir_removed(self, relpath):
+        if relpath in self:
+            self.remove_node(relpath)
+
+    def _dir_moved(self, dirpath, new_dirpath):
+        self._move_subtree(dirpath, new_dirpath)
 
 
 def _rename(path, new_path):

@@ -45,8 +45,7 @@ def find_missing(src, dst):
 
 
 def _find_missing(src, dst):
-    if not (isinstance(src, localdiskdirtree.LocalDiskDirTree) and
-            isinstance(dst, localdiskdirtree.LocalDiskDirTree)):
+    if not (localdiskdirtree.is_local(src) and localdiskdirtree.is_local(dst)):
         missing = dst.get_unknown_entries_in_given_dirtree(src)
         # By path components, so a dir's files and subdirs stay together
         return Missing(sorted((entry.relpath for entry in missing.iter_files()),

@@ -42,8 +42,8 @@ def _run(args):
         # nothing to scan here
         for path in (args.dir_a_path, args.dir_b_path):
             replicafactory.validate_dir(path)
-        dirtree_a = localdiskdirtree.LocalDiskDirTree(args.dir_a_path, True, args.max_depth)
-        dirtree_b = localdiskdirtree.LocalDiskDirTree(args.dir_b_path, True, args.max_depth)
+        dirtree_a = localdiskdirtree.LocalReplica(args.dir_a_path, True, args.max_depth)
+        dirtree_b = localdiskdirtree.LocalReplica(args.dir_b_path, True, args.max_depth)
     else:
         dirtree_a = replicafactory.create_dirtree_from_arg(args.dir_a_path, args.max_depth)
         if dirtree_a is None:
