@@ -2,6 +2,8 @@ import json
 import os
 import shutil
 import tempfile
+import threading
+import time
 import unittest
 from unittest import mock
 
@@ -142,6 +144,44 @@ class AITest(unittest.TestCase):
         moved = ai.File('f0.txt', None, 10)
         self.assertEqual(ai.cached([moved], lambda file: 'sorted/f0.txt\t10', 'root')[0], {'f0.txt': 'a list'})
         self.assertEqual(ai.cached([moved], lambda file: 'else\t1', 'root')[0], {})
+
+    def test_a_hashed_file_is_kept_by_its_hash_and_found_by_the_key_it_had(self):
+        with mock.patch('dirdelta.ai._run_query', side_effect=_Answering(
+                lambda prompt: [{'number': 1, 'description': 'a list'}])):
+            ai.describe(self.files(1), self.key)
+        hashed = lambda file: [ai.hash_key('abc'), self.key(file)]
+        # Hashed since: what it said by its path is still found, so nothing's asked
+        with mock.patch('dirdelta.ai._run_query') as query:
+            self.assertEqual(ai.describe(self.files(1), hashed), {'f0.txt': 'a list'})
+        query.assert_not_called()
+        # What's asked now is kept by the hash, with what was known; a copy elsewhere shares it
+        with mock.patch('dirdelta.ai._run_query', side_effect=_Answering(
+                lambda prompt: [{'number': 1, 'action': 'move', 'path': 'docs/f0.txt', 'reason': 'r'}])):
+            ai.recommend(self.files(1), hashed, {}, 'root', {})
+        copy = ai.File('elsewhere/copy.txt', None, 10)
+        descriptions, recommendations = ai.cached([copy], lambda file: [ai.hash_key('abc')], 'root')
+        self.assertEqual(descriptions, {'elsewhere/copy.txt': 'a list'})
+        self.assertEqual(recommendations['elsewhere/copy.txt']['path'], 'docs/f0.txt')
+
+    def test_threads_dont_overwrite_each_others_entries(self):
+        with mock.patch('dirdelta.ai._run_query', side_effect=_Answering(
+                lambda prompt: [{'number': 1, 'description': 'first'}])):
+            ai.describe(self.files(1), self.key)
+        real_save, started = ai._save_cache, threading.Event()
+
+        def slow_save(cache):
+            # Another thread's carry() comes while this one is writing what it read
+            started.set()
+            time.sleep(0.05)
+            real_save(cache)
+        with mock.patch('dirdelta.ai._save_cache', side_effect=slow_save):
+            carrying = threading.Thread(target=lambda: (started.wait(), ai.carry({self.key(self.files(1)[0]): 'moved\t10'})))
+            carrying.start()
+            ai.carry({self.key(self.files(1)[0]): 'also\t10'})
+            carrying.join()
+        cache = ai._load_cache()
+        self.assertIn('moved\t10', cache)
+        self.assertIn('also\t10', cache)
 
     def test_a_failed_batch_is_asked_again_a_file_at_a_time(self):
         def run_query(prompt, readable_dirs, schema, max_turns, model, system_prompt=None):

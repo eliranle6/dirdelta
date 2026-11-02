@@ -272,7 +272,14 @@ class InboxSort(object):
         return self._inbox_tree.file_size(self._full(relpath))
 
     def _cache_key(self, file):
-        return '%s\t%s' % (posixpath.join(self.inbox_path, file.relpath), file.size)
+        """What Claude said of the inbox's file is kept by its contents' hash, once it's known; else,
+        or from before, by its path and size"""
+        sha1 = self._inbox_tree.known_hash(self._full(file.relpath), 'sha1')
+        path_key = self._path_key(file.relpath, file.size)
+        return [ai.hash_key(sha1), path_key] if sha1 else [path_key]
+
+    def _path_key(self, relpath, size):
+        return ai.path_key(posixpath.join(self.inbox_path, relpath), size)
 
     def _load_cached(self, relpaths):
         files = [ai.File(relpath, None, self._size(relpath)) for relpath in relpaths]
@@ -444,8 +451,7 @@ class InboxSort(object):
                 self._inbox_index.move(relpath, new)
         # What Claude said of each, in its cache, under its new path (the same size)
         sizes = {new: self._size(new) for new in moved.values()}
-        ai.carry({self._cache_key(ai.File(relpath, None, sizes[new])): self._cache_key(ai.File(new, None, sizes[new]))
-                  for relpath, new in moved.items()})
+        ai.carry({self._path_key(relpath, sizes[new]): self._path_key(new, sizes[new]) for relpath, new in moved.items()})
         # Its hashes are kept under the new paths: the jobs list them there
         for job in self._jobs():
             job.scan_in_background()
@@ -1337,8 +1343,8 @@ class InboxSort(object):
         moves = [(self._full(relpath), _join(self._root_rel, target)) for relpath, target in plan]
         # The cache's keys of each file, here and where it goes (the same size), while it's here
         sizes = {relpath: self._size(relpath) for relpath, _ in plan}
-        keys = {relpath: (self._cache_key(ai.File(relpath, None, sizes[relpath])),
-                          self._target_cache_key(target, sizes[relpath]))
+        keys = {relpath: (self._path_key(relpath, sizes[relpath]),
+                          ai.path_key(posixpath.join(self.root_path, target), sizes[relpath]))
                 for relpath, target in plan}
         # Once it's done (or stopped), Enter goes back to the picker, so what was done can be read
         done = None
@@ -1427,10 +1433,6 @@ class InboxSort(object):
                           len(relpaths), _files(count), what, self.inbox_path)] +
                       text.listed(["  " + relpath for relpath in relpaths], interactive_dir_sync.InteractiveDirSync.MAX_FILES_LISTED),
                       dryrun.label(), 'red')
-
-    def _target_cache_key(self, target, size):
-        """The cache's key of a file at target in the sorted tree"""
-        return '%s\t%s' % (posixpath.join(self.root_path, target), size)
 
     def _target(self, relpath):
         """Where Claude recommends the inbox's file at relpath go, in the sorted tree"""

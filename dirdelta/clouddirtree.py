@@ -152,6 +152,9 @@ class CloudDirTree(dirtree.DirTree):
         # Drive's, so nothing's read
         return self._info(relpath).hashes.get(algorithm)
 
+    def known_hash(self, relpath, algorithm):
+        return self._info(relpath).hashes.get(algorithm)
+
     def known_hashes(self, relpath):
         return tuple(self._info(relpath).hashes)
 

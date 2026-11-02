@@ -133,6 +133,9 @@ class LocalDiskDirTree(dirtree.DirTree):
     def local_path(self, relpath):
         return os.path.join(self._rootpath, relpath)
 
+    def known_hash(self, relpath, algorithm):
+        return hashcache.get(os.path.join(self._rootpath, relpath), algorithm)
+
     def content_hash(self, relpath, algorithm, should_stop=None):
         return self.content_hashes(relpath, [algorithm], should_stop)[algorithm]
 

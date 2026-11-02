@@ -104,7 +104,7 @@ by label, then a second chain of `if action == ...` that re-derives the same per
 Small `Option` objects (label, enabled/why, verb, parts, `run()`) would keep each action's text
 and behaviour together. Goes well with #1.
 
-## 11. The inbox's AI cache is keyed by path+size, while everything is hashed (M, moderate)
+## 11. The inbox's AI cache is keyed by path+size, while everything is hashed (M, moderate) — fixed 2026-11-02: by SHA-1 once it's known (`known_hash()`), else by path and size, found by either; `carry()` only for what's by path; one lock around the read-modify-writes
 `ai.py` keys by `"<cloud or local path>\t<size>"`, so a move needs `ai.carry()`, two key
 functions (`_cache_key`, `_target_cache_key`) and bookkeeping in `_approve()`. Files now have
 SHA-1s (Drive's, or the background hasher's): keyed by hash (falling back to path+size until

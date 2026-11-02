@@ -384,6 +384,14 @@ class InboxSortTest(unittest.TestCase):
             self.sort([picker.Picked(':', 'a.txt', ['b.jpg']), None], [])
         act.assert_called_once_with(['b.jpg'], 'a.txt')
 
+    def test_what_claude_said_goes_with_a_hashed_file_wherever_it_is(self):
+        self.sorter = sorter = Sort(self.inbox, self.root)
+        file = ai.File('a.txt', None, sorter._size('a.txt'))
+        path_key = ai.path_key(os.path.join(self.inbox, 'a.txt'), file.size)
+        self.assertEqual(sorter._cache_key(file), [path_key])
+        with mock.patch.object(sorter._inbox_tree, 'known_hash', return_value='abc'):
+            self.assertEqual(sorter._cache_key(file), [ai.hash_key('abc'), path_key])
+
     def test_the_menu_starts_with_nothing(self):
         self.sort([['a.txt'], None], [NOTHING])
         # Each kind of action apart, after a blank line (skipped when moving)

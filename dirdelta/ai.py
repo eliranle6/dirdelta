@@ -4,7 +4,8 @@ laptop's logged-in Claude (or ANTHROPIC_API_KEY, if set).
 
 Claude reads the files itself, with its Read tool (text, images, PDFs), and with no other tool: it
 gets only the paths it's given, in a dir of its own (cwd). What it says is cached (CACHE_FILE), by
-the file's path and size, so it's asked once per file. It sends the files' contents to Anthropic,
+the file's contents' hash once it's known (so what's said of a file goes with it when it moves, and
+its copies share it), else by its path and size, so it's asked once per file. It sends the files' contents to Anthropic,
 so it's only asked when the user chooses to."""
 import asyncio
 import collections
@@ -12,6 +13,7 @@ import gc
 import json
 import logging
 import os
+import threading
 
 
 # The model, for descriptions and recommendations both: the fastest and cheapest
@@ -19,6 +21,9 @@ MODEL = 'claude-haiku-5-5'
 # For a plan of what to do with files (see aiplan.py), where following what the user said matters most
 PLAN_MODEL = 'claude-opus-5-5'
 CACHE_FILE = os.path.expanduser('~/.cache/dirdelta/ai.json')
+# Around reading the cache, changing it and writing it, from the worker's thread and the main one, so
+# neither overwrites what the other added
+_cache_lock = threading.Lock()
 # How many files one request is about
 BATCH_SIZE = 10
 # Bigger files aren't read (Claude says what it can from their names)
@@ -63,11 +68,33 @@ def _schema(fields, enums=None):
     return {"type": "object", "properties": {"files": {"type": "array", "items": item}}, "required": ["files"]}
 
 
+def path_key(path, size):
+    """A cache's key of a file by where it is, for what isn't hashed yet"""
+    return '%s\t%s' % (path, size)
+
+
+def hash_key(sha1):
+    """A cache's key of a file by its contents"""
+    return 'sha1:%s' % (sha1,)
+
+
+def _keys(cache_key, file):
+    """cache_key(file) as a list: what it's kept under first, then what it may be cached under since
+    before (e.g. by its path, before it was hashed)"""
+    keys = cache_key(file)
+    return [keys] if isinstance(keys, str) else list(keys)
+
+
+def _entry_of(cache, keys):
+    """What cache has of the file with keys, by the first of them that's in it"""
+    return next((cache[key] for key in keys if key in cache), {})
+
+
 def describe(files, cache_key, progress=None, anew=()):
     """{relpath: description} of files (File), a sentence of at most MAX_DESCRIPTION_WORDS words
     each, from the cache or Claude (which reads them), in batches of BATCH_SIZE,
-    calling progress(done, count) after each. cache_key(file) is the file's key in the cache; the
-    files at anew (relpaths) are asked about again, whatever it has. Raises AIError if Claude can't
+    calling progress(done, count) after each. cache_key(file) is the file's key in the cache, or its
+    keys (see _keys()); the files at anew (relpaths) are asked about again, whatever it has. Raises AIError if Claude can't
     be asked."""
     def is_cached(entry):
         return entry.get('description') and {'description': entry['description']}
@@ -108,7 +135,7 @@ def cached(files, cache_key, root_name):
     cache = _load_cache()
     descriptions, recommendations = {}, {}
     for file in files:
-        entry = cache.get(cache_key(file), {})
+        entry = _entry_of(cache, _keys(cache_key, file))
         if entry.get('description'):
             descriptions[file.relpath] = entry['description']
         recommendation = _cached_recommendation(entry, root_name)
@@ -126,7 +153,7 @@ def _ask(files, cache_key, is_cached, keep, ask, progress, anew=()):
     needed = []
     for file in files:
         answer = (None if file.relpath in anew else
-                  is_cached(dict(cache.get(cache_key(file), {}), _relpath=file.relpath)))
+                  is_cached(dict(_entry_of(cache, _keys(cache_key, file)), _relpath=file.relpath)))
         if answer:
             found[file.relpath] = answer
         else:
@@ -137,13 +164,17 @@ def _ask(files, cache_key, is_cached, keep, ask, progress, anew=()):
         batch = needed[start:start + BATCH_SIZE]
         answers = _ask_each_if_failed(ask, batch)
         # Kept at once, so what was asked isn't asked again if it's stopped
-        cache = _load_cache()
-        for file in batch:
-            answer = answers.get(file.relpath)
-            if answer is not None:
-                found[file.relpath] = answer
-                keep(cache.setdefault(cache_key(file), {}), answer)
-        _save_cache(cache)
+        with _cache_lock:
+            cache = _load_cache()
+            for file in batch:
+                answer = answers.get(file.relpath)
+                if answer is not None:
+                    found[file.relpath] = answer
+                    keys = _keys(cache_key, file)
+                    # Under its first key, with what's known of it by the others
+                    entry = cache.setdefault(keys[0], dict(_entry_of(cache, keys)))
+                    keep(entry, answer)
+            _save_cache(cache)
     if progress is not None and needed:
         progress(len(needed), len(needed))
     return found
@@ -367,15 +398,16 @@ def _why(error, stderr_lines):
 
 
 def carry(keys):
-    """What the cache has of files, under their new keys too ({old key: new key}), e.g. after they
-    were moved or copied, so it goes with them"""
+    """What the cache has of files by their paths, under their new ones too ({old key: new key}, see
+    path_key()), after they were moved or copied, so it goes with them (by their hashes, it does)"""
     if not keys:
         return
-    cache = _load_cache()
-    for old_key, new_key in keys.items():
-        if old_key in cache and new_key not in cache:
-            cache[new_key] = dict(cache[old_key])
-    _save_cache(cache)
+    with _cache_lock:
+        cache = _load_cache()
+        for old_key, new_key in keys.items():
+            if old_key in cache and new_key not in cache:
+                cache[new_key] = dict(cache[old_key])
+        _save_cache(cache)
 
 
 def _load_cache():

@@ -389,6 +389,11 @@ class DirTree(object):
         it)"""
         return {algorithm: self.content_hash(relpath, algorithm, should_stop) for algorithm in algorithms}
 
+    def known_hash(self, relpath, algorithm):
+        """The file's hash (hex) by algorithm if it's known without reading it (Drive's, or one kept
+        in the hash cache), else None"""
+        return None
+
     def known_hashes(self, relpath):
         """The algorithms whose hashes of the file at relpath are known without reading it (e.g.
         Drive's), the best first"""
