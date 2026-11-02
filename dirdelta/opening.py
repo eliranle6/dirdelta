@@ -254,7 +254,7 @@ class Opener(object):
         return ''.join(text for text, _ in self.status_parts())
 
     def status_parts(self):
-        """The status bar's part of opening files, as picker.status()'s ([(text, color)]; none for
+        """The status bar's part of opening files, as picker.segments()'s ([(text, color)]; none for
         nothing): how far the downloads got while there are any; else what was opened, or why not,
         or Ctrl-X's question, for a while"""
         with self._lock:

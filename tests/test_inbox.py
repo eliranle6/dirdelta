@@ -639,7 +639,7 @@ class InboxSortTest(unittest.TestCase):
         with mock.patch('dirdelta.opening.subprocess.Popen') as popen:
             sorter._opener.open(['trip/c.jpg'], ['trip/c.jpg'])
         self.assertEqual(popen.call_args.args[0], ['xdg-open', os.path.join(self.inbox, 'trip', 'c.jpg')])
-        self.assertEqual(sorter._shown_as([])[''], picker.status([('Opened c.jpg', 'yellow')]))
+        self.assertEqual(sorter._shown_as([])[''], picker.segments([('Opened c.jpg', 'yellow')]))
 
     def test_open_in_the_menu_opens_the_picked_files(self):
         with mock.patch('dirdelta.opening.Opener.open_in_background') as open_in_background:

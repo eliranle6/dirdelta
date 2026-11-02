@@ -169,7 +169,7 @@ run twice for a recent pair (`choose_replicas._mounted`, then `main._ready`). `c
 has the same "missing dir" block twice (sorts and pairs). `utils.py` is a two-function grab bag
 (`create_dirtree_from_arg` belongs in a replica factory).
 
-## 20. The picker's in-band markup is defined six times (S→M, low-moderate) — the Python side in part 2026-11-01: `status()` and `segments()` made by one `_marked()`; the C++ parsers not done
+## 20. The picker's in-band markup is defined six times (S→M, low-moderate) — fixed 2026-11-02: one producer, `picker.segments()`, and one parser, treepicker's `parse_segments()`, with `parse_status()` and `parse_preview_line()` on it; the JSON protocol not done, as this advises
 `\x01color\x01text` is produced by three Python functions (`picker.highlighted`, `status`,
 `segments`) and parsed by three C++ ones (`parse_status`, `parse_preview_line`,
 `parse_preview_segments`), with slightly different rules (default colors, line vs. segment).
@@ -177,14 +177,14 @@ One "segments" format, one producer and one parser. (A JSON-lines protocol over 
 instead of `--updates`/`--preview`/`--selection`/`--notify-fd` + two temp files would be
 cleaner still, but it's an L change on both sides for little user-visible gain.)
 
-## 21. C++: two scanners in PathTree (M, low-moderate) — find waited for by its pid, from PATH (2026-11-01); one scanner not done
+## 21. C++: two scanners in PathTree (M, low-moderate) — fixed 2026-11-02: one scanner, by `readdir()`. Measured on 318k entries: `std::filesystem` 1.7s, find 1.06s, `readdir()` 0.62s; so no find, tmpfile or subprocess utility
 `update_from_filesystem` fork/execs a hard-coded `/usr/bin/find`, sends stderr to a tmpfile,
 then `wait(nullptr)`, which reaps *any* child rather than find's pid; `load_children` (lazy)
 uses `std::filesystem::directory_iterator`. One `std::filesystem` scan would drop the subprocess
 utility and the tmpfile (measure first: speed matters here). At least wait on find's pid and
 look `find` up on PATH, as the Python side does.
 
-## 22. C++: small duplication in cli/readers (S, low) — the key checks one (2026-11-01); the rest not done
+## 22. C++: small duplication in cli/readers (S, low) — fixed 2026-11-02: the key checks one, `CliOptions` is a `PickerOptions`, one `DelimitedBuffer`, a path cleaned in one pass
 `pick_and_print` copies `CliOptions` into `PickerOptions` field by field (embed one in the
 other); `expect_key_error` and `notify_key_error` loop over the same key table;
 `UpdatesReader::feed` and `PreviewsReader::feed` share the same delimiter-buffering loop;

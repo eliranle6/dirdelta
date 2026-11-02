@@ -191,7 +191,7 @@ class InteractiveDirSync(object):
 
             def shown_as(marks=marks, src_job=src_job):
                 """The hashing tags (Marks), and the downloads' to open the files (opening.py)"""
-                shown = marks() if marks is not None else {'': picker.status(self._opener.status_parts())}
+                shown = marks() if marks is not None else {'': picker.segments(self._opener.status_parts())}
                 return opening.with_tags(shown, self._opener, lambda relpath: (
                     marks.text(relpath) if marks is not None else os.path.basename(relpath)))
             try:

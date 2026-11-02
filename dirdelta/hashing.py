@@ -558,7 +558,7 @@ def active_jobs():
 
 
 def status_parts(jobs):
-    """[(text, color)] of the jobs' statuses, for picker.status(), each by its replica's short name
+    """[(text, color)] of the jobs' statuses, for picker.segments(), each by its replica's short name
     (one that tells it from the others, see replicanames.short_names())"""
     names = replicanames.short_names([job.root for job in jobs])
     parts = []

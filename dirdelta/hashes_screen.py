@@ -316,7 +316,7 @@ def _finish_dashboard(items, options, shown, names, jobs):
 
     def shown_now():
         now = dict(shown, **_jobs_shown(items, names))
-        now[''] = picker.status(hashing.status_parts(jobs))
+        now[''] = picker.segments(hashing.status_parts(jobs))
         return now
     first = shown_now()
     # The first that can be picked
@@ -520,12 +520,12 @@ class Marks(object):
             self._current = current
             for relpath in changed:
                 shown[relpath] = self.text(relpath)
-        shown[''] = picker.status(hashing.status_parts(self._status_jobs) + (self._extra() if self._extra else []))
+        shown[''] = picker.segments(hashing.status_parts(self._status_jobs) + (self._extra() if self._extra else []))
         return shown
 
 
 def picker_status(replicas, extra=()):
     """The status of a picker of replicas (trees) that has no Marks: a label of each local one's job"""
-    return picker.status(hashing.status_parts(jobs_of(replicas)) + list(extra))
+    return picker.segments(hashing.status_parts(jobs_of(replicas)) + list(extra))
 
 

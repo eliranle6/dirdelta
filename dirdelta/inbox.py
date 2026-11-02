@@ -554,7 +554,7 @@ class InboxSort(object):
         opening.with_tags(shown, self._opener, os.path.basename)
         parts = self._opener.status_parts() + ([(status, 'yellow')] if status else [])
         shown[''] = (hashes_screen.picker_status(self._views(), parts) if self._jobs() else
-                     picker.status(parts) if self._opener.status_parts() else status)
+                     picker.segments(parts) if self._opener.status_parts() else status)
         return shown
 
     def _send_previews(self, relpaths, send):

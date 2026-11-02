@@ -74,28 +74,17 @@ def trail(title=None):
 HIGHLIGHT_MARK = '\x01'
 
 
-def _marked(parts):
-    """parts ([(text, color)]: a --label-color, or None or '' for plain) in treepicker's labels'
-    markup: each after HIGHLIGHT_MARK, its color, HIGHLIGHT_MARK; the empty ones left out. The one
-    way it's made, for highlighted(), status() and segments()."""
+def segments(parts):
+    """A text in colored parts, for treepicker's labels' markup (a status for shown_as's '', a line of
+    pick_option(previews_below=...)'s): parts is [(text, color)], a --label-color, or plain for None
+    or ''; each after HIGHLIGHT_MARK, its color, HIGHLIGHT_MARK; the empty ones left out. The one
+    way it's made."""
     return ''.join('%s%s%s%s' % (HIGHLIGHT_MARK, color or '', HIGHLIGHT_MARK, text) for text, color in parts if text)
 
 
 def highlighted(text, color='green'):
     """A pick_files() preview's line, shown bold on color (a --label-color), across the column"""
-    return '%s%s%s%s' % (HIGHLIGHT_MARK, color, HIGHLIGHT_MARK, text)
-
-
-def status(parts):
-    """A status for shown_as's '' (see pick_files()) of several labels, each in its color: parts is
-    [(text, color)] (a --label-color, or 'orange'); the empty ones are left out"""
-    return _marked(parts)
-
-
-def segments(parts):
-    """A line of pick_option(previews_below=...)'s in parts: parts is [(text, color)], each on a
-    label color (or plain, for None or '')"""
-    return _marked(parts)
+    return segments([(text, color)])
 
 
 # A text of a tree's node (shown_as's) or of a preview's line is in styled parts with it (see
@@ -404,7 +393,7 @@ _ambient_status = None
 
 def set_ambient_status(parts):
     """parts() is [(text, color)] of what goes on behind the pickers, each on the status bar of every
-    picker that says nothing else there, as it changes (see status())"""
+    picker that says nothing else there, as it changes (see segments())"""
     global _ambient_status
     _ambient_status = parts
 
@@ -421,7 +410,7 @@ def _with_ambient_status(shown_as):
         if '' not in now:
             parts = _ambient_status()
             if parts or was_shown:
-                now[''] = status(parts)
+                now[''] = segments(parts)
                 was_shown.append(True)
         return now
     return shown
@@ -569,7 +558,7 @@ def _send_updates(fd, shown_as, is_done):
                 if not is_logged:
                     _log_error()
                     is_logged = True
-                now = {'': status([("Something went wrong: see %s" % (ERRORS_LOG,), 'red')])}
+                now = {'': segments([("Something went wrong: see %s" % (ERRORS_LOG,), 'red')])}
             changed = {item: shown for item, shown in now.items() if sent.get(item) != shown}
             if changed:
                 try:
