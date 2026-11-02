@@ -130,7 +130,6 @@ def _sync(replica_a, replica_b, replica_a_path, replica_b_path, known_replicas=N
         shown = {label: action.shown_as() for label, action in actions.items()}
         # Only to read: moving goes past them
         shown[STATE] = _state_line(ways, replica_a_path, replica_b_path)
-        shown[STATE_BLANK] = picker.Skipped('')
         shown[DASHBOARD] = "%s: files, last updates, hashes%s" % (
             DASHBOARD, " (%s)" % ("; ".join(text for text, _ in hashing.status_parts(jobs)),) if jobs else "")
         if jobs:
@@ -149,14 +148,11 @@ def _sync(replica_a, replica_b, replica_a_path, replica_b_path, known_replicas=N
         if known_replicas is not None:
             is_favorite = known_replicas.is_favorite(replica_a_path, replica_b_path)
             favorite_options = [REMOVE_FAVORITE if is_favorite else ADD_FAVORITE]
-        option = picker.pick_option([STATE, STATE_BLANK] + list(actions) + list(rescans) + list(refreshes) + [DASHBOARD] +
+        option = picker.pick_option([picker.Option(STATE, STATE, picker.Skipped(STATE)), picker.BLANK] + list(actions) + list(rescans) + list(refreshes) + [DASHBOARD] +
                                     favorite_options + ([LABELS] if known_replicas is not None else []) + [BACK],
                                     shown_as=shown_as, selected=list(actions)[0],
                                     help_lines=syncstate.help_lines())
         note_compared()
-        if option in (STATE, STATE_BLANK):
-            # Picked before the menu was told they can't be
-            continue
         if option in (None, BACK):
             # Back to the start menu (q too)
             return None
@@ -206,9 +202,8 @@ def _sync(replica_a, replica_b, replica_a_path, replica_b_path, known_replicas=N
 _files = text.files
 
 # The sync menu's first line: whether the two are in sync (see syncstate.py), as each way finds
-# their files; and a blank line after it (neither can be picked)
+# their files
 STATE = "Sync state"
-STATE_BLANK = " "
 
 
 def _state_line(ways, path_a, path_b):

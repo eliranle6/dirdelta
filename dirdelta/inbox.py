@@ -730,31 +730,26 @@ class InboxSort(object):
         # Similar actions together, a blank line between each kind (opening and reading anew, the
         # picker's keys, together)
         kinds = [(ASK,), (MOVE,), (COPY,), (REMOVE,), (OPEN, READ)]
-        labels, blanks = picker.grouped([[self.NOTHING]] + [
-            [label for label, _, verb, _ in options.values() if verb in kind] for kind in kinds])
         # Each in its verb's color, the parts saying where the files go in their sources' (as the
         # brackets below the menu), after its key, if a picker's key does it too
         prefixes = picker.shortcut_prefixes([self.NOTHING] + [label for label, _, _, _ in options.values()],
                                             {label: self.SHORTCUTS[action] for action, (label, _, _, _) in options.items()
                                              if action in self.SHORTCUTS})
-        colors = {label: prefixes[label] + _option_text(label, VERB_COLORS[verb], parts)
-                  for label, _, verb, parts in options.values()}
-        colors[self.NOTHING] = prefixes[self.NOTHING] + self.NOTHING
-        colors.update(blanks)
-        lines = {label: self._destination_lines(verb, parts, relpaths, removable if action == self.REMOVE_COPIES else
+        choices = picker.grouped([[picker.Option(self.NOTHING, self.NOTHING, prefixes[self.NOTHING] + self.NOTHING)]] + [
+            [picker.Option(action, label, prefixes[label] + _option_text(label, VERB_COLORS[verb], parts))
+             for action, (label, _, verb, parts) in options.items() if verb in kind] for kind in kinds])
+        lines = {action: self._destination_lines(verb, parts, relpaths, removable if action == self.REMOVE_COPIES else
                                                 junky if action == self.REMOVE_JUNK else
                                                 [(folder or '.') + '/'] if action == self.READ_ANEW else relpaths)
                  for action, (label, _, verb, parts) in options.items()}
-        lines[options[self.ASK_AI][0]] = [picker.segments([(" %s " % (ASK.upper(),), VERB_COLORS[ASK]),
+        lines[self.ASK_AI] = [picker.segments([(" %s " % (ASK.upper(),), VERB_COLORS[ASK]),
                                                            (" tell it what to do; it answers with a plan to review", None)])]
         if self.EXPLORE in options:
-            lines[options[self.EXPLORE][0]] = [picker.segments([(" %s " % (OPEN.upper(),), VERB_COLORS[OPEN]),
+            lines[self.EXPLORE] = [picker.segments([(" %s " % (OPEN.upper(),), VERB_COLORS[OPEN]),
                                                                 (" look in it, unpacking nothing", None)])]
         header = ("%s, in %s: what to do with it?" % (name, posixpath.dirname(posixpath.join(self.inbox_path, relpaths[0])))
                   if is_one else "%s picked in %s. What to do with them?" % (count, self.inbox_path))
-        answer = picker.pick_option(labels, header=header, title="What to do", shown_as=lambda: colors, label=LABEL,
-                                    previews_below=lines)
-        action = next((action for action, (label, _, _, _) in options.items() if label == answer), None)
+        action = picker.pick_option(choices, header=header, title="What to do", label=LABEL, previews_below=lines)
         if action == self.ASK_AI:
             return self._ask_ai(relpaths, relpaths)
         if action == self.EXPLORE:
@@ -1136,10 +1131,8 @@ class InboxSort(object):
         options = {self.RECENT_DIR % (relpath or '.',): relpath for relpath in recent}
         pick = self.PICK_DIR
         # Picking one first, then the recent ones, apart
-        labels, blanks = picker.grouped([[pick], list(options)])
-        answer = picker.pick_option(labels, header="Where in %s to %s the %s?" %
-                                    (self.root_path, verb, count), label=LABEL, title="Where to",
-                                    shown_as=lambda: blanks)
+        answer = picker.pick_option(picker.grouped([[pick], list(options)]), header="Where in %s to %s the %s?" %
+                                    (self.root_path, verb, count), label=LABEL, title="Where to")
         if answer == pick:
             return self._pick_dir(verb, count)
         if answer not in options:

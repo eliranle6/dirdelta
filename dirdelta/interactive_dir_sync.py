@@ -477,20 +477,18 @@ class InteractiveDirSync(object):
         prefixes = picker.shortcut_prefixes([self.NOTHING] + [label for label, _ in options.values()],
                                             {label: self.SHORTCUTS[action] for action, (label, _) in options.items()
                                              if action in self.SHORTCUTS})
-        disabled = {label: prefixes[label] + label if reason is None else
-                    picker.Disabled(picker.unstyled(prefixes[label]) + "%s: %s" % (label, reason))
-                    for label, reason in options.values()}
-        disabled[self.NOTHING] = prefixes[self.NOTHING] + self.NOTHING
+        def option(action):
+            label, reason = options[action]
+            return picker.Option(action, label, prefixes[label] + label if reason is None else
+                                 picker.Disabled(picker.unstyled(prefixes[label]) + "%s: %s" % (label, reason)))
         # Similar actions together, a blank line between each kind
         kinds = [[self.ASK_AI], [self.COPY], [self.REMOVE], [self.RENAME_IN_DST, self.RENAME_IN_SRC], [self.EXPLORE, self.OPEN, self.READ_ANEW]]
-        labels, blanks = picker.grouped([[self.NOTHING]] + [[options[action][0] for action in kind if action in options]
-                                                             for kind in kinds])
-        disabled.update(blanks)
+        choices = picker.grouped([[picker.Option(self.NOTHING, self.NOTHING, prefixes[self.NOTHING] + self.NOTHING)]] +
+                                 [[option(action) for action in kind if action in options] for kind in kinds])
         header = ("%s picked in %s, which %s lacks. What to do with them?" %
                   (count, src_name, dst_name))
-        answer = picker.pick_option(labels, header=header, shown_as=lambda: disabled, title="What to do")
-        action = next((action for action, (label, _) in options.items() if label == answer), None)
-        if action is None:
+        action = picker.pick_option(choices, header=header, title="What to do")
+        if action not in options:
             return None
         if action == self.OPEN:
             if opening.confirm(self._opener, relpaths, relpaths):

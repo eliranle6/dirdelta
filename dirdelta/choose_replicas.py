@@ -39,12 +39,6 @@ LOCAL_ROOT = '/'
 CLOUD_ROOT = 'cloud'
 
 
-def blank_line(number):
-    """A blank line of the menu, between its sections (skipped, as the headings are: see picker.Skipped):
-    spaces, number of them and one, so each is an option of its own"""
-    return ' ' * (number + 1)
-
-
 def run(replicas):
     """Let the user choose two replicas, from replicas' (a Replicas) favorites and history or each
     on its own. Returns their paths (a, b); or a Sort, if they chose an inbox to sort (a new one, or
@@ -52,29 +46,18 @@ def run(replicas):
     to check (main: their volumes, then are_there()), back to this menu if not."""
     chosen = [None, None]
     while True:
-        slots = {slot_label(name, path): index for index, (name, path) in enumerate(zip('AB', chosen))}
-        favorites = {favorite_label(*pair, known=replicas): pair for pair in replicas.favorites}
-        recent = {recent_label(*pair, known=replicas): pair for pair in replicas.recent()}
+        slots = [picker.Option(('slot', index), slot_label(name, path)) for index, (name, path) in enumerate(zip('AB', chosen))]
         # How fresh each is, in colors (see styled_pair())
-        pair_texts = {label: styled_pair(label, pair[0], pair[1], replicas)
-                      for label, pair in list(favorites.items()) + list(recent.items())}
-        pairs = dict(favorites, **recent)
-        sorts = {sort_label(*sort): Sort(*sort) for sort in replicas.sorts}
-        sections = [(SYNC_SECTION, list(slots) + list(favorites)), (RECENT_SYNCS_SECTION, list(recent)),
-                    (SORT_SECTION, [SORT]), (RECENT_SORTS_SECTION, list(sorts)),
+        favorites = [_pair_option(favorite_label(*pair, known=replicas), pair, replicas) for pair in replicas.favorites]
+        recent = [_pair_option(recent_label(*pair, known=replicas), pair, replicas) for pair in replicas.recent()]
+        sorts = [picker.Option(('sort', Sort(*sort)), sort_label(*sort)) for sort in replicas.sorts]
+        sections = [(SYNC_SECTION, slots + favorites), (RECENT_SYNCS_SECTION, recent),
+                    (SORT_SECTION, [SORT]), (RECENT_SORTS_SECTION, sorts),
                     (REPLICAS_SECTION, [KNOWN_LIST] if replicas.known else [])]
-        options = []
-        for heading, section in sections:
-            if section:
-                options += ([blank_line(len(options))] if options else []) + [heading] + section
         # Quit apart from the last section too
-        options.append(blank_line(len(options)))
-        headings = {option: picker.Skipped(option)
-                    for option in [heading for heading, _ in sections] + [option for option in options if not option.strip()]}
-        headings.update(pair_texts)
-        option = picker.pick_option(options + [QUIT],
-                                    header='Choose the two replicas to sync, or an inbox to sort',
-                                    shown_as=lambda: headings, selected=options[1], help_lines=help_lines())
+        options = picker.grouped([[picker.Skipped(heading)] + section for heading, section in sections if section] + [[QUIT]])
+        option = picker.pick_option(options, header='Choose the two replicas to sync, or an inbox to sort',
+                                    selected=('slot', 0), help_lines=help_lines())
         if option in (None, QUIT):
             return None
         if option == KNOWN_LIST:
@@ -85,11 +68,9 @@ def run(replicas):
             if sort is not None:
                 return sort
             continue
-        if option in sorts:
-            return sorts[option]
-        if option in pairs:
-            return pairs[option]
-        index = slots[option]
+        if option[0] in ('sort', 'pair'):
+            return option[1]
+        index = option[1]
         path = _choose_replica('Replica %s' % ('AB'[index],))
         if path is None:
             continue
@@ -101,6 +82,10 @@ def run(replicas):
                 chosen[index] = None
                 continue
             return tuple(chosen)
+
+
+def _pair_option(label, pair, known):
+    return picker.Option(('pair', tuple(pair)), label, styled_pair(label, pair[0], pair[1], known))
 
 
 def _choose_sort(replicas):

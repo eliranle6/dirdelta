@@ -6,6 +6,7 @@ from unittest import mock
 
 from dirdelta import clouddirtree
 from dirdelta import dirsync_main
+from dirdelta import picker
 from dirdelta import dirtree
 from dirdelta import elsewhere
 from dirdelta import hashing
@@ -79,7 +80,8 @@ class MainMenuTest(unittest.TestCase):
         with mock.patch('dirdelta.picker.pick_option', return_value=dirsync_main.BACK) as pick_option:
             dirsync_main._sync(replica_a, replica_b, '/a', '/b')
         options, = pick_option.call_args.args
-        self.assertEqual(options[:2], [dirsync_main.STATE, dirsync_main.STATE_BLANK])
+        self.assertEqual(options[:2], [picker.Option(dirsync_main.STATE, dirsync_main.STATE, picker.Skipped(dirsync_main.STATE)),
+                                       picker.BLANK])
         return options[2:]
 
     def test_each_way_gets_its_files(self):

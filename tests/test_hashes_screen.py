@@ -164,7 +164,7 @@ class DashboardTest(unittest.TestCase):
     def test_it_pauses_and_resumes_a_job(self):
         job = _Job('/photos', _progress(state=hashing.HASHING, is_started=True))
         job._is_started = True
-        toggle = hashes_screen._TOGGLE % ('/photos',)
+        toggle = (hashes_screen._TOGGLE, '/photos')
         pick = self.dashboard(job, [toggle, toggle, hashes_screen.BACK])
         self.assertEqual((job.paused, job.started), (1, 1))
         # It's selected again after it's picked, q goes back, and it's titled
@@ -179,29 +179,29 @@ class DashboardTest(unittest.TestCase):
         self.known.note_seen('path:/photos', '/photos', None, datetime.datetime(2026, 10, 30, 9, 5))
         self.dashboard(job, [hashes_screen.BACK])
         shown = self.shown
-        self.assertEqual(shown[hashes_screen._INFO % ('/photos',)].text, "  10 files, 2.0 KB")
+        self.assertEqual(shown[(hashes_screen._INFO, '/photos')].text, "  10 files, 2.0 KB")
         self.assertIn("  ● Synced 30.10.2026 09:05", [picker.unstyled(option.text) for option in shown.values()
                                                    if isinstance(option, (picker.Disabled, picker.Skipped))])
-        self.assertIn("Hashes: [", shown[hashes_screen._BAR % ('/photos',)].text)
-        self.assertIn("50%  4 of 10 files", shown[hashes_screen._BAR % ('/photos',)].text)
-        state = shown[hashes_screen._STATE % ('/photos',)].text
+        self.assertIn("Hashes: [", shown[(hashes_screen._BAR, '/photos')].text)
+        self.assertIn("50%  4 of 10 files", shown[(hashes_screen._BAR, '/photos')].text)
+        state = shown[(hashes_screen._STATE, '/photos')].text
         self.assertIn("Hashing", state)
         self.assertIn("now a (and 1 more)", state)
         self.assertIn("2 files couldn't be hashed", state)
-        self.assertEqual(shown[hashes_screen._TOGGLE % ('/photos',)], "  Pause hashing photos")
+        self.assertEqual(shown[(hashes_screen._TOGGLE, '/photos')], "  Pause hashing photos")
         self.assertEqual(shown[''], picker.segments([("photos: 50% hashed (4/10)", 'orange')]))
 
     def test_a_done_one_cant_be_paused(self):
         job = _Job('/photos', _progress(state=hashing.DONE))
         with mock.patch('dirdelta.hashing._jobs', {'/photos': job}):
             shown = hashes_screen._jobs_shown([('/photos', self.tree)], {'/photos': 'photos'})
-        self.assertIsInstance(shown[hashes_screen._TOGGLE % ('/photos',)], picker.Disabled)
+        self.assertIsInstance(shown[(hashes_screen._TOGGLE, '/photos')], picker.Disabled)
 
     def test_its_files_and_scanning_again(self):
         job = _Job('/photos', _progress())
         with mock.patch('dirdelta.hashes_screen.view_files') as view_files, \
                 mock.patch.object(job, 'scan_in_background') as scan:
-            self.dashboard(job, [hashes_screen._FILES % ('/photos',), hashes_screen._RESCAN % ('/photos',),
+            self.dashboard(job, [(hashes_screen._FILES, '/photos'), (hashes_screen._RESCAN, '/photos'),
                                  hashes_screen.BACK])
         view_files.assert_called_once_with(job)
         scan.assert_called_once_with()
@@ -210,15 +210,15 @@ class DashboardTest(unittest.TestCase):
         with mock.patch('dirdelta.hashcache.count_under', return_value=7):
             self.dashboard(None, [hashes_screen.BACK], trees=[], other_paths=['/old', 'cloud/c'])
         shown = self.shown
-        self.assertIn("Hashes kept of 7 files", shown[hashes_screen._INFO % ('/old',)].text)
-        self.assertIn("In Google Drive", shown[hashes_screen._INFO % ('cloud/c',)].text)
-        self.assertEqual(shown[hashes_screen._KNOWN % ('0 /old',)].text, "  Never synced before")
+        self.assertIn("Hashes kept of 7 files", shown[(hashes_screen._INFO, '/old')].text)
+        self.assertIn("In Google Drive", shown[(hashes_screen._INFO, 'cloud/c')].text)
+        self.assertEqual(shown[(hashes_screen._KNOWN, 0, '/old')].text, "  Never synced before")
 
     def test_the_pairs_known_come_first_with_their_sync_state(self):
         self.known.record('/photos', 'cloud/p')
         self.known.note_compared('/photos', 'cloud/p', 0, 2, datetime.datetime(2026, 11, 1, 9, 5))
         pick = self.dashboard(None, [hashes_screen.BACK])
-        options = pick.call_args.args[0]
+        options = [picker.option_id(option) for option in pick.call_args.args[0]]
         self.assertEqual(options[0], hashes_screen.PAIRS_HEADING)
         self.assertEqual(picker.unstyled(self.shown[options[1]].text), "\u00ab /photos <-> cloud/p")
         self.assertEqual(picker.unstyled(self.shown[options[2]].text),

@@ -216,7 +216,7 @@ class InboxSortTest(unittest.TestCase):
             self.sort([['a.txt'], ['a.txt'], None], ['Ask Claude', NOTHING])
         labels = self.pick_files.call_args.kwargs['shown_as']()
         self.assertEqual(picker.unstyled(labels['a.txt']), 'a.txt  [claude: an empty note]  [claude: junk? an empty note]')
-        menu = self.pick_option.call_args.args[0]
+        menu = helpers.labels_of(self.pick_option.call_args.args[0])
         self.assertIn('Remove it: it looks like junk (to the trash)', menu)
 
     def test_junk_in_a_dry_run_stays(self):
@@ -270,7 +270,7 @@ class InboxSortTest(unittest.TestCase):
     def test_remove_is_asked_twice(self):
         self.sort([['a.txt'], None], ['Remove it from', YES, SURE])
         self.assertFalse(self.exists('inbox', 'a.txt'))
-        self.assertEqual(self.pick_option.call_args.args[0], [NO, SURE])
+        self.assertEqual(helpers.labels_of(self.pick_option.call_args.args[0]), [NO, SURE])
         self.sort([['b.jpg'], None], ['Remove it from', YES, NO])
         self.assertTrue(self.exists('inbox', 'b.jpg'))
 
@@ -364,7 +364,7 @@ class InboxSortTest(unittest.TestCase):
 
     def test_the_context_menu_with_nothing_picked(self):
         self.sort([picker.Picked(':', 'a.txt', []), None], [NOTHING])
-        options = self.pick_option.call_args.args[0]
+        options = helpers.labels_of(self.pick_option.call_args.args[0])
         for start in ("Choose what to do with a.txt", "Pick a.txt", "Ask AI", "Have Claude describe a.txt",
                       "Open a.txt", "Rename a.txt", "Replicas dashboard"):
             self.assertTrue(any(option.startswith(start) for option in options), start)
@@ -387,12 +387,10 @@ class InboxSortTest(unittest.TestCase):
     def test_the_menu_starts_with_nothing(self):
         self.sort([['a.txt'], None], [NOTHING])
         # Each kind of action apart, after a blank line (skipped when moving)
-        with_blanks = self.pick_option.call_args.args[0]
-        self.assertEqual([option.split(' ')[0] if option.strip() else '' for option in with_blanks],
+        with_blanks = [picker.option_label(option) for option in self.pick_option.call_args.args[0]]
+        self.assertEqual([option.split(' ')[0] for option in with_blanks],
                          ['Nothing:', '', 'Ask', 'Describe', 'Ask', '', 'Move', 'Move', 'Move', '', 'Copy', '', 'Remove', '', 'Open'])
-        self.assertTrue(all(self.pick_option.call_args.kwargs['shown_as']()[blank] == picker.Skipped('')
-                            for blank in with_blanks if not blank.strip()))
-        options = [option for option in with_blanks if option.strip()]
+        options = [option for option in with_blanks if option]
         self.assertEqual(options[0], NOTHING)
         # With nothing recommended yet, and no copies or junk, only what can be done is offered
         self.assertEqual(options[1:], [
@@ -410,7 +408,7 @@ class InboxSortTest(unittest.TestCase):
         self.assertEqual(self.pick_option.call_args.kwargs['header'], "a.txt, in %s: what to do with it?" % (self.inbox,))
         # Each colored by what it does, and where the files go in their sources' colors, after
         # the picker's key that does it, if one does
-        shown = self.pick_option.call_args.kwargs['shown_as']()
+        shown = helpers.shown_of(self.pick_option.call_args.args[0])
         self.assertEqual([picker.unstyled(shown[option])[:9] for option in options],
                          [' ' * 9, '[a]      ', ' ' * 9, '[Ctrl-I] '] + [' ' * 9] * 6)
         self.assertEqual(shown[options[3]], picker.styled([('[Ctrl-I]', 'bold'), (' ', None), (options[3], 'magenta')]))
@@ -423,7 +421,7 @@ class InboxSortTest(unittest.TestCase):
         self.assertTrue(shown[options[7]].startswith(' ' * 9 + picker.styled([
             ("Copy it to ", 'cyan'), ("a dir you pick", 'yellow'), (" (keeping it in the inbox): ", 'cyan')])))
         # And below the menu, what it does and where to, and where each part of the path is from
-        lines = self.pick_option.call_args.kwargs['previews_below'][options[4]]
+        lines = self.pick_option.call_args.kwargs['previews_below'][Sort.MOVE_TO]
         self.assertEqual(lines[0], picker.segments([(" MOVE ", 'blue'), (" ", None), (self.root + '/', None),
                                                     ("<a dir you pick>/", None), ("a.txt", None)]))
         width = picker.display_width
@@ -436,7 +434,7 @@ class InboxSortTest(unittest.TestCase):
     def test_claudes_dir_under_the_files_own_name_isnt_offered_when_its_claudes_name(self):
         with self.claude_places():
             self.sort([['a.txt'], ['a.txt'], None], ['Ask Claude', NOTHING])
-        options = self.pick_option.call_args.args[0]
+        options = helpers.labels_of(self.pick_option.call_args.args[0])
         self.assertIn("Move it to Claude's recommendation: %s/docs/a.txt" % (self.root,), options)
         self.assertFalse(any(option.startswith("Move it to Claude's dir, keeping") for option in options))
         self.assertFalse(any("under Claude's name" in option for option in options))
@@ -525,7 +523,7 @@ class InboxSortTest(unittest.TestCase):
                                         'reason': 'a doc'}}):
             self.sort([['a.txt'], ['a.txt'], None], ['Ask Claude', 'Ask Claude where it goes', NOTHING])
         self.assertIn("Ask Claude where it goes in %s, while you go on (anew: asked before)" % (self.root,),
-                      self.pick_option.call_args_list[1].args[0])
+                      helpers.labels_of(self.pick_option.call_args_list[1].args[0]))
         self.assertEqual(len(self.queries), 4)
 
     def test_recommendations_are_shown_and_moved_to(self):
@@ -539,7 +537,7 @@ class InboxSortTest(unittest.TestCase):
         self.assertEqual([query[:2] for query in self.queries],
                          [(['description'], ai.MODEL), (['action', 'path', 'reason'], ai.MODEL)])
         self.assertIn("b.jpg (size 5 bytes): a cat", self.queries[1][2])
-        menus = [call.args[0] for call in self.pick_option.call_args_list]
+        menus = [helpers.labels_of(call.args[0]) for call in self.pick_option.call_args_list]
         # One destination: the menu names it
         self.assertIn("Move it to Claude's recommendation: %s/photos/cats/b.jpg" % (self.root,), menus[1])
         self.assertTrue(self.exists('sorted', 'photos', 'cats', 'b.jpg'))
@@ -623,7 +621,7 @@ class InboxSortTest(unittest.TestCase):
         self.assertTrue(self.exists('inbox', 'a.txt'))
         self.sort([['a.txt', 'b.jpg'], None], [NOTHING])
         # A name is typed for one file: not offered for two
-        self.assertFalse(any("a name you type" in option for option in self.pick_option.call_args.args[0]))
+        self.assertFalse(any("a name you type" in option for option in helpers.labels_of(self.pick_option.call_args.args[0])))
 
     def test_ctrl_x_opens_the_selected_one_not_the_picked_ones(self):
         with mock.patch('dirdelta.opening.Opener.open_in_background') as open_in_background:
@@ -651,7 +649,7 @@ class InboxSortTest(unittest.TestCase):
     def test_too_many_to_open_arent_offered_to(self):
         with mock.patch('dirdelta.opening.MAX_OPENED', 2):
             self.sort([['a.txt', 'b.jpg', 'trip/c.jpg'], None], [NOTHING])
-        self.assertFalse(any(option.startswith('Open') for option in self.pick_option.call_args.args[0]))
+        self.assertFalse(any(option.startswith('Open') for option in helpers.labels_of(self.pick_option.call_args.args[0])))
 
     def test_read_anew_in_the_menu_of_a_drive_inbox_reads_the_selected_folder(self):
         cache = os.path.join(self.tmpdir, 'files.txt')
@@ -672,7 +670,7 @@ class InboxSortTest(unittest.TestCase):
             sorter.run()
         # As r does: its folder is the one read (see CloudDirTree.refresh_from_drive())
         refresh.assert_called_once_with(sorter._inbox_tree, 'in/trip/c.jpg')
-        options = pick_option.call_args.args[0]
+        options = helpers.labels_of(pick_option.call_args.args[0])
         self.assertEqual(options[-1], 'Read cloud/me/in/trip/ anew from Google Drive')
         # Back to the picker, as it was
         self.assertEqual(pick_files.call_args.kwargs['picked'], ['trip/c.jpg'])
@@ -749,12 +747,13 @@ class InboxSortTest(unittest.TestCase):
         sorter._compare(['old.txt'])
         with helpers.answering_option_picker([NOTHING]) as pick_option:
             sorter._act(['old.txt', 'a.txt', 'old.jpg'])
-        option = [option for option in pick_option.call_args.args[0] if option.startswith('Remove 1')][0]
+        option = [option for option in helpers.labels_of(pick_option.call_args.args[0]) if option.startswith('Remove 1')][0]
         self.assertEqual(option, "Remove 1 of the 3 files: copies of files in %s (1 not compared yet: "
                                  "Ctrl-I compares them)" % (self.root,))
         # Offered, as a removal
-        self.assertEqual(picker.unstyled(pick_option.call_args.kwargs['shown_as']()[option]).lstrip(), option)
-        self.assertEqual(pick_option.call_args.kwargs['shown_as']()[option], ' ' * 9 + picker.styled([(option, 'red')]))
+        shown = helpers.shown_of(pick_option.call_args.args[0])
+        self.assertEqual(picker.unstyled(shown[option]).lstrip(), option)
+        self.assertEqual(shown[option], ' ' * 9 + picker.styled([(option, 'red')]))
 
     def test_a_copys_plain_removal_isnt_offered_as_well(self):
         # Removing it from the inbox would do what removing the copy does
@@ -763,12 +762,12 @@ class InboxSortTest(unittest.TestCase):
         sorter._compare(['old.txt'])
         with helpers.answering_option_picker([NOTHING]) as pick_option:
             sorter._act(['old.txt'])
-        removals = [option for option in pick_option.call_args.args[0] if option.startswith('Remove')]
+        removals = [option for option in helpers.labels_of(pick_option.call_args.args[0]) if option.startswith('Remove')]
         self.assertEqual(removals, ["Remove it: a copy of a file in %s" % (self.root,)])
         # With a file that isn't a copy, both are
         with helpers.answering_option_picker([NOTHING]) as pick_option:
             sorter._act(['old.txt', 'a.txt'])
-        removals = [option for option in pick_option.call_args.args[0] if option.startswith('Remove')]
+        removals = [option for option in helpers.labels_of(pick_option.call_args.args[0]) if option.startswith('Remove')]
         self.assertEqual(len(removals), 2)
 
     def test_a_renamed_copy_is_found_by_the_hashes_of_both_with_nothing_compared(self):
@@ -873,8 +872,7 @@ class InboxSortTest(unittest.TestCase):
             # Then the recent ones, after picking one (first), a blank line apart
             self.sort([['b.jpg'], None], ['Copy it to a dir you pick', 'Recent: docs/', YES], known=known)
             menu = self.pick_option.call_args_list[1]
-            self.assertEqual(menu.args[0], [Sort.PICK_DIR, ' ', 'Recent: docs/'])
-            self.assertEqual(menu.kwargs['shown_as'](), {' ': picker.Skipped('')})
+            self.assertEqual(menu.args[0], [Sort.PICK_DIR, picker.BLANK, 'Recent: docs/'])
             self.assertIn(self.root, menu.kwargs['header'])
             self.assertTrue(self.exists('sorted', 'docs', 'b.jpg'))
             # A new one, or one picked, goes to the top; one not moved to (No) doesn't

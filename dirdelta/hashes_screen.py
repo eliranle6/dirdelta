@@ -168,18 +168,10 @@ def wait(jobs):
         messages.print_line("All hashed: %s" % (progress_line(progress),), 'green')
 
 
-# The dashboard's options, made unique by the replica's path (shown_as says what they show)
-_HEADING = "\u2500\u2500 %s \u2500\u2500"
-_INFO = "  info %s"
-_KNOWN = "  known %s"
-_SYNCED = "  synced %s"
-_BAR = "  bar %s"
-_STATE = "  state %s"
-_TOGGLE = "  toggle %s"
-_FILES = "  See which of its files are hashed %s"
-_RESCAN = "  rescan %s"
-_DRIVE = "  drive %s"
-_DRIVE_NOTE = "  drive note %s"
+# The dashboard's options: each (one of these, the replica's path), its text what shown_as says
+_HEADING_TEXT = "\u2500\u2500 %s \u2500\u2500"
+_HEADING, _INFO, _KNOWN, _BAR, _STATE, _TOGGLE, _FILES, _RESCAN, _DRIVE, _DRIVE_NOTE = (
+    'heading', 'info', 'known', 'bar', 'state', 'toggle', 'files', 'rescan', 'drive', 'drive note')
 BACK = "Back"
 TITLE = "Replicas dashboard"
 
@@ -210,12 +202,8 @@ def dashboard(replica_trees=(), known=None, other_paths=()):
     options, shown = [], {}
     sections = [(REPLICAS_HEADING, [item for item in items if item[0] not in inbox_names]),
                 (INBOXES_HEADING, [item for item in items if item[0] in inbox_names])]
-    blank = 0
     def add_blank():
-        nonlocal blank
-        blank += 1
-        options.append(' ' * blank)
-        shown[options[-1]] = picker.Skipped('')
+        options.append(picker.BLANK)
     # What's synced to what first, under its heading, if any pair is known
     pairs = _pairs(known)
     if pairs:
@@ -243,8 +231,7 @@ def dashboard(replica_trees=(), known=None, other_paths=()):
 
 REPLICAS_HEADING = '\u2550\u2550 Replicas \u2550\u2550'
 PAIRS_HEADING = '\u2550\u2550 Pairs: what\'s synced to what \u2550\u2550'
-_PAIR = "  pair %s <-> %s"
-_PAIR_STATE = "  pair state %s <-> %s"
+_PAIR, _PAIR_STATE = 'pair', 'pair state'
 
 
 def _pairs(known):
@@ -263,7 +250,7 @@ def _add_pair(path_a, path_b, options, shown, known):
     (see syncstate.py)"""
     state = syncstate.of(known, path_a, path_b)
     mark, color = syncstate.mark(state)
-    options += [_PAIR % (path_a, path_b), _PAIR_STATE % (path_a, path_b)]
+    options += [(_PAIR, path_a, path_b), (_PAIR_STATE, path_a, path_b)]
     shown[options[-2]] = picker.Skipped(picker.styled([(mark + " ", color), ("%s <-> %s" % (path_a, path_b), 'bold')]))
     shown[options[-1]] = picker.Skipped(picker.styled([("  " + syncstate.describe(state, path_a, path_b), color)]))
 INBOXES_HEADING = '\u2550\u2550 Inboxes (files waiting to be sorted) \u2550\u2550'
@@ -273,34 +260,34 @@ def _add_replica(item, options, shown, known, names):
     """The dashboard's options of a replica (item: (name, tree or None))"""
     name, tree = item
     job = _job_of(name, tree)
-    options += [_HEADING % (name,), _INFO % (name,)]
-    shown[_HEADING % (name,)] = picker.Skipped(_HEADING % ("%s: %s" % (names[name], name)
-                                                            if names[name] != name else name,))
+    options += [(_HEADING, name), (_INFO, name)]
+    shown[(_HEADING, name)] = picker.Skipped(_HEADING_TEXT % ("%s: %s" % (names[name], name)
+                                                              if names[name] != name else name,))
     info = known.info_at(name) if known is not None else None
     known_lines = replicainfo.known_lines(info, styled=True) if info else ["  Never synced before"]
     if info and not paths.is_cloud_path(name) and not replicalog.is_disk_connected(
             next((identity for identity, other in known.known.items() if other is info), '')):
         known_lines.append("  Its disk isn't connected now")
     for number, line in enumerate(known_lines):
-        options.append(_KNOWN % ("%d %s" % (number, name),))
+        options.append((_KNOWN, number, name))
         shown[options[-1]] = picker.Skipped(line)
     if job is not None:
-        options += [_BAR % (name,), _STATE % (name,), _TOGGLE % (name,), _FILES % (name,), _RESCAN % (name,)]
+        options += [(_BAR, name), (_STATE, name), (_TOGGLE, name), (_FILES, name), (_RESCAN, name)]
     elif isinstance(tree, clouddirtree.CloudDirTree):
         nr_files, size, first, note = _drive_lines(tree)
         # When Drive's file list was read, in its freshness's color
-        shown[_INFO % (name,)] = picker.Skipped(picker.styled([
+        shown[(_INFO, name)] = picker.Skipped(picker.styled([
             ("  %s, %s" % (_files(nr_files), text.format_size(size)), None),
             (_cache_age(name), replicainfo.freshness(replicainfo.cache_time(name)))]))
-        options += [_DRIVE % (name,), _DRIVE_NOTE % (name,)]
-        shown[_DRIVE % (name,)] = picker.Skipped(first)
-        shown[_DRIVE_NOTE % (name,)] = picker.Skipped(note)
+        options += [(_DRIVE, name), (_DRIVE_NOTE, name)]
+        shown[(_DRIVE, name)] = picker.Skipped(first)
+        shown[(_DRIVE_NOTE, name)] = picker.Skipped(note)
     elif paths.is_cloud_path(name):
-        shown[_INFO % (name,)] = picker.Skipped("  In Google Drive: its files and Drive's hashes are "
+        shown[(_INFO, name)] = picker.Skipped("  In Google Drive: its files and Drive's hashes are "
                                                  "counted when it's synced or sorted")
     else:
         kept = hashcache.count_under(os.path.realpath(name))
-        shown[_INFO % (name,)] = picker.Skipped(
+        shown[(_INFO, name)] = picker.Skipped(
             "  Hashes kept of %s (as of when they were hashed); how many are left is counted when it's "
             "synced or sorted" % (_files(kept),))
 
@@ -315,15 +302,17 @@ def _finish_dashboard(items, options, shown, names, jobs):
                   os.path.join(paths.META_DIR, hashcache.META_NAME), hashcache.CACHE_FILE))
 
     def shown_now():
-        now = dict(shown, **_jobs_shown(items, names))
+        now = {**shown, **_jobs_shown(items, names)}
         now[''] = picker.segments(hashing.status_parts(jobs))
         return now
     first = shown_now()
     # The first that can be picked
-    selected = next((option for option in options if option.startswith(("  toggle", "  See")) and
+    selected = next((option for option in options if isinstance(option, tuple) and option[0] in (_TOGGLE, _FILES) and
                      not isinstance(first.get(option), picker.Disabled)), BACK)
+    # Those that are their ids; what they show, shown_as says
+    choices = [picker.Option(option, '') if isinstance(option, tuple) else option for option in options]
     while True:
-        option = picker.pick_option(options, header=header, title=TITLE, shown_as=shown_now, selected=selected,
+        option = picker.pick_option(choices, header=header, title=TITLE, shown_as=shown_now, selected=selected,
                                     key_hints=[('Enter', 'do it'), ('q', 'back')],
                                     help_lines=["The pairs' marks:"] + ["  " + line for line in syncstate.help_lines()] +
                                     replicainfo.path_marks_help())
@@ -331,14 +320,14 @@ def _finish_dashboard(items, options, shown, names, jobs):
             return
         selected = option
         for name, job in _jobs_by_name(items).items():
-            if option == _TOGGLE % (name,):
+            if option == (_TOGGLE, name):
                 if job.is_started():
                     job.pause()
                 else:
                     job.start()
-            elif option == _FILES % (name,):
+            elif option == (_FILES, name):
                 view_files(job)
-            elif option == _RESCAN % (name,):
+            elif option == (_RESCAN, name):
                 job.scan_in_background()
 
 
@@ -363,28 +352,28 @@ def _jobs_shown(items, names):
     for name, job in _jobs_by_name(items).items():
         progress = job.progress()
         if progress.state in (hashing.NOT_SCANNED, hashing.SCANNING):
-            shown[_INFO % (name,)] = picker.Skipped("  Listing its files...")
-            shown[_BAR % (name,)] = picker.Skipped("  Hashes: -")
+            shown[(_INFO, name)] = picker.Skipped("  Listing its files...")
+            shown[(_BAR, name)] = picker.Skipped("  Hashes: -")
         else:
-            shown[_INFO % (name,)] = picker.Skipped("  %s, %s" % (_files(progress.nr_files),
+            shown[(_INFO, name)] = picker.Skipped("  %s, %s" % (_files(progress.nr_files),
                                                                    text.format_size(progress.size)))
-            shown[_BAR % (name,)] = picker.Skipped("  Hashes: " + progress_line(progress))
+            shown[(_BAR, name)] = picker.Skipped("  Hashes: " + progress_line(progress))
         state = _state_text(job, progress)
         if progress.current:
             state += ": now %s%s" % (progress.current[0], " (and %d more)" % (len(progress.current) - 1,)
                                      if len(progress.current) > 1 else "")
         if progress.nr_failed:
             state += "; %s couldn't be hashed (unreadable, or changing while read)" % (_files(progress.nr_failed),)
-        shown[_STATE % (name,)] = picker.Skipped("  " + state)
+        shown[(_STATE, name)] = picker.Skipped("  " + state)
         short = names.get(name, job.name())
         if progress.state == hashing.DONE:
-            shown[_TOGGLE % (name,)] = picker.Disabled("  Pause hashing %s: it's all hashed" % (short,))
+            shown[(_TOGGLE, name)] = picker.Disabled("  Pause hashing %s: it's all hashed" % (short,))
         elif job.is_started():
-            shown[_TOGGLE % (name,)] = "  Pause hashing %s" % (short,)
+            shown[(_TOGGLE, name)] = "  Pause hashing %s" % (short,)
         else:
-            shown[_TOGGLE % (name,)] = "  %s hashing %s" % ("Resume" if progress.is_paused else "Start", short)
-        shown[_FILES % (name,)] = "  See its files: which are hashed, and which not yet"
-        shown[_RESCAN % (name,)] = "  Look for new or changed files in it (after changes outside dirdelta)"
+            shown[(_TOGGLE, name)] = "  %s hashing %s" % ("Resume" if progress.is_paused else "Start", short)
+        shown[(_FILES, name)] = "  See its files: which are hashed, and which not yet"
+        shown[(_RESCAN, name)] = "  Look for new or changed files in it (after changes outside dirdelta)"
     return shown
 
 

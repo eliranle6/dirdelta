@@ -39,20 +39,15 @@ def choose(entries, header, label=None, side=None):
     the tree beside the picker is, its key's too). Returns its result, or None to go back."""
     keys = list(PICKER_KEYS) + ([(SIDE_KEY_NAME, 'move to %s, on the right (Ctrl-W h: back)' % (side,))] if side else [])
     results = {entry.label: entry.result for entry in entries}
-    # The keys' lines are options too, though they can't be chosen, so each is unique
     lines = ["%s %s" % key for key in keys]
-    labels, blanks = picker.grouped([[NOTHING], list(results), [IN_THE_PICKER] + lines])
     shortcuts = {entry.label: entry.key_name for entry in entries if entry.key_name}
     shortcuts.update({line: key for line, (key, _) in zip(lines, keys)})
     prefixes = picker.shortcut_prefixes([NOTHING, IN_THE_PICKER] + list(results) + lines, shortcuts)
-    shown = dict(blanks)
-    shown[NOTHING] = prefixes[NOTHING] + NOTHING
-    for option in results:
-        shown[option] = prefixes[option] + option
-    shown[IN_THE_PICKER] = picker.Skipped(IN_THE_PICKER)
-    for line, (_, what) in zip(lines, keys):
-        shown[line] = picker.Skipped(prefixes[line] + what)
-    answer = picker.pick_option(labels, header=header, shown_as=lambda: shown, label=label, title="Menu")
+    options = picker.grouped([[picker.Option(NOTHING, NOTHING, prefixes[NOTHING] + NOTHING)],
+                              [picker.Option(option, option, prefixes[option] + option) for option in results],
+                              [picker.Skipped(IN_THE_PICKER)] +
+                              [picker.Skipped(prefixes[line] + what) for line, (_, what) in zip(lines, keys)]])
+    answer = picker.pick_option(options, header=header, label=label, title="Menu")
     return results.get(answer)
 
 

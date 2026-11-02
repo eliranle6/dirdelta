@@ -122,6 +122,26 @@ class PickerTest(unittest.TestCase):
         with open(log) as f:
             self.assertIn("TypeError: a bug", f.read())
 
+    def test_an_options_id_is_returned_and_said_by_its_line(self):
+        os.environ['FAKE_PICKER_WAIT_FOR'] = 'Later'
+        self.answer('Do it ')
+        options = ['Do it', picker.BLANK, picker.Option(('do', 1), 'Do it', 'Now'), picker.Option('later', 'Later')]
+        answer = picker.pick_option(options, selected=('do', 1), shown_as=lambda: {'later': 'Later', 'unknown': 'x'},
+                                    previews_below={('do', 1): ['what']})
+        self.assertEqual(answer, ('do', 1))
+        self.assertEqual(self.log_entry('stdin').split('\0')[:-1], ['Do it', ' ', 'Do it ', 'Later'])
+        args = self.log_entry('args')
+        self.assertEqual(args[args.index('--select') + 1], 'Do it ')
+        # The first updates: what they're shown as first, and by shown_as, not what it doesn't have
+        updates = self.log_entry('updates').split('\0')
+        self.assertIn('Do it \tNow', updates)
+        self.assertIn('Later\tLater', updates)
+        self.assertFalse(any('unknown' in update for update in updates))
+
+    def test_quitting_a_menu_of_options_is_none(self):
+        self.answer(exit_code=1)
+        self.assertIsNone(picker.pick_option([picker.Option(1, 'a')]))
+
     def test_a_failing_shown_as_says_so_on_the_bottom_line(self):
         sent = []
 
@@ -523,11 +543,32 @@ class UpdateLineTest(unittest.TestCase):
         self.assertEqual(picker._update('a', picker.Colored('A', 'red')), 'a\tA\tcolor=red')
 
 
+class MenuLinesTest(unittest.TestCase):
+    def test_a_strings_line_is_itself_and_its_id(self):
+        self.assertEqual(picker._menu_lines(['a', 'b']), (['a', 'b'], {'a': 'a', 'b': 'b'}, {}))
+
+    def test_an_options_line_is_its_label_and_its_id_what_its_told_by(self):
+        lines, line_of, shown = picker._menu_lines([picker.Option(('x', 1), 'Do it', picker.Disabled('no'))])
+        self.assertEqual(lines, ['Do it'])
+        self.assertEqual(line_of, {('x', 1): 'Do it'})
+        self.assertEqual(shown, {'Do it': picker.Disabled('no')})
+
+    def test_each_line_is_its_own(self):
+        lines, line_of, shown = picker._menu_lines([picker.Skipped('Head'), 'a', picker.BLANK, picker.Option(1, 'a'),
+                                                    picker.BLANK])
+        self.assertEqual(lines, ['Head', 'a', ' ', 'a ', '  '])
+        self.assertEqual(len(set(lines)), 5)
+        self.assertEqual(line_of, {'a': 'a', 1: 'a '})
+        # What's skipped isn't an option
+        self.assertEqual(shown, {'Head': picker.Skipped('Head'), ' ': picker.BLANK, '  ': picker.BLANK})
+
+    def test_a_styled_labels_line_is_its_text(self):
+        self.assertEqual(picker._menu_lines([picker.Skipped(picker.styled([('Head', 'bold')]))])[0], ['Head'])
+
+
 class GroupedTest(unittest.TestCase):
     def test_a_blank_line_between_groups(self):
-        options, blanks = picker.grouped([['a'], [], ['b', 'c'], ['d']])
-        self.assertEqual(options, ['a', ' ', 'b', 'c', '  ', 'd'])
-        self.assertEqual(blanks, {' ': picker.Skipped(''), '  ': picker.Skipped('')})
+        self.assertEqual(picker.grouped([['a'], [], ['b', 'c'], ['d']]), ['a', picker.BLANK, 'b', 'c', picker.BLANK, 'd'])
 
 
 class ShortcutPrefixesTest(unittest.TestCase):

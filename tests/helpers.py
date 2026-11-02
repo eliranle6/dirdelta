@@ -32,10 +32,38 @@ downloads.DOWNLOADS_DIR = os.path.join(_downloads_dir, 'downloads')
 atexit.register(shutil.rmtree, _downloads_dir, ignore_errors=True)
 
 
+def answer_of(options, answer):
+    """What picker.pick_option() returns of options when answer, a label (or, for a test that knows
+    it, an option's id), is picked: the option with that label, or else one starting with it; answer
+    itself if there's none"""
+    choices = [option for option in options if not isinstance(option, picker.Skipped)]
+    for matches in (lambda option: picker.option_id(option) == answer,
+                    lambda option: picker.option_label(option) == answer,
+                    lambda option: isinstance(answer, str) and picker.option_label(option).startswith(answer)):
+        for option in choices:
+            if matches(option):
+                return picker.option_id(option)
+    return answer
+
+
+def labels_of(options):
+    """options (a pick_option()'s) as labels, without its blank lines"""
+    return [picker.option_label(option) for option in options if option != picker.BLANK]
+
+
+def shown_of(options):
+    """{label: how it's shown at first} of options (a pick_option()'s)"""
+    return {picker.option_label(option): (option if isinstance(option, picker.Skipped) else
+                                          option.shown if isinstance(option, picker.Option) and option.shown is not None
+                                          else picker.option_label(option))
+            for option in options if option != picker.BLANK}
+
+
 def scripted_option_picker(answers):
-    """Patch picker.pick_option so each call returns the next of the given labels."""
+    """Patch picker.pick_option so each call returns the option of the next of the given labels."""
     answers = list(answers)
-    return mock.patch('dirdelta.picker.pick_option', side_effect=lambda *_, **__: answers.pop(0))
+    return mock.patch('dirdelta.picker.pick_option',
+                      side_effect=lambda options, *_, **__: answer_of(options, answers.pop(0)))
 
 
 def scripted_tree_picker(choose):
@@ -61,9 +89,7 @@ def answering_option_picker(answers):
 
     def pick_option(options, *_, **__):
         answer = answers.pop(0)
-        if answer is None:
-            return None
-        return next(option for option in options if option == answer or option.startswith(answer))
+        return None if answer is None else answer_of(options, answer)
     return mock.patch('dirdelta.picker.pick_option', side_effect=pick_option)
 
 

@@ -3,6 +3,7 @@ from unittest import mock
 
 from dirdelta import contextmenu
 from dirdelta import picker
+import helpers
 
 ENTRIES = [contextmenu.Entry('a', 'Ask', 'asked'), contextmenu.Entry(None, 'Do', 'done')]
 
@@ -10,8 +11,8 @@ ENTRIES = [contextmenu.Entry('a', 'Ask', 'asked'), contextmenu.Entry(None, 'Do',
 class ChooseTest(unittest.TestCase):
     def choose(self, answer, **kwargs):
         def pick_option(options, **picked):
-            self.options, self.shown = options, picked['shown_as']()
-            return answer
+            self.options, self.shown = helpers.labels_of(options), helpers.shown_of(options)
+            return None if answer is None else helpers.answer_of(options, answer)
         with mock.patch('dirdelta.picker.pick_option', side_effect=pick_option):
             return contextmenu.choose(ENTRIES, 'What?', **kwargs)
 
@@ -35,7 +36,6 @@ class ChooseTest(unittest.TestCase):
         skipped = [shown.text for shown in self.shown.values() if isinstance(shown, picker.Skipped)]
         self.assertTrue(any('search' in line for line in skipped))
         self.assertTrue(any('there' in line for line in skipped))
-        self.assertEqual(len(self.options), len(set(self.options)))
 
     def test_without_a_side_tree_its_key_isnt_shown(self):
         self.choose(None)

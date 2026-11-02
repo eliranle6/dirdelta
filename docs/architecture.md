@@ -88,11 +88,10 @@ most `MAX_SORTS`, by their way around: `record_sort()`), which return a
 recent dirs (`recent_dirs`, by its path: the relpaths files were moved or copied
 to by "Move to...", at most `MAX_RECENT_DIRS`, `record_dir()`/`dirs_of()`),
 for the inbox. Each kind is a section under a heading
-(a `picker.Disabled` option, so it can't be picked; the menu starts on the
+(a `picker.Skipped` line, so it can't be picked; the menu starts on the
 first slot, `pick_option(selected=...)`): Sync two replicas (the slots and the
 favorites), Recent syncs, Sort an inbox, Recent inbox sorts; a section with
-nothing in it has no heading. A blank line (also a `picker.Disabled` option: spaces, a different
-number of them each, `blank_line()`, so each is an option of its own) comes between sections, and
+nothing in it has no heading. A blank line (`picker.BLANK`) comes between sections, and
 before Quit. Choosing the sorted tree offers the
 replicas the user knows first (`known_replicas()`: the favorites', the
 recent pairs', the recent sorts' trees).

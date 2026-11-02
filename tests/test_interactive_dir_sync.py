@@ -133,7 +133,7 @@ class InteractiveDirSyncTest(unittest.TestCase):
         self.assertEqual(self._offered()[1], (['sub/c.txt'], []))
         self.assertIn('Remove complete: removed 1 of 1 files from %s' % (self.src_root,), self.messages)
         # The second time: are you sure, No first
-        options = self.pick_option.call_args_list[2].args[0]
+        options = helpers.labels_of(self.pick_option.call_args_list[2].args[0])
         self.assertEqual(options, [NO, SURE])
         self.assertIn('Are you sure? 1 file will be removed from %s, for good.' % (self.src_root,),
                       self.pick_option.call_args_list[2].kwargs['header'])
@@ -154,7 +154,7 @@ class InteractiveDirSyncTest(unittest.TestCase):
     def test_the_action_menu_starts_with_nothing_which_goes_back_to_the_picks(self):
         with mock.patch('dirdelta.dryrun.DRYRUN', False):
             self._browse([picker.Picked('', 'sub/c.txt', ['sub/b.txt']), None], [NOTHING])
-        options = self.pick_option.call_args_list[0].args[0]
+        options = [picker.option_label(option) for option in self.pick_option.call_args_list[0].args[0]]
         self.assertEqual(options[0], NOTHING)
         # Each kind apart, after a blank line
         self.assertEqual([option.split(' ')[0] for option in options[1:]],
@@ -198,7 +198,7 @@ class InteractiveDirSyncTest(unittest.TestCase):
 
     def test_the_confirmation_starts_with_no_and_says_what_it_will_do(self):
         self._browse([['sub/b.txt'], None], ['Copy', NO])
-        options = self.pick_option.call_args.args[0]
+        options = helpers.labels_of(self.pick_option.call_args.args[0])
         self.assertEqual(options[0], NO)
         header = self.pick_option.call_args.kwargs['header'].splitlines()
         self.assertEqual(header[0], 'Copy 1 file from %s to %s?' % (self.src_root, self.dst_root))
@@ -208,7 +208,7 @@ class InteractiveDirSyncTest(unittest.TestCase):
 
     def disabled(self):
         """The action menu's disabled options' texts (after the shortcuts' column)"""
-        shown = self.pick_option.call_args_list[0].kwargs['shown_as']()
+        shown = helpers.shown_of(self.pick_option.call_args_list[0].args[0])
         return [text.text.lstrip() for text in shown.values() if isinstance(text, picker.Disabled)]
 
     def test_what_cant_be_done_is_greyed_out(self):
@@ -356,7 +356,7 @@ class RenameTest(unittest.TestCase):
 
     def test_the_menu_counts_the_files_with_a_sure_match(self):
         self.browse([NOTHING])
-        options = self.pick_option.call_args.args[0]
+        options = helpers.labels_of(self.pick_option.call_args.args[0])
         self.assertIn("Rename the files matching 1 of these to these paths, in %s" % (self.dst_root,), options)
         self.assertIn("Rename 1 file of these to their matches' paths, in %s" % (self.src_root,), options)
 
@@ -448,7 +448,7 @@ class RefreshKeyTest(unittest.TestCase):
             calls = self.browse(self.cloud, self.local,
                                 [picker.Picked('', 'a/2.mp3', ['a/1.mp3']), None])
         self.refresh.assert_called_once_with(self.cloud, 'a/2.mp3')
-        self.assertEqual(pick_option.call_args.args[0][-1], 'Read cloud/mein/a/ anew from Google Drive')
+        self.assertEqual(helpers.labels_of(pick_option.call_args.args[0])[-1], 'Read cloud/mein/a/ anew from Google Drive')
         self.assertTrue(self.sync.has_changed)
         self.assertEqual(calls[1].kwargs['picked'], ['a/1.mp3'])
         self.assertEqual(calls[1].kwargs['selected'], 'a/2.mp3')
@@ -458,7 +458,7 @@ class RefreshKeyTest(unittest.TestCase):
         local.add_file_by_relpath('x.mp3')
         with helpers.answering_option_picker([NOTHING]) as pick_option:
             self.browse(local, self.local, [picker.Picked('', 'x.mp3', ['x.mp3']), None])
-        self.assertFalse(any(option.startswith('Read') for option in pick_option.call_args.args[0]))
+        self.assertFalse(any(option.startswith('Read') for option in helpers.labels_of(pick_option.call_args.args[0])))
 
     def test_the_other_replica_is_refreshed_when_its_drives(self):
         self.local.add_file_by_relpath('x/new.mp3')
@@ -647,7 +647,7 @@ class ActInDstTest(_TwoDirsTestCase):
         with mock.patch('dirdelta.picker.pick_option', side_effect=['Yes', 'Yes, remove them']) as pick_option, \
                 mock.patch('dirdelta.dryrun.DRYRUN', False):
             self.sync._act_in_dst('repo', True)
-        self.assertTrue(pick_option.call_args_list[0].args[0][-1] == 'Yes')
+        self.assertTrue(helpers.labels_of(pick_option.call_args_list[0].args[0])[-1] == 'Yes')
         self.assertFalse(os.path.exists(os.path.join(self.dst_path, 'repo', 'x.txt')))
 
     def test_d_on_a_read_only_one_says_so(self):
@@ -706,11 +706,11 @@ class ExploreTest(_TwoDirsTestCase):
     def test_the_menu_offers_it_on_a_zip_only(self):
         with mock.patch('dirdelta.picker.view_files') as view, helpers.answering_option_picker(['Explore']) as options:
             self.sync._act(['z.zip'])
-        self.assertTrue(any(option.startswith('Explore') for option in options.call_args.args[0]))
+        self.assertTrue(any(option.startswith('Explore') for option in helpers.labels_of(options.call_args.args[0])))
         self.assertEqual(view.call_args.args[1], ['in/side.txt'])
         with helpers.answering_option_picker([None]) as options:
             self.sync._act(['a.txt'])
-        self.assertFalse(any(option.startswith('Explore') for option in options.call_args.args[0]))
+        self.assertFalse(any(option.startswith('Explore') for option in helpers.labels_of(options.call_args.args[0])))
 
 
 class ContextMenuTest(_TwoDirsTestCase):
@@ -720,9 +720,9 @@ class ContextMenuTest(_TwoDirsTestCase):
         """browse(), ':' being pressed on the Picked of picks, then quitting; the menu answering answer
         (what its options start with). The options are self.options."""
         def pick_option(options, **kwargs):
-            self.options = options
-            self.shown = kwargs['shown_as']()
-            return next(option for option in options if option.startswith(answer))
+            self.options = helpers.labels_of(options)
+            self.shown = helpers.shown_of(options)
+            return helpers.answer_of(options, answer)
         results = iter(picks + [None])
         with helpers.scripted_files_picker(lambda relpaths: next(results)) as pick_files, mock.patch('dirdelta.picker.pick_option', side_effect=pick_option), \
                 mock.patch('dirdelta.interactive_dir_sync.hashes_screen.jobs_of', return_value=[]):

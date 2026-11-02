@@ -45,6 +45,13 @@ Disabled = collections.namedtuple('Disabled', ['text'])
 Skipped = collections.namedtuple('Skipped', ['text'])
 # What shown_as shows an option as in a color (a text color: red, green, yellow, blue, magenta, cyan)
 Colored = collections.namedtuple('Colored', ['text', 'color'])
+# An option of a menu that's more than its text (pick_option()'s options may be plain strings too):
+# what's returned when it's picked (any hashable value), its label (its plain text, e.g. what it's
+# found by when searching), and how it's shown at first, if otherwise (a string, or one of the above)
+Option = collections.namedtuple('Option', ['id', 'label', 'shown'], defaults=(None,))
+# A line of a menu that isn't an option at all is a Skipped in pick_option()'s options, and this one a
+# blank line between its sections
+BLANK = Skipped('')
 
 # Where the user is, the screens' breadcrumbs: the places entered (see place()), after the program's
 # name. A menu's tree's root shows them (treepicker shows the path to the selection after it).
@@ -106,19 +113,12 @@ def styled(parts):
 
 def grouped(groups):
     """A menu's options of groups (lists of options, e.g. of similar actions), with a blank line
-    between each two (the empty groups left out): (the options, {blank line: how it's shown, a
-    Skipped, for shown_as}). The blank lines are spaces, a number of them each, so each is an option
-    of its own."""
-    options, blanks = [], {}
+    between each two (the empty groups left out)"""
+    options = []
     for group in groups:
-        if not group:
-            continue
-        if options:
-            blank = ' ' * (len(blanks) + 1)
-            options.append(blank)
-            blanks[blank] = Skipped('')
-        options += list(group)
-    return options, blanks
+        if group:
+            options += ([BLANK] if options else []) + list(group)
+    return options
 
 
 def shortcut_prefixes(labels, shortcuts):
@@ -334,26 +334,71 @@ def _twice(key, twice_keys):
 
 def pick_option(options, header='', shown_as=None, label=None, selected=None, title=None, key_hints=(),
                 help_lines=(), previews_below=None):
-    """Let the user pick one of the options (strings). Returns it, or None if the user quit.
+    """Let the user pick one of the options: each a string, an Option, or a Skipped (a line that isn't
+    an option: a heading, or BLANK). Returns the one picked (a string), or its id (an Option), or None
+    if the user quit. Below, an option is what it's returned as.
 
     shown_as, if given, is called again and again while the menu is shown (every
     SHOWN_AS_INTERVAL seconds, on another thread), and returns {option: what to show it as} for
-    the options to show otherwise than as themselves, e.g. with a count that's coming in: a
+    the options to show otherwise than as they are, e.g. with a count that's coming in: a
     string, or a Disabled for one that can't be picked (until shown_as says otherwise). What's
     returned is still the option itself. label: as pick_files()'s. selected: the option to start
     with selected (else the first). title: what the menu is, after the breadcrumbs (see place()).
     key_hints, help_lines: as pick_files()'s. previews_below: {option: lines} shown below the
     menu, above its status bar, while the option is selected (e.g. what it would do), each line
     plain, or in colored parts (see segments()). shown_as's options may be Colored too."""
+    lines, line_of, shown_first = _menu_lines(options)
     args = ['--list', '--root', trail(title)] + _header_args(header) + _help_args(key_hints, help_lines)
-    if selected is not None:
-        args += ['--select', selected]
+    if selected in line_of:
+        args += ['--select', line_of[selected]]
     previews = None
     if previews_below:
         args.append('--preview-below')
-        previews = lambda send: send(previews_below, default=[])
-    picked = _run(args, options, shown_as, label, previews=previews)
-    return None if picked is None else picked[0]
+        lines_previews = {line_of[option]: previews_below[option] for option in previews_below if option in line_of}
+        previews = lambda send: send(lines_previews, default=[])
+
+    def lines_shown():
+        now = dict(shown_first)
+        for option, shown in (shown_as() if shown_as is not None else {}).items():
+            # (Its '' is the status, not an option)
+            if option == '' or option in line_of:
+                now[line_of.get(option, option)] = shown
+        return now
+    picked = _run(args, lines, lines_shown if shown_as is not None or shown_first else None, label, previews=previews)
+    if picked is None:
+        return None
+    return {line: option for option, line in line_of.items()}.get(picked[0], picked[0])
+
+
+def _menu_lines(options):
+    """What treepicker gets of pick_option()'s options: (a line for each, {option (see pick_option()):
+    its line}, {line: what to show it as at first}). A line is the option's text, each its own (a
+    blank one, or a repeated one, with spaces after it), since treepicker tells them by it."""
+    lines, line_of, shown_first = [], {}, {}
+    for item in options:
+        line = unstyled(option_label(item))
+        while not line or line in shown_first or line in lines:
+            line += ' '
+        lines.append(line)
+        if isinstance(item, Skipped):
+            shown_first[line] = item
+        else:
+            line_of[option_id(item)] = line
+            if isinstance(item, Option) and item.shown is not None:
+                shown_first[line] = item.shown
+    return lines, line_of, shown_first
+
+
+def option_id(item):
+    """What pick_option() returns for one of its options (not a Skipped)"""
+    return item.id if isinstance(item, Option) else item
+
+
+def option_label(item):
+    """The plain text of one of pick_option()'s options"""
+    if isinstance(item, Option):
+        return item.label
+    return item.text if isinstance(item, Skipped) else item
 
 
 def _tree_paths(tree):

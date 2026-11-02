@@ -8,7 +8,7 @@ risk included), best first. "Effort" is a guess: S (< 1h), M (a few hours), L (a
 (No .md file was opened for this. Two CLAUDE.md files, the repo's and lib/treepicker's, were loaded
 into the reviewer's context automatically; the findings come from the code.)
 
-## 1. Menus are keyed by their display text (S→M, high value)
+## 1. Menus are keyed by their display text (S→M, high value) — fixed 2026-11-02: `pick_option()`'s options may be a `picker.Option(id, label, shown)` or a `picker.Skipped` line (`picker.BLANK`), and it returns the id, `_menu_lines()` keeping the lines unique; the start menu, the dashboard, the sync menu, the context menu and both `_act()`s use them
 `picker.pick_option()` takes and returns label strings, so every caller maps the answer back by
 string equality, and several work around it:
 - `choose_replicas.blank_line()` makes separators unique by padding them with N spaces; headings
