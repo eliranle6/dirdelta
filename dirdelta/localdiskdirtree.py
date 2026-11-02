@@ -11,15 +11,13 @@ from dirdelta import dryrun
 from dirdelta import entries
 from dirdelta import exif
 from dirdelta import hashcache
-from dirdelta import hashing
+from dirdelta import localscan
 from dirdelta import messages
 from dirdelta import text
 
 
-# How many of find's error messages a scan warning lists
+# How many of a listing's error messages a scan warning lists
 MAX_SCAN_ERRORS_SHOWN = 3
-# How much of find's output files_by_name() reads at a time, at most
-FIND_READ_SIZE = 1 << 16
 # How much of a file content_hash() reads at a time (asking should_stop() after each)
 HASH_READ_SIZE = 1 << 20
 
@@ -41,7 +39,7 @@ def scan_warning(where, errors):
     miss some; no lines if there are no errors."""
     if not errors:
         return []
-    lines = ["find couldn't read everything in %s (%d errors), so the diff may be wrong:" %
+    lines = ["Couldn't read everything in %s (%d errors), so the diff may be wrong:" %
              (where, len(errors))]
     return lines + text.listed(["  " + error for error in errors], MAX_SCAN_ERRORS_SHOWN)
 
@@ -77,28 +75,14 @@ class LocalDiskDirTree(dirtree.DirTree):
         """Add the dirs and files on disk (hidden ones too), down to max_depth levels below the root."""
         if not self._silent:
             messages.print_line("Scanning directory %s..." % (self._rootpath,))
-        # One find for both files and dirs, each entry its type letter, size, modification time and
-        # path, ending with '\0' (paths may hold newlines). Other types (e.g. symlinks) are skipped.
-        command = ["find", self._rootpath, "-mindepth", "1"]
-        if self.max_depth is not None:
-            command += ["-maxdepth", str(self.max_depth)]
-        command += ["-printf", "%y %s %T@ %p\\0"]
-        result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        self.scan_errors = result.stderr.decode('utf-8', 'surrogateescape').splitlines()
-        stamps = {}
-        prefix_length = len(self._rootpath.rstrip('/')) + 1
-        for entry in result.stdout.split(b'\0'):
-            if not entry:
-                continue
-            kind, size, mtime, path = entry.split(b' ', 3)
-            # Names needn't be valid UTF-8: decoded like Python decodes paths
-            path = os.fsdecode(path)
-            if kind == b'f':
-                self.add_file_by_fullpath(path)
-                stamps[path[prefix_length:]] = (int(size), hashing.nanoseconds(mtime.decode('ascii')))
-            elif kind == b'd':
-                self.create_dir_node_from_fullpath_if_not_exists(path)
-        self.file_stamps = stamps
+        scan = localscan.scan(self._rootpath, self.max_depth)
+        self.scan_errors = scan.errors
+        for relpath, (kind, _, _) in scan.entries.items():
+            if kind == localscan.FILE:
+                self.add_file_by_relpath(relpath)
+            else:
+                self.create_dir_node_from_relpath_if_not_exists(relpath)
+        self.file_stamps = scan.files()
 
     def rescan(self):
         """See what's on disk now, if the tree was scanned (one that wasn't has nothing to go stale): the
@@ -166,34 +150,12 @@ class LocalDiskDirTree(dirtree.DirTree):
         return os.path.isfile(os.path.join(self._rootpath, relpath))
 
     def files_by_name(self, progress=None):
-        """As DirTree's, but from a find of the dir (down to max_depth levels), with its files'
-        sizes: the tree may not be scanned (see dirdiff.py), or be from an older scan. Read as find
-        goes, for progress; if progress raises, find is stopped."""
-        command = ["find", self._rootpath, "-mindepth", "1"]
-        if self.max_depth is not None:
-            command += ["-maxdepth", str(self.max_depth)]
-        command += ["-type", "f", "-printf", "%s %P\\0"]
+        """As DirTree's, but from a listing of the dir (down to max_depth levels), with its files'
+        sizes: the tree may not be scanned (see dirdiff.py), or be from an older scan. If progress
+        raises, the listing is stopped."""
         found = collections.defaultdict(list)
-        count = 0
-        # The start of an entry whose end hasn't been read yet
-        pending = b''
-        process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
-        try:
-            for chunk in iter(lambda: process.stdout.read1(FIND_READ_SIZE), b''):
-                items = (pending + chunk).split(b'\0')
-                pending = items.pop()
-                for item in items:
-                    size, relpath = item.split(b' ', 1)
-                    relpath = os.fsdecode(relpath)
-                    found[os.path.basename(relpath)].append((relpath, int(size)))
-                count += len(items)
-                if progress is not None:
-                    progress(count)
-        finally:
-            if process.poll() is None:
-                process.kill()
-            process.stdout.close()
-            process.wait()
+        for relpath, (size, _) in localscan.scan(self._rootpath, self.max_depth, progress).files().items():
+            found[os.path.basename(relpath)].append((relpath, size))
         return found
 
     def _copy_file(self, file_entry, source):

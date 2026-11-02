@@ -14,7 +14,6 @@ import os
 import posixpath
 import re
 import shutil
-import subprocess
 import textwrap
 import threading
 import time
@@ -38,6 +37,7 @@ from dirdelta import hashing
 from dirdelta import interactive_dir_sync
 from dirdelta import junk
 from dirdelta import localdiskdirtree
+from dirdelta import localscan
 from dirdelta import messages
 from dirdelta import opening
 from dirdelta import paths
@@ -260,8 +260,7 @@ class InboxSort(object):
             full = self._inbox_tree.files_under(self._inbox_rel)
             relpaths = [_relpath_in(relpath, self._inbox_rel) for relpath in full]
         else:
-            found = localdiskdirtree.LocalDiskDirTree(self.inbox_path, silent=True).files_by_name()
-            relpaths = [relpath for files in found.values() for relpath, _ in files]
+            relpaths = list(localscan.scan(self.inbox_path).files())
         return sorted(relpaths, key=lambda relpath: relpath.split('/'))
 
     def _full(self, relpath):
@@ -1084,10 +1083,7 @@ class InboxSort(object):
                      for child in self._root_tree.nodes_under(node.identifier)
                      if child.identifier != self._root_rel]
         else:
-            result = subprocess.run(['find', self.root_path, '-mindepth', '1', '(', '-type', 'd', '-o', '-type', 'f',
-                                     ')', '-printf', '%y %P\\0'],
-                                    stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
-            found = [(os.fsdecode(entry[2:]), entry[:1] == b'd') for entry in result.stdout.split(b'\0') if entry]
+            found = [(relpath, kind == localscan.DIR) for relpath, (kind, _, _) in localscan.scan(self.root_path).entries.items()]
         inbox_in_root = _relpath_in(self._inbox_rel, self._root_rel) if self.is_one_tree and _is_at_or_under(
             self._inbox_rel, self._root_rel) else None
         found = [(relpath, is_dir) for relpath, is_dir in found

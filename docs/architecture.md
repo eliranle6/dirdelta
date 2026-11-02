@@ -313,6 +313,11 @@ after a move or copy are copied to their new paths' keys (`ai.carry()`); the cac
 (recommendations also by the sorted tree), `AIError` if Claude can't be
 asked.
 
+### `localscan.py`
+`scan(root, max_depth, progress)` is the one listing of a local dir (one `find`, stderr to a
+temp file): `Scan.entries`, `{relpath: (kind, size, mtime_ns)}`, and `Scan.errors`. The local
+trees, hashing's job, the inbox's listing and dirs, and the side tree all use it.
+
 ### `replicafactory.py`
 `create_dirtree_from_arg(rootpath)` is the single dispatch point deciding
 cloud vs local, with `paths.is_cloud_path()`: a path is "cloud" iff its
@@ -534,7 +539,7 @@ dirdiff: this copy's build (`DIRDELTA_PROGRAMS_DIR`, set by `bin/python` and mak
 `InteractiveDirSync(src, dst)`. Its diff (`_missing()`): for two local dirs,
 `dirdiff`, run anew for each action (so the dirs' own trees are never
 scanned: `dirsync_main` makes them empty, and there's no stale scan), with a
-warning screen if find couldn't read everything; with a cloud replica, the
+warning screen if couldn't read everything; with a cloud replica, the
 trees' `get_unknown_entries_in_given_dirtree()`. Either way it's a list of
 relpaths: no Python tree is built of the missing files (for 111k of them that
 took ~2.5s; the picker now opens 0.2s after the diff).

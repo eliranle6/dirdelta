@@ -70,7 +70,7 @@ sends up to 100 creates per batch request. Either the rule is "one at a time" (t
 break it) or it's "only interactive work serialises" (then the comment is wrong). Decide and
 write the rule in one place (`driveapi.py`).
 
-## 7. One local directory listing, not five (M, moderate value, some speed)
+## 7. One local directory listing, not five (M, moderate value, some speed) — fixed 2026-11-02: `localscan.scan()`, for every Python caller, the throwaway tree gone. `file_size()`/`modified_time()` still `lstat`: `file_stamps` goes stale as files change, and a wrong size is worse than a syscall
 Local dirs are walked by: `LocalDiskDirTree.update_from_filesystem` (find `%y %s %T@ %p`),
 `LocalDiskDirTree.files_by_name` (find `%s %P`), `hashing._list_files` (find `%s %T@ %P`),
 `inbox._root_dirs` (find `%y %P`), plus C++ `dirdiff` and `treepicker`. `inbox._inbox_files()`

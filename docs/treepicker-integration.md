@@ -26,7 +26,7 @@ Like fzf: dirdelta starts `treepicker`, which draws on the terminal itself
   a node and everything under it, Enter finishes).
 - Picking under a local dir (picker mode): `treepicker -0 --max-depth N DIR`.
   treepicker scans it with `find` itself, so dirdelta builds no Python tree;
-  if find couldn't read everything, treepicker warns in its header.
+  if couldn't read everything, treepicker warns in its header.
 - Picking a replica dir (the menu of a run without paths):
   `treepicker -0 --dirs-only --lazy /` for a local one: only dirs, each read
   when it's shown (so `/` opens at once; a search finds only what was read).

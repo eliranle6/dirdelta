@@ -53,7 +53,7 @@ def _run(args):
             return
         warnings = scan_errors_warning(dirtree_a) + scan_errors_warning(dirtree_b)
         if warnings:
-            messages.show("Warning: find couldn't read everything", warnings, dryrun.label(), 'red')
+            messages.show("Warning: couldn't read everything", warnings, dryrun.label(), 'red')
     # Both are dirs (or Drive's), so they're the history's latest; and what's known of each (its
     # log's last entry, see replicalog.py) is as it is now
     known_replicas = replicas.load()
@@ -304,7 +304,7 @@ def _rescan(replica):
         messages.show("Couldn't rescan it", [str(error)], dryrun.label(), 'red')
     warning = scan_errors_warning(replica) if is_done else []
     if warning:
-        messages.show("Warning: find couldn't read everything", warning, dryrun.label(), 'red')
+        messages.show("Warning: couldn't read everything", warning, dryrun.label(), 'red')
     return is_done
 
 

@@ -10,6 +10,7 @@ import helpers
 from dirdelta import text
 from dirdelta import hashcache
 from dirdelta import hashing
+from dirdelta import localscan
 
 # How long a test waits for the workers, at most, in seconds
 TIMEOUT = 10
@@ -164,10 +165,10 @@ class ListFilesTest(unittest.TestCase):
         self.assertEqual(found['a/b c'], (stat.st_size, stat.st_mtime_ns))
 
     def test_finds_seconds_in_nanoseconds(self):
-        self.assertEqual(hashing.nanoseconds('1698765432.1234567890'), 1698765432123456789)
-        self.assertEqual(hashing.nanoseconds('1698765432.5'), 1698765432500000000)
-        self.assertEqual(hashing.nanoseconds('1698765432'), 1698765432000000000)
-        self.assertEqual(hashing.nanoseconds('-1.5'), -1500000000)
+        self.assertEqual(localscan.nanoseconds('1698765432.1234567890'), 1698765432123456789)
+        self.assertEqual(localscan.nanoseconds('1698765432.5'), 1698765432500000000)
+        self.assertEqual(localscan.nanoseconds('1698765432'), 1698765432000000000)
+        self.assertEqual(localscan.nanoseconds('-1.5'), -1500000000)
 
 
 def _progress(**fields):

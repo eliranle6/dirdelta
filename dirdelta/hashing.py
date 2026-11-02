@@ -19,12 +19,12 @@ import glob
 import hashlib
 import os
 import platform
-import subprocess
 import threading
 import time
 
 from dirdelta import replicanames
 from dirdelta import hashcache
+from dirdelta import localscan
 from dirdelta import paths
 from dirdelta import text
 
@@ -466,28 +466,9 @@ def _lower_priority():
 
 
 def _list_files(root, max_depth=None):
-    """{relpath: (size, mtime_ns)} of the files under root (down to max_depth levels), by one find.
-    Raises OSError if find can't be run."""
-    command = ['find', root, '-mindepth', '1']
-    if max_depth is not None:
-        command += ['-maxdepth', str(max_depth)]
-    command += ['-type', 'f', '-printf', '%s %T@ %P\\0']
-    result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
-    found = {}
-    for item in result.stdout.split(b'\0'):
-        if not item:
-            continue
-        size, mtime, relpath = item.split(b' ', 2)
-        found[os.fsdecode(relpath)] = (int(size), nanoseconds(mtime.decode('ascii')))
-    return found
-
-
-def nanoseconds(timestamp):
-    """find's %T@ (seconds, e.g. '1698765432.1234567890') in nanoseconds, as os.stat()'s st_mtime_ns"""
-    seconds, _, fraction = timestamp.partition('.')
-    if seconds.startswith('-'):
-        return int(round(float(timestamp) * 10 ** 9))
-    return int(seconds) * 10 ** 9 + int((fraction + '000000000')[:9])
+    """{relpath: (size, mtime_ns)} of the files under root (down to max_depth levels). Raises OSError
+    if they can't be listed."""
+    return localscan.scan(root, max_depth).files()
 
 
 # What a file is shown as in a picker, after its name (a search, e.g. /not hashed, finds them):

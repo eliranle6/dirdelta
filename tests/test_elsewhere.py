@@ -327,7 +327,7 @@ class IndexTest(unittest.TestCase):
     def test_a_local_dir_it_cant_list_is_said(self):
         src = _SizedTree('/src', {'x': 1})
         dst = localdiskdirtree.LocalDiskDirTree('/src', True)
-        with mock.patch('dirdelta.localdiskdirtree.subprocess.Popen', side_effect=OSError("no find")):
+        with mock.patch('dirdelta.localscan.subprocess.Popen', side_effect=OSError("no find")):
             sent = _previews(['x'], src, dst)
         self.assertEqual(sent.defaults[-1][-1], "no find")
 

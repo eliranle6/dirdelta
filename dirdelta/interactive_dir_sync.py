@@ -422,7 +422,7 @@ class InteractiveDirSync(object):
         else:
             missing = find_missing(self._src, self._dst)
         if missing.warning:
-            messages.show("Warning: find couldn't read everything", missing.warning, dryrun.label(),
+            messages.show("Warning: couldn't read everything", missing.warning, dryrun.label(),
                           'red')
         return missing.relpaths
 

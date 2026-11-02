@@ -32,7 +32,7 @@ class ScanErrorsWarningTest(unittest.TestCase):
 
     def test_errors_are_listed(self):
         self.assertEqual(self.warning(["find: '/some/dir/a': Permission denied"]), [
-            "find couldn't read everything in /some/dir (1 errors), so the diff may be wrong:",
+            "Couldn't read everything in /some/dir (1 errors), so the diff may be wrong:",
             "  find: '/some/dir/a': Permission denied",
         ])
 
