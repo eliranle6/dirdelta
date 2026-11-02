@@ -321,7 +321,7 @@ make clean
 
 Removes this copy's build output (see `bin/builddir`), and what older versions left in the repo
 (`__pycache__`, `*.pyc`, `build/`, `*.egg-info`, `.eggs`, pbr's `AUTHORS`/`ChangeLog`, `lib/treepicker/build`).
-It leaves the venv, `secrets/` and the Drive cache (`~/.cache/dirman/files.txt`) alone; to start over,
+It leaves the venv, `secrets/` and the Drive cache (`~/.cache/dirman/files.sqlite`) alone; to start over,
 delete the venv too (`~/.cache/dirdelta-build/venv`).
 
 ## Deploying to your system

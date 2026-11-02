@@ -113,11 +113,10 @@ for any front end. The sync menu's first line is the state as found now
 under "Pairs: what's synced to what".
 
 ### `inbox.py`, `ai.py` — sorting an inbox
-`InboxSort(inbox_path, root_path)`: local dirs or cloud paths. Both of a
-kind (`is_one_tree`): its files move within one tree that has both, their
-common dir (`LocalDiskDirTree`, unscanned) or Drive's (`CloudDirTree` of
-their common cloud path), so a move is a rename (`InboxError` if the sorted
-tree is in the inbox). One of each: a tree each, and a move is
+`InboxSort(inbox_path, root_path)`: local dirs or cloud paths, a tree each
+(`LocalReplica`, or `CloudDirTree`). Both of a kind (`is_same_kind`): a move is a
+rename, by `move_files(moves, to)` (`InboxError` if the sorted
+tree is in the inbox; one in the sorted tree is `_inbox_in_root`, left out of its index and side tree). One of each: a move is
 `_transfer()`: the sorted tree's `copy_in(files)` (an
 upload; or a download, from a `_Renamed` source that maps each file's new
 relpath to the inbox's), then the inbox's `remove_files()` of the files
@@ -175,8 +174,8 @@ is from beside it; files of one name to one dir are refused), then No/Yes,
 then `move_files()` / `copy_files_within()` (local `shutil.copy2`, Drive's
 `files().copy`) on a progress screen. `Ctrl-R` refreshes the selected Drive
 folder, as a sync's does. Copies: the inbox and the sorted tree are each a
-replica of its own too (`_inbox_view`, and a view of the sorted tree, with
-their `elsewhere.Index`es, the sorted tree's built in the background and
+replica of its own, with
+their `elsewhere.Index`es, told of changes by their trees (`DirTree.add_listener()`), the sorted tree's built in the background and
 without the inbox's files, if it's in it), and the picker runs
 `elsewhere.check_contents()` on the selection, as a sync's does
 (`sends_previews=False`: the inbox's own previews show `_checked`); before
@@ -354,6 +353,10 @@ files" sub-tree, just before a copy.
 tree, which is what lets `update_from_filesystem` rescan a tree in place.
 
 ### `localdiskdirtree.py`
+`LocalReplica` asks the disk for what it has and keeps no tree of it (two local replicas, an inbox);
+`LocalDiskDirTree`, one that also keeps a tree (the local side of a sync with Drive), is told of each change
+by `_file_added()` and the like. `filescreen.py` has what the sync's and the inbox's file screens share.
+
 `LocalDiskDirTree(DirTree)`. `factory(filesystem_dirpath, max_depth=None,
 silent=False)` builds the tree then calls `update_from_filesystem`, which
 runs one `find ROOT -mindepth 1 [-maxdepth N] -printf '%y %p\0'` (rather
@@ -386,8 +389,8 @@ fixed, see known-issues.md #2 — and is now covered by
 ### `clouddirtree.py` / `drivecache.py` / `clouddirtreefactory.py`
 Cloud state is never queried live per-scan. Instead:
 1. `replicafactory.create_dirtree_from_arg` calls `factory_interactive(rootpath)`
-   for any path whose first component is `cloud`. It ensures a cache file exists at
-   `drivecache.FILE_LIST_CACHE` (`~/.cache/dirman/files.txt`), prompting
+   for any path whose first component is `cloud`. It ensures a cache exists
+   (`drivecache.exists()`: `~/.cache/dirman/files.sqlite`, into which an old `files.txt` is imported, then kept as `.bak`), prompting
    the user (`picker.pick_option`) to refresh the replica's folder in it if it
    already exists ("Refresh cloud/X from Google Drive"; the prompt says if the
    cache may be out of date there, see the stale marker below), or to continue

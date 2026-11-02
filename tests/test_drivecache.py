@@ -5,6 +5,7 @@ import unittest
 from unittest import mock
 
 from dirdelta import drivecache
+import helpers
 from test_clouddirtree import ITEMS
 
 
@@ -19,7 +20,7 @@ class EntriesTest(unittest.TestCase):
         patcher = mock.patch('dirdelta.drivecache.FILE_LIST_CACHE', self.cache)
         patcher.start()
         self.addCleanup(patcher.stop)
-        self.addCleanup(os.remove, self.cache)
+        self.addCleanup(helpers.remove_drive_cache, self.cache)
 
     def test_the_folder_itself_comes_first(self):
         self.assertEqual(next(drivecache.entries('/mein')), ('', 'mein', True, False, None, None, {}, None))
@@ -66,11 +67,8 @@ class EntriesTest(unittest.TestCase):
         ], 'ROOT')
         found = {entry.relpath: entry.cloud_id for entry in drivecache.entries('/mein')}
         self.assertEqual(found, {'': 'mein', 'renamed.mp3': 'song', 'new': 'new', 'new/1.mp3': 'n1'})
-        # The rest is as it was, lines it doesn't read too
+        # The rest is as it was
         self.assertEqual([entry[0] for entry in drivecache.entries('/other')], ['', 'elsewhere.mp3'])
-        with open(self.cache) as f:
-            self.assertEqual(f.readline(), 'not a JSON line, skipped\n')
-        self.assertFalse(os.path.exists(self.cache + '.tmp'))
 
     def test_a_file_trashed_and_restored_since_is_back_after_a_replace(self):
         drivecache.trash('song')
@@ -82,29 +80,59 @@ class EntriesTest(unittest.TestCase):
         drivecache.trash('album')
         self.assertEqual(drivecache.count_under('/mein'), 3)
         self.assertIsNone(drivecache.count_under('/nowhere'))
-        with mock.patch('dirdelta.drivecache.FILE_LIST_CACHE', self.cache + '.missing'):
+        with mock.patch('dirdelta.drivecache.FILE_LIST_CACHE', self.cache + '-missing.txt'):
             self.assertIsNone(drivecache.count_under('/mein'))
 
     def test_with_no_cache_a_replace_makes_one_with_the_root(self):
-        os.remove(self.cache)
+        helpers.remove_drive_cache(self.cache)
         drivecache.replace_under('mein', [{'id': 'mein', 'name': 'mein', 'parents': ['ROOT'],
                                            'mimeType': drivecache.FOLDER_MIME_TYPE},
                                           {'id': 'song', 'name': 'song.mp3', 'parents': ['mein']}],
                                  'ROOT')
-        with open(self.cache) as f:
-            self.assertEqual(f.readline(), '{"%s": "ROOT"}\n' % (drivecache.ROOT_ID_KEY,))
+        self.assertEqual(drivecache.root_id(), 'ROOT')
         self.assertEqual([entry[0] for entry in drivecache.entries('/mein')], ['', 'song.mp3'])
-        self.assertFalse(os.path.exists(self.cache + '.tmp'))
 
-    def test_with_no_cache_a_replace_cut_off_makes_none(self):
-        os.remove(self.cache)
-        with mock.patch('dirdelta.drivecache.os.replace', side_effect=KeyboardInterrupt):
-            with self.assertRaises(KeyboardInterrupt):
-                drivecache.replace_under('mein', [], 'ROOT')
+    def test_a_replace_cut_off_leaves_it_as_it_was(self):
+        before = drivecache.rows()
+
+        def items():
+            yield {'id': 'new', 'name': 'new.mp3', 'parents': ['mein']}
+            raise KeyboardInterrupt()
+        with self.assertRaises(KeyboardInterrupt):
+            drivecache.replace_under('mein', items(), 'ROOT')
+        self.assertEqual(drivecache.rows(), before)
+
+    def test_the_old_file_is_imported_once_and_kept_aside(self):
+        # setUp's, once something's read
+        self.assertEqual(drivecache.root_id(), 'ROOT')
         self.assertFalse(os.path.exists(self.cache))
-        # For the cleanup
-        os.remove(self.cache + '.tmp')
-        open(self.cache, 'w').close()
+        self.assertTrue(os.path.exists(self.cache + '.bak'))
+        self.assertTrue(os.path.exists(os.path.splitext(self.cache)[0] + '.sqlite'))
+        self.assertEqual(sorted(md['id'] for md in drivecache.rows()),
+                         sorted(item['id'] for item in ITEMS))
+
+    def test_an_import_cut_off_is_done_again(self):
+        with mock.patch('dirdelta.drivecache._put', side_effect=KeyboardInterrupt):
+            with self.assertRaises(KeyboardInterrupt):
+                drivecache.root_id()
+        self.assertTrue(os.path.exists(self.cache))
+        self.assertEqual(len(drivecache.rows()), len(ITEMS))
+
+    def test_a_trashed_line_of_the_old_file_is_imported(self):
+        self.append({drivecache.TRASHED_ID_KEY: 'song'})
+        self.assertNotIn('song', [md['id'] for md in drivecache.rows()])
+
+    def test_a_cache_that_isnt_a_database_says_so(self):
+        drivecache.root_id()
+        with open(os.path.splitext(self.cache)[0] + '.sqlite', 'wb') as f:
+            f.write(b'not a database, not at all' * 100)
+        with self.assertRaisesRegex(drivecache.DriveCacheError, "can't be read"):
+            list(drivecache.entries('/mein'))
+
+    def test_what_changes_is_read_again(self):
+        self.assertEqual(drivecache.count_under('/mein'), 5)
+        drivecache.add({'id': 'x', 'name': 'x.mp3', 'parents': ['mein']})
+        self.assertEqual(drivecache.count_under('/mein'), 6)
 
 
 class ParseTest(unittest.TestCase):
@@ -120,6 +148,7 @@ class ParseTest(unittest.TestCase):
     def test_parsed_once_until_the_file_changes(self):
         with mock.patch('dirdelta.drivecache._parse', wraps=drivecache._parse) as parse:
             list(drivecache.entries('/a'))
+            drivecache.root_id()
             list(drivecache.entries('/a'))
             self.assertEqual(parse.call_count, 1)
             drivecache.add({'id': 'f', 'name': 'f.txt', 'parents': ['a']})
@@ -205,7 +234,7 @@ class CacheContentsTest(unittest.TestCase):
         patcher = mock.patch('dirdelta.drivecache.FILE_LIST_CACHE', self.cache)
         patcher.start()
         self.addCleanup(patcher.stop)
-        self.addCleanup(os.remove, self.cache)
+        self.addCleanup(helpers.remove_drive_cache, self.cache)
 
     def write(self, items, root_line=True):
         with open(self.cache, 'w') as f:

@@ -1,17 +1,21 @@
-"""The cache of Google Drive's file list (FILE_LIST_CACHE): one JSON line per file or folder, with
-its id, name, parents and mimeType, as the Drive API lists them, after a line with My Drive's root
-folder's id (clouddirtreefactory writes it). entries() reads it into the paths of what's under a
-folder.
+"""The cache of Google Drive's file list, an SQLite file (see _database_path(), next to
+FILE_LIST_CACHE): a row per file or folder, by its id, with its parent and its metadata as the Drive API
+gives it (a JSON object: id, name, parents, mimeType...), and My Drive's root folder's id. entries() reads
+it into the paths of what's under a folder.
 
-What dirdelta changes in Drive is added to it as it goes (add(), trash()), so it stays up to date:
-a line per file or folder made, and a line with the id of each file moved to the trash. What's under
-a folder is replaced with what Drive lists there now (replace_under()) when it's refreshed."""
+What dirdelta changes in Drive is added to it as it goes (add(), trash()), so it stays up to date. What's
+under a folder is replaced with what Drive lists there now (replace_under()) when it's refreshed.
+
+FILE_LIST_CACHE is the format it was in before (and drivemeta.py's lines still are): one JSON line per file
+or folder, after a line with the root's id, and a line {TRASHED_ID_KEY: id} per file trashed. If it's
+there, it's imported, and kept as FILE_LIST_CACHE + '.bak'."""
 import collections
 import contextlib
 import datetime
 import json
 import os
 import posixpath
+import sqlite3
 import threading
 import time
 
@@ -207,7 +211,7 @@ def under(folder_id, left_out=()):
     """The metadata of what the cache has under the folder with folder_id (the files and folders in
     it, and in those, ...), each folder before what's in it, without what's under the folders whose
     ids are in left_out (nor them)"""
-    id_child_map, id_md_map, _ = _parsefile(FILE_LIST_CACHE)
+    id_child_map, id_md_map, _ = _parsefile()
     found = []
     stack = [folder_id]
     while stack:
@@ -221,51 +225,128 @@ def under(folder_id, left_out=()):
 
 def add(md):
     """Add a file or folder that was made in Drive (its metadata, as the Drive API gives it)"""
-    _append(md)
+    with _opened() as db:
+        _put(db, md)
 
 
 def trash(cloud_id):
     """Note that the file or folder with the id was moved to the trash"""
-    _append({TRASHED_ID_KEY: cloud_id})
+    with _opened() as db:
+        db.execute('DELETE FROM files WHERE id = ?', (cloud_id,))
 
 
 def replace_under(folder_id, items, my_drive_id):
     """Replace what the cache has under the folder with folder_id (the files and folders in it, and
     in those, ...) with items (their metadata, as the Drive API lists them, FILE_FIELDS), e.g. what
-    Drive lists under it now. The folder's own line stays. With no cache, make one, with My Drive's
-    root folder's id (my_drive_id) and items. Rewrites the whole cache, into a temporary file first,
-    which then takes its place, so it's never left half written (nor made half written)."""
-    tmp_path = FILE_LIST_CACHE + '.tmp'
-    # (Without the root's line, it can't be read: what's listed now is all it has)
-    if root_id() is None:
-        os.makedirs(os.path.dirname(FILE_LIST_CACHE), exist_ok=True)
-        with open(tmp_path, 'w') as new:
-            new.write(json.dumps({ROOT_ID_KEY: my_drive_id}) + '\n')
-            for md in items:
-                new.write(json.dumps(md) + '\n')
-        os.replace(tmp_path, FILE_LIST_CACHE)
-        return
-    id_child_map, _, _ = _parsefile(FILE_LIST_CACHE)
-    under = set()
-    stack = [folder_id]
-    while stack:
-        for child_id in id_child_map.get(stack.pop(), []):
-            under.add(child_id)
-            stack.append(child_id)
-    with open(FILE_LIST_CACHE) as old, open(tmp_path, 'w') as new:
-        for line in old:
-            # A trashed line stays: what's under the folder now comes after it, so it's in
-            if line.startswith('{') and json.loads(line).get('id') in under:
-                continue
-            new.write(line)
+    Drive lists under it now. The folder's own row stays. With no cache, or one that doesn't say
+    what My Drive is, make one, with My Drive's root folder's id (my_drive_id) and items. All at once:
+    it's never left half written."""
+    with _opened() as db:
+        if _root_of(db) is None:
+            db.execute('DELETE FROM files')
+            _set_root(db, my_drive_id)
+        stack = [folder_id]
+        while stack:
+            children = [row[0] for row in db.execute('SELECT id FROM files WHERE parent = ?', (stack.pop(),))]
+            db.executemany('DELETE FROM files WHERE id = ?', [(child,) for child in children])
+            stack.extend(children)
         for md in items:
-            new.write(json.dumps(md) + '\n')
-    os.replace(tmp_path, FILE_LIST_CACHE)
+            _put(db, md)
 
 
-def _append(line):
-    with open(FILE_LIST_CACHE, 'a') as f:
-        f.write(json.dumps(line) + '\n')
+def _database_path():
+    # Next to the cache's old file (wherever it is, e.g. in tests)
+    return os.path.splitext(FILE_LIST_CACHE)[0] + '.sqlite'
+
+
+def exists():
+    """Whether there's a cache at all (its old file, not imported yet, is one)"""
+    return os.path.exists(_database_path()) or os.path.exists(FILE_LIST_CACHE)
+
+
+def changed_at():
+    """When the cache was last changed (seconds since the epoch), or None if there's none"""
+    for path in (_database_path(), FILE_LIST_CACHE):
+        try:
+            return os.path.getmtime(path)
+        except OSError:
+            pass
+    return None
+
+
+def rows():
+    """The metadata of all the files and folders the cache has, whatever's under what"""
+    with _opened(is_writing=False) as db:
+        return [json.loads(row[0]) for row in db.execute('SELECT md FROM files ORDER BY rowid')]
+
+
+# Around the database, from any thread; and how many times each was changed by this process (a change
+# may leave its file's size and time as they were), for what's parsed of it (_parsefile())
+_lock = threading.RLock()
+_generations = collections.Counter()
+
+
+@contextlib.contextmanager
+def _opened(is_writing=True):
+    """The database (a connection, committing as it ends, all or nothing), its old file imported into
+    it first, if it's there. Raises DriveCacheError if it can't be read."""
+    with _lock:
+        try:
+            os.makedirs(os.path.dirname(_database_path()) or '.', exist_ok=True)
+            db = sqlite3.connect(_database_path())
+            try:
+                with db:
+                    db.execute('CREATE TABLE IF NOT EXISTS files (id TEXT PRIMARY KEY, parent TEXT, md TEXT NOT NULL)')
+                    db.execute('CREATE INDEX IF NOT EXISTS files_by_parent ON files (parent)')
+                    db.execute('CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT)')
+                    is_imported = _import_old_file(db)
+                    yield db
+            finally:
+                db.close()
+            # Only once it's in (cut off before, it's imported next time)
+            if is_imported:
+                os.replace(FILE_LIST_CACHE, FILE_LIST_CACHE + '.bak')
+                _generations[_database_path()] += 1
+        except sqlite3.DatabaseError as error:
+            raise DriveCacheError("The cloud files list cache can't be read (%s): remove %s, then run dirdelta "
+                                  "again and refresh it." % (error, _database_path()))
+        if is_writing:
+            _generations[_database_path()] += 1
+
+
+def _put(db, md):
+    parents = md.get('parents')
+    db.execute('INSERT OR REPLACE INTO files (id, parent, md) VALUES (?, ?, ?)',
+               (md['id'], parents[0] if parents else None, json.dumps(md)))
+
+
+def _set_root(db, root_id_):
+    db.execute('INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)', (ROOT_ID_KEY, root_id_))
+
+
+def _root_of(db):
+    row = db.execute('SELECT value FROM meta WHERE key = ?', (ROOT_ID_KEY,)).fetchone()
+    return row[0] if row else None
+
+
+def _import_old_file(db):
+    """Take in the cache's old file, if it's there, in the transaction that's open. Returns whether
+    it did."""
+    if not os.path.exists(FILE_LIST_CACHE):
+        return False
+    with open(FILE_LIST_CACHE) as old:
+        for line in old:
+            # Skip non-dict lines
+            if not line.startswith('{'):
+                continue
+            md = json.loads(line)
+            if ROOT_ID_KEY in md:
+                _set_root(db, md[ROOT_ID_KEY])
+            elif TRASHED_ID_KEY in md:
+                db.execute('DELETE FROM files WHERE id = ?', (md[TRASHED_ID_KEY],))
+            else:
+                _put(db, md)
+    return True
 
 
 class DriveCacheError(Exception):
@@ -334,7 +415,7 @@ def entries(inner_rootpath):
     path_name()); two entries can have the same one, since Drive allows same-named files. Raises
     DriveCacheError if there's no such folder, or if names under it can't be paths: same-named
     folders (or a folder and a file) in one folder, or a '/' in a name."""
-    id_child_map, id_md_map, root_cloud_id = _parsefile(FILE_LIST_CACHE)
+    id_child_map, id_md_map, root_cloud_id = _parsefile()
     inner_rootpath = '/' + '/'.join(component for component in inner_rootpath.split('/') if component)
     found = False
     problems = []
@@ -407,62 +488,51 @@ def _name_problems(folder_path, children):
 
 
 def root_id():
-    """My Drive's root folder's id, as the cache has it (its first lines), or None if it doesn't"""
+    """My Drive's root folder's id, as the cache has it, or None if it doesn't (or there's none)"""
+    if not exists():
+        return None
     try:
-        with open(FILE_LIST_CACHE) as f:
-            for line in f:
-                if line.startswith('{'):
-                    md = json.loads(line)
-                    if ROOT_ID_KEY in md:
-                        return md[ROOT_ID_KEY]
-                    return None
-    except (OSError, ValueError):
-        pass
-    return None
+        with _opened(is_writing=False) as db:
+            return _root_of(db)
+    except (OSError, DriveCacheError):
+        return None
 
 
-# The last parse of each cache file, by its file: (its (inode, size, mtime), what _parsefile() gave)
+# The last parse of the cache, by its database's path: (its generation, inode, size and mtime, what
+# _parsefile() gave)
 _parsed = {}
-_parsed_lock = threading.Lock()
 
 
-def _parsefile(filename):
+def _parsefile():
     """Read the cache into an id->children map, an id->metadata map and My Drive's root folder's id.
     What isn't in My Drive is left out (files shared with the user, which have no parents, or whose
-    parent folder the user can't see). Parsed again only once the file changed (by its inode, size
-    and modification time): what's given is shared, not to be changed."""
-    stat = os.stat(filename)
-    stamp = (stat.st_ino, stat.st_size, stat.st_mtime_ns)
-    with _parsed_lock:
-        if filename in _parsed and _parsed[filename][0] == stamp:
-            return _parsed[filename][1]
-        parsed = _parse(filename)
-        _parsed[filename] = (stamp, parsed)
-        return parsed
+    parent folder the user can't see). Read again only once it changed: what's given is shared, not to
+    be changed. Raises FileNotFoundError if there's no cache."""
+    if not exists():
+        raise FileNotFoundError("There's no cloud files list cache")
+    # Its old file imported first: that changes it
+    if os.path.exists(FILE_LIST_CACHE):
+        with _opened():
+            pass
+    with _opened(is_writing=False) as db:
+        path = _database_path()
+        stat = os.stat(path)
+        stamp = (_generations[path], stat.st_ino, stat.st_size, stat.st_mtime_ns)
+        if path in _parsed and _parsed[path][0] == stamp:
+            return _parsed[path][1]
+        parsed = _parse(db)
+    _parsed[path] = (stamp, parsed)
+    return parsed
 
 
-def _parse(filename):
+def _parse(db):
     id_child_map = collections.defaultdict(list)
     id_md_map = {}
-    root = None
-
-    with open(filename) as f:
-        for line in f:
-            # Skip non-dict lines
-            if not line.startswith('{'):
-                continue
-            md = json.loads(line)
-            if ROOT_ID_KEY in md:
-                root = md[ROOT_ID_KEY]
-            elif TRASHED_ID_KEY in md:
-                id_md_map.pop(md[TRASHED_ID_KEY], None)
-            else:
-                id_md_map[md['id']] = md
-    # Once all are read, since a line may trash what an earlier one listed
-    for cloud_id, md in id_md_map.items():
-        if md.get('parents'):
-            id_child_map[md['parents'][0]].append(cloud_id)
-
+    for cloud_id, parent, md in db.execute('SELECT id, parent, md FROM files ORDER BY rowid'):
+        id_md_map[cloud_id] = json.loads(md)
+        if parent is not None:
+            id_child_map[parent].append(cloud_id)
+    root = _root_of(db)
     if root is None:
         raise DriveCacheError("The cloud files list cache doesn't say which folder is My Drive: run "
                               "dirdelta again and refresh it.")

@@ -1,4 +1,3 @@
-import os.path
 import time
 
 from dirdelta import clouddirtree
@@ -16,7 +15,7 @@ OPTION_NO_REFRESH = 'Not now'
 def factory_interactive(rootpath):
     """The cloud tree at rootpath, from the cache, refreshed first (from Drive) if the user wants,
     or if there's no cache yet. None if the user chose nothing (or quit the question)."""
-    if not os.path.exists(drivecache.FILE_LIST_CACHE):
+    if not drivecache.exists():
         clouddirtree.refresh_cache(paths.path_in_cloud(rootpath))
     else:
         answer = _ask_whether_to_refresh(rootpath)

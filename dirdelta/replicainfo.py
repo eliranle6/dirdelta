@@ -3,7 +3,6 @@ log's last entry, the marks of how fresh what's known is (see freshness()), and 
 a Drive one's file list. For the start menu (choose_replicas.py), the sync's menu and the replicas
 dashboard (hashes_screen.py), so neither imports the other for it."""
 import datetime
-import os
 
 from dirdelta import drivecache
 from dirdelta import paths
@@ -55,10 +54,8 @@ def cache_time(path=None):
         updated = drivecache.updated(paths.path_in_cloud(path))
         if updated is not None:
             return datetime.datetime.fromtimestamp(updated)
-    try:
-        return datetime.datetime.fromtimestamp(os.path.getmtime(drivecache.FILE_LIST_CACHE))
-    except OSError:
-        return None
+    changed = drivecache.changed_at()
+    return None if changed is None else datetime.datetime.fromtimestamp(changed)
 
 
 def path_marks_help():

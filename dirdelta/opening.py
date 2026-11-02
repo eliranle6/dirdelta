@@ -16,7 +16,6 @@ import time
 
 from dirdelta import downloads
 from dirdelta import localdiskdirtree
-from dirdelta import paths
 from dirdelta import picker
 from dirdelta import text
 from dirdelta.text import format_size as _size

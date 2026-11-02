@@ -52,7 +52,7 @@ class CloudDirTreeTest(unittest.TestCase):
         patcher = mock.patch('dirdelta.drivecache.FILE_LIST_CACHE', self.cache)
         patcher.start()
         self.addCleanup(patcher.stop)
-        self.addCleanup(os.remove, self.cache)
+        self.addCleanup(helpers.remove_drive_cache, self.cache)
 
     def _relpaths(self, tree):
         return sorted(entry.relpath for entry in tree.iter_files())
@@ -215,7 +215,7 @@ class CloudDirTreeChangesTest(unittest.TestCase):
                         mock.patch('dirdelta.dryrun.DRYRUN', False)):
             patcher.start()
             self.addCleanup(patcher.stop)
-        self.addCleanup(os.remove, self.cache)
+        self.addCleanup(helpers.remove_drive_cache, self.cache)
         self.addCleanup(clouddirtree.drivecache.mark_fresh)
         self.addCleanup(shutil.rmtree, self.local_dir, ignore_errors=True)
         self.tree = clouddirtree.factory('cloud/mein')
@@ -334,8 +334,7 @@ class CloudDirTreeChangesTest(unittest.TestCase):
     def test_what_drive_says_of_a_new_file_is_kept(self):
         self.create_result = lambda body: {'id': 'x', 'mimeType': 'audio/mpeg', 'size': '3'}
         self.upload(['new.mp3'])
-        with open(self.cache) as f:
-            last = json.loads(f.readlines()[-1])
+        last = clouddirtree.drivecache.rows()[-1]
         # With the modification time it was made with
         self.assertTrue(last.pop('modifiedTime'))
         self.assertEqual(last, {'id': 'x', 'name': 'new.mp3', 'parents': ['mein'],
@@ -367,11 +366,9 @@ class CloudDirTreeChangesTest(unittest.TestCase):
 
     def test_a_failed_change_leaves_the_cache_as_it_was(self):
         self.service.files.return_value.update.return_value.execute.side_effect = _http_error()
-        with open(self.cache) as f:
-            before = f.read()
+        before = clouddirtree.drivecache.rows()
         self.tree.remove_files([self.tree.get_node('song.mp3').data])
-        with open(self.cache) as f:
-            self.assertEqual(f.read(), before)
+        self.assertEqual(clouddirtree.drivecache.rows(), before)
         # Nothing changed in Drive: not stale (asking for a refresh) either
         self.assertFalse(clouddirtree.drivecache.stale_paths())
 
@@ -848,16 +845,14 @@ class CloudDirTreeChangesTest(unittest.TestCase):
         self.assertEqual(len(self.relpaths(self.tree)), 5)
 
     def test_a_failed_refresh_leaves_the_tree_and_the_cache_as_they_were(self):
-        with open(self.cache) as f:
-            cache_before = f.read()
+        cache_before = clouddirtree.drivecache.rows()
         def listed(query):
             raise _http_error()
         self.listed = listed
         with self.assertRaises(HttpError):
             self.tree.refresh_from_drive()
         self.assertIn('album/track.mp3', self.tree)
-        with open(self.cache) as f:
-            self.assertEqual(f.read(), cache_before)
+        self.assertEqual(clouddirtree.drivecache.rows(), cache_before)
 
     def test_a_refresh_whose_names_cant_be_paths_leaves_the_tree_as_it_was(self):
         self.drive_has([_item('mein', 'mein', 'ROOT', FOLDER), _item('a1', 'a', 'mein', FOLDER),
@@ -897,11 +892,10 @@ class CloudDirTreeChangesTest(unittest.TestCase):
         self.assertEqual(clouddirtree.drivecache.stale_paths(), ['/mein'])
 
     def test_with_no_cache_a_refresh_makes_one(self):
-        os.remove(self.cache)
+        helpers.remove_drive_cache(self.cache)
         self.drive_has(self.DRIVE_NOW)
         clouddirtree.refresh_cache('/mein')
-        with open(self.cache) as f:
-            self.assertEqual(json.loads(f.readline()), {clouddirtree.drivecache.ROOT_ID_KEY: 'ROOT'})
+        self.assertEqual(clouddirtree.drivecache.root_id(), 'ROOT')
         self.assertEqual(self.relpaths(clouddirtree.factory('cloud/mein')), ['new/1.mp3', 'song.mp3'])
 
     def test_refresh_of_all_of_drive(self):

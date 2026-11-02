@@ -87,7 +87,7 @@ Developer tasks all live in the Makefile (`make` lists them): `test`,
 `clean`, `install`, `deploy`, `undeploy`. Keep new ones there too rather
 than adding shell scripts. `make clean`
 removes this copy's build output (and what older versions left in the repo), not the venv. It does not
-touch `~/.cache/dirman/files.txt` (the real Drive cache, refreshed a folder at a
+touch `~/.cache/dirman/files.sqlite` (the real Drive cache, `files.txt` imported once and kept as `files.txt.bak`, refreshed a folder at a
 time: a replica's, at the start or from the main menu, or one in it, with the file
 picker's `r`; with a `files.txt.stale` next to it, listing the folders where a
 change dirdelta made to Drive was cut off before it was added to the cache, and a
@@ -154,7 +154,7 @@ module:
 PYTHONPATH=tests bin/python -m unittest test_interactive_dir_sync -v
 ```
 
-Every module has a test file (729 tests, all passing as of 2026-11-01) except
+Every module has a test file (768 tests, all passing as of 2026-11-02) except
 the thin wiring in `main.py`/`dirsync_main.py`, covered only by running the
 app. Shared fakes:
 - `tests/helpers.py`: `scripted_option_picker` / `scripted_tree_picker` /
@@ -187,7 +187,7 @@ app. Shared fakes:
   `test_mounts` fakes `findmnt`, `lsblk`, `mount` (`subprocess.run`),
   `os.path.ismount` and `/dev/disk/by-uuid`.
 - Drive is never contacted: `test_clouddirtree` writes a JSON-lines cache to
-  a temp file, `test_driveapi` mocks `Credentials`/`build`, and the rest patch
+  a temp file (imported, as the old format is; `helpers.remove_drive_cache()` removes it), `test_driveapi` mocks `Credentials`/`build`, and the rest patch
   `driveapi.service()` with a fake (e.g. `test_clouddirtree`'s uploads, downloads
   and trashing).
 
@@ -221,6 +221,6 @@ Notes for whoever changes things next:
   in `dirdelta/dirtree.py`) — no hashing, no size/mtime comparison.
 - Local dirs are listed by `localscan.scan()`, which shells out to the real `find`
   binary (one run per listing) rather than using `os.walk`.
-- Cloud state is cached to disk (`~/.cache/dirman/files.txt`) rather than
+- Cloud state is cached to disk (`~/.cache/dirman/files.sqlite`) rather than
   queried live on every scan; refreshing a folder re-reads it from the Drive
   API.

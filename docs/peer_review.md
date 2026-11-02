@@ -134,7 +134,7 @@ then two more "view" trees, and juggles `_inbox_rel`, `_root_rel`, `_full()`, `_
 whole cache is parsed into a tree). A `move_to(other_tree, relpath, new_relpath)` on trees of the
 same backend (a local rename, or a Drive parents change) would let it keep just two trees.
 
-## 15. The Drive cache is re-parsed whole on every call (M, value grows with Drive size) — memoized 2026-11-01 (`_parsefile()`, by the file's inode, size and mtime); SQLite not done
+## 15. The Drive cache is re-parsed whole on every call (M, value grows with Drive size) — fixed 2026-11-02: memoized (`_parsefile()`), and in SQLite (`files.sqlite`, with an index on parent; `files.txt` imported once, and kept as `files.txt.bak`), so trashing deletes a row and nothing grows
 `drivecache.entries()` parses the full JSON-lines file; `count_under()` is `entries()` again;
 `refresh_cache()` calls `count_under()` then `replace_under()` (which parses, then re-reads and
 `json.loads` every line again); `refresh_from_drive()` and `factory()` parse again. Memoize the

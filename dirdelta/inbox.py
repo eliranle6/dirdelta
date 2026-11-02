@@ -194,7 +194,7 @@ class InboxSort(filescreen.FilesScreen):
             if not paths.is_cloud_path(path) and not os.path.isdir(path):
                 raise InboxError("%s is not a directory" % (path,))
         if any(paths.is_cloud_path(path) for path in (self.inbox_path, self.root_path)) and \
-                not os.path.exists(drivecache.FILE_LIST_CACHE):
+                not drivecache.exists():
             for path in (self.inbox_path, self.root_path):
                 if paths.is_cloud_path(path):
                     clouddirtree.refresh_cache(paths.path_in_cloud(path))

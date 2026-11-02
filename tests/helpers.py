@@ -32,6 +32,14 @@ downloads.DOWNLOADS_DIR = os.path.join(_downloads_dir, 'downloads')
 atexit.register(shutil.rmtree, _downloads_dir, ignore_errors=True)
 
 
+def remove_drive_cache(path):
+    """Remove the Drive cache that FILE_LIST_CACHE was pointed at path for: its database, and its old
+    file, imported or not"""
+    for file in (path, path + '.bak', os.path.splitext(path)[0] + '.sqlite'):
+        if os.path.exists(file):
+            os.remove(file)
+
+
 def answer_of(options, answer):
     """What picker.pick_option() returns of options when answer, a label (or, for a test that knows
     it, an option's id), is picked: the option with that label, or else one starting with it; answer
