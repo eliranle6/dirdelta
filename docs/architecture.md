@@ -307,8 +307,8 @@ Recommendations are given the sorted tree's dirs (at most `MAX_DIRS_GIVEN`,
 the shallowest; not the inbox's, if it's in it), each with a few of its
 files' names (`NAMES_PER_DIR`), and recommend a path (a dir and a name, the
 file's own or a better one in that dir's style), cleaned (`..` refused, the
-file's extension kept): `ai.recommended_path()` (a recommendation cached
-before, with only a dir, is the file's name there). After a move or copy, the
+file's extension kept): `ai.recommended_path()` (one cached without a
+path, by an older dirdelta, is asked for again). After a move or copy, the
 files' cache entries are copied to their new paths' keys (`ai.carry()`). Answers are cached by the file's path and size
 (recommendations also by the sorted tree), `AIError` if Claude can't be
 asked.

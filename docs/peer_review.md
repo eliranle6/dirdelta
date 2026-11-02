@@ -147,7 +147,7 @@ parent), which also stops the file from growing with `trashedId` lines forever.
 reached through a symlink is one replica to the hasher and two pairs to the history. Pick one
 (`realpath`, probably) in `paths.py`.
 
-## 17. Compatibility shims for old cache formats (S, cleanup)
+## 17. Compatibility shims for old cache formats (S, cleanup) — fixed 2026-11-02: all gone. A cache without its root line says to refresh; a recommendation without a path is asked for again. The ~4,500 Drive files with no SHA-1 get theirs when their folders are refreshed
 `drivecache._guess_root` (caches without a root line), stale markers without paths,
 `ai.recommended_path`'s `destination` key, the dashboard's "no SHA-1 (from before 29.10.2026)"
 note, and `drivecache.is_stale()` is unused. For a single-user tool, one forced refresh/migration

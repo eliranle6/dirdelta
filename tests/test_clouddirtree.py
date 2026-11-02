@@ -46,6 +46,7 @@ class CloudDirTreeTest(unittest.TestCase):
     def setUp(self):
         fd, self.cache = tempfile.mkstemp(prefix='dirstuff-cloud-cache-')
         with os.fdopen(fd, 'w') as f:
+            f.write(json.dumps({'myDriveRootId': 'ROOT'}) + '\n')
             for item in ITEMS:
                 f.write(json.dumps(item) + '\n')
         patcher = mock.patch('dirdelta.drivecache.FILE_LIST_CACHE', self.cache)
@@ -178,6 +179,7 @@ class CloudDirTreeChangesTest(unittest.TestCase):
     def setUp(self):
         fd, self.cache = tempfile.mkstemp(prefix='dirstuff-cloud-cache-')
         with os.fdopen(fd, 'w') as f:
+            f.write(json.dumps({'myDriveRootId': 'ROOT'}) + '\n')
             for item in ITEMS:
                 f.write(json.dumps(item) + '\n')
         # Drive's answer to each create (by what it's made with): a folder made with a generated id
@@ -297,7 +299,7 @@ class CloudDirTreeChangesTest(unittest.TestCase):
         # Both are in the cache
         relpaths = [entry.relpath for entry in clouddirtree.factory('cloud/mein').iter_files()]
         self.assertIn('1.mp3', relpaths)
-        self.assertFalse(clouddirtree.drivecache.is_stale())
+        self.assertFalse(clouddirtree.drivecache.stale_paths())
 
     def test_writing_a_file_there_makes_a_new_version_of_it(self):
         files = self.service.files.return_value
@@ -311,7 +313,7 @@ class CloudDirTreeChangesTest(unittest.TestCase):
         # In the cache, in its folder still
         tree = clouddirtree.factory('cloud/mein')
         self.assertEqual(tree.file_size('song.mp3'), 7)
-        self.assertFalse(clouddirtree.drivecache.is_stale())
+        self.assertFalse(clouddirtree.drivecache.stale_paths())
 
     def test_writing_a_file_that_isnt_there_makes_it(self):
         helpers.make_files(self.local_dir, ['last_update.txt'])
@@ -327,7 +329,7 @@ class CloudDirTreeChangesTest(unittest.TestCase):
         self.assertIn('a/b/new.mp3', relpaths)
         self.assertNotIn('song.mp3', relpaths)
         self.assertIsNotNone(clouddirtree.factory('cloud/mein').get_node('a/b'))
-        self.assertFalse(clouddirtree.drivecache.is_stale())
+        self.assertFalse(clouddirtree.drivecache.stale_paths())
 
     def test_what_drive_says_of_a_new_file_is_kept(self):
         self.create_result = lambda body: {'id': 'x', 'mimeType': 'audio/mpeg', 'size': '3'}
@@ -354,14 +356,14 @@ class CloudDirTreeChangesTest(unittest.TestCase):
                 mock.patch('dirdelta.messages.note_stopped'):
             self.upload(['1.mp3', '2.mp3'])
         self.assertNotIn('1.mp3', self.tree)
-        self.assertTrue(clouddirtree.drivecache.is_stale())
+        self.assertTrue(clouddirtree.drivecache.stale_paths())
         # And the next change, done, doesn't make it look fresh
         never.set()
         clouddirtree.messages.print_line.side_effect = None
         self.create_result = lambda body: {'id': 'ok'}
         self.upload(['other.mp3'])
         self.tree.remove_files([self.tree.get_node('song.mp3').data])
-        self.assertTrue(clouddirtree.drivecache.is_stale())
+        self.assertTrue(clouddirtree.drivecache.stale_paths())
 
     def test_a_failed_change_leaves_the_cache_as_it_was(self):
         self.service.files.return_value.update.return_value.execute.side_effect = _http_error()
@@ -371,7 +373,7 @@ class CloudDirTreeChangesTest(unittest.TestCase):
         with open(self.cache) as f:
             self.assertEqual(f.read(), before)
         # Nothing changed in Drive: not stale (asking for a refresh) either
-        self.assertFalse(clouddirtree.drivecache.is_stale())
+        self.assertFalse(clouddirtree.drivecache.stale_paths())
 
     def test_a_removed_files_size_is_forgotten_with_it(self):
         self.tree._infos['song.mp3'] = self.tree._info('song.mp3')._replace(size=123)
@@ -383,7 +385,7 @@ class CloudDirTreeChangesTest(unittest.TestCase):
         with mock.patch('dirdelta.dryrun.DRYRUN', True):
             self.upload(['new.mp3'])
             self.tree.remove_files([self.tree.get_node('song.mp3').data])
-        self.assertFalse(clouddirtree.drivecache.is_stale())
+        self.assertFalse(clouddirtree.drivecache.stale_paths())
 
     def test_upload_into_the_root(self):
         self.upload(['new.mp3'])
@@ -492,7 +494,7 @@ class CloudDirTreeChangesTest(unittest.TestCase):
                       self.lines())
         # The cache has it trashed, and what's in it
         self.assertIsNone(clouddirtree.factory('cloud/mein').get_node('album'))
-        self.assertFalse(clouddirtree.drivecache.is_stale())
+        self.assertFalse(clouddirtree.drivecache.stale_paths())
 
     def test_only_the_topmost_whole_folders_are_trashed(self):
         for relpath, cloud_id in (('a/1.mp3', 'one'), ('a/b/2.mp3', 'two'), ('a/b/c/3.mp3', 'three'),
@@ -587,7 +589,7 @@ class CloudDirTreeChangesTest(unittest.TestCase):
         found = {entry.relpath: entry.cloud_id for entry in clouddirtree.drivecache.entries('/mein')}
         self.assertEqual(found['album/moved.mp3'], 'song')
         self.assertNotIn('song.mp3', found)
-        self.assertFalse(clouddirtree.drivecache.is_stale())
+        self.assertFalse(clouddirtree.drivecache.stale_paths())
         self.assertIn('Move complete: moved 1 of 1 files in cloud/mein', self.lines())
 
     def test_a_folder_a_move_leaves_empty_is_trashed(self):

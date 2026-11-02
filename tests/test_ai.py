@@ -109,7 +109,7 @@ class AITest(unittest.TestCase):
         self.assertIn("clearly junk", answering.prompts[0][0])
         self.assertIn("1. f0.txt (size 10 bytes); already in the sorted tree, with the same contents, at docs/f0.txt",
                       answering.prompts[0][0])
-        self.assertIsNone(ai.recommended_path('f0.txt', found['f0.txt']))
+        self.assertIsNone(ai.recommended_path(found['f0.txt']))
         # A file found to be a copy since is asked about again
         with mock.patch('dirdelta.ai._run_query', side_effect=AssertionError('asked again')):
             ai.recommend(self.files(1), self.key, {}, 'root', {}, {'f0.txt': ['docs/f0.txt']})
@@ -125,10 +125,14 @@ class AITest(unittest.TestCase):
             ai.recommend(self.files(1), self.key, [], 'root', {})
         self.assertEqual(answering.models, ['claude-haiku-5-5', 'claude-haiku-5-5'])
 
-    def test_a_recommendation_cached_with_a_dir_only_is_the_files_name_there(self):
-        self.assertEqual(ai.recommended_path('in/a.txt', {'destination': 'docs'}), 'docs/a.txt')
-        self.assertEqual(ai.recommended_path('a.txt', {'destination': ''}), 'a.txt')
-        self.assertEqual(ai.recommended_path('a.txt', {'path': 'docs/b.txt'}), 'docs/b.txt')
+    def test_a_recommendations_path(self):
+        self.assertEqual(ai.recommended_path({'action': 'move', 'path': 'docs/b.txt'}), 'docs/b.txt')
+        self.assertIsNone(ai.recommended_path({'action': 'remove', 'path': ''}))
+
+    def test_a_recommendation_cached_without_a_path_is_asked_for_again(self):
+        ai._save_cache({'key a.txt': {'recommendations': {'root': {'destination': 'docs', 'reason': 'old'}}}})
+        files = self.files(1)
+        self.assertEqual(ai.cached(files, self.key, 'root')[1], {})
 
     def test_what_the_cache_has_goes_with_the_files(self):
         with mock.patch('dirdelta.ai._run_query', side_effect=_Answering(

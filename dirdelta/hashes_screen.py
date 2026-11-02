@@ -424,10 +424,7 @@ def _drive_lines(cloud):
         nr_sha256 += 'sha256' in known
     first = "  Drive's hashes, none read here: SHA-1 of %s of %s, SHA-256 of %s" % (
         "{:,}".format(nr_sha1), _files(nr_files), "{:,}".format(nr_sha256))
-    if nr_sha1 < nr_sha256:
-        note = ("  %s have no SHA-1 in the cache (from before 29.10.2026): reading its folders anew "
-                "from Drive gets them" % (_files(nr_sha256 - nr_sha1),))
-    elif nr_sha256 < nr_files:
+    if nr_sha256 < nr_files:
         note = "  %s have no hash: Google's own files (Docs, Sheets...)" % (_files(nr_files - nr_sha256),)
     else:
         note = "  All its files have Drive's hashes"

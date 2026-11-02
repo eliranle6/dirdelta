@@ -112,12 +112,7 @@ def stale_paths():
     if not os.path.exists(_stale_marker_path()):
         return []
     with open(_stale_marker_path()) as marker:
-        # A marker from before the paths were written down: all of it
-        return [line if line.startswith('/') else '/' for line in marker.read().splitlines()]
-
-
-def is_stale():
-    return bool(stale_paths())
+        return marker.read().splitlines()
 
 
 def _keep_stale_paths(keep):
@@ -234,17 +229,18 @@ def trash(cloud_id):
     _append({TRASHED_ID_KEY: cloud_id})
 
 
-def replace_under(folder_id, items, root_id):
+def replace_under(folder_id, items, my_drive_id):
     """Replace what the cache has under the folder with folder_id (the files and folders in it, and
     in those, ...) with items (their metadata, as the Drive API lists them, FILE_FIELDS), e.g. what
     Drive lists under it now. The folder's own line stays. With no cache, make one, with My Drive's
-    root folder's id (root_id) and items. Rewrites the whole cache, into a temporary file first,
+    root folder's id (my_drive_id) and items. Rewrites the whole cache, into a temporary file first,
     which then takes its place, so it's never left half written (nor made half written)."""
     tmp_path = FILE_LIST_CACHE + '.tmp'
-    if not os.path.exists(FILE_LIST_CACHE):
+    # (Without the root's line, it can't be read: what's listed now is all it has)
+    if root_id() is None:
         os.makedirs(os.path.dirname(FILE_LIST_CACHE), exist_ok=True)
         with open(tmp_path, 'w') as new:
-            new.write(json.dumps({ROOT_ID_KEY: root_id}) + '\n')
+            new.write(json.dumps({ROOT_ID_KEY: my_drive_id}) + '\n')
             for md in items:
                 new.write(json.dumps(md) + '\n')
         os.replace(tmp_path, FILE_LIST_CACHE)
@@ -284,8 +280,7 @@ def is_google_file(md):
 
 def hashes(md):
     """{algorithm (a hashlib name): hex} of the hashes of the file's contents that Drive gave (in
-    HASH_FIELDS' order: the fastest first); none for a folder or a Google file, and only SHA-256 in
-    the cache's lines from before SHA-1 was asked for"""
+    HASH_FIELDS' order: the fastest first); none for a folder or a Google file"""
     return {algorithm: md[field] for algorithm, field in HASH_FIELDS if field in md}
 
 
@@ -449,7 +444,6 @@ def _parsefile(filename):
 def _parse(filename):
     id_child_map = collections.defaultdict(list)
     id_md_map = {}
-    trashed_ids = set()
     root = None
 
     with open(filename) as f:
@@ -462,7 +456,6 @@ def _parse(filename):
                 root = md[ROOT_ID_KEY]
             elif TRASHED_ID_KEY in md:
                 id_md_map.pop(md[TRASHED_ID_KEY], None)
-                trashed_ids.add(md[TRASHED_ID_KEY])
             else:
                 id_md_map[md['id']] = md
     # Once all are read, since a line may trash what an earlier one listed
@@ -471,15 +464,6 @@ def _parse(filename):
             id_child_map[md['parents'][0]].append(cloud_id)
 
     if root is None:
-        root = _guess_root(id_child_map, id_md_map, trashed_ids)
+        raise DriveCacheError("The cloud files list cache doesn't say which folder is My Drive: run "
+                              "dirdelta again and refresh it.")
     return id_child_map, id_md_map, root
-
-
-def _guess_root(id_child_map, id_md_map, trashed_ids):
-    """My Drive's root folder's id, in a cache from before it was written down: the one folder that
-    has children but isn't listed itself (and wasn't trashed), if there's just one"""
-    unlisted = set(id_child_map).difference(id_md_map, trashed_ids)
-    if len(unlisted) != 1:
-        raise DriveCacheError("Can't tell which folder is My Drive in the cloud files list cache, "
-                              "which is from an older dirdelta: run dirdelta again and refresh it.")
-    return unlisted.pop()

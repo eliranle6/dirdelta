@@ -90,7 +90,7 @@ def recommend(files, cache_key, dirs, root_name, descriptions, copies=None, prog
     e.g. describe()'s), so it reads nothing. The files at anew are asked about again, as describe()'s."""
     copies = copies or {}
     def is_cached(entry):
-        recommendation = entry.get('recommendations', {}).get(root_name)
+        recommendation = _cached_recommendation(entry, root_name)
         # One made before the file was found to be a copy isn't of what's known now
         if recommendation and recommendation.get('copies', []) != sorted(copies.get(entry.get('_relpath'), [])):
             return None
@@ -111,7 +111,7 @@ def cached(files, cache_key, root_name):
         entry = cache.get(cache_key(file), {})
         if entry.get('description'):
             descriptions[file.relpath] = entry['description']
-        recommendation = entry.get('recommendations', {}).get(root_name)
+        recommendation = _cached_recommendation(entry, root_name)
         if recommendation:
             recommendations[file.relpath] = recommendation
     return descriptions, recommendations
@@ -233,15 +233,19 @@ def _ask_for_recommendations(files, dirs, root_name, descriptions, copies):
     return answers
 
 
-def recommended_path(relpath, recommendation):
-    """The path in the sorted tree that a recommendation (of the file at relpath) says it goes to:
-    its path, or (cached before it had one) its dir and the file's name; None if it says to remove
-    the file"""
-    if recommendation.get('action') == 'remove':
-        return None
-    if recommendation.get('path'):
-        return recommendation['path']
-    return '/'.join(part for part in (recommendation.get('destination', ''), os.path.basename(relpath)) if part)
+def recommended_path(recommendation):
+    """The path in the sorted tree that a recommendation says its file goes to; None if it says to
+    remove the file"""
+    return None if recommendation.get('action') == 'remove' else recommendation['path']
+
+
+def _cached_recommendation(entry, root_name):
+    """A cache entry's recommendation in the sorted tree root_name, if it has one that says what to
+    do (one that doesn't, from an older dirdelta, is asked for again)"""
+    recommendation = entry.get('recommendations', {}).get(root_name)
+    if recommendation and (recommendation.get('action') == 'remove' or recommendation.get('path')):
+        return recommendation
+    return None
 
 
 def _numbered(result, files):

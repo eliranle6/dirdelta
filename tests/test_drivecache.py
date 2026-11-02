@@ -13,6 +13,7 @@ class EntriesTest(unittest.TestCase):
         fd, self.cache = tempfile.mkstemp(prefix='dirstuff-drive-cache-')
         with os.fdopen(fd, 'w') as f:
             f.write('not a JSON line, skipped\n')
+            f.write(json.dumps({drivecache.ROOT_ID_KEY: 'ROOT'}) + '\n')
             for item in ITEMS:
                 f.write(json.dumps(item) + '\n')
         patcher = mock.patch('dirdelta.drivecache.FILE_LIST_CACHE', self.cache)
@@ -135,7 +136,7 @@ class StaleTest(unittest.TestCase):
         self.addCleanup(drivecache.mark_fresh)
 
     def test_fresh_at_first(self):
-        self.assertFalse(drivecache.is_stale())
+        self.assertFalse(drivecache.stale_paths())
         self.assertEqual(drivecache.stale_paths(), [])
 
     def test_marked_folders_are_stale_until_unmarked(self):
@@ -147,7 +148,7 @@ class StaleTest(unittest.TestCase):
         drivecache.unmark_stale('/a')
         self.assertEqual(drivecache.stale_paths(), ['/b'])
         drivecache.unmark_stale('/b')
-        self.assertFalse(drivecache.is_stale())
+        self.assertFalse(drivecache.stale_paths())
         self.assertFalse(os.path.exists(self.cache + '.stale'))
 
     def test_a_refresh_makes_what_it_read_fresh(self):
@@ -156,21 +157,21 @@ class StaleTest(unittest.TestCase):
         drivecache.mark_fresh('/a')
         self.assertEqual(drivecache.stale_paths(), ['/ab', '/c'])
         drivecache.mark_fresh()
-        self.assertFalse(drivecache.is_stale())
+        self.assertFalse(drivecache.stale_paths())
 
     def test_changing_is_stale_only_while_its_made_or_when_its_cut_off(self):
         with drivecache.changing('/a'):
             self.assertEqual(drivecache.stale_paths(), ['/a'])
-        self.assertFalse(drivecache.is_stale())
+        self.assertFalse(drivecache.stale_paths())
         # A failure changed nothing in Drive
         with self.assertRaises(ValueError), drivecache.changing('/a'):
             raise ValueError
-        self.assertFalse(drivecache.is_stale())
+        self.assertFalse(drivecache.stale_paths())
         # Ctrl-C may have changed it, unless what was done was settled first
         with self.assertRaises(KeyboardInterrupt), drivecache.changing('/a') as changes:
             changes.settled = True
             raise KeyboardInterrupt
-        self.assertFalse(drivecache.is_stale())
+        self.assertFalse(drivecache.stale_paths())
         with self.assertRaises(KeyboardInterrupt), drivecache.changing('/a'):
             raise KeyboardInterrupt
         self.assertEqual(drivecache.stale_paths(), ['/a'])
@@ -179,14 +180,6 @@ class StaleTest(unittest.TestCase):
             pass
         self.assertEqual(drivecache.stale_paths(), ['/a'])
 
-    def test_a_marker_from_before_the_paths_is_all_of_drive(self):
-        with open(self.cache + '.stale', 'w') as marker:
-            marker.write("dirdelta changed Google Drive after this cache was made\n")
-        self.assertEqual(drivecache.stale_paths(), ['/'])
-        drivecache.mark_fresh('/a')
-        self.assertTrue(drivecache.is_stale())
-        drivecache.mark_fresh('/')
-        self.assertFalse(drivecache.is_stale())
 
 
 FOLDER = drivecache.FOLDER_MIME_TYPE
@@ -270,14 +263,15 @@ class CacheContentsTest(unittest.TestCase):
             _item('song', 'song.mp3', 'ROOT'), shared, _item('orphan', 'orphan.mp3', 'UNSEEN')]),
             [('song.mp3', 'song', False)])
 
-    def test_an_old_cache_without_the_root_line_still_works(self):
-        self.assertEqual(self.entries('/', [_item('song', 'song.mp3', 'ROOT')], root_line=False),
-                         [('song.mp3', 'song', False)])
-
-    def test_an_old_cache_with_files_outside_my_drive_must_be_refreshed(self):
+    def test_a_cache_without_the_root_line_must_be_refreshed(self):
         with self.assertRaisesRegex(drivecache.DriveCacheError, 'refresh'):
-            self.entries('/', [_item('song', 'song.mp3', 'ROOT'), _item('orphan', 'orphan.mp3', 'UNSEEN')],
-                         root_line=False)
+            self.entries('/', [_item('song', 'song.mp3', 'ROOT')], root_line=False)
+
+    def test_refreshing_a_cache_without_the_root_line_makes_it_readable(self):
+        self.write([_item('old', 'old.mp3', 'ROOT')], root_line=False)
+        drivecache.replace_under('ROOT', [_item('song', 'song.mp3', 'ROOT')], 'ROOT')
+        self.assertEqual(drivecache.root_id(), 'ROOT')
+        self.assertEqual([entry.relpath for entry in drivecache.entries('/')][1:], ['song.mp3'])
 
     def test_same_named_folders_are_an_error(self):
         with self.assertRaisesRegex(drivecache.DriveCacheError, r'2 folders or files named /eliran/album'):
