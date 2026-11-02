@@ -73,8 +73,8 @@ class LocalReplica(dirtree.DirTree):
     def _dir_removed(self, relpath):
         """The (empty) dir at relpath was just removed"""
 
-    def _dir_moved(self, dirpath, new_dirpath):
-        """The dir at dirpath was just moved, with all in it, to new_dirpath"""
+    def _dir_moved(self, dirpath, new_dirpath, to):
+        """The dir at dirpath was just moved, with all in it, to new_dirpath in to (maybe this one)"""
 
     @contextlib.contextmanager
     def trashing(self):
@@ -234,9 +234,10 @@ class LocalReplica(dirtree.DirTree):
     def exists(self, relpath):
         return os.path.lexists(os.path.join(self._rootpath, relpath))
 
-    def _move_dir(self, dirpath, new_dirpath):
+    def _move_dir(self, dirpath, new_dirpath, to=None):
+        to = to or self
         path = os.path.join(self._rootpath, dirpath)
-        new_path = os.path.join(self._rootpath, new_dirpath)
+        new_path = os.path.join(to.fullpath(), new_dirpath)
         if os.path.lexists(new_path):
             messages.print_line("Skipped %s/: %s is there already" % (dirpath, new_dirpath), "yellow")
             return False
@@ -249,14 +250,15 @@ class LocalReplica(dirtree.DirTree):
         # Its files' hashes, under their new paths (between filesystems, a copy may have other times,
         # and then they're hashed again)
         hashcache.move(path, new_path)
-        self._dir_moved(dirpath, new_dirpath)
+        self._dir_moved(dirpath, new_dirpath, to)
         # The dirs it was in, if it leaves them empty, as a removal does
         self._remove_emptied_dirs([entries.FileEntry(os.path.basename(dirpath), dirpath, path)])
         return True
 
-    def _move_file(self, relpath, new_relpath):
+    def _move_file(self, relpath, new_relpath, to=None):
+        to = to or self
         path = os.path.join(self._rootpath, relpath)
-        new_path = os.path.join(self._rootpath, new_relpath)
+        new_path = os.path.join(to.fullpath(), new_relpath)
         if os.path.lexists(new_path):
             messages.print_line("Skipped %s: %s is there already" % (relpath, new_relpath), "yellow")
             return False
@@ -267,7 +269,11 @@ class LocalReplica(dirtree.DirTree):
             messages.print_line("Move failed: %s" % (error,), "red")
             return False
         hashcache.move(path, new_path)
-        self._file_moved(relpath, new_relpath)
+        if to is self:
+            self._file_moved(relpath, new_relpath)
+        else:
+            self._file_removed(relpath)
+            to._file_added(new_relpath)
         # As a removal does
         self._remove_emptied_dirs([entries.FileEntry(os.path.basename(relpath), relpath, path)])
         return True
@@ -288,8 +294,9 @@ class LocalReplica(dirtree.DirTree):
         self._file_removed(file_entry.relpath)
         return True
 
-    def _copy_within(self, relpath, new_relpath):
-        new_path = os.path.join(self._rootpath, new_relpath)
+    def _copy_within(self, relpath, new_relpath, to=None):
+        to = to or self
+        new_path = os.path.join(to.fullpath(), new_relpath)
         if os.path.lexists(new_path):
             messages.print_line("Skipped %s: %s is there already" % (relpath, new_relpath), "yellow")
             return False
@@ -299,7 +306,7 @@ class LocalReplica(dirtree.DirTree):
         except OSError as error:
             messages.print_line("Copy failed: %s" % (error,), "red")
             return False
-        self._file_added(new_relpath)
+        to._file_added(new_relpath)
         return True
 
     def fetch_file(self, relpath, local_path):
@@ -357,8 +364,11 @@ class LocalDiskDirTree(LocalReplica):
         if relpath in self:
             self.remove_node(relpath)
 
-    def _dir_moved(self, dirpath, new_dirpath):
-        self._move_subtree(dirpath, new_dirpath)
+    def _dir_moved(self, dirpath, new_dirpath, to):
+        if isinstance(to, LocalDiskDirTree):
+            self._move_subtree(dirpath, new_dirpath, to)
+        elif dirpath in self:
+            self.remove_node(dirpath)
 
 
 def _rename(path, new_path):

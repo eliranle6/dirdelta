@@ -178,45 +178,51 @@ class DirTree(object):
                     ('Remove', 'removed', 'removes', 'from ' + self.displayname() + self.REMOVED_TO),
                     lambda: nr_removed, len(file_entries), dry_where='from ' + self.displayname())
 
-    def move_files(self, moves):
-        """Move files within the tree: each of moves is (relpath, new_relpath); a whole dir's, as one
-        (see dir_moves()). Returns the moves done. A dry run changes nothing (and returns none)."""
+    def move_files(self, moves, to=None):
+        """Move files within the tree, or to another of its kind (to; a rename there too): each of
+        moves is (relpath, new_relpath); a whole dir's, as one (see dir_moves()). Returns the moves
+        done. A dry run changes nothing (and returns none)."""
         verb = _verb('moving')
         done = []
-        dir_moves, file_moves = self.dir_moves(moves)
+        to = to or self
+        dir_moves, file_moves = self.dir_moves(moves, to)
 
         def work():
             for dirpath, new_dirpath, its_moves in dir_moves:
                 messages.print_line("%s dir %s/ to %s/, with its %d files" % (verb, dirpath, new_dirpath,
                                                                              len(its_moves)))
-                if not dryrun.DRYRUN and self._move_dir(dirpath, new_dirpath):
+                if not dryrun.DRYRUN and self._move_dir(dirpath, new_dirpath, to):
                     done.extend(its_moves)
             for number, (relpath, new_relpath) in enumerate(file_moves, 1):
                 messages.print_line("%s %s to %s (%d out of %d)" % (verb, relpath, new_relpath, number,
                                                                     len(file_moves)))
-                if not dryrun.DRYRUN and self._move_file(relpath, new_relpath):
+                if not dryrun.DRYRUN and self._move_file(relpath, new_relpath, to):
                     done.append((relpath, new_relpath))
 
         def after():
             if done:
                 self._moved(done)
-        self._batch(work, ('Move', 'moved', 'moves', 'in ' + self.displayname()), lambda: len(done), len(moves),
-                    after=after)
+        self._batch(work, ('Move', 'moved', 'moves', self._where(to)), lambda: len(done), len(moves), after=after)
         return done
 
-    def copy_files_within(self, copies):
-        """Copy files within the tree: each of copies is (relpath, new_relpath). Returns the copies
-        done. A dry run changes nothing (and returns none)."""
+    def _where(self, to):
+        """Where a move or copy goes, to say it"""
+        return 'in ' + self.displayname() if to is self else 'to ' + to.displayname()
+
+    def copy_files_within(self, copies, to=None):
+        """Copy files within the tree, or to another of its kind (to): each of copies is (relpath,
+        new_relpath). Returns the copies done. A dry run changes nothing (and returns none)."""
         verb = _verb('copying')
         done = []
+        to = to or self
 
         def work():
             for number, (relpath, new_relpath) in enumerate(copies, 1):
                 messages.print_line("%s %s to %s (%d out of %d)" % (verb, relpath, new_relpath, number,
                                                                     len(copies)))
-                if not dryrun.DRYRUN and self._copy_within(relpath, new_relpath):
+                if not dryrun.DRYRUN and self._copy_within(relpath, new_relpath, to):
                     done.append((relpath, new_relpath))
-        self._batch(work, ('Copy', 'copied', 'copies', 'in ' + self.displayname()), lambda: len(done), len(copies))
+        self._batch(work, ('Copy', 'copied', 'copies', self._where(to)), lambda: len(done), len(copies))
         return done
 
     def _batch(self, work, words, nr_done, total, after=None, dry_where=None):
@@ -239,9 +245,9 @@ class DirTree(object):
         else:
             messages.print_line("%s %s: %s %d of %d files %s" % (noun, ended, past, nr_done(), total, where))
 
-    def _copy_within(self, relpath, new_relpath):
-        """Copy the file at relpath to new_relpath (where there's none), and add its node. Returns
-        whether it was copied (if not, says why)."""
+    def _copy_within(self, relpath, new_relpath, to=None):
+        """Copy the file at relpath to new_relpath here, or in to, another tree of its kind (where
+        there's none), and add its node. Returns whether it was copied (if not, says why)."""
         raise NotImplementedError("Can't copy files within %s" % (self.displayname(),))
 
     def _copy_files(self, files, source, starting, copied):
@@ -282,15 +288,17 @@ class DirTree(object):
         """Remove file_entry, and its node. Returns whether it was removed."""
         raise NotImplementedError("Can't remove files from %s" % (self.displayname(),))
 
-    def _move_file(self, relpath, new_relpath):
-        """Move the file at relpath to new_relpath (where there's none), and its node. Returns
-        whether it was moved (if not, says why)."""
+    def _move_file(self, relpath, new_relpath, to=None):
+        """Move the file at relpath to new_relpath here, or in to, another tree of its kind (where
+        there's none), and its node. Returns whether it was moved (if not, says why)."""
         raise NotImplementedError("Can't move files in %s" % (self.displayname(),))
 
-    def dir_moves(self, moves):
+    def dir_moves(self, moves, to=None):
         """Of moves (relpath, new_relpath), the ones that move a whole dir: [(dirpath, new_dirpath,
         its moves)], the topmost, each a dir all of whose files (files_under()) are moved into
-        new_dirpath at the same relative paths, where there's nothing yet; and the other moves"""
+        new_dirpath (in to, or here) at the same relative paths, where there's nothing yet; and the
+        other moves"""
+        to = to or self
         new_of = dict(moves)
         pairs = set()
         for relpath, new_relpath in moves:
@@ -302,12 +310,11 @@ class DirTree(object):
                 depth += 1
         found = []
         for dirpath, new_dirpath in sorted(pairs, key=lambda pair: (pair[0].count('/'), pair)):
-            if (any(_is_at_or_under(dirpath, other) for other, _, _ in found) or
-                    _is_at_or_under(new_dirpath, dirpath) or _is_at_or_under(dirpath, new_dirpath) or
-                    self._is_kept(dirpath)):
+            if (any(_is_at_or_under(dirpath, other) for other, _, _ in found) or self._is_kept(dirpath) or
+                    (to is self and (_is_at_or_under(new_dirpath, dirpath) or _is_at_or_under(dirpath, new_dirpath)))):
                 continue
             files = self.files_under(dirpath)
-            if (files and not self.exists(new_dirpath) and
+            if (files and not to.exists(new_dirpath) and
                     all(new_of.get(relpath) == new_dirpath + relpath[len(dirpath):] for relpath in files)):
                 found.append((dirpath, new_dirpath, [(relpath, new_of[relpath]) for relpath in files]))
         in_dirs = {relpath for _, _, its_moves in found for relpath, _ in its_moves}
@@ -329,14 +336,15 @@ class DirTree(object):
         """Whether there's a file or dir at relpath"""
         return relpath in self
 
-    def _move_dir(self, dirpath, new_dirpath):
-        """Move the dir at dirpath, and all in it, to new_dirpath (where there's nothing), and its
-        nodes. Returns whether it was moved (if not, says why)."""
+    def _move_dir(self, dirpath, new_dirpath, to=None):
+        """Move the dir at dirpath, and all in it, to new_dirpath here, or in to, another tree of its
+        kind (where there's nothing), and its nodes. Returns whether it was moved (if not, says why)."""
         raise NotImplementedError("Can't move dirs in %s" % (self.displayname(),))
 
-    def _move_subtree(self, dirpath, new_dirpath):
-        """Move the nodes at and under dirpath to new_dirpath (if the tree has them). Returns the
-        (relpath, new_relpath) of each."""
+    def _move_subtree(self, dirpath, new_dirpath, to=None):
+        """Move the nodes at and under dirpath to new_dirpath, here or in to (if this tree has them).
+        Returns the (relpath, new_relpath) of each."""
+        to = to or self
         if dirpath not in self:
             return []
         nodes = [(node.identifier, isinstance(node.data, entries.FileEntry))
@@ -347,9 +355,9 @@ class DirTree(object):
         for relpath, is_file in sorted(nodes, key=lambda node: node[0].count('/')):
             new_relpath = new_dirpath + relpath[len(dirpath):]
             if is_file:
-                self.add_file_by_relpath(new_relpath)
+                to.add_file_by_relpath(new_relpath)
             else:
-                self.create_dir_node_from_relpath_if_not_exists(new_relpath)
+                to.create_dir_node_from_relpath_if_not_exists(new_relpath)
             moved.append((relpath, new_relpath))
         return moved
 

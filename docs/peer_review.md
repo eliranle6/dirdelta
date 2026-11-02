@@ -127,7 +127,7 @@ After every action, callers must remember `dst_index.add(...)`, `src_index.remov
 "surely moved" previews. Have trees notify listeners of add/remove/move, or rebuild the
 name/size maps lazily (they're dict builds, cheap next to the hashing).
 
-## 14. The inbox's "one tree at the common ancestor" (L, moderate)
+## 14. The inbox's "one tree at the common ancestor" (L, moderate) — fixed 2026-11-02: a tree each, whatever they are; `move_files()`, `copy_files_within()` and what's under them take the tree it goes `to`: a rename, or a Drive parents change, between two trees. An inbox in the sorted tree is `_inbox_in_root`, excluded from its index and side tree
 To make moves renames, `InboxSort` builds a tree at the common ancestor of inbox and sorted tree,
 then two more "view" trees, and juggles `_inbox_rel`, `_root_rel`, `_full()`, `_relpath_in()`,
 `excluded=` on the index. For `cloud/a` and `cloud/b` the common tree is all of My Drive (the

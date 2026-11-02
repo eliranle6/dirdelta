@@ -30,18 +30,18 @@ class OpenerTest(unittest.TestCase):
         return [call.args[0][1] for call in self.popen.call_args_list]
 
     def local(self):
-        return opening.Opener(localdiskdirtree.LocalDiskDirTree(self.root, True), 'inbox')
+        return opening.Opener(localdiskdirtree.LocalDiskDirTree(os.path.join(self.root, 'inbox'), True))
 
     def drive(self, sizes):
         """A Drive tree with files in its folder 'in' of sizes ({name: size}), and its opener; its
         fetch_file writes a file's size in bytes, saying it got half of it first, and the opener's
         status and tags then go to self.midway"""
-        tree = clouddirtree.CloudDirTree('cloud/me')
+        tree = clouddirtree.CloudDirTree('cloud/me/in')
         for name, size in sizes.items():
-            tree.add_file_by_relpath('in/' + name)
-            tree._infos['in/' + name] = clouddirtree.FileInfo(size, None, {}, None, False)
+            tree.add_file_by_relpath(name)
+            tree._infos[name] = clouddirtree.FileInfo(size, None, {}, None, False)
         self.midway = []
-        opener = opening.Opener(tree, 'in')
+        opener = opening.Opener(tree)
 
         def fetch(relpath, local_path, progress=None):
             progress(tree.file_size(relpath) // 2)
@@ -96,7 +96,7 @@ class OpenerTest(unittest.TestCase):
     def test_a_drive_file_is_downloaded_first_with_its_progress_shown(self):
         opener = self.drive({'x.jpg': 4 * MB})
         opener.open(['x.jpg'], ['x.jpg'])
-        self.assertEqual(self.fetch_file.call_args.args[0], 'in/x.jpg')
+        self.assertEqual(self.fetch_file.call_args.args[0], 'x.jpg')
         self.assertEqual(self.midway, [("Downloading x.jpg to open it: 50% (2.0 MB of 4.0 MB)",
                                         {'x.jpg': opening.DOWNLOADING_TAG % (50,)})])
         path, = self.opened()

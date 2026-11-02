@@ -592,6 +592,47 @@ class CloudDirTreeChangesTest(unittest.TestCase):
         self.assertFalse(clouddirtree.drivecache.stale_paths())
         self.assertIn('Move complete: moved 1 of 1 files in cloud/mein', self.lines())
 
+    def test_a_move_to_another_tree_is_a_rename_in_drive_and_goes_with_whats_known(self):
+        other = clouddirtree.factory('cloud/other')
+        self.tree._infos['song.mp3'] = clouddirtree.FileInfo(5, None, {'sha1': 'S'}, None, False)
+        self.service.files.return_value.update.return_value.execute.return_value = {
+            'id': 'song', 'name': 'moved.mp3', 'mimeType': 'audio/mpeg', 'size': '5'}
+        self.assertEqual(self.tree.move_files([('song.mp3', 'new/moved.mp3')], other), [('song.mp3', 'new/moved.mp3')])
+        update = self.service.files.return_value.update.call_args.kwargs
+        self.assertEqual(update['fileId'], 'song')
+        self.assertEqual(update['body'], {'name': 'moved.mp3'})
+        self.assertEqual(update['removeParents'], 'mein')
+        # In other's new folder, made there
+        self.assertEqual(update['addParents'], other._cloud_ids['new'])
+        self.assertNotIn('song.mp3', self.tree)
+        self.assertIn('new/moved.mp3', other)
+        self.assertEqual(other.known_hash('new/moved.mp3', 'sha1'), 'S')
+        self.assertEqual(other._cloud_ids['new/moved.mp3'], 'song')
+        self.assertFalse(self.tree.has_file('song.mp3'))
+        self.assertEqual(self.tree.known_hash('song.mp3', 'sha1'), None)
+        self.assertFalse(clouddirtree.drivecache.stale_paths())
+        # The cache agrees
+        self.assertIn('new/moved.mp3', [entry.relpath for entry in clouddirtree.drivecache.entries('/other')])
+        self.assertNotIn('song.mp3', [entry.relpath for entry in clouddirtree.drivecache.entries('/mein')])
+
+    def test_a_whole_folder_moved_to_another_tree_is_one_request(self):
+        other = clouddirtree.factory('cloud/other')
+        moves = [('album/track.mp3', 'album/track.mp3')]
+        self.service.files.return_value.update.return_value.execute.return_value = {'id': 'album', 'name': 'album'}
+        self.assertEqual(self.tree.move_files(moves, other), moves)
+        self.assertEqual(self.service.files.return_value.update.call_count, 1)
+        self.assertEqual(self.service.files.return_value.update.call_args.kwargs['fileId'], 'album')
+        self.assertNotIn('album', self.tree)
+        self.assertEqual(other._cloud_ids['album/track.mp3'], 'track')
+
+    def test_a_copy_to_another_tree(self):
+        other = clouddirtree.factory('cloud/other')
+        self.service.files.return_value.copy.return_value.execute.return_value = {'id': 'copied', 'mimeType': 'audio/mpeg'}
+        self.assertEqual(self.tree.copy_files_within([('song.mp3', 'copy.mp3')], other), [('song.mp3', 'copy.mp3')])
+        self.assertIn('song.mp3', self.tree)
+        self.assertIn('copy.mp3', other)
+        self.assertEqual(self.service.files.return_value.copy.call_args.kwargs['body']['parents'], ['other'])
+
     def test_a_folder_a_move_leaves_empty_is_trashed(self):
         # album/ has only track.mp3
         self.move('album/track.mp3', 'track.mp3')

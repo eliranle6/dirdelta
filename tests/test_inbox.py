@@ -677,7 +677,7 @@ class InboxSortTest(unittest.TestCase):
             sorter = Sort('cloud/me/in', 'cloud/me/sorted')
             sorter.run()
         # As r does: its folder is the one read (see CloudDirTree.refresh_from_drive())
-        refresh.assert_called_once_with(sorter._inbox_tree, 'in/trip/c.jpg')
+        refresh.assert_called_once_with(sorter._inbox_tree, 'trip/c.jpg')
         options = helpers.labels_of(pick_option.call_args.args[0])
         self.assertEqual(options[-1], 'Read cloud/me/in/trip/ anew from Google Drive')
         # Back to the picker, as it was
@@ -902,11 +902,7 @@ class InboxSortTest(unittest.TestCase):
         """The sort with a tree each (as a local inbox and a Drive sorted tree have), both local
         here, so the copy-then-remove path is run without Drive"""
         sorter = Sort(self.inbox, self.root)
-        sorter.is_one_tree = False
-        sorter._inbox_tree = localdiskdirtree.LocalDiskDirTree(self.inbox, silent=True)
-        sorter._root_tree = localdiskdirtree.LocalDiskDirTree(self.root, silent=True)
-        sorter._inbox_rel = sorter._root_rel = ''
-        sorter._inbox_tree.keep_dirs([''])
+        sorter.is_same_kind = False
         return sorter
 
     def test_a_move_between_two_trees_is_a_copy_then_a_removal(self):
@@ -958,7 +954,7 @@ class InboxSortTest(unittest.TestCase):
             sorter = Sort(self.inbox, 'cloud/me')
             with self.assertRaises(inbox.drivecache.DriveCacheError):
                 Sort(self.inbox, 'cloud/nope')
-        self.assertFalse(sorter.is_one_tree)
+        self.assertFalse(sorter.is_same_kind)
         self.assertIsInstance(sorter._root_tree, clouddirtree.CloudDirTree)
         self.assertEqual(sorter._inbox_tree.fullpath(), self.inbox)
         self.assertEqual(sorter.root_path, 'cloud/me')

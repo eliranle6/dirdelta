@@ -24,6 +24,25 @@ class KeptHashesTest(unittest.TestCase):
         patcher.start()
         self.addCleanup(patcher.stop)
 
+    def test_moves_and_copies_to_another_replica(self):
+        other_root = tempfile.mkdtemp(prefix='dirdelta-other-', dir=os.path.dirname(self.root))
+        self.addCleanup(shutil.rmtree, other_root, ignore_errors=True)
+        other = localdiskdirtree.LocalReplica(other_root)
+        with mock.patch('dirdelta.dryrun.DRYRUN', False):
+            self.assertEqual(self.tree.move_files([('y', 'e/y2')], other), [('y', 'e/y2')])
+            self.assertEqual(self.tree.move_files([('d/x', 'd/x')], other), [('d/x', 'd/x')])
+            self.assertEqual(other.copy_files_within([('e/y2', 'copy')], self.tree), [('e/y2', 'copy')])
+        self.assertTrue(other.has_file('e/y2'))
+        self.assertFalse(self.tree.has_file('y'))
+        self.assertNotIn('y', self.tree)
+        self.assertTrue(other.has_file('d/x'))
+        self.assertFalse(os.path.exists(os.path.join(self.root, 'd')))
+        self.assertTrue(self.tree.has_file('copy'))
+        self.assertIn('copy', self.tree)
+        # Its hash goes with it
+        self.assertEqual(localdiskdirtree.hashcache.get(os.path.join(other_root, 'e', 'y2'), 'sha1'),
+                         hashlib.sha1(b'y').hexdigest())
+
     def test_a_moved_file_and_dir(self):
         self.assertTrue(self.tree._move_file('y', 'e/y2'))
         self.assertTrue(self.tree._move_dir('d', 'f'))

@@ -64,14 +64,12 @@ def _short_dir():
 
 
 class Opener(object):
-    """Opens files of tree (a DirTree), at relpaths under its root_rel (a dir's relpath in it, ''
-    its root), e.g. an inbox's in the tree it shares with the sorted tree. Drive is asked under
+    """Opens files of tree (a DirTree), by their relpaths. Drive is asked under
     drive_lock (a threading.Lock), if given, as the Drive service (shared with whatever else asks
     it) isn't thread-safe."""
 
-    def __init__(self, tree, root_rel='', drive_lock=None):
+    def __init__(self, tree, drive_lock=None):
         self._tree = tree
-        self._root_rel = root_rel
         self._drive_lock = drive_lock or threading.Lock()
         self._lock = threading.Lock()
         # The files to open, in turn ([(relpath, whether it's a file)]), and whether a worker is
@@ -101,9 +99,8 @@ class Opener(object):
             return []
         found = []
         for relpath in relpaths:
-            full = self._full(relpath)
-            if relpath in files and self._tree.cant_fetch(full) is None:
-                size = self._tree.file_size(full)
+            if relpath in files and self._tree.cant_fetch(relpath) is None:
+                size = self._tree.file_size(relpath)
                 if not downloads.is_downloaded(self._path(relpath), size):
                     found.append((relpath, size))
         return found
@@ -137,7 +134,7 @@ class Opener(object):
     # Opening
 
     def open_in_background(self, relpaths, files):
-        """Open the files at relpaths (relative to root_rel), on a thread of their own, after the
+        """Open the files at relpaths , on a thread of their own, after the
         ones already being opened. files: the relpaths that are files (the rest are dirs: a local
         one is opened too, in the file manager; a Drive one can't be). Returns the thread, or None
         if one was opening files already (and goes on with these)."""
@@ -217,9 +214,8 @@ class Opener(object):
         (unless it was), on this thread; None if it's one that can't be, or is bigger than max_size.
         Raises OSError if it can't be downloaded."""
         if not localdiskdirtree.is_local(self._tree):
-            full = self._full(relpath)
-            if self._tree.cant_fetch(full) is not None or (max_size is not None and
-                                                           (self._tree.file_size(full) or 0) > max_size):
+            if self._tree.cant_fetch(relpath) is not None or (max_size is not None and
+                                                           (self._tree.file_size(relpath) or 0) > max_size):
                 return None
         return self._local_path(relpath, True)
 
@@ -227,11 +223,10 @@ class Opener(object):
         """The local path to open relpath at: a Drive file's downloaded (its progress kept, for
         the status bar and its tag). Raises OSError if it can't be."""
         if localdiskdirtree.is_local(self._tree):
-            return os.path.join(self._tree.fullpath(), self._full(relpath))
+            return os.path.join(self._tree.fullpath(), relpath)
         if not is_file:
             raise OSError("a Google Drive folder can't be opened here")
-        full = self._full(relpath)
-        reason = self._tree.cant_fetch(full)
+        reason = self._tree.cant_fetch(relpath)
         if reason is not None:
             raise OSError(reason)
         state = self._states.get(relpath)
@@ -243,9 +238,9 @@ class Opener(object):
         def fetch(local_path):
             if state is not None:
                 state[0] = _DOWNLOADING
-            self._tree.fetch_file(full, local_path, progress=progress)
+            self._tree.fetch_file(relpath, local_path, progress=progress)
         with self._drive_lock:
-            return downloads.get(self._path(relpath), self._tree.file_size(full), fetch)
+            return downloads.get(self._path(relpath), self._tree.file_size(relpath), fetch)
 
     # What the picker shows
 
@@ -298,19 +293,14 @@ class Opener(object):
     # Paths
 
     def _size(self, relpath):
-        return self._tree.file_size(self._full(relpath)) or 0
+        return self._tree.file_size(relpath) or 0
 
     def _name(self, relpath):
         return os.path.basename(relpath) or os.path.basename(self._path()) or self._path()
 
-    def _full(self, relpath):
-        """relpath's relpath in the tree"""
-        return paths.join(self._root_rel, relpath)
-
     def _path(self, relpath=''):
         """relpath's path, the tree's (local, or a cloud path)"""
-        full = self._full(relpath)
-        return posixpath.join(self._tree.fullpath(), full) if full else self._tree.fullpath()
+        return posixpath.join(self._tree.fullpath(), relpath) if relpath else self._tree.fullpath()
 
 
 def confirm(opener, relpaths, files, label=None):

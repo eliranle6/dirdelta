@@ -1,4 +1,5 @@
 import collections
+import contextlib
 import concurrent.futures
 import os
 import posixpath
@@ -391,17 +392,30 @@ class CloudDirTree(dirtree.DirTree):
             return "one of several files of the same name in its folder"
         return None
 
-    def _move_file(self, relpath, new_relpath):
+    def _handed_over(self, relpath, new_relpath, to):
+        """What's kept of the file or folder at relpath is new_relpath's in to now (it was moved)"""
+        if to is self:
+            self._rekey(relpath, new_relpath)
+            return
+        if relpath in self._cloud_ids:
+            to._cloud_ids[new_relpath] = self._cloud_ids[relpath]
+        if relpath in self._infos:
+            to._infos[new_relpath] = self._infos[relpath]
+        self._forget(relpath)
+
+    def _move_file(self, relpath, new_relpath, to=None):
         """Move the file in Drive (keeping its id, history and sharing): rename it, and put it in
-        new_relpath's folder (made if needed) instead of its own; and note it in the cache"""
+        new_relpath's folder (in to, or this tree; made if needed) instead of its own; and note it in
+        the cache"""
+        to = to or self
         reason = self.cant_move(relpath)
         if reason is not None:
             messages.print_line("Skipped %s: %s" % (relpath, reason), "yellow")
             return False
         # Stale until the change is in the cache, in case it's cut off in the middle
         try:
-            with drivecache.changing(self.fullpath()):
-                parent_id = self._folder_id(os.path.dirname(new_relpath))
+            with _changing_both(self.fullpath(), to.fullpath()):
+                parent_id = to._folder_id(os.path.dirname(new_relpath))
                 old_parent_id = self._cloud_ids[os.path.dirname(relpath)]
                 md = driveapi.service().files().update(
                     fileId=self._cloud_ids[relpath], body={'name': os.path.basename(new_relpath)},
@@ -413,21 +427,22 @@ class CloudDirTree(dirtree.DirTree):
             messages.print_line("Move failed: %s" % (error,), "red")
             return False
         self.remove_node(relpath)
-        self.add_file_by_relpath(new_relpath)
-        self._rekey(relpath, new_relpath)
+        to.add_file_by_relpath(new_relpath)
+        self._handed_over(relpath, new_relpath, to)
         return True
 
-    def _move_dir(self, dirpath, new_dirpath):
+    def _move_dir(self, dirpath, new_dirpath, to=None):
         """Move the folder in Drive, as one (keeping its id, and what's in it): rename it, and put it
-        in new_dirpath's parent folder (made if needed) instead of its own; and note it in the
-        cache"""
+        in new_dirpath's parent folder (in to, or this tree; made if needed) instead of its own; and
+        note it in the cache"""
+        to = to or self
         if dirpath not in self._cloud_ids:
             messages.print_line("Skipped %s/: Drive's id of it isn't known" % (dirpath,), "yellow")
             return False
         # Stale until the change is in the cache, in case it's cut off in the middle
         try:
-            with drivecache.changing(self.fullpath()):
-                parent_id = self._folder_id(os.path.dirname(new_dirpath))
+            with _changing_both(self.fullpath(), to.fullpath()):
+                parent_id = to._folder_id(os.path.dirname(new_dirpath))
                 md = driveapi.service().files().update(
                     fileId=self._cloud_ids[dirpath], body={'name': os.path.basename(new_dirpath)},
                     addParents=parent_id, removeParents=self._cloud_ids[os.path.dirname(dirpath)],
@@ -436,23 +451,24 @@ class CloudDirTree(dirtree.DirTree):
         except HttpError as error:
             messages.print_line("Move failed: %s" % (error,), "red")
             return False
-        for relpath, new_relpath in self._move_subtree(dirpath, new_dirpath):
-            self._rekey(relpath, new_relpath)
+        for relpath, new_relpath in self._move_subtree(dirpath, new_dirpath, to):
+            self._handed_over(relpath, new_relpath, to)
         return True
 
-    def _copy_within(self, relpath, new_relpath):
-        """Copy the file in Drive (one request: Drive copies it), into new_relpath's folder (made if
-        needed), with its name; and note it in the cache"""
+    def _copy_within(self, relpath, new_relpath, to=None):
+        """Copy the file in Drive (one request: Drive copies it), into new_relpath's folder (in to, or
+        this tree; made if needed), with its name; and note it in the cache"""
+        to = to or self
         reason = self.cant_move(relpath)
         if reason is not None:
             messages.print_line("Skipped %s: %s" % (relpath, reason), "yellow")
             return False
-        if new_relpath in self:
+        if new_relpath in to:
             messages.print_line("Skipped %s: %s is there already" % (relpath, new_relpath), "yellow")
             return False
         try:
-            with drivecache.changing(self.fullpath()):
-                parent_id = self._folder_id(os.path.dirname(new_relpath))
+            with _changing_both(self.fullpath(), to.fullpath()):
+                parent_id = to._folder_id(os.path.dirname(new_relpath))
                 body = {'name': os.path.basename(new_relpath), 'parents': [parent_id]}
                 md = driveapi.service().files().copy(
                     fileId=self._cloud_ids[relpath], body=body,
@@ -462,11 +478,11 @@ class CloudDirTree(dirtree.DirTree):
         except HttpError as error:
             messages.print_line("Copy failed: %s" % (error,), "red")
             return False
-        self.add_file_by_relpath(new_relpath)
-        self._cloud_ids[new_relpath] = md['id']
+        to.add_file_by_relpath(new_relpath)
+        to._cloud_ids[new_relpath] = md['id']
         # The same contents (and so size, hashes, photo's date)
         if relpath in self._infos:
-            self._infos[new_relpath] = self._infos[relpath]
+            to._infos[new_relpath] = self._infos[relpath]
         return True
 
     def _moved(self, moves):
@@ -653,6 +669,15 @@ class CloudDirTree(dirtree.DirTree):
             messages.print_line("Remove failed: %s" % (error,), "red")
             return False
         return True
+
+
+@contextlib.contextmanager
+def _changing_both(folder_path, other_path):
+    """Around a change dirdelta makes in Drive under both folders (maybe the same one): see
+    drivecache.changing()"""
+    with drivecache.changing(folder_path):
+        with drivecache.changing(other_path):
+            yield
 
 
 def refresh_cache(folder_path):
