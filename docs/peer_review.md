@@ -98,7 +98,7 @@ the same Yes/No → "Are you sure?" removal confirmation, built separately (`_co
 `InteractiveDirSync.MAX_FILES_LISTED`). A shared `FilesScreen` base (loop, keys, confirmations,
 an `ActResult` type) would shrink both and keep their behaviour from drifting.
 
-## 10. `inbox._act()` is a 160-line table plus a 13-branch dispatch (M, moderate value)
+## 10. `inbox._act()` is a 160-line table plus a 13-branch dispatch (M, moderate value) — fixed 2026-11-02: an `_Action` per option (label, why not, verb, parts, `run`), so each one's text and behaviour are together, and no dispatch
 An `OrderedDict` of 13 `(label, why_not, verb, path_parts)` tuples, filtered, then matched back
 by label, then a second chain of `if action == ...` that re-derives the same per-action data.
 Small `Option` objects (label, enabled/why, verb, parts, `run()`) would keep each action's text

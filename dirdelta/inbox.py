@@ -125,6 +125,22 @@ def _of(count, total):
 _join = paths.join
 
 
+class _Action(object):
+    """What the inbox's action menu may do with the picked files: its label; why it can't be done
+    (None: it can); what it does (a verb, see VERB_COLORS) and where it puts them (parts, the path's,
+    see _destination_lines()); run(), which does it, returning what _act() does; and for the lines
+    below the menu, the files it's done to (else the picked ones), or what it says of itself (said:
+    (a verb, words)) instead"""
+    def __init__(self, label, why_not, verb, parts, run, acted_on=None, said=None):
+        self.label = label
+        self.why_not = why_not
+        self.verb = verb
+        self.parts = parts
+        self.run = run
+        self.acted_on = acted_on
+        self.said = said
+
+
 class InboxSort(object):
     """The inbox at inbox_path and the sorted tree at root_path (local dirs, or cloud paths)"""
     NOTHING = "Nothing: back to the files"
@@ -636,158 +652,158 @@ class InboxSort(object):
         typed = ("<a name you type>", YOUR_NAME)
         it = "it" if is_one else _of(len(recommended), len(relpaths))
         they = "it" if is_one else "the %s" % (count,)
-        # Each: its label, why it can't be (None: it can), what it does (a verb), and where it puts
-        # them (the path's parts). The ones that can't be done aren't offered, nor one that does the
-        # same as another (Claude's dir under the file's own name, when Claude keeps the name).
-        options = collections.OrderedDict([
-            (self.ASK_AI, ("Ask AI what to do with %s, and review its plan" % (they,), None, ASK, [])),
-            (self.DESCRIBE, ("Describe %s with Claude, while you go on (sends it their contents)" %
-                             ("it" if is_one else _of(len(undescribed), len(relpaths)),),
-                             None if undescribed else "described", ASK, [])),
+        def path_of(*parts):
+            return ''.join(text for text, _ in parts)
+
+        def to_a_dir(action):
+            return lambda: self._to_a_dir(action, relpaths, renamed, count)
+        actions = collections.OrderedDict([
+            (self.ASK_AI, _Action("Ask AI what to do with %s, and review its plan" % (they,), None, ASK, [],
+                                  lambda: self._ask_ai(relpaths, relpaths))),
+            (self.DESCRIBE, _Action("Describe %s with Claude, while you go on (sends it their contents)" %
+                                    ("it" if is_one else _of(len(undescribed), len(relpaths)),),
+                                    None if undescribed else "described", ASK, [],
+                                    lambda: self.describe_in_background(undescribed))),
             # As Ctrl-I: the ones Claude placed already are asked about anew (they may have changed)
-            (self.RECOMMEND, ("Ask Claude where %s go%s in %s, while you go on%s" %
-                              ("it" if is_one else _of(len(askable), len(relpaths)), "es" if is_one else "",
-                               self.root_path, (" (anew: %s before)" % ("asked" if is_one else
-                                                                        "%d asked" % (len(asked_before),)))
-                               if asked_before else ""),
-                              None if askable else "being asked", ASK, [])),
-            (self.MOVE_RECOMMENDED, ("Move %s to Claude's recommendation: %s" %
-                                     (it, ''.join(text for text, _ in [root, claudes_dir, claudes_name]))
-                                     if is_one or len(destinations) == 1 else
-                                     "Move %s to Claude's recommendations (%d dirs%s)" %
-                                     (it, len(destinations), ", %d renamed" % (len(renamed),) if renamed else ""),
-                                     None if recommended else "no recommendation", MOVE,
-                                     [root, claudes_dir, claudes_name])),
-            (self.MOVE_TO_CLAUDES_DIR, ("Move %s to Claude's dir, keeping %s name: %s" %
-                                        (it, "its" if is_one else "their",
-                                         ''.join(text for text, _ in [root, claudes_dir, own_name])),
-                                        None if renamed else "the same as Claude's recommendation", MOVE,
-                                        [root, claudes_dir, own_name])),
-            (self.MOVE_TO_CLAUDES_DIR_TYPED, ("Move it to Claude's dir, under a name you type: %s" %
-                                              (''.join(text for text, _ in [root, claudes_dir, typed]),),
-                                              None if is_one and recommended else "not one file with a recommendation",
-                                              MOVE, [root, claudes_dir, typed])),
-            (self.MOVE_TO, ("Move %s to a dir you pick: %s" % (they, ''.join(text for text, _ in [root, your_dir, own_name])),
-                            None, MOVE, [root, your_dir, own_name])),
-            (self.MOVE_TO_CLAUDES_NAMES, ("Move %s to a dir you pick, under Claude's %s: %s" %
-                                          (they, "name" if is_one else "names",
-                                           ''.join(text for text, _ in [root, your_dir, claudes_name])),
-                                          None if renamed else "no other name from Claude", MOVE,
-                                          [root, your_dir, claudes_name])),
-            (self.MOVE_TO_TYPED, ("Move it to a dir you pick, under a name you type: %s" %
-                                  (''.join(text for text, _ in [root, your_dir, typed]),),
-                                  None if is_one else "not one file", MOVE, [root, your_dir, typed])),
-            (self.MOVE_IN_INBOX, ("Move %s to another dir in the inbox, a dir you pick: %s" %
-                                  (they, ''.join(text for text, _ in [inbox_root, your_dir, own_name])),
-                                  None, MOVE, [inbox_root, your_dir, own_name])),
-            (self.COPY_TO, ("Copy %s to a dir you pick (keeping %s in the inbox): %s" %
-                            (they, "it" if is_one else "them", ''.join(text for text, _ in [root, your_dir, own_name])),
-                            None, COPY, [root, your_dir, own_name])),
-            (self.REMOVE_COPIES, ("Remove %s: %s in %s%s" %
-                                  ("it" if is_one else _of(len(removable), len(relpaths)),
-                                   "a copy of a file" if is_one else "copies of files", self.root_path, not_yet),
-                                  None if removable else "not a copy", REMOVE, [])),
-            (self.REMOVE_JUNK, ("Remove %s: %s like junk (to %s)" %
-                                ("it" if is_one else _of(len(junky), len(relpaths)),
-                                 "it looks" if is_one or len(junky) == 1 else "they look",
-                                 "Drive's trash" if self.inbox_is_cloud else "the trash"),
-                                None if junky else "not junk", REMOVE, [])),
+            (self.RECOMMEND, _Action("Ask Claude where %s go%s in %s, while you go on%s" %
+                                     ("it" if is_one else _of(len(askable), len(relpaths)), "es" if is_one else "",
+                                      self.root_path, (" (anew: %s before)" % ("asked" if is_one else
+                                                                               "%d asked" % (len(asked_before),)))
+                                      if asked_before else ""),
+                                     None if askable else "being asked", ASK, [],
+                                     lambda: self.ask_in_background(askable, anew=True))),
+            (self.MOVE_RECOMMENDED, _Action("Move %s to Claude's recommendation: %s" %
+                                            (it, path_of(root, claudes_dir, claudes_name))
+                                            if is_one or len(destinations) == 1 else
+                                            "Move %s to Claude's recommendations (%d dirs%s)" %
+                                            (it, len(destinations), ", %d renamed" % (len(renamed),) if renamed else ""),
+                                            None if recommended else "no recommendation", MOVE,
+                                            [root, claudes_dir, claudes_name],
+                                            lambda: self._approve(self.MOVE_TO, [(relpath, self._target(relpath))
+                                                                                 for relpath in recommended]))),
+            (self.MOVE_TO_CLAUDES_DIR, _Action("Move %s to Claude's dir, keeping %s name: %s" %
+                                               (it, "its" if is_one else "their", path_of(root, claudes_dir, own_name)),
+                                               None if renamed else "the same as Claude's recommendation", MOVE,
+                                               [root, claudes_dir, own_name],
+                                               lambda: self._to_claudes_dir(recommended))),
+            (self.MOVE_TO_CLAUDES_DIR_TYPED, _Action("Move it to Claude's dir, under a name you type: %s" %
+                                                     (path_of(root, claudes_dir, typed),),
+                                                     None if is_one and recommended else "not one file with a recommendation",
+                                                     MOVE, [root, claudes_dir, typed],
+                                                     lambda: self._to_claudes_dir(recommended, is_typed=True))),
+            (self.MOVE_TO, _Action("Move %s to a dir you pick: %s" % (they, path_of(root, your_dir, own_name)),
+                                   None, MOVE, [root, your_dir, own_name], to_a_dir(self.MOVE_TO))),
+            (self.MOVE_TO_CLAUDES_NAMES, _Action("Move %s to a dir you pick, under Claude's %s: %s" %
+                                                 (they, "name" if is_one else "names",
+                                                  path_of(root, your_dir, claudes_name)),
+                                                 None if renamed else "no other name from Claude", MOVE,
+                                                 [root, your_dir, claudes_name], to_a_dir(self.MOVE_TO_CLAUDES_NAMES))),
+            (self.MOVE_TO_TYPED, _Action("Move it to a dir you pick, under a name you type: %s" %
+                                         (path_of(root, your_dir, typed),),
+                                         None if is_one else "not one file", MOVE, [root, your_dir, typed],
+                                         to_a_dir(self.MOVE_TO_TYPED))),
+            (self.MOVE_IN_INBOX, _Action("Move %s to another dir in the inbox, a dir you pick: %s" %
+                                         (they, path_of(inbox_root, your_dir, own_name)),
+                                         None, MOVE, [inbox_root, your_dir, own_name],
+                                         lambda: self._to_a_dir_in_inbox(relpaths, count))),
+            (self.COPY_TO, _Action("Copy %s to a dir you pick (keeping %s in the inbox): %s" %
+                                   (they, "it" if is_one else "them", path_of(root, your_dir, own_name)),
+                                   None, COPY, [root, your_dir, own_name], to_a_dir(self.COPY_TO))),
+            (self.REMOVE_COPIES, _Action("Remove %s: %s in %s%s" %
+                                         ("it" if is_one else _of(len(removable), len(relpaths)),
+                                          "a copy of a file" if is_one else "copies of files", self.root_path, not_yet),
+                                         None if removable else "not a copy", REMOVE, [],
+                                         lambda: self._remove(removable, ["  %s: a copy of %s" % (relpath, ', '.join(
+                                             _join(self.root_path, copy) for copy in self._copies(relpath)[:2]))
+                                             for relpath in removable]), acted_on=removable)),
+            (self.REMOVE_JUNK, _Action("Remove %s: %s like junk (to %s)" %
+                                       ("it" if is_one else _of(len(junky), len(relpaths)),
+                                        "it looks" if is_one or len(junky) == 1 else "they look",
+                                        "Drive's trash" if self.inbox_is_cloud else "the trash"),
+                                       None if junky else "not junk", REMOVE, [],
+                                       lambda: self._remove(junky, ["  %s: %s" % (relpath, self._junk(relpath))
+                                                                    for relpath in junky], to_trash=True),
+                                       acted_on=junky)),
             # Not when it does what removing the copies does (all of them are), or the junk does
             # (all of them are, in Drive, where both go to its trash)
-            (self.REMOVE, ("Remove %s from %s" % (they, self.inbox_path),
-                           "the same as removing the copies" if len(removable) == len(relpaths) else
-                           "the same as removing the junk" if self.inbox_is_cloud and len(junky) == len(relpaths) else
-                           None, REMOVE, [])),
-            (self.EXPLORE, ("Explore it: what's in the zip", None if is_one and archives.is_archive(relpaths[0]) else
-                            "not a zip", OPEN, [])),
-            (self.OPEN, ("Open %s with %s program%s" %
-                         (they, "its" if is_one else "their", "" if is_one else "s"),
-                         None if len(relpaths) <= opening.MAX_OPENED else "too many", OPEN, [])),
-            (self.READ_ANEW, ("Read %s/ anew from Google Drive" % (_join(self.inbox_path, folder),),
-                              None if self.inbox_is_cloud else "not Drive's", READ, [])),
+            (self.REMOVE, _Action("Remove %s from %s" % (they, self.inbox_path),
+                                  "the same as removing the copies" if len(removable) == len(relpaths) else
+                                  "the same as removing the junk" if self.inbox_is_cloud and len(junky) == len(relpaths) else
+                                  None, REMOVE, [], lambda: self._remove(relpaths))),
+            (self.EXPLORE, _Action("Explore it: what's in the zip", None if is_one and archives.is_archive(relpaths[0]) else
+                                   "not a zip", OPEN, [], lambda: self._explore(relpaths[0], set(relpaths)),
+                                   said=(OPEN, " look in it, unpacking nothing"))),
+            (self.OPEN, _Action("Open %s with %s program%s" %
+                                (they, "its" if is_one else "their", "" if is_one else "s"),
+                                None if len(relpaths) <= opening.MAX_OPENED else "too many", OPEN, [],
+                                lambda: self._open(relpaths))),
+            (self.READ_ANEW, _Action("Read %s/ anew from Google Drive" % (_join(self.inbox_path, folder),),
+                                     None if self.inbox_is_cloud else "not Drive's", READ, [],
+                                     lambda: self.REFRESH_KEY, acted_on=[(folder or '.') + '/'])),
         ])
-        options = collections.OrderedDict((action, option) for action, option in options.items() if option[1] is None)
+        # The ones that can't be done aren't offered, nor one that does the same as another (Claude's
+        # dir under the file's own name, when Claude keeps the name)
+        offered = collections.OrderedDict((key, action) for key, action in actions.items() if action.why_not is None)
         # Similar actions together, a blank line between each kind (opening and reading anew, the
         # picker's keys, together)
         kinds = [(ASK,), (MOVE,), (COPY,), (REMOVE,), (OPEN, READ)]
         # Each in its verb's color, the parts saying where the files go in their sources' (as the
         # brackets below the menu), after its key, if a picker's key does it too
-        prefixes = picker.shortcut_prefixes([self.NOTHING] + [label for label, _, _, _ in options.values()],
-                                            {label: self.SHORTCUTS[action] for action, (label, _, _, _) in options.items()
-                                             if action in self.SHORTCUTS})
+        prefixes = picker.shortcut_prefixes([self.NOTHING] + [action.label for action in offered.values()],
+                                            {action.label: self.SHORTCUTS[key] for key, action in offered.items()
+                                             if key in self.SHORTCUTS})
         choices = picker.grouped([[picker.Option(self.NOTHING, self.NOTHING, prefixes[self.NOTHING] + self.NOTHING)]] + [
-            [picker.Option(action, label, prefixes[label] + _option_text(label, VERB_COLORS[verb], parts))
-             for action, (label, _, verb, parts) in options.items() if verb in kind] for kind in kinds])
-        lines = {action: self._destination_lines(verb, parts, relpaths, removable if action == self.REMOVE_COPIES else
-                                                junky if action == self.REMOVE_JUNK else
-                                                [(folder or '.') + '/'] if action == self.READ_ANEW else relpaths)
-                 for action, (label, _, verb, parts) in options.items()}
-        lines[self.ASK_AI] = [picker.segments([(" %s " % (ASK.upper(),), VERB_COLORS[ASK]),
-                                                           (" tell it what to do; it answers with a plan to review", None)])]
-        if self.EXPLORE in options:
-            lines[self.EXPLORE] = [picker.segments([(" %s " % (OPEN.upper(),), VERB_COLORS[OPEN]),
-                                                                (" look in it, unpacking nothing", None)])]
+            [picker.Option(key, action.label, prefixes[action.label] + _option_text(action.label, VERB_COLORS[action.verb], action.parts))
+             for key, action in offered.items() if action.verb in kind] for kind in kinds])
+        lines = {key: (self._said_lines(*action.said) if action.said else
+                       self._destination_lines(action.verb, action.parts, relpaths, action.acted_on or relpaths))
+                 for key, action in offered.items()}
+        lines[self.ASK_AI] = self._said_lines(ASK, " tell it what to do; it answers with a plan to review")
         header = ("%s, in %s: what to do with it?" % (name, posixpath.dirname(posixpath.join(self.inbox_path, relpaths[0])))
                   if is_one else "%s picked in %s. What to do with them?" % (count, self.inbox_path))
-        action = picker.pick_option(choices, header=header, title="What to do", label=LABEL, previews_below=lines)
-        if action == self.ASK_AI:
-            return self._ask_ai(relpaths, relpaths)
-        if action == self.EXPLORE:
-            self._explore(relpaths[0], set(relpaths))
+        chosen = offered.get(picker.pick_option(choices, header=header, title="What to do", label=LABEL, previews_below=lines))
+        return chosen.run() if chosen is not None else None
+
+    def _said_lines(self, verb, text):
+        """The lines below the menu for an option that says what it does in its own words"""
+        return [picker.segments([(" %s " % (verb.upper(),), VERB_COLORS[verb]), (text, None)])]
+
+    def _open(self, relpaths):
+        if opening.confirm(self._opener, relpaths, relpaths, LABEL):
+            self.open_in_background(relpaths, relpaths)
+
+    def _to_a_dir_in_inbox(self, relpaths, count):
+        destination = self._pick_dir('move', count, in_inbox=True)
+        return None if destination is None else self._move_in_inbox(relpaths, destination)
+
+    def _to_claudes_dir(self, recommended, is_typed=False):
+        """Move the recommended files to the dirs Claude says, each under its own name, or (is_typed:
+        one file) one the user types"""
+        plan = [(relpath, _join(os.path.dirname(self._target(relpath)), os.path.basename(relpath)))
+                for relpath in recommended]
+        if is_typed:
+            plan = self._typed_name(plan)
+        return None if plan is None else self._approve(self.MOVE_TO, plan)
+
+    def _to_a_dir(self, action, relpaths, renamed, count):
+        """Move or copy (action) the files to a dir the user chooses, under their own names, Claude's
+        (for the ones it renamed: MOVE_TO_CLAUDES_NAMES) or one typed (MOVE_TO_TYPED); offered first
+        next time, if they went"""
+        destination = self._choose_dir('copy' if action == self.COPY_TO else 'move', count)
+        if destination is None:
             return None
-        if action == self.OPEN:
-            if opening.confirm(self._opener, relpaths, relpaths, LABEL):
-                self.open_in_background(relpaths, relpaths)
-            return None
-        if action == self.READ_ANEW:
-            return self.REFRESH_KEY
-        if action == self.DESCRIBE:
-            self.describe_in_background(undescribed)
-            return None
-        if action == self.RECOMMEND:
-            self.ask_in_background(askable, anew=True)
-            return None
-        if action == self.MOVE_IN_INBOX:
-            destination = self._pick_dir('move', count, in_inbox=True)
-            return None if destination is None else self._move_in_inbox(relpaths, destination)
-        if action == self.MOVE_RECOMMENDED:
-            return self._approve(self.MOVE_TO, [(relpath, self._target(relpath)) for relpath in recommended])
-        if action in (self.MOVE_TO_CLAUDES_DIR, self.MOVE_TO_CLAUDES_DIR_TYPED):
-            plan = [(relpath, _join(os.path.dirname(self._target(relpath)), os.path.basename(relpath)))
-                    for relpath in recommended]
-        elif action in (self.MOVE_TO, self.COPY_TO, self.MOVE_TO_CLAUDES_NAMES, self.MOVE_TO_TYPED):
-            destination = self._choose_dir('copy' if action == self.COPY_TO else 'move', count)
-            if destination is None:
-                return None
-            # Claude's name, for the files it renamed
-            names = {relpath: os.path.basename(self._target(relpath) if relpath in renamed else relpath)
-                     for relpath in relpaths}
-            plan = [(relpath, _join(destination, names[relpath] if action == self.MOVE_TO_CLAUDES_NAMES
-                                    else os.path.basename(relpath)))
-                    for relpath in relpaths]
-        if action in (self.MOVE_TO_CLAUDES_DIR_TYPED, self.MOVE_TO_TYPED):
+        names = {relpath: os.path.basename(self._target(relpath) if relpath in renamed and action == self.MOVE_TO_CLAUDES_NAMES
+                                           else relpath) for relpath in relpaths}
+        plan = [(relpath, _join(destination, names[relpath])) for relpath in relpaths]
+        if action == self.MOVE_TO_TYPED:
             plan = self._typed_name(plan)
             if plan is None:
                 return None
-        if action in (self.MOVE_TO_CLAUDES_DIR, self.MOVE_TO_CLAUDES_DIR_TYPED):
-            return self._approve(self.MOVE_TO, plan)
-        if action in (self.MOVE_TO, self.COPY_TO, self.MOVE_TO_CLAUDES_NAMES, self.MOVE_TO_TYPED):
-            done = self._approve(self.COPY_TO if action == self.COPY_TO else self.MOVE_TO, plan)
-            if done and self._known_replicas is not None:
-                # Offered first next time
-                self._known_replicas.record_dir(self.root_path, destination)
-                replicas.save(self._known_replicas)
-            return done
-        if action == self.REMOVE:
-            return self._remove(relpaths)
-        if action == self.REMOVE_JUNK:
-            return self._remove(junky, ["  %s: %s" % (relpath, self._junk(relpath)) for relpath in junky],
-                                to_trash=True)
-        if action == self.REMOVE_COPIES:
-            return self._remove(removable, ["  %s: a copy of %s" % (relpath, ', '.join(
-                _join(self.root_path, copy) for copy in self._copies(relpath)[:2]))
-                for relpath in removable])
-        return None
+        done = self._approve(self.COPY_TO if action == self.COPY_TO else self.MOVE_TO, plan)
+        if done and self._known_replicas is not None:
+            self._known_replicas.record_dir(self.root_path, destination)
+            replicas.save(self._known_replicas)
+        return done
 
     def _destination_lines(self, verb, parts, relpaths, acted_on):
         """The lines below the menu for an option: what it does to the files (verb, see VERB_COLORS),
