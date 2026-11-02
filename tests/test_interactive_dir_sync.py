@@ -773,31 +773,6 @@ class ContextMenuTest(_TwoDirsTestCase):
         menu.assert_not_called()
 
 
-class ShownTest(unittest.TestCase):
-    def test_the_selection_or_the_closest_dir_still_shown(self):
-        missing = ['a/b/1', 'a/c/2']
-        self.assertEqual(interactive_dir_sync._shown('a/b/1', missing), 'a/b/1')
-        self.assertEqual(interactive_dir_sync._shown('a/b', missing), 'a/b')
-        self.assertEqual(interactive_dir_sync._shown('a/d/3', missing), 'a')
-        self.assertEqual(interactive_dir_sync._shown('z', missing), '')
-
-    def test_a_gone_one_is_followed_by_the_closest_file_left(self):
-        before = ['a/1', 'a/2', 'a/3', 'b/4', 'c/5']
-        shown = interactive_dir_sync._shown
-        # The next one
-        self.assertEqual(shown('a/2', ['a/1', 'a/3', 'b/4'], before), 'a/3')
-        # The one before, in its dir, rather than the next, in another
-        self.assertEqual(shown('a/3', ['a/1', 'b/4'], before), 'a/1')
-        # The last: the one before
-        self.assertEqual(shown('c/5', ['a/1', 'b/4'], before), 'b/4')
-        # A dir that's gone: from its first file's place
-        self.assertEqual(shown('b', ['a/1', 'c/5'], before), 'c/5')
-        # None left near: the closest dir
-        self.assertEqual(shown('a/2', [], before), '')
-
-
-
-
 class FindMissingTest(unittest.TestCase):
     def test_what_dirdelta_keeps_in_a_replica_isnt_one_of_its_files(self):
         roots = [tempfile.mkdtemp(prefix='dirdelta-missing-') for _ in range(2)]

@@ -31,6 +31,7 @@ from dirdelta import drivemeta
 from dirdelta import dryrun
 from dirdelta import elsewhere
 from dirdelta import entries
+from dirdelta import filescreen
 from dirdelta import hashcache
 from dirdelta import hashes_screen
 from dirdelta import hashing
@@ -141,7 +142,7 @@ class _Action(object):
         self.said = said
 
 
-class InboxSort(object):
+class InboxSort(filescreen.FilesScreen):
     """The inbox at inbox_path and the sorted tree at root_path (local dirs, or cloud paths)"""
     NOTHING = "Nothing: back to the files"
     # What the picker's keys do on the selected file, in the menu too: opening it (Ctrl-X), reading
@@ -169,12 +170,6 @@ class InboxSort(object):
     REMOVE = 'remove'
     REMOVE_COPIES = 'remove the copies'
     REMOVE_JUNK = 'remove the junk'
-    CONFIRM_NO = 'No'
-    CONFIRM_YES = 'Yes'
-    CONFIRM_SURE = 'Yes, remove them'
-    # Ctrl-R
-    REFRESH_KEY = '\x12'
-    REFRESH_KEY_NAME = 'Ctrl-R'
     # The dir picker's key that makes a new dir in the selected one (its name typed next)
     NEW_DIR_KEY = 'n'
     # The dir picker's keys that make a new dir beside the selected one, as vim's o and O (a dir
@@ -327,29 +322,9 @@ class InboxSort(object):
                 self._finish_describing()
                 return
             selected = chosen.selected
-            if chosen.key == contextmenu.KEY:
-                # With files picked, Enter's menu of them; else one of what the keys do
-                answer = '' if chosen.files else self._context_menu(selected, files)
-                if answer is None:
-                    picked = chosen.files
-                    continue
-                if answer == contextmenu.PICK:
-                    picked = contextmenu.under(files, selected)
-                    continue
-                if answer in (OPEN_KEY, DESCRIBE_KEY):
-                    self._on_key(answer, selected, chosen.files, files)
-                    picked = chosen.files
-                    continue
-                chosen = chosen._replace(key='' if answer == contextmenu.WHAT_TO_DO else answer,
-                                         files=contextmenu.under(files, selected)
-                                         if answer == contextmenu.WHAT_TO_DO else chosen.files)
-            if chosen.key == archive_screen.KEY:
-                self._explore(selected, files)
-                picked = chosen.files
-                continue
-            if chosen.key == hashes_screen.KEY:
-                hashes_screen.dashboard(self._trees(), self._known_replicas)
-                picked = chosen.files
+            chosen, left_picked = self._shared_key(chosen, files)
+            if chosen is None:
+                picked = left_picked
                 continue
             if chosen.key == renaming.PRESSED:
                 moved = self._rename_selected(selected)
@@ -373,7 +348,7 @@ class InboxSort(object):
                                     chosen.files or (contextmenu.under(files, selected) if selected else []))
             else:
                 done = self._act(chosen.files, selected)
-            if done == self.REFRESH_KEY:
+            if done is filescreen.READ_ANEW:
                 with self._drive_lock:
                     interactive_dir_sync.refresh_replica(self._inbox_tree, selected)
                 picked = chosen.files
@@ -387,7 +362,16 @@ class InboxSort(object):
                 job.scan_in_background()
             picked = [relpath for relpath in chosen.files if relpath not in done]
             left = [relpath for relpath in self._inbox_files()]
-            selected = _shown(selected, left, files)
+            selected = filescreen.shown_near(selected or '', left, files)
+
+    def _dashboard(self):
+        hashes_screen.dashboard(self._trees(), self._known_replicas)
+
+    def _menu_key(self, answer, selected, files):
+        if answer in (OPEN_KEY, DESCRIBE_KEY):
+            self._on_key(answer, selected, [], files)
+            return True
+        return False
 
     def _context_menu(self, selected, files):
         """What to do with nothing picked, on the picker's selected relpath (see contextmenu.py): what
@@ -612,7 +596,7 @@ class InboxSort(object):
         """Let the user choose what to do with the picked files at relpaths, and do it once they
         confirm. Returns the ones done (moved, copied, removed; in a dry run, the ones it would have
         done), or None if none were (or Claude was asked, or they were opened: nothing moved); or
-        REFRESH_KEY to read the folder of selected (the picker's selection: a file, or a dir; by
+        filescreen.READ_ANEW to read the folder of selected (the picker's selection: a file, or a dir; by
         default the first file's) anew from Drive, as the key does."""
         if selected is None:
             selected = relpaths[0]
@@ -739,7 +723,7 @@ class InboxSort(object):
                                 lambda: self._open(relpaths))),
             (self.READ_ANEW, _Action("Read %s/ anew from Google Drive" % (_join(self.inbox_path, folder),),
                                      None if self.inbox_is_cloud else "not Drive's", READ, [],
-                                     lambda: self.REFRESH_KEY, acted_on=[(folder or '.') + '/'])),
+                                     lambda: filescreen.READ_ANEW, acted_on=[(folder or '.') + '/'])),
         ])
         # The ones that can't be done aren't offered, nor one that does the same as another (Claude's
         # dir under the file's own name, when Claude keeps the name)
@@ -1309,8 +1293,7 @@ class InboxSort(object):
                 " (to Drive's trash)" if self.inbox_is_cloud and action == self.MOVE_TO else ""))
         if dryrun.DRYRUN:
             lines.append(dryrun.NOTE)
-        if picker.pick_option([self.CONFIRM_NO, self.CONFIRM_YES], header='\n'.join(lines), title="Sure?",
-                              label=LABEL) != self.CONFIRM_YES:
+        if not self._said_yes(lines, LABEL):
             return None
         moves = list(plan)
         # The cache's keys of each file, here and where it goes (the same size), while it's here
@@ -1369,15 +1352,14 @@ class InboxSort(object):
         if there:
             messages.show("Can't move them there",
                           ["%s/ has a file or dir of the same name already:" % (where,)] +
-                          ["  " + target for target in there[:interactive_dir_sync.InteractiveDirSync.MAX_FILES_LISTED]],
+                          ["  " + target for target in there[:filescreen.MAX_FILES_LISTED]],
                           dryrun.label(), 'red')
             return None
         lines = ["Move %s to %s/?" % (_files(len(plan)), where)]
-        lines += text.listed(["  " + relpath for relpath, _ in plan], interactive_dir_sync.InteractiveDirSync.MAX_FILES_LISTED)
+        lines += text.listed(["  " + relpath for relpath, _ in plan], filescreen.MAX_FILES_LISTED)
         if dryrun.DRYRUN:
             lines.append(dryrun.NOTE)
-        if picker.pick_option([self.CONFIRM_NO, self.CONFIRM_YES], header='\n'.join(lines), title="Sure?",
-                              label=LABEL) != self.CONFIRM_YES:
+        if not self._said_yes(lines, LABEL):
             return None
         # Stopped (Ctrl-C) before move_files() says (it says how far it got, if it's stopped in it)
         done = []
@@ -1399,7 +1381,7 @@ class InboxSort(object):
         messages.show("Not all were %s" % (what,),
                       ["%d of the %s couldn't be %s (they're still in %s):" % (
                           len(relpaths), _files(count), what, self.inbox_path)] +
-                      text.listed(["  " + relpath for relpath in relpaths], interactive_dir_sync.InteractiveDirSync.MAX_FILES_LISTED),
+                      text.listed(["  " + relpath for relpath in relpaths], filescreen.MAX_FILES_LISTED),
                       dryrun.label(), 'red')
 
     def _target(self, relpath):
@@ -1449,16 +1431,12 @@ class InboxSort(object):
         (Drive's go to its trash anyway), rather than for good."""
         lines = ["Remove %s from %s?" % (_files(len(relpaths)), self.inbox_path)]
         listed = listed or ["  %s" % (relpath,) for relpath in relpaths]
-        lines += text.listed(listed, interactive_dir_sync.InteractiveDirSync.MAX_FILES_LISTED)
+        lines += text.listed(listed, filescreen.MAX_FILES_LISTED)
         if dryrun.DRYRUN:
             lines.append(dryrun.NOTE)
-        if picker.pick_option([self.CONFIRM_NO, self.CONFIRM_YES], header='\n'.join(lines), title="Sure?",
-                              label=LABEL) != self.CONFIRM_YES:
+        if not self._said_yes(lines, LABEL):
             return None
-        sure = "Are you sure? %s will be removed from %s%s." % (
-            _files(len(relpaths)), self.inbox_path, " (to Drive's trash)" if self.inbox_is_cloud else
-            " (to the trash)" if to_trash else ", for good")
-        if picker.pick_option([self.CONFIRM_NO, self.CONFIRM_SURE], header=sure, label=LABEL, title="Sure?") != self.CONFIRM_SURE:
+        if not self._is_sure(len(relpaths), self.inbox_path, self.inbox_is_cloud, to_trash, LABEL):
             return None
         file_entries = self._entries(relpath for relpath in relpaths)
         # Once it's done (or stopped), Enter goes back to the picker, so what was removed can be read
@@ -1597,7 +1575,3 @@ def _relpath(path, root):
 _is_at_or_under = paths.is_at_or_under
 
 
-def _shown(relpath, files, before=None):
-    """relpath, or the closest one to it the picker of files still shows (see
-    interactive_dir_sync._shown(): before, the files shown before)"""
-    return interactive_dir_sync._shown(relpath or '', files, before)

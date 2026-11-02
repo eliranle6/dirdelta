@@ -89,7 +89,7 @@ Related: `copy_inner_entries_from_dirtree(dirtree, source)` takes a *DirTree* on
 `iter_files()` on it, so `InteractiveDirSync._copy` and `inbox._transfer` build one with
 `DirTree.from_file_entries()` just to pass it. Take a list of relpaths (and the source).
 
-## 9. Sync's and inbox's file screens are the same loop written twice (M, high value)
+## 9. Sync's and inbox's file screens are the same loop written twice (M, high value) — fixed 2026-11-02: `filescreen.FilesScreen`, with the keys they share (`_shared_key()`), the confirmations and `shown_near()`; `READ_ANEW`, not a key mixed into what `_act()` returns. Each keeps its own loop: what comes after an action really differs
 `InteractiveDirSync.browse()` and `InboxSort.run()`: pick files → `#` opens the dashboard → `r`
 refreshes from Drive → `_act()` → rescan → re-pick, reselect with `_shown()`. Both `_act()`s
 return `list | None | REFRESH_KEY` (a sentinel string mixed into a list return), and both have

@@ -16,6 +16,7 @@ from dirdelta import dirdiff
 from dirdelta import drivecache
 from dirdelta import elsewhere
 from dirdelta import entries
+from dirdelta import filescreen
 from dirdelta import dryrun
 from dirdelta import hashes_screen
 from dirdelta import hashing
@@ -90,7 +91,7 @@ def can_copy(src, dst):
 _files = text.files
 
 
-class InteractiveDirSync(object):
+class InteractiveDirSync(filescreen.FilesScreen):
     """The files in src that aren't in dst, which the user picks and then copies to dst, removes
     from src, or renames to match where the other replica has them (see elsewhere.py), again and
     again, until they're done."""
@@ -116,17 +117,6 @@ class InteractiveDirSync(object):
 
     # The action menu's first option, so it's the one selected at first: doing nothing
     NOTHING = "Nothing: back to the files"
-    # The confirmations' options: No first, so it's the one selected at first
-    CONFIRM_NO = 'No'
-    CONFIRM_YES = 'Yes'
-    # The second confirmation of a removal's
-    CONFIRM_SURE = 'Yes, remove them'
-    # How many of the picked files the confirmation lists
-    MAX_FILES_LISTED = 5
-    # The file picker's key that reads the selected folder anew from Drive, when a replica is Drive's
-    # Ctrl-R
-    REFRESH_KEY = '\x12'
-    REFRESH_KEY_NAME = 'Ctrl-R'
     # The key that removes what's selected in the tree beside the picker (dst's)
     SIDE_REMOVE_KEY = 'd'
 
@@ -217,29 +207,9 @@ class InteractiveDirSync(object):
             if chosen is None:
                 return
             selected = chosen.selected
-            if chosen.key == contextmenu.KEY:
-                # With files picked, Enter's menu of them; else one of what the keys do
-                answer = '' if chosen.files else self._context_menu(selected, missing, clouds)
-                if answer is None:
-                    picked = chosen.files
-                    continue
-                if answer == contextmenu.PICK:
-                    picked = contextmenu.under(missing, selected)
-                    continue
-                if answer == opening.KEY:
-                    self._opener.press([selected], files)
-                    picked = chosen.files
-                    continue
-                chosen = chosen._replace(key='' if answer == contextmenu.WHAT_TO_DO else answer,
-                                         files=contextmenu.under(missing, selected)
-                                         if answer == contextmenu.WHAT_TO_DO else chosen.files)
-            if chosen.key == archive_screen.KEY:
-                self._explore(selected, files)
-                picked = chosen.files
-                continue
-            if chosen.key == hashes_screen.KEY:
-                hashes_screen.dashboard([self._src, self._dst])
-                picked = chosen.files
+            chosen, left_picked = self._shared_key(chosen, missing)
+            if chosen is None:
+                picked = left_picked
                 continue
             key = chosen.key
             # What the action menu's action was (Copy and Remove change only the files they do)
@@ -258,7 +228,7 @@ class InteractiveDirSync(object):
                 still_missing = set(missing)
                 picked = [moved.get(relpath, relpath) for relpath in chosen.files
                           if moved.get(relpath, relpath) in still_missing]
-                selected = _shown(new_relpath, missing)
+                selected = filescreen.shown_near(new_relpath, missing)
                 continue
             if key == aiplan_screen.KEY:
                 # About the picked ones, or with none picked, all of them: the AI picks (and it's told
@@ -269,7 +239,7 @@ class InteractiveDirSync(object):
                 done = self._act_in_dst(chosen.side_selected, chosen.side_pressed == self.SIDE_REMOVE_KEY)
             elif not key:
                 done = self._act(chosen.files, selected)
-                if done == self.REFRESH_KEY:
+                if done is filescreen.READ_ANEW:
                     key = self.REFRESH_KEY
             if key == self.REFRESH_KEY:
                 done = []
@@ -304,13 +274,23 @@ class InteractiveDirSync(object):
             still_missing = set(missing)
             done = set(done)
             picked = [relpath for relpath in chosen.files if relpath in still_missing and relpath not in done]
-            selected = _shown(selected, missing, shown_before)
+            selected = filescreen.shown_near(selected, missing, shown_before)
 
-    def _context_menu(self, selected, missing, clouds):
+    def _dashboard(self):
+        hashes_screen.dashboard([self._src, self._dst])
+
+    def _menu_key(self, answer, selected, files):
+        if answer == opening.KEY:
+            self._opener.press([selected], set(files))
+            return True
+        return False
+
+    def _context_menu(self, selected, missing):
         """What to do with nothing picked, on the picker's selected relpath (see contextmenu.py): what
         its keys do, as the key's returned, a contextmenu.PICK or WHAT_TO_DO, or None"""
         name = contextmenu.selected_name(selected)
         is_file = selected in set(missing)
+        clouds = [replica for replica in (self._src, self._dst) if isinstance(replica, clouddirtree.CloudDirTree)]
         entries = [contextmenu.Entry(None, "Choose what to do with %s" % (name,), contextmenu.WHAT_TO_DO),
                    contextmenu.Entry('Space', "Pick %s" % (name,), contextmenu.PICK),
                    contextmenu.Entry(aiplan_screen.KEY_NAME, "Ask AI what to do with all the files, and review its plan",
@@ -425,7 +405,7 @@ class InteractiveDirSync(object):
     def _act(self, relpaths, selected=None):
         """Let the user choose what to do with the picked files at relpaths, and do it once they
         confirm. Returns the ones done (in a dry run, the ones it would have done), or None if the
-        user chose nothing (or didn't confirm, or opened them); or REFRESH_KEY to read the folder of
+        user chose nothing (or didn't confirm, or opened them); or filescreen.READ_ANEW to read the folder of
         selected (the picker's selection, a file or a dir; by default the first file) anew from
         Drive, as the key does."""
         if selected is None:
@@ -491,7 +471,7 @@ class InteractiveDirSync(object):
                 self._opener.open_in_background(relpaths, relpaths)
             return None
         if action == self.READ_ANEW:
-            return self.REFRESH_KEY
+            return filescreen.READ_ANEW
         if action in (self.RENAME_IN_DST, self.RENAME_IN_SRC):
             moves = self._renames(action, may_be_there)
             return None if moves is None else self._rename(action, moves)
@@ -702,19 +682,10 @@ class InteractiveDirSync(object):
                   replica.removal_notes(relpaths))
         if dryrun.DRYRUN:
             lines.append(dryrun.NOTE)
-        answer = picker.pick_option([self.CONFIRM_NO, self.CONFIRM_YES], header='\n'.join(lines),
-                                    label=self.LABELS[action], title="Sure?")
-        if answer != self.CONFIRM_YES:
+        if not self._said_yes(lines, self.LABELS[action]):
             return False
-        if action == self.REMOVE:
-            sure = ["Are you sure? %s will be removed from %s%s." %
-                    (_files(len(relpaths)), replica.displayname(),
-                     " (to Drive's trash)" if not is_local(replica) else
-                     " (to the trash)" if to_trash else ", for good")]
-            answer = picker.pick_option([self.CONFIRM_NO, self.CONFIRM_SURE], header='\n'.join(sure),
-                                        label=self.LABELS[action], title="Sure?")
-            return answer == self.CONFIRM_SURE
-        return True
+        return action != self.REMOVE or self._is_sure(len(relpaths), replica.displayname(), not is_local(replica),
+                                                      to_trash, self.LABELS[action])
 
     def _copy(self, files):
         # It adds what it copies to dst's tree, so the next diff doesn't list them
@@ -727,43 +698,3 @@ class InteractiveDirSync(object):
 def _exists(replica, relpath):
     """Whether the replica has a file or dir at relpath"""
     return os.path.lexists(os.path.join(replica.fullpath(), relpath)) if is_local(replica) else replica.exists(relpath)
-
-
-def _shown(relpath, missing, before=None):
-    """relpath (a picker's selection), if the picker of missing (files) still shows it; else the
-    closest file to where it was among before (the files shown then, in their order): the next
-    one still shown, or the one before, whichever is in a closer dir (the next, of two as close); or
-    else the closest dir above it still shown ('' the root)"""
-    if before and not _is_shown(relpath, missing):
-        prefix = relpath + '/' if relpath else ''
-        # Where it was: its place, or a dir's first file's
-        place = next((index for index, path in enumerate(before) if path == relpath or path.startswith(prefix)), None)
-        if place is not None:
-            left = set(missing)
-            after = next((path for path in before[place:] if path in left), None)
-            earlier = next((path for path in reversed(before[:place]) if path in left), None)
-            found = [path for path in (after, earlier) if path is not None]
-            if found:
-                return max(found, key=lambda path: _common_depth(path, relpath) * 2 + (path == after))
-    while relpath:
-        prefix = relpath + '/'
-        if any(path == relpath or path.startswith(prefix) for path in missing):
-            return relpath
-        relpath = os.path.dirname(relpath)
-    return relpath
-
-
-def _is_shown(relpath, missing):
-    """Whether the picker of missing (files) shows relpath: one of them, or a dir of some"""
-    prefix = relpath + '/'
-    return not relpath or any(path == relpath or path.startswith(prefix) for path in missing)
-
-
-def _common_depth(relpath, other):
-    """How many dirs the two relpaths are both in"""
-    depth = 0
-    for part, other_part in zip(relpath.split('/')[:-1], other.split('/')[:-1]):
-        if part != other_part:
-            break
-        depth += 1
-    return depth
