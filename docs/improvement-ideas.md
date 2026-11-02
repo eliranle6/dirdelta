@@ -235,6 +235,34 @@ Ordered by how easy they are, easiest first (2026-10-30).
        laptop's (`/mnt/win` is the laptop's Windows drive), so the replicas it serves may
        differ.
 
+## Refactors (no behavior change)
+
+What the 2026-10-31 peer review's fixes left out (2026-11-02), easiest first. None was found to be
+unneeded, and none has been measured or tried: each is left for the reason it gives.
+
+- **Diff a local dir with a Drive replica by dirdiff** (the review's #12). A sync with Drive still
+  builds the local side's tree in Python (`LocalDiskDirTree`); dirdiff could diff the dir against a
+  list of Drive's paths on stdin, and the local side would be a `LocalReplica` too. Left out as
+  optional, not as slower: for two local dirs of 119k files, dirdiff took ~1s against ~6s for the
+  Python trees (`dirdiff.py`), so it's likely faster here too. To be timed before it's done.
+- **Sizes and times from the last scan** (#7). `LocalReplica.file_size()` and `modified_time()` could
+  read `file_stamps` rather than `lstat` per call. Left out because the stamps go stale as files
+  change, and a wrong size is worse than a syscall: it's only no change of behavior if they're kept
+  up to date.
+- **`hashing.py` without its screens' parts** (#18). Its tags, bar and status texts could move out of
+  the thread pool's module, to `hashes_screen.py`. Left there (2026-11-01) since they say its jobs'
+  states, and every picker uses them.
+- **Options with ids in the simple menus too** (#1). The label screen's, the mount's, the log entry's
+  and the replica's "Where is it?" still use plain strings: they compare constants or look answers
+  up in a dict, so renaming a label can't break them. Only for all the menus to be alike.
+- **One loop for both file screens** (#9). `filescreen.FilesScreen` has what `InteractiveDirSync.browse()`
+  and `InboxSort.run()` share, the keys, the confirmations and where the selection goes, but each has
+  its own loop: what comes after an action differs (a sync's files are what the other replica lacks,
+  an inbox's what's left in it). Merging them seemed riskier than it's worth.
+- **One JSON-lines protocol with treepicker** (#20), over one socket, instead of `--updates`,
+  `--preview`, `--selection`, `--notify-fd` and two temp files. Cleaner, but a big change on both sides
+  for little to see, by the review's own judgment.
+
 ## Parked: performance
 
 Decided 2026-10-25: speed is good enough, so no more work on it until decided otherwise. A sync
