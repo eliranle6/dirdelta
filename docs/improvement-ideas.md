@@ -279,7 +279,8 @@ unneeded, and none has been measured or tried: each is left for the reason it gi
 
 Decided 2026-10-25: speed is good enough, so no more work on it until decided otherwise. A sync
 of a 111k-file diff shows its file picker ~0.75s after Copy is chosen (dirdiff 0.56s, then
-treepicker's load 0.15s). Ideas measured then, if it's ever reopened:
+treepicker's load 0.15s). Ideas measured then, if it's ever reopened (dirdiff scanned with find then;
+since 2026-11-02 it's `readdir()`, about 40% faster than find, so these need measuring anew):
 - dirdiff builds two full sorted trees, where a hash set of the other dir's paths and the first
   dir's sorted find output would do (find alone takes 0.17s of its 0.56s): ~0.3s.
 - dirdiff printing the missing files as find lists them, piped into treepicker, so its tree is

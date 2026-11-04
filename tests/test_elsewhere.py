@@ -1,7 +1,10 @@
+import collections
 import hashlib
 import os
 import shutil
 import tempfile
+import threading
+import time
 import unittest
 from unittest import mock
 
@@ -550,6 +553,115 @@ class KeptUpToDateTest(unittest.TestCase):
         tree.rescan()
         tree.move_files([('a/x', 'c/z')])
         self.assertEqual(list(index.files_named('z')), ['c/z'])
+
+
+class _ChangingDuringAListing(dirtree.DirTree):
+    """A replica in which something changes while it's listed, after what's listed is read"""
+    def __init__(self, listed, during):
+        super(_ChangingDuringAListing, self).__init__('/x')
+        self.listed = listed
+        self.during = during
+        self.sizes = {}
+
+    def files_by_name(self, progress=None):
+        found = collections.defaultdict(list)
+        for relpath, size in self.listed.items():
+            found[os.path.basename(relpath)].append((relpath, size))
+        during, self.during = self.during, None
+        if during is not None:
+            during()
+        return found
+
+    def file_size(self, relpath):
+        return self.sizes.get(relpath)
+
+
+class ChangesDuringABuildTest(unittest.TestCase):
+    def built(self, listed, during):
+        replica = _ChangingDuringAListing(listed, None)
+        index = elsewhere.Index(replica)
+        replica.during = lambda: during(index, replica)
+        index.build()
+        return index
+
+    def test_a_file_made_during_it_is_in_it(self):
+        index = self.built({'a/x': 1}, lambda index, _: index.add('a/new', 2))
+        self.assertEqual(index.files_named('new'), {'a/new': 2})
+        self.assertEqual(sorted(index.relpaths()), ['a/new', 'a/x'])
+
+    def test_a_file_removed_during_it_isnt_in_it(self):
+        index = self.built({'a/x': 1, 'a/y': 1}, lambda index, _: index.remove('a/x'))
+        self.assertEqual(index.relpaths(), ['a/y'])
+        self.assertEqual(index.names_in('a'), {'y'})
+
+    def test_a_file_moved_during_it_is_where_it_went_with_its_size(self):
+        index = self.built({'a/x': 7}, lambda index, _: index.move('a/x', 'b/z'))
+        self.assertEqual(index.files_named('z'), {'b/z': 7})
+        self.assertEqual(index.files_named('x'), {})
+
+    def test_one_moved_before_the_listing_saw_it_keeps_its_size(self):
+        index = self.built({'b/z': 7}, lambda index, _: index.move('a/x', 'b/z'))
+        self.assertEqual(index.files_named('z'), {'b/z': 7})
+
+    def test_invalidated_during_it_its_listed_anew(self):
+        replica = _ChangingDuringAListing({'old': 1}, None)
+        index = elsewhere.Index(replica)
+
+        def during():
+            replica.listed = {'new': 2}
+            index.invalidate()
+        replica.during = during
+        index.build()
+        self.assertEqual(index.relpaths(), ['new'])
+
+    def test_stopped_it_isnt_built_and_the_changes_are_dropped(self):
+        replica = _ChangingDuringAListing({'a': 1}, None)
+        index = elsewhere.Index(replica)
+
+        def during():
+            index.add('b', 1)
+            raise KeyboardInterrupt()
+        replica.during = during
+        with self.assertRaises(KeyboardInterrupt):
+            index.build()
+        self.assertFalse(index.is_built())
+        index.build()
+        self.assertEqual(index.relpaths(), ['a'])
+
+    def test_two_threads_build_it_once(self):
+        replica = _ChangingDuringAListing({'a': 1}, None)
+        calls = []
+        real = replica.files_by_name
+        replica.files_by_name = lambda progress=None: (calls.append(1), time.sleep(0.05), real(progress))[2]
+        index = elsewhere.Index(replica)
+        threads = [threading.Thread(target=index.build) for _ in range(4)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
+        self.assertEqual(len(calls), 1)
+
+    def test_reading_while_files_change_on_another_thread(self):
+        replica = _ChangingDuringAListing({'f%d' % (number,): 1 for number in range(200)}, None)
+        index = elsewhere.Index(replica)
+        index.build()
+        errors = []
+        is_done = threading.Event()
+
+        def read():
+            try:
+                while not is_done.is_set():
+                    index.relpaths()
+                    index.names_in('')
+            except RuntimeError as error:
+                errors.append(error)
+        reader = threading.Thread(target=read)
+        reader.start()
+        for number in range(3000):
+            index.add('new%d' % (number,), 1)
+        is_done.set()
+        reader.join()
+        self.assertEqual(errors, [])
 
 
 class HashedReplicasTest(unittest.TestCase):

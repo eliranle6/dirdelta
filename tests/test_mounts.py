@@ -160,10 +160,41 @@ class MountsTest(unittest.TestCase):
         return show
 
     def test_one_that_comes_up_read_only_says_so_and_why(self):
-        show = self.mount_coming_up('ro,relatime')
+        with mock.patch('dirdelta.mounts._is_windows_hibernated', return_value=True):
+            show = self.mount_coming_up('ro,relatime')
         title, lines = show.call_args.args[:2]
         self.assertEqual(title, 'Mounted read-only: /mnt/win')
         self.assertTrue(any('powercfg /h off' in line for line in lines))
+        self.assertIn('still copy', lines[0])
+
+    def hibernation_file(self, start):
+        target = os.path.join(self.tmpdir, 'win')
+        os.makedirs(target, exist_ok=True)
+        with open(os.path.join(target, mounts.HIBERNATION_FILE), 'wb') as f:
+            f.write(start)
+        return WIN._replace(target=target)
+
+    def test_windows_is_hibernated_by_its_files_start(self):
+        self.assertTrue(mounts._is_windows_hibernated(self.hibernation_file(b'HIBR and more')))
+        self.assertTrue(mounts._is_windows_hibernated(self.hibernation_file(b'hibr')))
+        self.assertFalse(mounts._is_windows_hibernated(self.hibernation_file(b'\0\0\0\0')))
+        self.assertFalse(mounts._is_windows_hibernated(WIN._replace(target=os.path.join(self.tmpdir, 'none'))))
+        # Another filesystem's file isn't Windows' session
+        self.assertFalse(mounts._is_windows_hibernated(self.hibernation_file(b'HIBR')._replace(fstype='ext4')))
+
+    def test_read_only_without_hibernation_doesnt_blame_windows(self):
+        lines = mounts.read_only_reason(self.hibernation_file(b'\0\0\0\0'))
+        self.assertFalse(any('Windows' in line for line in lines))
+        self.assertTrue(any('remount,rw' in line for line in lines))
+
+    def test_the_reason_of_a_dir_already_read_only(self):
+        hibernated = self.hibernation_file(b'HIBR')._replace(vfs_options='ro,relatime')
+        with mock.patch('dirdelta.mounts.current_mount', return_value=hibernated):
+            self.assertTrue(any('powercfg' in line for line in mounts.read_only_lines_of(hibernated.target + '/x')))
+            self.assertEqual(mounts.read_only_lines_of('cloud/x'), [])
+        # Read-write: it's only its permissions, if it's read-only
+        with mock.patch('dirdelta.mounts.current_mount', return_value=hibernated._replace(vfs_options='rw')):
+            self.assertEqual(mounts.read_only_lines_of(hibernated.target), [])
 
     def test_one_that_comes_up_read_write_says_nothing_more(self):
         self.mount_coming_up('rw,relatime').assert_not_called()

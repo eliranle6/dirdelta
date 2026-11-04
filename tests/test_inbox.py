@@ -427,6 +427,52 @@ class InboxSortTest(unittest.TestCase):
         self.assertTrue(any(option.startswith('Copy it') for option in options))
         self.assertFalse(any(option.startswith(('Move', 'Remove')) for option in options))
 
+    def read_only_root(self):
+        patcher = mock.patch('dirdelta.interactive_dir_sync.is_writable', side_effect=lambda tree: tree.fullpath() != os.path.realpath(self.root))
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def test_into_a_read_only_sorted_tree_nothing_is_offered(self):
+        self.read_only_root()
+        self.sort([['a.txt'], None], [NOTHING])
+        self.assertIn('no files can go into it', self.show.call_args_list[0].args[1][0])
+        options = helpers.labels_of(self.pick_option.call_args.args[0])
+        self.assertFalse(any(option.startswith('Copy') for option in options))
+        self.assertEqual([option for option in options if option.startswith('Move')],
+                         [option for option in options if 'in the inbox' in option or 'another dir in the inbox' in option])
+        self.assertTrue(any(option.startswith('Remove') for option in options))
+
+    def test_enter_in_the_side_tree_of_a_read_only_inbox_copies(self):
+        self.read_only_inbox()
+        sorter = Sort(self.inbox, self.root)
+        with mock.patch.object(sorter, '_approve', return_value=None) as approve:
+            sorter._move_to_side(['a.txt'], 'docs')
+        self.assertEqual(approve.call_args.args[0], Sort.COPY_TO)
+
+    def test_enter_in_a_read_only_side_tree_says_so(self):
+        self.read_only_root()
+        sorter = Sort(self.inbox, self.root)
+        with mock.patch.object(sorter, '_approve') as approve:
+            self.assertIsNone(sorter._move_to_side(['a.txt'], 'docs'))
+        approve.assert_not_called()
+        self.assertEqual(self.show.call_args.args[0], 'Read-only')
+
+    def test_the_ais_plan_is_only_of_what_can_be_done(self):
+        sorter = Sort(self.inbox, self.root)
+        names = lambda: [action.name for action in sorter._ai_task(['a.txt']  , []).actions]
+        self.assertEqual(len(names()), 4)
+        with mock.patch('dirdelta.interactive_dir_sync.is_writable', side_effect=lambda tree: tree.fullpath() != os.path.realpath(self.inbox)):
+            self.assertEqual(names(), [Sort.COPY_TO])
+        with mock.patch('dirdelta.interactive_dir_sync.is_writable', side_effect=lambda tree: tree.fullpath() != os.path.realpath(self.root)):
+            self.assertEqual(names(), [Sort.MOVE_IN_INBOX, Sort.REMOVE])
+
+    def test_with_both_read_only_the_ai_isnt_asked(self):
+        sorter = Sort(self.inbox, self.root)
+        with mock.patch('dirdelta.interactive_dir_sync.is_writable', return_value=False), \
+                mock.patch('dirdelta.aiplan_screen.ask') as ask:
+            self.assertIsNone(sorter._ask_ai(['a.txt']))
+        ask.assert_not_called()
+
     def test_a_copy_from_a_read_only_inbox_goes_through(self):
         self.read_only_inbox()
         self.sort([['a.txt'], None], ['Copy it to a dir you pick', YES], dirs=[os.path.join(self.root, 'docs')], is_dry_run=False)

@@ -83,7 +83,15 @@ class Index(object):
         # A local replica's hashing job, once there's one, and what it hashed that isn't in yet
         # (it's sent from its threads); and the relpaths whose hashes came since take_new()
         self._job = None
-        self._lock = threading.Lock()
+        # Around what changes its maps, and what reads them on other threads (a replica's changes
+        # come on the thread making them, its previews are worked out on another); and one build at
+        # a time, with the changes that come meanwhile, to apply to what it found
+        self._lock = threading.RLock()
+        self._build_lock = threading.Lock()
+        self._is_building = False
+        self._changes_meanwhile = []
+        # How many times it was invalidated: a build begun before the last isn't of what's there
+        self._nr_invalidated = 0
         self._pending = []
         self._new = set()
         # How many files it has (once built), and the ones with a hash known, by algorithm
@@ -95,9 +103,29 @@ class Index(object):
 
     def build(self, progress=None):
         """Build it, unless it is: from the replica's files_by_name(progress), which may raise to
-        stop it (and then it isn't built)"""
+        stop it (and then it isn't built). What changes in the replica meanwhile goes in it too, and
+        if it's invalidated meanwhile, it's built anew. Another thread's build is waited for."""
         if self.is_built():
             return
+        with self._build_lock:
+            if self.is_built():
+                return
+            with self._lock:
+                self._is_building = True
+                self._changes_meanwhile = []
+            try:
+                while not self._built_from_a_listing(progress):
+                    pass
+            finally:
+                with self._lock:
+                    self._is_building = False
+                    self._changes_meanwhile = []
+
+    def _built_from_a_listing(self, progress):
+        """List the replica's files, and make what's listed the index, unless it was invalidated
+        meanwhile. Returns whether it was made."""
+        with self._lock:
+            nr_invalidated = self._nr_invalidated
         by_name = {}
         for name, files in self.replica.files_by_name(progress).items():
             files = {relpath: size for relpath, size in files if not self._is_excluded(relpath)}
@@ -114,18 +142,28 @@ class Index(object):
                 for algorithm in self.replica.known_hashes(relpath):
                     known.setdefault(relpath, {})[algorithm] = self.replica.content_hash(relpath, algorithm)
         with self._lock:
+            if nr_invalidated != self._nr_invalidated:
+                self._changes_meanwhile = []
+                return False
             for relpath, hashes in known.items():
                 self._add_hashes(relpath, hashes)
-        self._names_by_dir, self._by_size = names_by_dir, by_size
-        self._nr_files = sum(len(files) for files in by_name.values())
-        # Last: is_built() says it is once all is
-        self._by_name = by_name
+            self._names_by_dir, self._by_size = names_by_dir, by_size
+            self._nr_files = sum(len(files) for files in by_name.values())
+            # Last: is_built() says it is once all is
+            self._by_name = by_name
+            self._is_building = False
+            # What the listing may or may not have seen
+            for change, args in self._changes_meanwhile:
+                change(*args)
+            self._changes_meanwhile = []
+        return True
 
     def _is_excluded(self, relpath):
         return self._excluded is not None and paths.is_at_or_under(relpath, self._excluded)
 
     def invalidate(self):
         with self._lock:
+            self._nr_invalidated += 1
             self._by_name = self._names_by_dir = self._by_size = None
             self._by_hash = collections.defaultdict(set)
             self._hashed = collections.defaultdict(set)
@@ -207,15 +245,18 @@ class Index(object):
 
     def relpaths(self):
         """All its files' relpaths, once built"""
-        return [relpath for files in self._by_name.values() for relpath in files]
+        with self._lock:
+            return [relpath for files in self._by_name.values() for relpath in files]
 
     def files_named(self, name):
         """{relpath: size} of the files with the name"""
-        return self._by_name.get(name, {})
+        with self._lock:
+            return dict(self._by_name.get(name, {}))
 
     def files_sized(self, size):
         """The relpaths of the files of the size, if it's big enough to be in (RENAMED_MIN_SIZE)"""
-        return self._by_size.get(size, set())
+        with self._lock:
+            return set(self._by_size.get(size, set()))
 
     def hash_algorithms(self):
         """The algorithms of the hashes known of its files without reading them (Drive's, or its
@@ -230,7 +271,8 @@ class Index(object):
         return set(self._by_hash.get((algorithm, value), set()))
 
     def names_in(self, dirpath):
-        return self._names_by_dir.get(dirpath, set())
+        with self._lock:
+            return set(self._names_by_dir.get(dirpath, set()))
 
     def date_taken(self, relpath):
         if relpath not in self._dates_taken:
@@ -253,49 +295,61 @@ class Index(object):
         return {algorithm: hashes[algorithm] for algorithm in algorithms}
 
     def add(self, relpath, size):
-        """A file is at relpath now (unless it isn't built yet, when there's nothing to change)"""
-        if self.is_built() and not self._is_excluded(relpath):
-            name = os.path.basename(relpath)
-            if relpath not in self._by_name.get(name, {}):
-                self._nr_files += 1
-            self._by_name.setdefault(name, {})[relpath] = size
-            self._names_by_dir[os.path.dirname(relpath)].add(name)
-            if size is not None and size >= RENAMED_MIN_SIZE:
-                self._by_size[size].add(relpath)
-            hashes = {algorithm: self.replica.content_hash(relpath, algorithm)
-                      for algorithm in self.replica.known_hashes(relpath)}
-            with self._lock:
+        """A file is at relpath now (unless it isn't built yet, when there's nothing to change, or
+        it's being built, when it's done after)"""
+        with self._lock:
+            if self._is_building:
+                self._changes_meanwhile.append((self.add, (relpath, size)))
+            elif self.is_built() and not self._is_excluded(relpath):
+                name = os.path.basename(relpath)
+                if relpath not in self._by_name.get(name, {}):
+                    self._nr_files += 1
+                self._by_name.setdefault(name, {})[relpath] = size
+                self._names_by_dir[os.path.dirname(relpath)].add(name)
+                if size is not None and size >= RENAMED_MIN_SIZE:
+                    self._by_size[size].add(relpath)
+                hashes = {algorithm: self.replica.content_hash(relpath, algorithm)
+                          for algorithm in self.replica.known_hashes(relpath)}
                 self._add_hashes(relpath, hashes)
 
     def remove(self, relpath):
-        if self.is_built():
-            name = os.path.basename(relpath)
-            files = self._by_name.get(name, {})
-            if relpath in files:
-                self._nr_files -= 1
-            size = files.pop(relpath, None)
-            if not files:
-                self._by_name.pop(name, None)
-            self._names_by_dir.get(os.path.dirname(relpath), set()).discard(name)
-            self._by_size.get(size, set()).discard(relpath)
         with self._lock:
+            if self._is_building:
+                self._changes_meanwhile.append((self.remove, (relpath,)))
+            if self.is_built():
+                name = os.path.basename(relpath)
+                files = self._by_name.get(name, {})
+                if relpath in files:
+                    self._nr_files -= 1
+                size = files.pop(relpath, None)
+                if not files:
+                    self._by_name.pop(name, None)
+                # (Drive may have another of the name in the dir)
+                if not any(os.path.dirname(path) == os.path.dirname(relpath) for path in files):
+                    self._names_by_dir.get(os.path.dirname(relpath), set()).discard(name)
+                self._by_size.get(size, set()).discard(relpath)
             for algorithm, value in self._hashes.get(relpath, {}).items():
                 self._by_hash.get((algorithm, value), set()).discard(relpath)
                 self._hashed[algorithm].discard(relpath)
             self._hashes.pop(relpath, None)
-        self._dates_taken.pop(relpath, None)
+            self._dates_taken.pop(relpath, None)
 
     def move(self, relpath, new_relpath):
-        # The same file, with the same contents
-        hashes = self._hashes.get(relpath)
-        if self.is_built():
-            size = self.files_named(os.path.basename(relpath)).get(relpath)
-            self.remove(relpath)
-            self.add(new_relpath, size)
-        else:
-            self.remove(relpath)
-        if hashes:
-            with self._lock:
+        with self._lock:
+            # The same file, with the same contents
+            hashes = self._hashes.get(relpath)
+            if self._is_building:
+                self._changes_meanwhile.append((self.move, (relpath, new_relpath)))
+            elif self.is_built():
+                size = self.files_named(os.path.basename(relpath)).get(relpath)
+                if size is None:
+                    # Listed after it moved, or not listed
+                    size = self.files_named(os.path.basename(new_relpath)).get(new_relpath, self.replica.file_size(new_relpath))
+                self.remove(relpath)
+                self.add(new_relpath, size)
+            else:
+                self.remove(relpath)
+            if hashes:
                 self._add_hashes(new_relpath, hashes)
 
 

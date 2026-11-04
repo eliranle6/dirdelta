@@ -62,7 +62,10 @@ error screen says to shut Windows down fully; and if it mounts read-only instead
 as 2022.10.3 does, exiting 0 (`_came_up_read_only()`, unless fstab's line says `ro`), a warning
 says so, and the same. A read-only replica still works as a source: a sync and a sort warn, copying from it
 goes on, and only what would change it is held back (`is_writable()`; `LocalReplica._is_stuck()` refuses a move out
-before it starts, as between filesystems the copy would be made before the removal failed). Asked even in a dry run (it
+before it starts, as between filesystems the copy would be made before the removal failed).
+In a sort, a read-only side's actions aren't offered in its menu or to the AI (`_cant_be_done()`), and Enter in the
+side tree copies from a read-only inbox. Why it's read-only is said for a volume mounted so before dirdelta started too
+(`read_only_lines_of()`): Windows' only if its `hiberfil.sys` starts with `HIBR`. Asked even in a dry run (it
 changes the system, not files), never done without asking.
 
 ### `replicas.py` / `choose_replicas.py`

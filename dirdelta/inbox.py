@@ -40,6 +40,7 @@ from dirdelta import junk
 from dirdelta import localdiskdirtree
 from dirdelta import localscan
 from dirdelta import messages
+from dirdelta import mounts
 from dirdelta import opening
 from dirdelta import paths
 from dirdelta import picker
@@ -278,14 +279,29 @@ class InboxSort(filescreen.FilesScreen):
 
     # The screens
 
+    def _cant_be_done(self):
+        """The actions of the kinds that a read-only inbox (what takes files out of it, or moves them in
+        it) or sorted tree (what puts files in it) can't have done"""
+        cant = set()
+        if not interactive_dir_sync.is_writable(self._inbox_tree):
+            cant |= {self.MOVE_TO, self.MOVE_RECOMMENDED, self.MOVE_TO_CLAUDES_DIR, self.MOVE_TO_CLAUDES_DIR_TYPED,
+                     self.MOVE_TO_CLAUDES_NAMES, self.MOVE_TO_TYPED, self.MOVE_IN_INBOX,
+                     self.REMOVE, self.REMOVE_COPIES, self.REMOVE_JUNK}
+        if not interactive_dir_sync.is_writable(self._root_tree):
+            cant |= {self.MOVE_TO, self.MOVE_RECOMMENDED, self.MOVE_TO_CLAUDES_DIR, self.MOVE_TO_CLAUDES_DIR_TYPED,
+                     self.MOVE_TO_CLAUDES_NAMES, self.MOVE_TO_TYPED, self.COPY_TO}
+        return cant
+
     def _warn_if_read_only(self):
         """Say what can't be done if the inbox or the sorted tree is read-only, and what still can"""
         lines = []
         if not interactive_dir_sync.is_writable(self._inbox_tree):
             lines.append("%s is read-only: you can still copy its files to the sorted tree, but they can't be "
                          "moved out of it or removed." % (self.inbox_path,))
+            lines += mounts.read_only_lines_of(self.inbox_path)
         if not interactive_dir_sync.is_writable(self._root_tree):
             lines.append("%s is read-only: no files can go into it." % (self.root_path,))
+            lines += mounts.read_only_lines_of(self.root_path)
         if lines:
             messages.show("Read-only", lines, dryrun.label(), 'yellow')
 
@@ -324,7 +340,7 @@ class InboxSort(filescreen.FilesScreen):
                 shown_as=lambda files=files: self._shown_as(files),
                 notify_keys=DESCRIBE_KEY + OPEN_KEY, enter_picks_selection=True, twice_keys=renaming.KEY,
                 side=picker.Side(self.root_path, self._side_items(), True, self._side_follow,
-                                 key_hints=[('Enter', 'move the files here')]),
+                                 key_hints=[('Enter', ('copy' if self.MOVE_TO in self._cant_be_done() else 'move') + ' the files here')]),
                 none_picked_key_hints=[('Enter', 'Pick & choose what to do')],
                 on_notify=lambda key, selected, picked, files=files: self._on_key(key, selected, picked, files),
                 on_selection=functools.partial(elsewhere.check_contents, files, self._inbox_tree,
@@ -475,12 +491,17 @@ class InboxSort(filescreen.FilesScreen):
         _approve()). Returns the ones moved, as _act() does."""
         if not relpaths:
             return None
+        cant = self._cant_be_done()
+        if self.COPY_TO in cant:
+            messages.show("Read-only", ["%s is read-only: no files can go into it." % (self.root_path,)], dryrun.label(), 'yellow')
+            return None
         destination = side_relpath if self._is_sorted_dir(side_relpath) else posixpath.dirname(side_relpath)
         destination = self._not_the_inbox(destination)
         if destination is None:
             return None
-        done = self._approve(self.MOVE_TO, [(relpath, _join(destination, posixpath.basename(relpath)))
-                                            for relpath in relpaths])
+        # From a read-only inbox they can only be copied (its confirmation says which)
+        done = self._approve(self.COPY_TO if self.MOVE_TO in cant else self.MOVE_TO,
+                             [(relpath, _join(destination, posixpath.basename(relpath))) for relpath in relpaths])
         if done and self._known_replicas is not None:
             self._known_replicas.record_dir(self.root_path, destination)
             replicas.save(self._known_replicas)
@@ -739,10 +760,10 @@ class InboxSort(filescreen.FilesScreen):
         ])
         # The ones that can't be done aren't offered, nor one that does the same as another (Claude's
         # dir under the file's own name, when Claude keeps the name)
-        # (Nor, from a read-only inbox, what takes files out of it: copying them is left)
-        is_stuck = not interactive_dir_sync.is_writable(self._inbox_tree)
+        # (Nor what a read-only inbox or sorted tree can't have done)
+        cant = self._cant_be_done()
         offered = collections.OrderedDict((key, action) for key, action in actions.items() if action.why_not is None
-                                          and not (is_stuck and action.verb in (MOVE, REMOVE)))
+                                          and key not in cant)
         # Similar actions together, a blank line between each kind (opening and reading anew, the
         # picker's keys, together)
         kinds = [(ASK,), (MOVE,), (COPY,), (REMOVE,), (OPEN, READ)]
@@ -1230,6 +1251,8 @@ class InboxSort(filescreen.FilesScreen):
                                  "move or rename the file in the inbox: its path relative to the inbox.",
                                  True, False, in_inbox),
                    aiplan.Action(self.REMOVE, "Remove from the inbox", "remove the file from the inbox.")]
+        cant = self._cant_be_done()
+        actions = [action for action in actions if action.name not in cant]
         files = []
         for relpath in relpaths:
             notes = ([self._descriptions[relpath]] if relpath in self._descriptions else [])
@@ -1252,7 +1275,12 @@ class InboxSort(filescreen.FilesScreen):
         the user approves of its plan, if it answers with one (each kind once they confirm it, as if
         they chose it). Returns the ones done (in a
         dry run, the ones it would have done), or None if none were."""
-        self._last_instruction, steps = aiplan_screen.ask(self._ai_task(relpaths, focus), self._last_instruction, LABEL)
+        task = self._ai_task(relpaths, focus)
+        if not task.actions:
+            messages.show("Read-only", ["Both %s and %s are read-only: nothing can be done with these files." %
+                                        (self.inbox_path, self.root_path)], dryrun.label(), 'yellow')
+            return None
+        self._last_instruction, steps = aiplan_screen.ask(task, self._last_instruction, LABEL)
         if not steps:
             return None
         done = []

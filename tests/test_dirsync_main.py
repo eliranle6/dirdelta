@@ -191,6 +191,12 @@ class MainMenuTest(unittest.TestCase):
         self.assertIn('/a is read-only', lines[0])
         self.assertIn('you can still copy', lines[0])
 
+    def test_a_read_only_mount_says_why_before_the_menu_too(self):
+        tree = dirtree.DirTree('/a')
+        with mock.patch('dirdelta.interactive_dir_sync.is_writable', return_value=False), \
+                mock.patch('dirdelta.mounts.read_only_lines_of', return_value=['why']):
+            self.assertEqual(dirsync_main._read_only_lines(tree, '/a')[1:], ['why'])
+
     def test_writable_replicas_get_no_read_only_message(self):
         a = localdiskdirtree.LocalDiskDirTree('/a', silent=True)
         b = localdiskdirtree.LocalDiskDirTree('/b', silent=True)

@@ -124,7 +124,7 @@ dirstuff/                    the original dev machine's local folder, not a git 
 (`treepicker` is a C++ learning project of the same author. Its own working copy
 is at `/home/eliran/code/treepicker`, where changes are committed; `lib/treepicker`
 is a separate clone of it, updated by fetching from that copy and
-fast-forwarding, then committing the new pin here. Don't push either repo.)
+fast-forwarding, then committing the new pin here. Push only when asked; a push means both repos.)
 
 ## Secrets
 
@@ -154,7 +154,7 @@ module:
 PYTHONPATH=tests bin/python -m unittest test_interactive_dir_sync -v
 ```
 
-Every module has a test file (785 tests, all passing as of 2026-11-04) except
+Every module has a test file (802 tests, all passing as of 2026-11-04) except
 the thin wiring in `main.py`/`dirsync_main.py`, covered only by running the
 app. Shared fakes:
 - `tests/helpers.py`: `scripted_option_picker` / `scripted_tree_picker` /

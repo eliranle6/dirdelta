@@ -14,6 +14,7 @@ from dirdelta import interactive_dir_sync
 from dirdelta import label_screen
 from dirdelta import localdiskdirtree
 from dirdelta import messages
+from dirdelta import mounts
 from dirdelta import paths
 from dirdelta import picker
 from dirdelta import replicainfo
@@ -312,5 +313,6 @@ def _read_only_lines(replica, replica_path):
     """What can't be done with the replica, and what can, if it's read-only"""
     if not interactive_dir_sync.is_writable(replica):
         return ["%s is read-only (no write permission): you can still copy its files to the other replica, "
-                "but dirdelta won't copy files into it, remove files from it or move them in it." % (replica_path,)]
+                "but dirdelta won't copy files into it, remove files from it or move them in it." % (replica_path,)
+                ] + mounts.read_only_lines_of(replica_path)
     return []
