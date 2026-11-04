@@ -1,9 +1,10 @@
 # dirdelta
 
 A terminal TUI for diffing and syncing two "replicas" of a file tree — a local
-filesystem path or a Google Drive ("cloud") tree — by **filename only** (no
-content/hash comparison). For each file present in one replica but not the
-other, the user can choose to copy it across or delete it.
+filesystem path or a Google Drive ("cloud") tree. What each lacks is found by
+**path only** (no content/hash comparison); then hashes (and names and sizes) find
+where the other replica may have a file, moved or renamed. For each file present in one replica but not the
+other, the user can choose to copy it across, delete it or rename it to match.
 
 This is the main repo (github.com/eliranle6/dirdelta). Its pickers and menus are `treepicker`, a C++ program
 from its own repo (github.com/eliranle6/treepicker), vendored as a git submodule at
@@ -154,7 +155,7 @@ module:
 PYTHONPATH=tests bin/python -m unittest test_interactive_dir_sync -v
 ```
 
-Every module has a test file (802 tests, all passing as of 2026-11-04) except
+Modules are tested where it's worth it, not for the sake of a test file each (810 tests, all passing as of 2026-11-04) except
 the thin wiring in `main.py`/`dirsync_main.py`, covered only by running the
 app. Shared fakes:
 - `tests/helpers.py`: `scripted_option_picker` / `scripted_tree_picker` /
@@ -219,8 +220,9 @@ Notes for whoever changes things next:
   pbr derives versions from git tags, so `setup.cfg`'s `version` must stay
   ahead of the latest tag (dirdelta 1.4.0 vs. v1.3.2). The root
   `requirements.txt` lists the third-party dependencies.
-- Diffing is filename/path-only (see `DirTree.get_unknown_entries_in_given_dirtree`
-  in `dirdelta/dirtree.py`) — no hashing, no size/mtime comparison.
+- The diff itself is path-only (see `DirTree.get_unknown_entries_in_given_dirtree`
+  in `dirdelta/dirtree.py`, and `dirdiff.py`) — no hashing, no size/mtime comparison.
+  What it finds is then looked for elsewhere by contents (`hashing.py`, `elsewhere.py`).
 - Local dirs are listed by `localscan.scan()`, which shells out to the real `find`
   binary (one run per listing) rather than using `os.walk`.
 - Cloud state is cached to disk (`~/.cache/dirdelta/files.sqlite`) rather than

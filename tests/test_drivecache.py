@@ -1,6 +1,8 @@
 import json
 import os
+import sqlite3
 import tempfile
+import time
 import unittest
 from unittest import mock
 
@@ -124,10 +126,33 @@ class EntriesTest(unittest.TestCase):
 
     def test_a_cache_that_isnt_a_database_says_so(self):
         drivecache.root_id()
+        helpers.remove_drive_cache(self.cache)
         with open(os.path.splitext(self.cache)[0] + '.sqlite', 'wb') as f:
             f.write(b'not a database, not at all' * 100)
         with self.assertRaisesRegex(drivecache.DriveCacheError, "can't be read"):
             list(drivecache.entries('/mein'))
+
+    def test_what_another_process_changes_is_read_again(self):
+        self.assertEqual(drivecache.count_under('/mein'), 5)
+        other = sqlite3.connect(os.path.splitext(self.cache)[0] + '.sqlite')
+        with other:
+            other.execute('INSERT INTO files (id, parent, md) VALUES (?, ?, ?)',
+                          ('y', 'mein', json.dumps({'id': 'y', 'name': 'y.mp3', 'parents': ['mein']})))
+        other.close()
+        self.assertEqual(drivecache.count_under('/mein'), 6)
+
+    def test_a_write_is_quick(self):
+        drivecache.root_id()
+        started = time.time()
+        for number in range(100):
+            drivecache.add({'id': 'n%d' % (number,), 'name': 'n', 'parents': ['mein']})
+        # ~0.2ms each kept open and in WAL mode, against ~20ms: well apart, on a slow disk too
+        self.assertLess(time.time() - started, 1.0)
+
+    def test_a_cache_replaced_is_opened_anew(self):
+        self.assertEqual(drivecache.root_id(), 'ROOT')
+        helpers.remove_drive_cache(self.cache)
+        self.assertIsNone(drivecache.root_id())
 
     def test_what_changes_is_read_again(self):
         self.assertEqual(drivecache.count_under('/mein'), 5)

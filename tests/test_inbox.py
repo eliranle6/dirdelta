@@ -407,6 +407,20 @@ class InboxSortTest(unittest.TestCase):
         self.assertEqual(self.show.call_args.args[0], "That's dirdelta's")
         self.assertTrue(self.exists('inbox', 'a.txt'))
 
+    def test_the_dir_picker_leaves_out_what_cant_be_picked(self):
+        self.sort([['a.txt'], None], ['Move it to a dir you pick', YES], dirs=[os.path.join(self.root, 'docs')])
+        self.assertEqual(self.pick_under_dir.call_args.kwargs['excluded'], ['meta'])
+
+    def test_it_leaves_out_an_inbox_in_the_sorted_tree_too(self):
+        os.makedirs(os.path.join(self.root, 'in'), exist_ok=True)
+        sorter = Sort(os.path.join(self.root, 'in'), self.root)
+        with helpers.scripted_dir_picker(None) as pick:
+            sorter._pick_dir('move', '1 file')
+            self.assertEqual(pick.call_args.kwargs['excluded'], ['meta', 'in'])
+            # Moving in the inbox, it's what's picked in
+            sorter._pick_dir('move', '1 file', in_inbox=True)
+            self.assertEqual(pick.call_args.kwargs['excluded'], ['meta'])
+
     def test_a_dir_named_meta_deeper_in_is_the_users(self):
         self.assertEqual(self.sorter_for_meta()._not_dirdeltas('docs/meta'), 'docs/meta')
 

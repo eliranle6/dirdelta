@@ -27,6 +27,14 @@ class RenameTest(unittest.TestCase):
         self.ask = ask
         return renamed
 
+    def test_on_a_read_only_dir_its_said_before_asking_for_a_name(self):
+        with mock.patch('dirdelta.localdiskdirtree.os.access', return_value=False), \
+                mock.patch('dirdelta.messages.show') as show:
+            self.assertIsNone(self.rename('a.txt', 'b.txt'))
+        self.ask.assert_not_called()
+        self.assertEqual(show.call_args.args[0], "Can't rename it")
+        self.assertIn('read-only', show.call_args.args[1][0])
+
     def exists(self, relpath):
         return os.path.exists(os.path.join(self.root, relpath))
 

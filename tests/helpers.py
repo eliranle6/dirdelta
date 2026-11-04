@@ -39,7 +39,9 @@ atexit.register(shutil.rmtree, _downloads_dir, ignore_errors=True)
 def remove_drive_cache(path):
     """Remove the Drive cache that FILE_LIST_CACHE was pointed at path for: its database, and its old
     file, imported or not"""
-    for file in (path, path + '.bak', os.path.splitext(path)[0] + '.sqlite'):
+    database = os.path.splitext(path)[0] + '.sqlite'
+    drivecache.close()
+    for file in (path, path + '.bak', database, database + '-wal', database + '-shm'):
         if os.path.exists(file):
             os.remove(file)
 

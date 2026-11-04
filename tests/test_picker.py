@@ -122,6 +122,19 @@ class PickerTest(unittest.TestCase):
         with open(log) as f:
             self.assertIn("TypeError: a bug", f.read())
 
+    def test_pick_under_dir_excludes(self):
+        self.answer('.')
+        picker.pick_under_dir('/x', excluded=['meta', 'a/b'])
+        args = self.log_entry('args')
+        self.assertEqual([args[index + 1] for index, arg in enumerate(args) if arg == '--exclude'], ['meta', 'a/b'])
+
+    def test_a_trees_pick_leaves_out_what_is_excluded_with_all_in_it(self):
+        tree = dirtree.DirTree('/x')
+        for relpath in ('meta/hashes', 'a/meta/mine', 'a/b/c', 'a/keep'):
+            tree.add_file_by_relpath(relpath)
+        self.assertEqual(sorted(path[2:] for path in picker._tree_paths(tree, ['meta', 'a/b'])),
+                         ['a', 'a/keep', 'a/meta', 'a/meta/mine'])
+
     def test_an_options_id_is_returned_and_said_by_its_line(self):
         os.environ['FAKE_PICKER_WAIT_FOR'] = 'Later'
         self.answer('Do it ')

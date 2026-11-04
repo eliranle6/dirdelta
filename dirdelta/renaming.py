@@ -26,6 +26,10 @@ def rename(tree, relpath, label=None):
     if not tree.exists(relpath):
         messages.show("Can't rename it", ["%s isn't there (anymore?)." % (relpath,)], label or dryrun.label(), 'red')
         return None
+    reason = tree.cant_change(relpath)
+    if reason is not None:
+        messages.show("Can't rename it", ["%s can't be renamed: %s." % (relpath, reason)], label or dryrun.label())
+        return None
     is_dir = not tree.has_file(relpath)
     name = posixpath.basename(relpath)
     files = tree.files_under(relpath) if is_dir else [relpath]

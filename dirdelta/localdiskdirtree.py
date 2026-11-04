@@ -242,6 +242,11 @@ class LocalReplica(dirtree.DirTree):
     def exists(self, relpath):
         return os.path.lexists(os.path.join(self._rootpath, relpath))
 
+    def cant_change(self, relpath):
+        if not os.access(os.path.dirname(os.path.join(self._rootpath, relpath)), os.W_OK):
+            return "it's on a read-only dir"
+        return None
+
     def _is_stuck(self, relpath, path):
         """Whether what's at path can't leave its dir, as it's read-only (said): between filesystems, a
         move is a copy then a removal, which would fail only after the copy was made"""

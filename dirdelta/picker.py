@@ -163,17 +163,18 @@ Side = collections.namedtuple('Side', ['root_name', 'items', 'is_enter_picking',
 SIDE_KEY = '\x1d'
 
 
-def pick_from_tree(tree, header='', dirs_only=False, root_name=None, keys='', key_hints=(), twice_keys=''):
+def pick_from_tree(tree, header='', dirs_only=False, root_name=None, keys='', key_hints=(), twice_keys='', excluded=()):
     """Let the user pick a node of a DirTree (with dirs_only, only of its dirs), its root shown as
     root_name (default: the tree's displayname()). Returns [the picked node's data (entry)], or None
     if the user quit. With keys (e.g. 'n'), keys that end picking too: it returns (the key, '' for
     Enter; [the picked or selected node's data]), or None. twice_keys: keys that do so when pressed
-    twice in a row (e.g. 'c' for vim's cc), returned doubled ('cc')."""
+    twice in a row (e.g. 'c' for vim's cc), returned doubled ('cc'). excluded: relpaths left out, with
+    all in them."""
     args = (['--typed', '--root', root_name or tree.displayname()] + _header_args(header) +
             _keys_args(keys, twice_keys) + _help_args(key_hints, ()))
     if dirs_only:
         args.append('--dirs-only')
-    picked_paths = _run(args + ['-'], list(_tree_paths(tree)))
+    picked_paths = _run(args + ['-'], list(_tree_paths(tree, excluded)))
     if picked_paths is None:
         return None
     key, picked_paths = _key_and_selected(keys, picked_paths, twice_keys)
@@ -284,13 +285,15 @@ def view_files(rootpath, relpaths, header='', previews=None, label=None, shown_a
 
 
 def pick_under_dir(dirpath, max_depth=None, dirs_only=False, lazy=False, header='', keys='', key_hints=(),
-                   twice_keys=''):
+                   twice_keys='', excluded=()):
     """Let the user pick a file or dir (with dirs_only, a dir) under the local dir dirpath, scanned
     by treepicker itself: all of it at the start, or with lazy, a dir at a time, as it's shown
     (for a huge one, like /). Returns the picked one's full path, or None if the user quit. With
     keys (e.g. 'n'), keys that end picking too: it returns (the key, '' for Enter; the picked or
-    selected one's full path), or None. twice_keys: as pick_from_tree()'s."""
+    selected one's full path), or None. twice_keys, excluded (relpaths): as pick_from_tree()'s."""
     args = [] if max_depth is None else ['--max-depth', str(max_depth)]
+    for path in excluded:
+        args += ['--exclude', path]
     if dirs_only:
         args.append('--dirs-only')
     if lazy:
@@ -401,13 +404,15 @@ def option_label(item):
     return item.text if isinstance(item, Skipped) else item
 
 
-def _tree_paths(tree):
+def _tree_paths(tree, excluded=()):
     """The tree's nodes' paths for treepicker (relative, '/'-separated), each dir before what's in
     it, siblings sorted by name, each after its type for --typed ('f ' a file, 'd ' a dir). The root
     isn't one: it's treepicker's root."""
     stack = list(reversed(_sorted_children(tree, tree.root)))
     while stack:
         node = stack.pop()
+        if node.identifier in excluded:
+            continue
         kind = 'f' if isinstance(node.data, entries.FileEntry) else 'd'
         yield '%s %s' % (kind, node.identifier)
         stack.extend(reversed(_sorted_children(tree, node.identifier)))

@@ -391,6 +391,11 @@ class DirTree(object):
     def _moved(self, moves):
         """After move_files() did the moves (relpath, new_relpath), e.g. to tidy the dirs they left"""
 
+    def cant_change(self, relpath):
+        """Why what's at relpath can't be moved or renamed in its dir, whatever it is, or None if it
+        can (see cant_move())"""
+        return None
+
     def cant_move(self, relpath):
         """Why the file at relpath can't be moved (move_files()), or None if it can"""
         return None

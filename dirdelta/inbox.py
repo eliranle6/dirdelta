@@ -1156,17 +1156,19 @@ class InboxSort(filescreen.FilesScreen):
         base, is_cloud = (self.inbox_path, self.inbox_is_cloud) if in_inbox else (self.root_path, self.root_is_cloud)
         header = "Pick the dir in %s to %s the %s to." % (base, verb, count)
         keys = self.NEW_DIR_KEY + self.SIBLING_DIR_KEYS
+        # Not what can't be picked (typed, it's still refused: see _not_the_inbox())
+        excluded = [paths.META_DIR] + ([self._inbox_in_root] if not in_inbox and self._inbox_in_root else [])
         key_hints = [('Enter', 'this dir'), (self.NEW_DIR_KEY, 'a new dir in it'), ('o/O', 'a new dir beside it'),
                      renaming.KEY_HINT]
         while True:
             if is_cloud:
                 root = clouddirtree.factory(base)
                 picked = picker.pick_from_tree(root, header=header, dirs_only=True, root_name=base,
-                                               keys=keys, key_hints=key_hints, twice_keys=renaming.KEY)
+                                               keys=keys, key_hints=key_hints, twice_keys=renaming.KEY, excluded=excluded)
                 key, relpath = (picked[0], picked[1][0].relpath) if picked else ('', None)
             else:
                 picked = picker.pick_under_dir(base, dirs_only=True, lazy=True, header=header,
-                                               keys=keys, key_hints=key_hints, twice_keys=renaming.KEY)
+                                               keys=keys, key_hints=key_hints, twice_keys=renaming.KEY, excluded=excluded)
                 key, relpath = (picked[0], _relpath(picked[1], base)) if picked else ('', None)
             if relpath is None or key != renaming.PRESSED:
                 break
