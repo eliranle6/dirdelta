@@ -20,11 +20,11 @@ the dependencies are in one venv next to those (`make venv`), which the Makefile
 
 Deep dives live in `docs/`:
 - `docs/architecture.md` — module-by-module breakdown and data flow (scan → diff → pick → copy/remove)
-- `docs/known-issues.md` — real bugs and dead code found while reading the source, with file:line
+- `docs/known-issues.md` — bugs and dead code, with file:line: what's open is under "Still open" at its end, the fixed ones kept as history
 - `docs/glossary.md` — project-specific terms (replica, dirtree, cloud path convention, etc.)
 - `docs/improvement-ideas.md` — what's left to do, not implemented: a backlog to pick from
 - `lib/treepicker/CLAUDE.md` and `lib/treepicker/docs/improvement-ideas.md` — treepicker's own (read before changing picker behavior; picker changes are made in treepicker, not here)
-- `docs/treepicker-integration.md` — how dirdelta runs the C++ `treepicker` for its pickers and menus (it replaced the Python picker), and what's left
+- `docs/treepicker-integration.md` — how dirdelta runs the C++ `treepicker` for its pickers and menus (it replaced the Python picker)
 
 Read the relevant doc before making changes in that area rather than
 re-deriving it from scratch.
