@@ -785,6 +785,8 @@ its label; `short_names()` and `labeled()` are for where there's less room, or t
 in `Replicas.labels`, by `label_key()`: a local replica's is its disk's UUID, a Drive one's its identity. It reads
 them from the file when it changed, so nothing need be passed around; `drivemeta.check()` notes the account's user
 name in `files.txt.times`, so naming a replica asks nothing of Drive. `identity()` moved here from `replicalog.py`.
+The sync menu labels its two replicas, and the dashboard has an option for each replica it lists (not one that isn't
+mounted or there: what its path is on now isn't its disk); both run `label_screen.run()`.
 
 ## The file pickers' `:` menu: `contextmenu.py`
 

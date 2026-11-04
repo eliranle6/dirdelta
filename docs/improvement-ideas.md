@@ -9,7 +9,7 @@ picker, one picker per direction with Copy, Remove and Rename in it, sorting an 
 Claude's help, 2026-10-29; remembering how a replica's volume was mounted and offering to mount
 it, a new dir and the recent ones for an inbox's "Move to...", an inbox's junk by names,
 sizes and what Claude says, and each replica's last_update.txt (read, shown, and written after a
-sync), 2026-10-30; hashing whole local replicas in the background, 2026-10-31) are in git history. treepicker's own are in `lib/treepicker/docs/improvement-ideas.md`.
+sync), 2026-10-30; hashing whole local replicas in the background, 2026-10-31; the 2026-10-31 peer review's, `docs/peer_review.md` until it was done) are in git history. treepicker's own are in `lib/treepicker/docs/improvement-ideas.md`.
 
 Ordered by how easy they are, easiest first (2026-10-30).
 
@@ -262,6 +262,18 @@ unneeded, and none has been measured or tried: each is left for the reason it gi
 - **One JSON-lines protocol with treepicker** (#20), over one socket, instead of `--updates`,
   `--preview`, `--selection`, `--notify-fd` and two temp files. Cleaner, but a big change on both sides
   for little to see, by the review's own judgment.
+
+## Considered, not recommended
+- `exif.py`, a hand-written EXIF reader: a library would be shorter, but it avoids a dependency
+  for one field, and it's contained. Leave it.
+- `hashcache` on SQLite, the shared hashing pool (idle I/O priority, one worker on spinning
+  disks), `find` instead of `os.walk`, dirdiff in C++: each looked over-built at first, and each
+  has a measured reason in its comments. Keep.
+- C++ `Node` holds UI state (search/picked/disabled/color): mixing model and view, but moving it
+  out would cost lookups on a hot path for 100k-node trees. Not worth it.
+- `elsewhere.py`'s scoring (siblings, date taken, mtime, size closeness) predates whole-replica
+  hashing and could shrink to "hash first, names as a fallback", but it still matters for Drive's
+  Google files and for files not hashed yet. Revisit once hashing is the norm.
 
 ## Parked: performance
 

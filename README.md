@@ -289,7 +289,7 @@ files the other lacks) or never compared (?), in grey if one was changed since; 
 when it was last synced (● green today, yellow this week, red before), and for a Drive one when
 Drive's file list was read (☁). A sync's menu starts with the same state, as found now, and its "Replicas dashboard" lists them all, with their last
 entry, when they were last synced and changed by dirdelta, which disks aren't connected now, and
-their files' hashes (in a sync or a sort, the same dashboard is in its menu and behind `#`). When you quit a sync that changed files (live: copied, removed or moved), it offers
+their files' hashes, with an option to label each (in a sync or a sort, the same dashboard is in its menu and behind `#`). When you quit a sync that changed files (live: copied, removed or moved), it offers
 an entry for each changed replica, e.g. `30.10.2026 - copied 12 files from cloud/eliran` for the one
 copied into: added to its log (only its: the other's log is of the other's changes), edited first,
 or not (a log is made if there's none).

@@ -12,6 +12,8 @@ from dirdelta import clouddirtree
 from dirdelta import dryrun
 from dirdelta import hashcache
 from dirdelta import hashing
+from dirdelta import label_screen
+from dirdelta import mounts
 from dirdelta import localdiskdirtree
 from dirdelta import messages
 from dirdelta import paths
@@ -170,8 +172,8 @@ def wait(jobs):
 
 # The dashboard's options: each (one of these, the replica's path), its text what shown_as says
 _HEADING_TEXT = "\u2500\u2500 %s \u2500\u2500"
-_HEADING, _INFO, _KNOWN, _BAR, _STATE, _TOGGLE, _FILES, _RESCAN, _DRIVE, _DRIVE_NOTE = (
-    'heading', 'info', 'known', 'bar', 'state', 'toggle', 'files', 'rescan', 'drive', 'drive note')
+_HEADING, _INFO, _KNOWN, _BAR, _STATE, _TOGGLE, _FILES, _RESCAN, _DRIVE, _DRIVE_NOTE, _LABEL = (
+    'heading', 'info', 'known', 'bar', 'state', 'toggle', 'files', 'rescan', 'drive', 'drive note', 'label')
 BACK = "Back"
 TITLE = "Replicas dashboard"
 
@@ -183,12 +185,23 @@ def dashboard(replica_trees=(), known=None, other_paths=()):
     entry, when it was last synced and changed), and its hashes: a local one's hashing, if it has a
     job (a bar, files, sizes, speed, time left, the files being hashed now; pausing or resuming it,
     its files, hashed or not, and scanning it again), else how many of its files' hashes are kept;
-    and how many of a cloud one's files Drive gave hashes of"""
+    and how many of a cloud one's files Drive gave hashes of; and labeling it (see label_screen.py)"""
     if known is None:
         try:
             known = replicas.load()
         except replicas.ReplicasError:
             known = None
+    selected = None
+    # Made anew after a label changed: it's in the headings
+    while True:
+        selected = _show_dashboard(replica_trees, known, other_paths, selected)
+        if selected is None:
+            return
+
+
+def _show_dashboard(replica_trees, known, other_paths, selected):
+    """The dashboard, starting with selected (else the first that can be picked), until Back (returns
+    None), or until a replica was labeled (returns the option, to show it anew)"""
     items = [(tree.displayname(), tree) for tree in replica_trees]
     items += [(path, None) for path in other_paths if path not in dict(items)]
     # The replicas, then the inboxes (files waiting to be sorted, not replicas), each under a heading
@@ -226,7 +239,7 @@ def dashboard(replica_trees=(), known=None, other_paths=()):
                 # Each replica apart
                 add_blank()
             _add_replica(item, options, shown, known, names)
-    _finish_dashboard(items, options, shown, names, jobs)
+    return _finish_dashboard(items, options, shown, names, jobs, known, selected)
 
 
 REPLICAS_HEADING = '\u2550\u2550 Replicas \u2550\u2550'
@@ -290,11 +303,22 @@ def _add_replica(item, options, shown, known, names):
         shown[(_INFO, name)] = picker.Skipped(
             "  Hashes kept of %s (as of when they were hashed); how many are left is counted when it's "
             "synced or sorted" % (_files(kept),))
+    if known is not None:
+        options.append((_LABEL, name))
+        shown[(_LABEL, name)] = _label_option(name, known)
 
 
+def _label_option(name, known):
+    """How the option that labels the replica named name is shown. Not of one that isn't there: what
+    its path is on now isn't its disk, whose label it would be"""
+    if not paths.is_cloud_path(name) and (mounts.unmounted(name) is not None or not os.path.isdir(name)):
+        return picker.Disabled("  Label the replica: its disk isn't mounted")
+    current = known.labels.get(replicanames.label_key(name))
+    return "  Label the replica%s" % (": now '%s'" % (current,) if current else "",)
 
-def _finish_dashboard(items, options, shown, names, jobs):
-    """Show the dashboard of options (see dashboard()), until Back"""
+
+def _finish_dashboard(items, options, shown, names, jobs, known, selected=None):
+    """Show the dashboard of options, as _show_dashboard() says"""
     options.append(BACK)
     header = ("Replicas: when synced, and their files' hashes\n\n"
               "A local one's hashes are worked out here (SHA-1, as Drive's), each file read once, at the lowest "
@@ -307,8 +331,9 @@ def _finish_dashboard(items, options, shown, names, jobs):
         return now
     first = shown_now()
     # The first that can be picked
-    selected = next((option for option in options if isinstance(option, tuple) and option[0] in (_TOGGLE, _FILES) and
-                     not isinstance(first.get(option), picker.Disabled)), BACK)
+    selected = selected or next((option for option in options if isinstance(option, tuple) and
+                                 option[0] in (_TOGGLE, _FILES, _LABEL) and
+                                 not isinstance(first.get(option), picker.Disabled)), BACK)
     # Those that are their ids; what they show, shown_as says
     choices = [picker.Option(option, '') if isinstance(option, tuple) else option for option in options]
     while True:
@@ -317,8 +342,11 @@ def _finish_dashboard(items, options, shown, names, jobs):
                                     help_lines=["The pairs' marks:"] + ["  " + line for line in syncstate.help_lines()] +
                                     replicainfo.path_marks_help())
         if option in (None, BACK):
-            return
+            return None
         selected = option
+        if option[0] == _LABEL:
+            label_screen.run(known, [option[1]])
+            return option
         for name, job in _jobs_by_name(items).items():
             if option == (_TOGGLE, name):
                 if job.is_started():

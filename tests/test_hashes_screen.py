@@ -161,6 +161,42 @@ class DashboardTest(unittest.TestCase):
             self.shown = pick.call_args.kwargs['shown_as']()
         return pick
 
+    def test_a_replica_can_be_labeled_and_the_dashboard_says_so_after(self):
+        job = _Job('/photos', _progress())
+        label = (hashes_screen._LABEL, '/photos')
+        with mock.patch('dirdelta.hashes_screen.os.path.isdir', return_value=True), \
+                mock.patch('dirdelta.replicanames.label_key', return_value='uuid:U'), \
+                mock.patch('dirdelta.label_screen.run', side_effect=lambda known, _: known.set_label('uuid:U', 'mine')) as run:
+            pick = self.dashboard(job, [label, hashes_screen.BACK])
+        run.assert_called_once_with(self.known, ['/photos'])
+        self.assertEqual(self.known.labels, {'uuid:U': 'mine'})
+        # Shown anew, on it
+        self.assertEqual(pick.call_count, 2)
+        self.assertEqual(pick.call_args.kwargs['selected'], label)
+
+    def test_what_the_label_option_says(self):
+        with mock.patch('dirdelta.hashes_screen.os.path.isdir', return_value=True), \
+                mock.patch('dirdelta.replicanames.label_key', return_value='uuid:U'):
+            self.assertEqual(hashes_screen._label_option('/photos', self.known), "  Label the replica")
+            self.known.set_label('uuid:U', 'mine')
+            self.assertEqual(hashes_screen._label_option('/photos', self.known), "  Label the replica: now 'mine'")
+
+    def test_each_replica_has_its_label_option(self):
+        pick = self.dashboard(None, [hashes_screen.BACK], trees=[], other_paths=['/old', 'cloud/c'])
+        ids = [picker.option_id(option) for option in pick.call_args.args[0]]
+        self.assertIn((hashes_screen._LABEL, '/old'), ids)
+        self.assertIn((hashes_screen._LABEL, 'cloud/c'), ids)
+
+    def test_one_that_isnt_mounted_or_isnt_there_cant_be_labeled(self):
+        # What its path is on now isn't its disk
+        self.assertIsInstance(hashes_screen._label_option('/no/such/dir', self.known), picker.Disabled)
+        mount = hashes_screen.mounts.Mount('/mnt/x', '/dev/x', 'ext4', '', '', 'U', None)
+        with mock.patch('dirdelta.mounts.unmounted', return_value=mount), \
+                mock.patch('dirdelta.hashes_screen.os.path.isdir', return_value=True):
+            self.assertIsInstance(hashes_screen._label_option('/mnt/x', self.known), picker.Disabled)
+        with mock.patch('dirdelta.replicanames.identity', return_value='drive:R:/c'):
+            self.assertNotIsInstance(hashes_screen._label_option('cloud/c', self.known), picker.Disabled)
+
     def test_it_pauses_and_resumes_a_job(self):
         job = _Job('/photos', _progress(state=hashing.HASHING, is_started=True))
         job._is_started = True
