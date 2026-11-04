@@ -1062,7 +1062,7 @@ class InboxSort(filescreen.FilesScreen):
         try:
             if relpaths:
                 with self._drive_lock:
-                    files = self._ai_files(relpaths, is_quiet=True)
+                    files = self._ai_files(relpaths)
                 found = ai.describe(files, self._cache_key, anew=self._anew & set(relpaths))
                 self._descriptions.update(found)
                 for relpath in relpaths:
@@ -1131,26 +1131,21 @@ class InboxSort(filescreen.FilesScreen):
             messages.show("Claude couldn't finish with %s" % (_files(len(self._failed) - failed_before),),
                           [list(self._failed.values())[-1]], dryrun.label(), 'red')
 
-    def _ai_files(self, relpaths, is_quiet=False):
+    def _ai_files(self, relpaths):
         """ai.File of each of the inbox's files at relpaths: a Drive one downloaded first (one at a
         time; or found downloaded, see downloads.py), unless it's too big to be read, or a Google
-        file. With is_quiet, it prints nothing (a picker may have the screen)."""
+        file, or it couldn't be: then Claude goes by its name. It prints nothing (a picker may have
+        the screen)."""
         files = []
-        for number, relpath in enumerate(relpaths, 1):
+        for relpath in relpaths:
             size = self._size(relpath)
             local_path = None
             if not self.inbox_is_cloud:
                 local_path = os.path.join(self.inbox_path, relpath)
             elif (size or 0) <= ai.MAX_READ_SIZE and self._inbox_tree.cant_fetch(relpath) is None:
-                if not is_quiet:
-                    messages.print_progress("Downloading %d of %d files for Claude: %s" %
-                                            (number, len(relpaths), relpath))
                 try:
                     local_path = self._downloaded(relpath)
-                except OSError as error:
-                    if not is_quiet:
-                        messages.print_line("Couldn't download %s (%s): Claude goes by its name" %
-                                            (relpath, error), "yellow")
+                except OSError:
                     local_path = None
             files.append(ai.File(relpath, local_path, size))
         return files

@@ -6,16 +6,12 @@ from dirdelta import localscan
 from dirdelta import paths
 
 
-def items(path, tree=None, excluded=None):
-    """The replica at path's dirs and files, as picker.Side's items ('d DIR', 'f FILE', relpaths in
-    it, each dir before what's in it): a local dir's as it's listed now (all of it, at once), a
-    Drive one's from tree (its CloudDirTree, from the cache). excluded: a dir (relpath) left out,
-    with all in it (e.g. an inbox in the sorted tree)."""
-    return _listed(path, tree, excluded)[0]
-
-
 def _listed(path, tree, excluded):
-    """(items(), what couldn't be read of it, a local dir's files as {relpath: (size, mtime_ns)})"""
+    """(the replica at path's dirs and files, as picker.Side's items ('d DIR', 'f FILE', relpaths in
+    it, each dir before what's in it), what couldn't be read of it, a local dir's files as
+    {relpath: (size, mtime_ns)}): a local dir's as it's listed now (all of it, at once), a Drive
+    one's from tree (its CloudDirTree, from the cache). excluded: a dir (relpath) left out, with all
+    in it (e.g. an inbox in the sorted tree)."""
     errors, files = [], None
     if paths.is_cloud_path(path):
         assert tree is not None, "a Drive replica's tree is needed"
@@ -40,7 +36,7 @@ def _listed(path, tree, excluded):
 
 
 class Listing(object):
-    """items() of a replica, kept between its picker's showings (listing a big one takes seconds), until
+    """The items of a replica (_listed()), kept between its picker's showings (listing a big one takes seconds), until
     it changes: its tree tells it what dirdelta changes there (see DirTree.add_listener()), and invalidate()
     says what the tree doesn't (a folder read anew from Drive, an empty dir renamed, Ctrl-R pressed). What
     changes outside dirdelta is seen then, or the next time its picker is entered."""
