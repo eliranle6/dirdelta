@@ -61,6 +61,8 @@ PREVIEWS_INTERVAL = 0.3
 DESCRIBED_WAIT_INTERVAL = 0.2
 # The key that describes the picked files (or the selected one) with Claude, in the background
 DESCRIBE_KEY = '\t'
+# Seconds between Claude's downloads with the Drive lock free, for whoever waits for it (see _ai_files())
+LOCK_GAP = 0.001
 # The key that opens the selected file (Ctrl-X) with its program (see opening.py)
 OPEN_KEY = opening.KEY
 # How many of a dir's file names Claude is given, so it sees how they're named
@@ -1061,11 +1063,10 @@ class InboxSort(filescreen.FilesScreen):
         relpaths = [relpath for relpath in batch if relpath not in self._descriptions]
         try:
             if relpaths:
-                with self._drive_lock:
-                    files = self._ai_files(relpaths)
-                found = ai.describe(files, self._cache_key, anew=self._anew & set(relpaths))
+                files = self._ai_files(relpaths)
+                found = ai.describe(files, self._cache_key, anew=self._anew & set(relpaths)) if files else {}
                 self._descriptions.update(found)
-                for relpath in relpaths:
+                for relpath in (file.relpath for file in files):
                     if relpath not in found:
                         self._failed[relpath] = "Claude gave no description of it."
         except Exception as error:
@@ -1134,21 +1135,31 @@ class InboxSort(filescreen.FilesScreen):
     def _ai_files(self, relpaths):
         """ai.File of each of the inbox's files at relpaths: a Drive one downloaded first (one at a
         time; or found downloaded, see downloads.py), unless it's too big to be read, or a Google
-        file, or it couldn't be: then Claude goes by its name. It prints nothing (a picker may have
-        the screen)."""
+        file, or it couldn't be: then Claude goes by its name. One that's not in the inbox anymore is
+        left out. It prints nothing (a picker may have the screen). _drive_lock is held for each Drive
+        file, not all of them, so the screen waits for one download at most."""
+        if not self.inbox_is_cloud:
+            return [ai.File(relpath, os.path.join(self.inbox_path, relpath), self._size(relpath))
+                    for relpath in relpaths]
         files = []
         for relpath in relpaths:
-            size = self._size(relpath)
-            local_path = None
-            if not self.inbox_is_cloud:
-                local_path = os.path.join(self.inbox_path, relpath)
-            elif (size or 0) <= ai.MAX_READ_SIZE and self._inbox_tree.cant_fetch(relpath) is None:
-                try:
-                    local_path = self._downloaded(relpath)
-                except OSError:
-                    local_path = None
-            files.append(ai.File(relpath, local_path, size))
+            with self._drive_lock:
+                if relpath in self._inbox_tree:
+                    files.append(ai.File(relpath, self._downloaded_if_it_can_be(relpath), self._size(relpath)))
+            # Else this thread takes the lock again before one waiting for it wakes up: measured, the
+            # other waited for all of 58 files in a row, and for one with this
+            time.sleep(LOCK_GAP)
         return files
+
+    def _downloaded_if_it_can_be(self, relpath):
+        """The local path of the inbox's Drive file at relpath for Claude, or None if it's too big to
+        be read, a Google file, or it couldn't be downloaded"""
+        if (self._size(relpath) or 0) > ai.MAX_READ_SIZE or self._inbox_tree.cant_fetch(relpath) is not None:
+            return None
+        try:
+            return self._downloaded(relpath)
+        except OSError:
+            return None
 
     def _root_dirs(self):
         """{dir relpath: the names of a few of its files (NAMES_PER_DIR)} of the sorted tree's dirs

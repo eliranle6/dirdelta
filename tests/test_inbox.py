@@ -4,6 +4,8 @@ import os
 import shutil
 import subprocess
 import tempfile
+import threading
+import time
 import unittest
 import zipfile
 from unittest import mock
@@ -497,6 +499,42 @@ class InboxSortTest(unittest.TestCase):
         self.assertFalse(os.path.exists(os.path.join(self.inbox, 'b.jpg')))
         self.assertTrue(os.path.exists(os.path.join(self.root, 'docs', 'a.txt')))
         self.assertEqual(listed.call_count, self.pick_files.call_count)
+
+    def drive_inbox(self):
+        """A sort whose inbox is on Drive as far as _ai_files() can tell, with a.txt, b.jpg and trip/c.jpg"""
+        sorter = Sort(self.inbox, self.root)
+        sorter.inbox_is_cloud = True
+        sorter._inbox_tree = mock.MagicMock()
+        sorter._inbox_tree.__contains__.side_effect = lambda relpath: relpath in ('a.txt', 'b.jpg', 'trip/c.jpg')
+        sorter._inbox_tree.file_size.return_value = 1
+        sorter._inbox_tree.cant_fetch.return_value = None
+        return sorter
+
+    def test_whats_waiting_for_the_drive_lock_waits_for_one_download(self):
+        sorter = self.drive_inbox()
+        order = []
+        waiter = threading.Thread(target=lambda: (sorter._drive_lock.acquire(), order.append('other'), sorter._drive_lock.release()))
+
+        def download(relpath):
+            self.assertTrue(sorter._drive_lock.locked())
+            order.append(relpath)
+            if not waiter.is_alive() and len(order) == 1:
+                waiter.start()
+                time.sleep(0.02)
+            return '/tmp/' + relpath
+        with mock.patch.object(sorter, '_downloaded', side_effect=download):
+            files = sorter._ai_files(['a.txt', 'b.jpg', 'trip/c.jpg'])
+        waiter.join(5)
+        self.assertEqual([file.relpath for file in files], ['a.txt', 'b.jpg', 'trip/c.jpg'])
+        self.assertEqual(order[:2], ['a.txt', 'other'])
+
+    def test_a_file_gone_during_a_batch_is_left_out_and_not_called_failed(self):
+        sorter = self.drive_inbox()
+        with mock.patch.object(sorter, '_downloaded', return_value='/tmp/x'), \
+                mock.patch('dirdelta.ai.describe', return_value={'a.txt': 'a note'}):
+            sorter._describe(['a.txt', 'gone.txt'])
+        self.assertEqual(sorter._descriptions, {'a.txt': 'a note'})
+        self.assertEqual(sorter._failed, {})
 
     def test_ctrl_r_forgets_what_was_found_and_indexes_again(self):
         sorter = Sort(self.inbox, self.root)
