@@ -20,7 +20,7 @@ MAX_FILES_LISTED = 5
 REFRESH_KEY = '\x12'
 REFRESH_KEY_NAME = 'Ctrl-R'
 # What it does in the tree beside the picker, by whether that's on Drive
-SIDE_REFRESH_HINTS = {True: 'read it anew from Drive', False: 'list it anew'}
+SIDE_REFRESH_HINTS = {True: 'read this folder anew from Drive', False: 'see what changed in it'}
 
 
 class _ReadAnew(object):

@@ -188,6 +188,17 @@ class DashboardTest(unittest.TestCase):
         self.assertEqual(pick.call_args.kwargs['selected'], (hashes_screen._TOGGLE, path))
         self.assertNotIn(hash_it, options)
 
+    def test_quitting_is_asked_only_while_hashing(self):
+        job = _Job('/photos', _progress())
+        with mock.patch('dirdelta.hashing._jobs', {'/photos': job}), \
+                helpers.answering_option_picker([hashes_screen.KEEP_HASHING, hashes_screen.QUIT_ANYWAY]) as pick:
+            self.assertTrue(hashes_screen.is_ok_to_quit())
+            pick.assert_not_called()
+            job.start()
+            self.assertFalse(hashes_screen.is_ok_to_quit())
+            self.assertTrue(hashes_screen.is_ok_to_quit())
+        self.assertEqual(helpers.labels_of(pick.call_args.args[0])[0], hashes_screen.KEEP_HASHING)
+
     def test_a_replica_thats_not_there_cant_be_hashed(self):
         path = '/not/there/at/all'
         self.dashboard(None, [hashes_screen.BACK], trees=[], other_paths=[path])

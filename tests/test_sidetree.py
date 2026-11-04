@@ -70,6 +70,27 @@ class ListingTest(unittest.TestCase):
             self.tree.move_files([('a.txt', 'b/moved')])
         self.assertEqual(self.listed_times()[0], 0)
 
+    def test_whats_asked_is_told_of_the_next_listings_files_once(self):
+        told = []
+        listing = sidetree.Listing(self.root, self.tree)
+        self.addCleanup(listing.close)
+        listing.items()
+        listing.invalidate(told.append)
+        self.assertEqual(told, [])
+        listing.items()
+        self.assertEqual(len(told), 1)
+        self.assertIn('a.txt', told[0])
+        listing.invalidate()
+        listing.items()
+        self.assertEqual(len(told), 1)
+
+    def test_closed_before_its_listed_its_told_so(self):
+        told = []
+        listing = sidetree.Listing(self.root, self.tree)
+        listing.invalidate(told.append)
+        listing.close()
+        self.assertEqual(told, [None])
+
     def test_invalidate(self):
         self.listing.items()
         helpers.make_files(self.root, ['outside'])

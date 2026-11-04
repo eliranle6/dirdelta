@@ -326,7 +326,7 @@ class InboxSort(filescreen.FilesScreen):
         more_keys = ([aiplan_screen.KEY_HINT, archive_screen.KEY_HINT, ('Ctrl-I', 'Claude: describe, and say where they go'),
                       opening.KEY_HINT, renaming.KEY_HINT,
                       ('Ctrl-W l', 'move to the sorted tree, on the right (Ctrl-W h: back)')] +
-                     [(self.REFRESH_KEY_NAME, ('read the folder anew from Drive, ' if self.inbox_is_cloud else '') + 'list the sorted tree anew'),
+                     [(self.REFRESH_KEY_NAME, 'see what changed outside dirdelta' + (' (in Drive, in the selected folder)' if self.inbox_is_cloud else '')),
                       hashes_screen.KEY_HINT])
         help_lines = (picker.key_help_lines(more_keys) + ["Tags after a file's name (/ searches them too):",
                        "  [claude: ...]            what Claude says it is",
@@ -336,8 +336,13 @@ class InboxSort(filescreen.FilesScreen):
         # Where to go on in the sorted tree, after Ctrl-R there
         side_start = None
         is_first = True
+        shown_before = []
         while True:
             files = self._inbox_files()
+            # It may be gone, whatever was done (it's also listed anew for changes outside dirdelta)
+            if selected is not None:
+                selected = filescreen.shown_near(selected, files, shown_before)
+            shown_before = files
             if is_first:
                 self._side_items()
                 self._warn_if_not_all_read()
@@ -517,7 +522,10 @@ class InboxSort(filescreen.FilesScreen):
         self._indexing = None
         self._side_listing.invalidate()
         for job in hashes_screen.jobs_of([tree]):
-            job.scan_in_background()
+            if tree is self._root_tree:
+                hashes_screen.scan_with_listing(job, self._side_listing)
+            else:
+                job.scan_in_background()
 
     def _warn_if_not_all_read(self):
         """Say so if the inbox or the sorted tree couldn't all be listed, as a sync does: what can't be

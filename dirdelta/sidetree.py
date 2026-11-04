@@ -15,8 +15,8 @@ def items(path, tree=None, excluded=None):
 
 
 def _listed(path, tree, excluded):
-    """(items(), what couldn't be read of it)"""
-    errors = []
+    """(items(), what couldn't be read of it, a local dir's files as {relpath: (size, mtime_ns)})"""
+    errors, files = [], None
     if paths.is_cloud_path(path):
         assert tree is not None, "a Drive replica's tree is needed"
         found = []
@@ -27,7 +27,7 @@ def _listed(path, tree, excluded):
             found.append('%s %s' % (kind, node.identifier))
     else:
         scan = localscan.scan(path)
-        errors = scan.errors
+        errors, files = scan.errors, scan.files()
         found = ['%s %s' % (kind, relpath) for relpath, (kind, _, _) in scan.entries.items()]
         # Each dir's together, its dirs and files by name (find's order is the disk's)
         found.sort(key=lambda item: item[2:].split('/'))
@@ -35,7 +35,7 @@ def _listed(path, tree, excluded):
     found = [item for item in found if not paths.is_meta(item[2:])]
     if excluded:
         found = [item for item in found if not paths.is_at_or_under(item[2:], excluded)]
-    return found, errors
+    return found, errors, files
 
 
 class Listing(object):
@@ -48,20 +48,34 @@ class Listing(object):
         self._items = None
         # What couldn't be read of it, when it was last listed
         self.errors = []
+        # Told of the next listing's files (see invalidate())
+        self._on_listed = None
         tree.add_listener(self)
 
     def items(self):
         if self._items is None:
-            self._items, self.errors = _listed(self._path, self._tree, self._excluded)
+            self._items, self.errors, files = _listed(self._path, self._tree, self._excluded)
+            self._tell_listed(files)
         return self._items
 
-    def invalidate(self):
+    def invalidate(self, on_listed=None):
+        """It's listed anew when next needed. on_listed(files): called then with its files, as
+        {relpath: (size, mtime_ns)}, so what needs them too needn't list them; with None if it has none
+        (it's on Drive), or it's closed before that."""
         self._items = None
+        if on_listed is not None:
+            self._on_listed = on_listed
+
+    def _tell_listed(self, files):
+        on_listed, self._on_listed = self._on_listed, None
+        if on_listed is not None:
+            on_listed(files)
 
     def close(self):
         """It's not needed anymore: its tree needn't tell it, and what it listed can go"""
         self._tree.remove_listener(self)
         self._items = None
+        self._tell_listed(None)
 
     # What the tree tells it
 

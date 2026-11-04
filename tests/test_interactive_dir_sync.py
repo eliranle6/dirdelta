@@ -10,6 +10,7 @@ import helpers
 from dirdelta import clouddirtree
 from dirdelta import dirtree
 from dirdelta import elsewhere
+from dirdelta import hashing
 from dirdelta import interactive_dir_sync
 from dirdelta import localdiskdirtree
 from dirdelta import picker
@@ -436,7 +437,7 @@ class RefreshKeyTest(unittest.TestCase):
         self.assertFalse(self.sync.src_index.is_built())
         # And the replicas dashboard's
         self.assertEqual(calls[0].kwargs['keys'], Sync.REFRESH_KEY + '#a:e')
-        self.assertIn("  %-17s%s" % ('Ctrl-R', 'read the folder anew from Drive, list the tree on the right anew'), calls[0].kwargs['help_lines'])
+        self.assertIn("  %-17s%s" % ('Ctrl-R', 'see what changed outside dirdelta (in Drive, in the selected folder)'), calls[0].kwargs['help_lines'])
         self.assertIsNone(calls[0].kwargs['selected'])
         # What's still missing, what's still picked of it, where it was
         self.assertEqual(calls[1].args[1], ['a/1.mp3', 'b/3.mp3'])
@@ -468,7 +469,7 @@ class RefreshKeyTest(unittest.TestCase):
     def test_the_side_tree_is_listed_anew_and_is_gone_back_to_after_the_key_there(self):
         other = dirtree.DirTree('/other')
         other.add_file_by_relpath('a.mp3')
-        with mock.patch('dirdelta.sidetree._listed', return_value=([], [])) as listed:
+        with mock.patch('dirdelta.sidetree._listed', return_value=([], [], None)) as listed:
             calls = self.browse(other, self.local, [picker.Picked(Sync.REFRESH_KEY, 'a.mp3', ['a.mp3']),
                                                     picker.Picked(picker.SIDE_KEY, 'a.mp3', ['a.mp3'], 'x', Sync.REFRESH_KEY),
                                                     picker.Picked('', 'a.mp3', ['a.mp3']), None])
@@ -555,6 +556,17 @@ class ReadingLocalReplicasAnewTest(_TwoDirsTestCase):
         self.assertFalse(self.sync.src_index.is_built())
         self.assertFalse(self.sync.dst_index.is_built())
         self.assertIn('f a.txt', calls[1].kwargs['side'].items)
+
+    def test_dsts_hashing_gets_the_side_trees_listing_and_srcs_lists_its_own(self):
+        src_job, dst_job = hashing.Job(self.src_path), hashing.Job(self.dst_path)
+        with mock.patch('dirdelta.hashing._jobs', {self.src_path: src_job, self.dst_path: dst_job}), \
+                mock.patch.object(hashing.Job, 'scan'), \
+                mock.patch.object(src_job, 'scan_in_background') as src_scan, \
+                mock.patch.object(dst_job, 'scan_in_background') as dst_scan:
+            self.press(picker.Picked(Sync.REFRESH_KEY, 'b.txt', []))
+        src_scan.assert_called_once_with()
+        dst_scan.assert_called_once()
+        self.assertIn('a.txt', dst_scan.call_args.args[0])
 
     def test_in_the_side_tree_only_dst_is_and_it_stays_there(self):
         calls = self.press(picker.Picked(picker.SIDE_KEY, 'b.txt', [], 'old/d.txt', Sync.REFRESH_KEY))

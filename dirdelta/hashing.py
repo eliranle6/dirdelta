@@ -128,8 +128,8 @@ class Job(object):
         if self._is_started:
             _pool().wake()
 
-    def scan_in_background(self):
-        threading.Thread(target=self.scan, daemon=True).start()
+    def scan_in_background(self, listed=None):
+        threading.Thread(target=self.scan, args=(listed,), daemon=True).start()
 
     # Hashing
 

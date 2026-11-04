@@ -247,6 +247,38 @@ class MainMenuTest(unittest.TestCase):
         # Each way, at first and again
         self.assertGreaterEqual(len(self.find_missing_calls) - calls_before, 2)
 
+    def test_reading_anew_in_one_way_forgets_the_other_ways_comparisons_too(self):
+        a = localdiskdirtree.LocalDiskDirTree('/a', silent=True)
+        b = localdiskdirtree.LocalDiskDirTree('/b', silent=True)
+        answers = ['Files only in /a', 'Files only in /b', dirsync_main.BACK]
+        checked = []
+
+        def browse(sync):
+            checked.append(sync.checked)
+            if len(checked) == 1:
+                sync.checked['x'] = {'y': True}
+            else:
+                sync.has_changed = sync.was_read_anew = True
+        with mock.patch('dirdelta.picker.pick_option', side_effect=lambda *_, **__: answers.pop(0)), \
+                mock.patch.object(dirsync_main.interactive_dir_sync.InteractiveDirSync, 'browse', autospec=True, side_effect=browse):
+            dirsync_main._sync(a, b, '/a', '/b')
+        self.assertEqual(checked[0], {})
+
+    def test_a_copy_keeps_the_ways_comparisons(self):
+        a = localdiskdirtree.LocalDiskDirTree('/a', silent=True)
+        b = localdiskdirtree.LocalDiskDirTree('/b', silent=True)
+        answers = ['Files only in /a', dirsync_main.BACK]
+        checked = []
+
+        def browse(sync):
+            checked.append(sync.checked)
+            sync.checked['x'] = {'y': True}
+            sync.has_changed = True
+        with mock.patch('dirdelta.picker.pick_option', side_effect=lambda *_, **__: answers.pop(0)), \
+                mock.patch.object(dirsync_main.interactive_dir_sync.InteractiveDirSync, 'browse', autospec=True, side_effect=browse):
+            dirsync_main._sync(a, b, '/a', '/b')
+        self.assertEqual(checked[0], {'x': {'y': True}})
+
     def test_a_rescan_that_fails_says_so_and_finds_nothing_again(self):
         a = localdiskdirtree.LocalDiskDirTree('/a', silent=True)
         b = localdiskdirtree.LocalDiskDirTree('/b', silent=True)

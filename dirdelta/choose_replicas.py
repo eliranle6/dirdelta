@@ -7,6 +7,7 @@ import os
 
 from dirdelta import drivecache
 from dirdelta import hashes_screen
+from dirdelta import hashing
 from dirdelta import dryrun
 from dirdelta import messages
 from dirdelta import paths
@@ -57,9 +58,12 @@ def run(replicas):
         # Quit apart from the last section too
         options = picker.grouped([[picker.Skipped(heading)] + section for heading, section in sections if section] + [[QUIT]])
         option = picker.pick_option(options, header='Choose the two replicas to sync, or an inbox to sort',
-                                    selected=('slot', 0), help_lines=help_lines())
+                                    selected=('slot', 0), help_lines=help_lines(),
+                                    shown_as=hashes_screen.hashing_status if hashing.jobs() else None)
         if option in (None, QUIT):
-            return None
+            if hashes_screen.is_ok_to_quit():
+                return None
+            continue
         if option == KNOWN_LIST:
             hashes_screen.dashboard(known=replicas, other_paths=known_paths(replicas))
             continue

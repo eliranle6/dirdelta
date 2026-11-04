@@ -43,6 +43,8 @@ NOTHING = "Nothing: go back"
 NOT_NOW = "Not now (%s starts it later)" % (KEY,)
 HASH_AND_WAIT = "Hash now, and wait"
 HASH_IN_BACKGROUND = "Hash in the background, and go on"
+KEEP_HASHING = "Don't quit: keep hashing"
+QUIT_ANYWAY = "Quit"
 # How often the wait's progress line changes, in seconds
 WAIT_INTERVAL = 0.5
 
@@ -113,6 +115,28 @@ def offer(jobs):
     if answer == HASH_AND_WAIT:
         wait([job for job, _ in left])
     return True
+
+
+def scan_with_listing(job, listing):
+    """Have the job look for changes in its replica with what the replica's sidetree.Listing lists next,
+    all of it, if that's what the job lists too (else it lists them itself)"""
+    listing.invalidate(job.scan_in_background if job.max_depth is None else lambda files: job.scan_in_background())
+
+
+def hashing_status():
+    """What a menu's status bar says of all the jobs (for pick_option's shown_as)"""
+    return {'': picker.segments(hashing.status_parts(hashing.jobs()))}
+
+
+def is_ok_to_quit():
+    """Whether to quit: asked if any replica is still being hashed, since it stops with dirdelta"""
+    running = [job for job in hashing.jobs() if job.is_started() and job.progress().state != hashing.DONE]
+    if not running:
+        return True
+    names = replicanames.short_names([job.root for job in running])
+    lines = ["%s isn't all hashed yet." % (", ".join(names[job.root] for job in running),),
+             "Hashing stops if you quit. What's hashed is kept, and it can go on next time."]
+    return picker.pick_option([KEEP_HASHING, QUIT_ANYWAY], header='\n'.join(lines), title="Quit?") == QUIT_ANYWAY
 
 
 def total(jobs):
@@ -303,7 +327,7 @@ def _add_replica(item, options, shown, known, names):
         kept = hashcache.count_under(os.path.realpath(name))
         shown[(_INFO, name)] = picker.Skipped(
             "  Hashes kept of %s (as of when they were hashed); how many are left is counted when it's "
-            "synced or sorted" % (_files(kept),))
+            "hashed, synced or sorted" % (_files(kept),))
         options.append((_HASH, name))
         shown[(_HASH, name)] = ("  Hash its files, in the background" if _is_there(name) else
                                 picker.Disabled("  Hash its files: its disk isn't mounted"))

@@ -171,6 +171,9 @@ class InteractiveDirSync(filescreen.FilesScreen):
         # Whether the replicas' files changed here (copied, removed, moved, or read anew from
         # Drive), so what each lacks may have
         self.has_changed = False
+        # Whether a replica was read anew: what's known of its files' contents may be wrong, also
+        # the other way's (dirsync_main)
+        self.was_read_anew = False
         # Opens src's files (Ctrl-X, or Open in the action menu)
         self._opener = opening.Opener(src)
         # What the AI was last asked (see _ask_ai()), to start from next time
@@ -207,7 +210,7 @@ class InteractiveDirSync(filescreen.FilesScreen):
                       ('Ctrl-W l', 'move to %s, on the right (Ctrl-W h: back)' % (dst_name,)),
                       (self.SIDE_REMOVE_KEY + ' there', 'remove what\'s selected there'),
                       ('Enter, : there', 'choose what to do with it')] +
-                     [(self.REFRESH_KEY_NAME, ('read the folder anew from Drive, ' if clouds else '') + 'list the tree on the right anew'),
+                     [(self.REFRESH_KEY_NAME, 'see what changed outside dirdelta' + (' (in Drive, in the selected folder)' if clouds else '')),
                       hashes_screen.KEY_HINT])
         picked, selected = [], None
         # Where to go on in the side tree, after what was done there
@@ -299,12 +302,15 @@ class InteractiveDirSync(filescreen.FilesScreen):
                 self._side_listing.invalidate()
                 for replica, relpath in to_refresh:
                     if _read_anew(replica, relpath):
-                        self.has_changed = True
+                        self.has_changed = self.was_read_anew = True
                         self._index_of(replica).invalidate()
                         # Its files may have other contents now
                         self.checked.clear()
                         for job in hashes_screen.jobs_of([replica]):
-                            job.scan_in_background()
+                            if replica is self._dst:
+                                hashes_screen.scan_with_listing(job, self._side_listing)
+                            else:
+                                job.scan_in_background()
                 is_changed = self.has_changed
             else:
                 if done is None:

@@ -189,6 +189,9 @@ def _sync(replica_a, replica_b, replica_a_path, replica_b_path, known_replicas=N
         # lacks, and so does reading a replica anew from Drive (in the file picker)
         if actions[option].run():
             for way in ways:
+                # The way shown cleared its own; its files may have other contents for this one too
+                if actions[option].was_read_anew:
+                    way.checked.clear()
                 way.find_missing()
             # Files copied into a local replica (or moved in it) are hashed too
             for job in jobs:
@@ -282,6 +285,7 @@ class _Action(object):
                                                        way.checked, self.changes)
         with picker.place("Files in %s" % (replicanames.full(self.src_path),)):
             sync.browse()
+        self.was_read_anew = sync.was_read_anew
         return sync.has_changed
 
 

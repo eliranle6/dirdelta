@@ -273,6 +273,7 @@ Drive", which reads that folder anew from Drive (as the refresh offered at the s
 it changed outside dirdelta, and in the file picker `Ctrl-R` reads just the selected folder anew. Whatever the replicas, `Ctrl-R` also
 takes in what changed outside dirdelta: both trees and what each lacks are found anew. Pressed in the tree on
 the right, it does so for that replica (on Drive, the folder selected there), and you stay there.
+If a replica's still being hashed, quitting from the start menu asks first, as hashing stops with dirdelta.
 A Drive replica's file list is kept in it too, in `meta/files.jsonl`: uploaded while a sync (or a
 sort into it) goes on, a minute at most after it changed, and once more at the end (not in a dry
 run). At the start, if the copy there is newer than this machine's cache (another machine's), it's

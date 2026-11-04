@@ -462,6 +462,18 @@ class InboxSortTest(unittest.TestCase):
             sorter.run()
         self.assertEqual([call.kwargs['side'].start for call in pick_files.call_args_list], [None, 'docs', None])
 
+    def test_ctrl_r_with_the_selected_file_gone_selects_the_closest(self):
+        answers = [picker.Picked(Sort.REFRESH_KEY, 'a.txt', []), None]
+
+        def pick(root, files, **kwargs):
+            answer = answers.pop(0)
+            if answer is not None:
+                os.remove(os.path.join(self.inbox, 'a.txt'))
+            return answer
+        with mock.patch('dirdelta.picker.pick_files', side_effect=pick) as pick_files:
+            Sort(self.inbox, self.root).run()
+        self.assertEqual(pick_files.call_args.kwargs['selected'], 'b.jpg')
+
     def test_ctrl_r_forgets_what_was_found_and_indexes_again(self):
         sorter = Sort(self.inbox, self.root)
         sorter._inbox_index.build()
