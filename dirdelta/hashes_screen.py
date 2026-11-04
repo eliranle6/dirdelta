@@ -13,6 +13,7 @@ from dirdelta import dryrun
 from dirdelta import hashcache
 from dirdelta import hashing
 from dirdelta import label_screen
+from dirdelta import localscan
 from dirdelta import mounts
 from dirdelta import localdiskdirtree
 from dirdelta import messages
@@ -119,8 +120,8 @@ def offer(jobs):
 
 def scan_with_listing(job, listing):
     """Have the job look for changes in its replica with what the replica's sidetree.Listing lists next,
-    all of it, if that's what the job lists too (else it lists them itself)"""
-    listing.invalidate(job.scan_in_background if job.max_depth is None else lambda files: job.scan_in_background())
+    if it goes as deep as the job does (else the job lists them itself)"""
+    listing.invalidate(job.scan_in_background if job.max_depth == listing.max_depth else lambda files: job.scan_in_background())
 
 
 def hashing_status():
@@ -345,7 +346,8 @@ def _start_hashing(name):
     """Hash the local replica named name in the background, its files listed first (as a sync's are,
     but without keeping the dashboard waiting), its hashes kept in it (see hashcache.use_replica())"""
     hashcache.use_replica(name)
-    job = hashing.job(name)
+    # As deep as a sync of it goes, by default, so that sync's listings can be shared with it
+    job = hashing.job(name, localscan.DEFAULT_MAX_DEPTH)
     job.scan_in_background()
     job.start()
 

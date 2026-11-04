@@ -474,6 +474,30 @@ class InboxSortTest(unittest.TestCase):
             Sort(self.inbox, self.root).run()
         self.assertEqual(pick_files.call_args.kwargs['selected'], 'b.jpg')
 
+    def test_reading_a_drive_inbox_leaves_a_local_sorted_tree_alone(self):
+        sorter = Sort(self.inbox, self.root)
+        sorter.inbox_is_cloud = True
+        sorter._root_index.build()
+        sorter._side_listing.items()
+        sorter._indexing = 'finished'
+        with mock.patch('dirdelta.interactive_dir_sync.refresh_replica', return_value=True), \
+                mock.patch('dirdelta.interactive_dir_sync.rescan_replica') as rescan, \
+                mock.patch('dirdelta.sidetree._listed') as listed:
+            sorter._read_inbox_anew('a.txt')
+            sorter._side_listing.items()
+        rescan.assert_not_called()
+        listed.assert_not_called()
+        self.assertTrue(sorter._root_index.is_built())
+        self.assertEqual(sorter._indexing, 'finished')
+
+    def test_the_inbox_is_listed_once_for_each_time_its_picker_is_shown(self):
+        with mock.patch.object(Sort, '_inbox_files', autospec=True, side_effect=Sort._inbox_files) as listed:
+            self.sort([['b.jpg'], ['a.txt'], None], ['Remove it from', YES, SURE, 'Move it to a dir you pick', YES],
+                      dirs=[os.path.join(self.root, 'docs')])
+        self.assertFalse(os.path.exists(os.path.join(self.inbox, 'b.jpg')))
+        self.assertTrue(os.path.exists(os.path.join(self.root, 'docs', 'a.txt')))
+        self.assertEqual(listed.call_count, self.pick_files.call_count)
+
     def test_ctrl_r_forgets_what_was_found_and_indexes_again(self):
         sorter = Sort(self.inbox, self.root)
         sorter._inbox_index.build()

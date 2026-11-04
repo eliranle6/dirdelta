@@ -227,7 +227,9 @@ class InboxSort(filescreen.FilesScreen):
         self._failed = {}
         # The queued files to ask about anew (Ctrl-I on ones asked before), whatever Claude's cache has
         self._anew = set()
-        # The describer's downloads and the screen's changes share one Drive service (not thread-safe)
+        # One at a time: what the describer and the opener download (they'd write the same .part, see
+        # downloads.get()), and what the screen changes in the trees, which those read. It isn't for
+        # Drive's connection: each thread has its own (driveapi.service()).
         self._drive_lock = threading.Lock()
         # As a sync looks for a file where the other replica has it (elsewhere.py), the inbox's files
         # are looked for in the sorted tree, by name, size and contents, with each one's index; the
@@ -326,7 +328,7 @@ class InboxSort(filescreen.FilesScreen):
         more_keys = ([aiplan_screen.KEY_HINT, archive_screen.KEY_HINT, ('Ctrl-I', 'Claude: describe, and say where they go'),
                       opening.KEY_HINT, renaming.KEY_HINT,
                       ('Ctrl-W l', 'move to the sorted tree, on the right (Ctrl-W h: back)')] +
-                     [(self.REFRESH_KEY_NAME, 'see what changed outside dirdelta' + (' (in Drive, in the selected folder)' if self.inbox_is_cloud else '')),
+                     [(self.REFRESH_KEY_NAME, 'read the folder anew from Drive' if self.inbox_is_cloud else 'see what changed outside dirdelta'),
                       hashes_screen.KEY_HINT])
         help_lines = (picker.key_help_lines(more_keys) + ["Tags after a file's name (/ searches them too):",
                        "  [claude: ...]            what Claude says it is",
@@ -417,8 +419,6 @@ class InboxSort(filescreen.FilesScreen):
             for job in self._jobs():
                 job.scan_in_background()
             picked = [relpath for relpath in chosen.files if relpath not in done]
-            left = [relpath for relpath in self._inbox_files()]
-            selected = filescreen.shown_near(selected or '', left, files)
 
     def _dashboard(self):
         hashes_screen.dashboard(self._trees(), self._known_replicas)
@@ -497,9 +497,9 @@ class InboxSort(filescreen.FilesScreen):
         return self._side_listing.items()
 
     def _read_inbox_anew(self, relpath):
-        """Ctrl-R: the inbox (on Drive, its folder of relpath), and the sorted tree if it's local"""
+        """Ctrl-R: the inbox (on Drive, its folder of relpath), and the sorted tree too if both are local"""
         self._read_anew(self._inbox_tree, self._inbox_index, self.inbox_is_cloud, relpath)
-        if not self.root_is_cloud:
+        if not self.inbox_is_cloud and not self.root_is_cloud:
             self._read_anew(self._root_tree, self._root_index, False, '')
 
     def _read_side_anew(self, relpath):
@@ -518,9 +518,12 @@ class InboxSort(filescreen.FilesScreen):
         index.invalidate()
         # Its files may have other contents now
         self._checked.clear()
-        # Built again, in the background (see _start_indexing())
-        self._indexing = None
-        self._side_listing.invalidate()
+        if tree is self._root_tree:
+            # Built again, in the background (see _start_indexing())
+            self._indexing = None
+        # (A local one's isn't listed again for another's folder read from Drive)
+        if tree is self._root_tree or self.root_is_cloud:
+            self._side_listing.invalidate()
         for job in hashes_screen.jobs_of([tree]):
             if tree is self._root_tree:
                 hashes_screen.scan_with_listing(job, self._side_listing)
@@ -1572,12 +1575,16 @@ class InboxSort(filescreen.FilesScreen):
             self._inbox_tree.remove_files(file_entries)
         if dryrun.DRYRUN:
             return relpaths
-        left = set(self._inbox_files())
-        kept = [relpath for relpath in relpaths if relpath in left]
+        kept = [relpath for relpath in relpaths if self._is_in_inbox_now(relpath)]
         if kept:
             self._say_not_done("removed", kept, len(relpaths))
-        removed = [relpath for relpath in relpaths if relpath not in left]
-        return removed
+        return [relpath for relpath in relpaths if relpath not in set(kept)]
+
+    def _is_in_inbox_now(self, relpath):
+        """Whether the inbox has a file at relpath (asked of just it: listing a big inbox takes long)"""
+        if self.inbox_is_cloud:
+            return relpath in self._inbox_tree
+        return os.path.lexists(os.path.join(self.inbox_path, relpath))
 
 
 class _Renamed(object):

@@ -2,6 +2,7 @@ import argparse
 import os
 import sys
 
+from dirdelta import localscan
 from dirdelta import choose_replicas
 from dirdelta import dirsync_main
 from dirdelta import dirpick_main
@@ -22,7 +23,7 @@ def parse_args():
     parser.add_argument("-x", "--execute", default=None)
     # With two paths: sort the first (an inbox) into the second (a sorted tree), see inbox.py
     parser.add_argument("-s", "--sort", action='store_true')
-    parser.add_argument("-m", "--max-depth", type=int, default=20)
+    parser.add_argument("-m", "--max-depth", type=int, default=localscan.DEFAULT_MAX_DEPTH)
     return parser.parse_args()
 
 

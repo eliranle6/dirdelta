@@ -26,7 +26,8 @@ def _listed(path, tree, excluded):
             kind = 'd' if isinstance(node.data, entries.DirEntry) else 'f'
             found.append('%s %s' % (kind, node.identifier))
     else:
-        scan = localscan.scan(path)
+        # As deep as the replica's other listings go: what's below them isn't compared
+        scan = localscan.scan(path, getattr(tree, 'max_depth', None))
         errors, files = scan.errors, scan.files()
         found = ['%s %s' % (kind, relpath) for relpath, (kind, _, _) in scan.entries.items()]
         # Each dir's together, its dirs and files by name (find's order is the disk's)
@@ -45,6 +46,7 @@ class Listing(object):
     changes outside dirdelta is seen then, or the next time its picker is entered."""
     def __init__(self, path, tree, excluded=None):
         self._path, self._tree, self._excluded = path, tree, excluded
+        self.max_depth = getattr(tree, 'max_depth', None)
         self._items = None
         # What couldn't be read of it, when it was last listed
         self.errors = []

@@ -437,7 +437,7 @@ class RefreshKeyTest(unittest.TestCase):
         self.assertFalse(self.sync.src_index.is_built())
         # And the replicas dashboard's
         self.assertEqual(calls[0].kwargs['keys'], Sync.REFRESH_KEY + '#a:e')
-        self.assertIn("  %-17s%s" % ('Ctrl-R', 'see what changed outside dirdelta (in Drive, in the selected folder)'), calls[0].kwargs['help_lines'])
+        self.assertIn("  %-17s%s" % ('Ctrl-R', 'read the folder anew from Drive'), calls[0].kwargs['help_lines'])
         self.assertIsNone(calls[0].kwargs['selected'])
         # What's still missing, what's still picked of it, where it was
         self.assertEqual(calls[1].args[1], ['a/1.mp3', 'b/3.mp3'])
@@ -482,6 +482,15 @@ class RefreshKeyTest(unittest.TestCase):
         self.assertEqual(calls[1].kwargs['picked'], ['a.mp3'])
         # After the key in the side tree, it's where the picker starts; only then
         self.assertEqual([call.kwargs['side'].start for call in calls], [None, None, 'x', None])
+
+    def test_reading_drive_leaves_a_local_replica_alone(self):
+        with mock.patch('dirdelta.interactive_dir_sync.rescan_replica') as rescan, \
+                mock.patch('dirdelta.sidetree._listed', return_value=([], [], None)) as listed:
+            self.browse(self.cloud, self.local, [picker.Picked(Sync.REFRESH_KEY, 'a', []), None])
+        rescan.assert_not_called()
+        self.refresh.assert_called_once_with(self.cloud, 'a')
+        # The tree beside it, the local one, isn't listed again
+        self.assertEqual(listed.call_count, 1)
 
     def test_the_key_in_the_side_tree_reads_whats_selected_there_only_in_dst(self):
         self.local.add_file_by_relpath('x/new.mp3')
@@ -567,6 +576,23 @@ class ReadingLocalReplicasAnewTest(_TwoDirsTestCase):
         src_scan.assert_called_once_with()
         dst_scan.assert_called_once()
         self.assertIn('a.txt', dst_scan.call_args.args[0])
+
+    def dst_scan_with_job_going(self, depth):
+        """How dst's job (down to depth) was told to look for changes, its tree going down to 20, as a sync's does"""
+        dst = localdiskdirtree.LocalDiskDirTree(self.dst_path, True, 20)
+        self.sync = Sync(self.sync._src, dst)
+        dst_job = hashing.Job(self.dst_path, depth)
+        with mock.patch('dirdelta.hashing._jobs', {self.dst_path: dst_job}), mock.patch.object(hashing.Job, 'scan'), \
+                mock.patch.object(dst_job, 'scan_in_background') as dst_scan:
+            self.press(picker.Picked(Sync.REFRESH_KEY, 'b.txt', []))
+        dst_scan.assert_called_once()
+        return dst_scan
+
+    def test_a_job_going_as_deep_as_the_sides_tree_gets_its_listing(self):
+        self.assertIn('a.txt', self.dst_scan_with_job_going(20).call_args.args[0])
+
+    def test_a_job_going_deeper_than_the_side_tree_lists_for_itself(self):
+        self.dst_scan_with_job_going(None).assert_called_once_with()
 
     def test_in_the_side_tree_only_dst_is_and_it_stays_there(self):
         calls = self.press(picker.Picked(picker.SIDE_KEY, 'b.txt', [], 'old/d.txt', Sync.REFRESH_KEY))

@@ -70,6 +70,14 @@ class ListingTest(unittest.TestCase):
             self.tree.move_files([('a.txt', 'b/moved')])
         self.assertEqual(self.listed_times()[0], 0)
 
+    def test_it_goes_as_deep_as_its_replica(self):
+        helpers.make_files(self.root, ['deep/er/still/f.txt'])
+        tree = localdiskdirtree.LocalReplica(self.root, True, 2)
+        listing = sidetree.Listing(self.root, tree)
+        self.addCleanup(listing.close)
+        self.assertIn('d deep/er', listing.items())
+        self.assertNotIn('f deep/er/still/f.txt', listing.items())
+
     def test_whats_asked_is_told_of_the_next_listings_files_once(self):
         told = []
         listing = sidetree.Listing(self.root, self.tree)

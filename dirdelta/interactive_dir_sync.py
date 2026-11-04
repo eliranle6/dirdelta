@@ -210,7 +210,7 @@ class InteractiveDirSync(filescreen.FilesScreen):
                       ('Ctrl-W l', 'move to %s, on the right (Ctrl-W h: back)' % (dst_name,)),
                       (self.SIDE_REMOVE_KEY + ' there', 'remove what\'s selected there'),
                       ('Enter, : there', 'choose what to do with it')] +
-                     [(self.REFRESH_KEY_NAME, 'see what changed outside dirdelta' + (' (in Drive, in the selected folder)' if clouds else '')),
+                     [(self.REFRESH_KEY_NAME, 'read the folder anew from Drive' if clouds else 'see what changed outside dirdelta'),
                       hashes_screen.KEY_HINT])
         picked, selected = [], None
         # Where to go on in the side tree, after what was done there
@@ -263,9 +263,9 @@ class InteractiveDirSync(filescreen.FilesScreen):
             key = chosen.key
             # What the action menu's action was (Copy and Remove change only the files they do)
             self._last_action = None
-            # Ctrl-R there reads dst anew (on Drive, what's selected there); here, each replica (on Drive,
-            # what's selected here)
-            to_refresh = [(replica, selected) for replica in (self._src, self._dst)]
+            # Ctrl-R there reads dst anew (on Drive, what's selected there); here, what's on Drive (what's
+            # selected here), and only without any on Drive, the local ones
+            to_refresh = [(replica, selected) for replica in clouds or (self._src, self._dst)]
             if key == picker.SIDE_KEY and chosen.side_pressed == self.REFRESH_KEY:
                 key = self.REFRESH_KEY
                 to_refresh = [(self._dst, chosen.side_selected)]
@@ -298,8 +298,8 @@ class InteractiveDirSync(filescreen.FilesScreen):
                     key = self.REFRESH_KEY
             if key == self.REFRESH_KEY:
                 done = []
-                # What changed outside dirdelta shows there now
-                self._side_listing.invalidate()
+                if any(replica is self._dst for replica, _ in to_refresh):
+                    self._side_listing.invalidate()
                 for replica, relpath in to_refresh:
                     if _read_anew(replica, relpath):
                         self.has_changed = self.was_read_anew = True

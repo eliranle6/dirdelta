@@ -23,6 +23,10 @@ class Scan(object):
         return {relpath: (size, mtime_ns) for relpath, (kind, size, mtime_ns) in self.entries.items() if kind == FILE}
 
 
+# How deep a replica is listed, unless it's said otherwise (main's --max-depth)
+DEFAULT_MAX_DEPTH = 20
+
+
 def scan(root, max_depth=None, progress=None):
     """A Scan of what's under the dir at root (down to max_depth levels). progress, if given, is
     called as it goes with how many it found so far, and may raise, to stop it (find is stopped too).
