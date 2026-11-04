@@ -33,14 +33,14 @@ def is_local(tree):
     return isinstance(tree, LocalReplica)
 
 
-def scan_warning(where, errors):
+def scan_warning(where, errors, so="the diff may be wrong"):
     """A warning's lines if scanning where (a dir, or a description of dirs) couldn't read everything,
-    given find's error messages, since then a diff may list files as missing that are there, or
+    given find's error messages, since then (so) a diff may list files as missing that are there, or
     miss some; no lines if there are no errors."""
     if not errors:
         return []
-    lines = ["Couldn't read everything in %s (%s), so the diff may be wrong:" %
-             (where, text.counted(len(errors), 'error'))]
+    lines = ["Couldn't read everything in %s (%s), so %s:" %
+             (where, text.counted(len(errors), 'error'), so)]
     return lines + text.listed(["  " + error for error in errors], MAX_SCAN_ERRORS_SHOWN)
 
 
@@ -127,7 +127,9 @@ class LocalReplica(dirtree.DirTree):
     def listed(self, algorithm):
         kept = hashcache.known_under(self._rootpath)
         found = {}
-        for relpath, (size, mtime_ns) in localscan.scan(self._rootpath, self.max_depth).files().items():
+        scan = localscan.scan(self._rootpath, self.max_depth)
+        self.scan_errors = scan.errors
+        for relpath, (size, mtime_ns) in scan.files().items():
             known = kept.get(relpath)
             # As it was when it was hashed (see hashcache.get())
             found[relpath] = (size, known[2].get(algorithm) if known and known[:2] == (size, mtime_ns) else None)

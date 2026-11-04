@@ -245,6 +245,8 @@ class InboxSort(filescreen.FilesScreen):
         self._last_instruction = ''
         # What the last listing of the inbox found (see _inbox_files())
         self._listing = {}
+        # The sorted tree's dirs and files, for the tree beside the picker
+        self._side_listing = sidetree.Listing(self.root_path, self._root_tree, self._inbox_in_root)
 
     # The inbox's files
 
@@ -318,21 +320,26 @@ class InboxSort(filescreen.FilesScreen):
         self._warn_if_read_only()
         header = ("Files in %s, to sort into %s. Pick some, then choose what to do with them." %
                   (replicanames.full(self.inbox_path), replicanames.full(self.root_path)))
-        keys = (self.REFRESH_KEY if self.inbox_is_cloud else '') + hashes_screen.KEY + aiplan_screen.KEY + contextmenu.KEY + archive_screen.KEY
+        keys = self.REFRESH_KEY + hashes_screen.KEY + aiplan_screen.KEY + contextmenu.KEY + archive_screen.KEY
         # The keys row has little room: the rest are in the menu (:), and ?
         key_hints = [('Enter', 'choose what to do'), contextmenu.KEY_HINT]
         more_keys = ([aiplan_screen.KEY_HINT, archive_screen.KEY_HINT, ('Ctrl-I', 'Claude: describe, and say where they go'),
                       opening.KEY_HINT, renaming.KEY_HINT,
                       ('Ctrl-W l', 'move to the sorted tree, on the right (Ctrl-W h: back)')] +
-                     ([(self.REFRESH_KEY_NAME, 'read the folder anew from Drive')] if self.inbox_is_cloud else []) +
-                     [hashes_screen.KEY_HINT])
+                     [(self.REFRESH_KEY_NAME, ('read the folder anew from Drive, ' if self.inbox_is_cloud else '') + 'list the sorted tree anew'),
+                      hashes_screen.KEY_HINT])
         help_lines = (picker.key_help_lines(more_keys) + ["Tags after a file's name (/ searches them too):",
                        "  [claude: ...]            what Claude says it is",
                        "  [junk? ...]              it may be removed (by its name or size, or as Claude says)"] +
                       (hashes_screen.HELP_LINES[1:] if self._jobs() else []))
         picked, selected = [], None
+        is_first = True
         while True:
             files = self._inbox_files()
+            if is_first:
+                self._side_items()
+                self._warn_if_not_all_read()
+                is_first = False
             if not files:
                 messages.show("The inbox is empty", ["%s has no files to sort." % (self.inbox_path,)],
                               dryrun.label())
@@ -346,8 +353,9 @@ class InboxSort(filescreen.FilesScreen):
                 previews=lambda send, files=files: self._send_previews(files, send),
                 shown_as=lambda files=files: self._shown_as(files),
                 notify_keys=DESCRIBE_KEY + OPEN_KEY, enter_picks_selection=True, twice_keys=renaming.KEY,
-                side=picker.Side(self.root_path, self._side_items(), True, self._side_follow,
-                                 key_hints=[('Enter', ('copy' if self.MOVE_TO in self._cant_be_done() else 'move') + ' the files here')]),
+                side=picker.Side(self.root_path, self._side_items(), True, self._side_follow, self.REFRESH_KEY,
+                                 [('Enter', ('copy' if self.MOVE_TO in self._cant_be_done() else 'move') + ' the files here'),
+                                  (self.REFRESH_KEY_NAME, filescreen.SIDE_REFRESH_HINTS[self.root_is_cloud])]),
                 none_picked_key_hints=[('Enter', 'Pick & choose what to do')],
                 on_notify=lambda key, selected, picked, files=files: self._on_key(key, selected, picked, files),
                 on_selection=functools.partial(elsewhere.check_contents, files, self._inbox_tree,
@@ -367,8 +375,11 @@ class InboxSort(filescreen.FilesScreen):
                 selected = moved.get(selected, selected)
                 continue
             if chosen.key == self.REFRESH_KEY:
-                with self._drive_lock:
-                    interactive_dir_sync.refresh_replica(self._inbox_tree, selected)
+                self._read_inbox_anew(selected)
+                picked = chosen.files
+                continue
+            if chosen.key == picker.SIDE_KEY and chosen.side_pressed == self.REFRESH_KEY:
+                self._read_side_anew(chosen.side_selected)
                 picked = chosen.files
                 continue
             if chosen.key == picker.SIDE_KEY:
@@ -384,8 +395,7 @@ class InboxSort(filescreen.FilesScreen):
             else:
                 done = self._act(chosen.files, selected)
             if done is filescreen.READ_ANEW:
-                with self._drive_lock:
-                    interactive_dir_sync.refresh_replica(self._inbox_tree, selected)
+                self._read_inbox_anew(selected)
                 picked = chosen.files
                 continue
             if done is None:
@@ -473,7 +483,33 @@ class InboxSort(filescreen.FilesScreen):
     def _side_items(self):
         """The sorted tree's dirs and files, for the tree beside the picker, but the inbox's, if
         it's in it"""
-        return sidetree.items(self.root_path, self._root_tree, self._inbox_in_root)
+        return self._side_listing.items()
+
+    def _read_inbox_anew(self, relpath):
+        """Ctrl-R: the inbox's folder of relpath, if it's on Drive, and the sorted tree's list"""
+        if self.inbox_is_cloud:
+            with self._drive_lock:
+                interactive_dir_sync.refresh_replica(self._inbox_tree, relpath)
+        self._side_listing.invalidate()
+
+    def _read_side_anew(self, relpath):
+        """Ctrl-R in the sorted tree beside the picker: its folder of relpath, if it's on Drive, and its list"""
+        if self.root_is_cloud:
+            with self._drive_lock:
+                if interactive_dir_sync.refresh_replica(self._root_tree, relpath):
+                    self._root_index.invalidate()
+                    # Its files may have other contents now
+                    self._checked.clear()
+        self._side_listing.invalidate()
+
+    def _warn_if_not_all_read(self):
+        """Say so if the inbox or the sorted tree couldn't all be listed, as a sync does: what can't be
+        read isn't shown"""
+        lines = (localdiskdirtree.scan_warning(self.inbox_path, getattr(self._inbox_tree, 'scan_errors', []),
+                                               "its list lacks what's there") +
+                 localdiskdirtree.scan_warning(self.root_path, self._side_listing.errors, "its list lacks what's there"))
+        if lines:
+            messages.show("Warning: couldn't read everything", lines, dryrun.label(), 'yellow')
 
     def _side_follow(self, relpath):
         """Where in the sorted tree the inbox's file at relpath is related to (for the tree beside
@@ -1202,6 +1238,8 @@ class InboxSort(filescreen.FilesScreen):
         if renamed is None or dryrun.DRYRUN:
             return
         _, moves = renamed
+        # (An empty dir's rename tells nothing)
+        self._side_listing.invalidate()
         self.changes.note(self.root_path, 'moved', len(moves))
 
     def _new_dir(self, parent, verb, count, base=None):

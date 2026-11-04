@@ -436,7 +436,7 @@ class RefreshKeyTest(unittest.TestCase):
         self.assertFalse(self.sync.src_index.is_built())
         # And the replicas dashboard's
         self.assertEqual(calls[0].kwargs['keys'], Sync.REFRESH_KEY + '#a:e')
-        self.assertIn("  %-17s%s" % ('Ctrl-R', 'read the folder anew from Drive'), calls[0].kwargs['help_lines'])
+        self.assertIn("  %-17s%s" % ('Ctrl-R', 'read the folder anew from Drive, list the tree on the right anew'), calls[0].kwargs['help_lines'])
         self.assertIsNone(calls[0].kwargs['selected'])
         # What's still missing, what's still picked of it, where it was
         self.assertEqual(calls[1].args[1], ['a/1.mp3', 'b/3.mp3'])
@@ -465,13 +465,29 @@ class RefreshKeyTest(unittest.TestCase):
         self.browse(self.local, self.cloud, [picker.Picked(Sync.REFRESH_KEY, 'x/new.mp3', []), None])
         self.refresh.assert_called_once_with(self.cloud, 'x/new.mp3')
 
-    def test_without_a_drive_replica_theres_no_key(self):
+    def test_without_a_drive_replica_the_key_lists_the_side_tree_anew(self):
         other = dirtree.DirTree('/other')
         other.add_file_by_relpath('a.mp3')
-        calls = self.browse(other, self.local, [None])
-        self.assertEqual(calls[0].kwargs['keys'], '#a:e')
-        self.assertNotIn('r', [key for key, _ in calls[0].kwargs['key_hints']])
+        with mock.patch('dirdelta.sidetree._listed', return_value=([], [])) as listed:
+            calls = self.browse(other, self.local, [picker.Picked(Sync.REFRESH_KEY, 'a.mp3', ['a.mp3']),
+                                                    picker.Picked(picker.SIDE_KEY, 'a.mp3', ['a.mp3'], 'x', Sync.REFRESH_KEY),
+                                                    picker.Picked('', 'a.mp3', ['a.mp3']), None])
+        # Once to start with, once for each Ctrl-R, not for another return to the picker
+        self.assertEqual(listed.call_count, 3)
+        self.assertEqual(len(calls), 4)
+        self.refresh.assert_not_called()
+        self.assertEqual(calls[0].kwargs['keys'], Sync.REFRESH_KEY + '#a:e')
+        self.assertIn(Sync.REFRESH_KEY, calls[0].kwargs['side'].keys)
+        self.assertEqual(calls[1].kwargs['picked'], ['a.mp3'])
         self.assertFalse(self.sync.has_changed)
+
+    def test_the_key_in_the_side_tree_reads_whats_selected_there_only_in_dst(self):
+        self.local.add_file_by_relpath('x/new.mp3')
+        calls = self.browse(self.local, self.cloud,
+                            [picker.Picked(picker.SIDE_KEY, 'x/new.mp3', [], 'b', Sync.REFRESH_KEY), None])
+        self.refresh.assert_called_once_with(self.cloud, 'b')
+        self.assertEqual(len(calls), 2)
+        self.assertTrue(self.sync.has_changed)
 
     def test_a_refresh_with_nothing_left_missing_says_so(self):
         def refresh(tree, relpath):

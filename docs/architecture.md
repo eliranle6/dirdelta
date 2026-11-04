@@ -63,6 +63,7 @@ as 2022.10.3 does, exiting 0 (`_came_up_read_only()`, unless fstab's line says `
 says so, and the same. A read-only replica still works as a source: a sync and a sort warn, copying from it
 goes on, and only what would change it is held back (`is_writable()`; `LocalReplica._is_stuck()` refuses a move out
 before it starts, as between filesystems the copy would be made before the removal failed).
+Only a replica's root is checked, at the start: a read-only dir in a writable replica fails file by file, and says so.
 In a sort, a read-only side's actions aren't offered in its menu or to the AI (`_cant_be_done()`), and Enter in the
 side tree copies from a read-only inbox. Why it's read-only is said for a volume mounted so before dirdelta started too
 (`read_only_lines_of()`): Windows' only if its `hiberfil.sys` starts with `HIBR`. Asked even in a dry run (it
@@ -317,6 +318,9 @@ path, by an older dirdelta, is asked for again). Answers are cached by the file'
 after a move or copy are copied to their new paths' keys (`ai.carry()`); the cache's read-modify-writes are under one lock
 (recommendations also by the sorted tree), `AIError` if Claude can't be
 asked.
+
+### `sidetree.py`
+`Listing` keeps a replica's side tree between its picker's showings, listed anew when its tree tells it of a change (or `invalidate()`); changes made outside dirdelta show after `Ctrl-R` (in either tree of the picker, for local replicas too), or the next time the picker is entered. In the side tree, `Ctrl-R` (`Side.keys`) also reads the folder selected there anew if that replica is on Drive; it doesn't diff local replicas again.
 
 ### `localscan.py`
 `scan(root, max_depth, progress)` is the one listing of a local dir (one `find`, stderr to a

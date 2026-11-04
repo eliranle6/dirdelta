@@ -93,7 +93,10 @@ class ReadWriteTest(unittest.TestCase):
         self.assertEqual(tree.fetch_file.call_count, 1)
         # Written: uploaded in its place
         written = []
-        tree.write_file.side_effect = lambda relpath, local_path: written.append((relpath, open(local_path).read()))
+        def write_file(relpath, local_path):
+            with open(local_path) as f:
+                written.append((relpath, f.read()))
+        tree.write_file.side_effect = write_file
         replicalog.write(tree, LOG + "x\n")
         self.assertEqual(written, [(replicalog.LOG_NAME, LOG + "x\n")])
 

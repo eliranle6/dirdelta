@@ -144,8 +144,18 @@ class InteractiveDirSync(filescreen.FilesScreen):
         self._opener = opening.Opener(src)
         # What the AI was last asked (see _ask_ai()), to start from next time
         self._last_instruction = ''
+        # dst's dirs and files, for the tree beside the picker
+        self._side_listing = sidetree.Listing(
+            dst.displayname() if isinstance(dst, clouddirtree.CloudDirTree) else dst.fullpath(), dst)
 
     def browse(self):
+        """See _browse(); what it kept of dst is let go after"""
+        try:
+            self._browse()
+        finally:
+            self._side_listing.close()
+
+    def _browse(self):
         """Let the user pick some of the files of src that dst lacks, then choose what to do with
         them (_act()): after that, or after choosing nothing, pick again, where they were, with the
         files done no longer there (or, in a dry run, no longer picked), until they quit."""
@@ -159,15 +169,15 @@ class InteractiveDirSync(filescreen.FilesScreen):
         src_name, dst_name = (replicanames.full(replica.displayname() if not is_local(replica) else replica.fullpath())
                               for replica in (self._src, self._dst))
         header = "%s lacks these. Pick some, then choose what to do with them." % (dst_name,)
-        keys = (self.REFRESH_KEY if clouds else '') + hashes_screen.KEY + aiplan_screen.KEY + contextmenu.KEY + archive_screen.KEY
+        keys = self.REFRESH_KEY + hashes_screen.KEY + aiplan_screen.KEY + contextmenu.KEY + archive_screen.KEY
         # The keys row has little room: the rest are in the menu (:), and ?
         key_hints = [('Enter', 'choose what to do'), contextmenu.KEY_HINT]
         more_keys = ([aiplan_screen.KEY_HINT, archive_screen.KEY_HINT, opening.KEY_HINT, renaming.KEY_HINT,
                       ('Ctrl-W l', 'move to %s, on the right (Ctrl-W h: back)' % (dst_name,)),
                       (self.SIDE_REMOVE_KEY + ' there', 'remove what\'s selected there'),
                       ('Enter, : there', 'choose what to do with it')] +
-                     ([(self.REFRESH_KEY_NAME, 'read the folder anew from Drive')] if clouds else []) +
-                     [hashes_screen.KEY_HINT])
+                     [(self.REFRESH_KEY_NAME, ('read the folder anew from Drive, ' if clouds else '') + 'list the tree on the right anew'),
+                      hashes_screen.KEY_HINT])
         picked, selected = [], None
         while True:
             src_job = hashing.job_for(self._src.fullpath()) if is_local(self._src) else None
@@ -190,8 +200,9 @@ class InteractiveDirSync(filescreen.FilesScreen):
                     shown_as=shown_as, notify_keys=opening.KEY, twice_keys=renaming.KEY,
                     # dst beside it, to look through (e.g. for a newer version of a file)
                     side=picker.Side(dst_name, self._side_items(), True, self._side_follow,
-                                     self.SIDE_REMOVE_KEY + contextmenu.KEY,
-                                     [('Enter', 'choose what to do'), (self.SIDE_REMOVE_KEY, 'remove'), contextmenu.KEY_HINT]),
+                                     self.SIDE_REMOVE_KEY + contextmenu.KEY + self.REFRESH_KEY,
+                                     [('Enter', 'choose what to do'), (self.SIDE_REMOVE_KEY, 'remove'), contextmenu.KEY_HINT,
+                                      (self.REFRESH_KEY_NAME, filescreen.SIDE_REFRESH_HINTS[self._dst in clouds])]),
                     enter_picks_selection=True,
                     none_picked_key_hints=[('Enter', 'Pick & choose what to do')],
                     # Ctrl-X opens the selected one (the picked ones: the menu's Open)
@@ -214,6 +225,11 @@ class InteractiveDirSync(filescreen.FilesScreen):
             key = chosen.key
             # What the action menu's action was (Copy and Remove change only the files they do)
             self._last_action = None
+            # Ctrl-R there reads what's selected there, in dst; here, what's selected here, in each
+            to_refresh = [(replica, selected) for replica in clouds]
+            if key == picker.SIDE_KEY and chosen.side_pressed == self.REFRESH_KEY:
+                key = self.REFRESH_KEY
+                to_refresh = [(self._dst, chosen.side_selected)] if self._dst in clouds else []
             if key == renaming.PRESSED:
                 picked = chosen.files
                 renamed = self._rename_selected(selected)
@@ -243,8 +259,10 @@ class InteractiveDirSync(filescreen.FilesScreen):
                     key = self.REFRESH_KEY
             if key == self.REFRESH_KEY:
                 done = []
-                for replica in clouds:
-                    if refresh_replica(replica, selected):
+                # What changed outside dirdelta shows there now
+                self._side_listing.invalidate()
+                for replica, relpath in to_refresh:
+                    if refresh_replica(replica, relpath):
                         self.has_changed = True
                         self._index_of(replica).invalidate()
                         # Its files may have other contents now
@@ -370,8 +388,7 @@ class InteractiveDirSync(filescreen.FilesScreen):
 
     def _side_items(self):
         """dst's dirs and files, for the tree beside the picker (see sidetree.py)"""
-        path = self._dst.displayname() if isinstance(self._dst, clouddirtree.CloudDirTree) else self._dst.fullpath()
-        return sidetree.items(path, self._dst)
+        return self._side_listing.items()
 
     def _side_follow(self, relpath):
         """Where in dst src's file at relpath is related to, for the tree beside the picker: a file

@@ -414,6 +414,45 @@ class InboxSortTest(unittest.TestCase):
                 mock.patch.object(sorter._inbox_tree, 'known_hash', side_effect=AssertionError):
             sorter._load_cached(files)
 
+    @unittest.skipIf(os.geteuid() == 0, "root can read anything")
+    def test_what_cant_be_read_is_said_once_at_the_start(self):
+        locked = os.path.join(self.inbox, 'locked')
+        os.makedirs(locked)
+        os.chmod(locked, 0)
+        self.addCleanup(os.chmod, locked, 0o755)
+        self.sort([['a.txt'], ['a.txt'], None], [NOTHING, NOTHING])
+        warnings = [call for call in self.show.call_args_list if call.args[0] == "Warning: couldn't read everything"]
+        self.assertEqual(len(warnings), 1)
+        self.assertIn("(1 error), so its list lacks what's there", warnings[0].args[1][0])
+
+    def test_a_readable_inbox_says_nothing_of_it(self):
+        self.sort([['a.txt'], None], [NOTHING])
+        self.assertFalse([call for call in self.show.call_args_list if call.args[0].startswith('Warning')])
+
+    def test_the_side_tree_isnt_listed_again_on_each_return_to_the_picker(self):
+        with mock.patch('dirdelta.sidetree._listed', wraps=inbox.sidetree._listed) as listed:
+            self.sort([['a.txt'], ['a.txt'], None], [NOTHING, NOTHING])
+        self.assertEqual(listed.call_count, 1)
+
+    def refreshed(self, pick):
+        """How many times the side tree's listed in a sort with pick, then quitting, and the picks after pick"""
+        sorter = Sort(self.inbox, self.root)
+        with mock.patch('dirdelta.sidetree._listed', wraps=inbox.sidetree._listed) as listed, \
+                mock.patch('dirdelta.picker.pick_files', side_effect=[pick, None]) as pick_files, \
+                mock.patch('dirdelta.interactive_dir_sync.refresh_replica') as self.refresh_replica:
+            sorter.run()
+        return listed.call_count, pick_files.call_args_list[-1].kwargs['picked']
+
+    def test_ctrl_r_lists_the_side_tree_anew(self):
+        self.assertEqual(self.refreshed(picker.Picked(Sort.REFRESH_KEY, 'a.txt', ['a.txt'])), (2, ['a.txt']))
+        self.refresh_replica.assert_not_called()
+
+    def test_ctrl_r_in_the_side_tree_lists_it_anew_and_moves_nothing(self):
+        count, picked = self.refreshed(picker.Picked(picker.SIDE_KEY, 'a.txt', ['a.txt'], 'docs', Sort.REFRESH_KEY))
+        self.assertEqual((count, picked), (2, ['a.txt']))
+        self.assertTrue(os.path.exists(os.path.join(self.inbox, 'a.txt')))
+        self.refresh_replica.assert_not_called()
+
     def test_the_dir_picker_leaves_out_what_cant_be_picked(self):
         self.sort([['a.txt'], None], ['Move it to a dir you pick', YES], dirs=[os.path.join(self.root, 'docs')])
         self.assertEqual(self.pick_under_dir.call_args.kwargs['excluded'], ['meta'])

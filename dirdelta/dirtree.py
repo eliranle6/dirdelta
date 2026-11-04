@@ -61,6 +61,9 @@ class DirTree(object):
         elsewhere.Index's), once it's done; not in a dry run"""
         self._listeners.append(listener)
 
+    def remove_listener(self, listener):
+        self._listeners.remove(listener)
+
     def _tell_added(self, relpath):
         if self._listeners:
             size = self.file_size(relpath)
