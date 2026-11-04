@@ -49,7 +49,7 @@ class CloudDirTreeTest(unittest.TestCase):
             f.write(json.dumps({'myDriveRootId': 'ROOT'}) + '\n')
             for item in ITEMS:
                 f.write(json.dumps(item) + '\n')
-        patcher = mock.patch('dirdelta.drivecache.FILE_LIST_CACHE', self.cache)
+        patcher = mock.patch('dirdelta.drivecache.LINES_FILE', self.cache)
         patcher.start()
         self.addCleanup(patcher.stop)
         self.addCleanup(helpers.remove_drive_cache, self.cache)
@@ -208,7 +208,7 @@ class CloudDirTreeChangesTest(unittest.TestCase):
         files.list.side_effect = lambda q, **_: mock.Mock(
             execute=lambda **_: {'files': self.listed(q)})
         self.local_dir = tempfile.mkdtemp(prefix='dirstuff-cloud-local-')
-        for patcher in (mock.patch('dirdelta.drivecache.FILE_LIST_CACHE', self.cache),
+        for patcher in (mock.patch('dirdelta.drivecache.LINES_FILE', self.cache),
                         mock.patch('dirdelta.driveapi.service', return_value=self.service),
                         mock.patch('dirdelta.clouddirtree.MediaFileUpload'),
                         mock.patch('dirdelta.messages.print_line'),
@@ -588,6 +588,12 @@ class CloudDirTreeChangesTest(unittest.TestCase):
         self.assertNotIn('song.mp3', found)
         self.assertFalse(clouddirtree.drivecache.stale_paths())
         self.assertIn('Move complete: moved 1 of 1 files in cloud/mein', self.lines())
+
+    def test_listed_says_sizes_and_drives_hashes(self):
+        self.tree._infos['song.mp3'] = clouddirtree.FileInfo(5, None, {'sha1': 'S'}, None, False)
+        listed = self.tree.listed('sha1')
+        self.assertEqual(listed['song.mp3'], (5, 'S'))
+        self.assertEqual(sorted(listed), sorted(file_entry.relpath for file_entry in self.tree.iter_files()))
 
     def test_a_move_to_another_tree_is_a_rename_in_drive_and_goes_with_whats_known(self):
         other = clouddirtree.factory('cloud/other')

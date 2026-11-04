@@ -1,14 +1,14 @@
 """The cache of Google Drive's file list, an SQLite file (see _database_path(), next to
-FILE_LIST_CACHE): a row per file or folder, by its id, with its parent and its metadata as the Drive API
+LINES_FILE): a row per file or folder, by its id, with its parent and its metadata as the Drive API
 gives it (a JSON object: id, name, parents, mimeType...), and My Drive's root folder's id. entries() reads
 it into the paths of what's under a folder.
 
 What dirdelta changes in Drive is added to it as it goes (add(), trash()), so it stays up to date. What's
 under a folder is replaced with what Drive lists there now (replace_under()) when it's refreshed.
 
-FILE_LIST_CACHE is the format it was in before (and drivemeta.py's lines still are): one JSON line per file
+LINES_FILE is the format it was in before (and drivemeta.py's lines still are): one JSON line per file
 or folder, after a line with the root's id, and a line {TRASHED_ID_KEY: id} per file trashed. If it's
-there, it's imported, and kept as FILE_LIST_CACHE + '.bak'."""
+there, it's imported, and kept as LINES_FILE + '.bak'."""
 import atexit
 import collections
 import contextlib
@@ -24,7 +24,7 @@ from dirdelta import exif
 from dirdelta import paths
 from dirdelta import text
 
-FILE_LIST_CACHE = os.path.expanduser('~/.cache/dirdelta/files.txt')
+LINES_FILE = os.path.expanduser('~/.cache/dirdelta/files.txt')
 
 FOLDER_MIME_TYPE = 'application/vnd.google-apps.folder'
 # Google's own types (Docs, Sheets, Slides, shortcuts, ...): not files, so they can't be downloaded
@@ -57,7 +57,7 @@ MAX_PROBLEMS_SHOWN = 20
 
 def _stale_marker_path():
     # Next to the cache (wherever it is, e.g. in tests)
-    return FILE_LIST_CACHE + '.stale'
+    return os.path.splitext(LINES_FILE)[0] + '.stale'
 
 
 def mark_stale(folder_path):
@@ -131,7 +131,7 @@ def _keep_stale_paths(keep):
 
 def _times_path():
     # Next to the cache (wherever it is, e.g. in tests)
-    return FILE_LIST_CACHE + '.times'
+    return os.path.splitext(LINES_FILE)[0] + '.times'
 
 
 def _times():
@@ -257,19 +257,19 @@ def replace_under(folder_id, items, my_drive_id):
 
 def _database_path():
     # Next to the cache's old file (wherever it is, e.g. in tests)
-    return os.path.splitext(FILE_LIST_CACHE)[0] + '.sqlite'
+    return os.path.splitext(LINES_FILE)[0] + '.sqlite'
 
 
 def exists():
     """Whether there's a cache at all (its old file, not imported yet, is one)"""
-    return os.path.exists(_database_path()) or os.path.exists(FILE_LIST_CACHE)
+    return os.path.exists(_database_path()) or os.path.exists(LINES_FILE)
 
 
 def changed_at():
     """When the cache was last changed (seconds since the epoch), or None if there's none"""
     found = []
     # (In WAL mode, what changed last may be in its WAL file)
-    for path in (_database_path(), _database_path() + '-wal', FILE_LIST_CACHE):
+    for path in (_database_path(), _database_path() + '-wal', LINES_FILE):
         try:
             found.append(os.path.getmtime(path))
         except OSError:
@@ -345,7 +345,7 @@ def _opened(is_writing=True):
                 yield db
             # Only once it's in (cut off before, it's imported next time)
             if is_imported:
-                os.replace(FILE_LIST_CACHE, FILE_LIST_CACHE + '.bak')
+                os.replace(LINES_FILE, LINES_FILE + '.bak')
                 _generations[_database_path()] += 1
         except sqlite3.DatabaseError as error:
             close()
@@ -373,9 +373,9 @@ def _root_of(db):
 def _import_old_file(db):
     """Take in the cache's old file, if it's there, in the transaction that's open. Returns whether
     it did."""
-    if not os.path.exists(FILE_LIST_CACHE):
+    if not os.path.exists(LINES_FILE):
         return False
-    with open(FILE_LIST_CACHE) as old:
+    with open(LINES_FILE) as old:
         for line in old:
             # Skip non-dict lines
             if not line.startswith('{'):
@@ -552,7 +552,7 @@ def _parsefile():
     if not exists():
         raise FileNotFoundError("There's no cloud files list cache")
     # Its old file imported first: that changes it
-    if os.path.exists(FILE_LIST_CACHE):
+    if os.path.exists(LINES_FILE):
         with _opened():
             pass
     with _opened(is_writing=False) as db:

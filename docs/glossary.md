@@ -29,7 +29,7 @@ mtime, or a hash — the diff is filename/path-string equality only, by
 design.
 
 **Cloud files list cache** — `~/.cache/dirdelta/files.sqlite`
-(`files.txt`, `drivecache.FILE_LIST_CACHE`, is imported once, then kept as `files.txt.bak`). A row per Drive API
+(`files.txt`, `drivecache.LINES_FILE`, is imported once, then kept as `files.txt.bak`). A row per Drive API
 file object (`id`, `name`, `parents`, `mimeType`, etc., as JSON), refreshed on
 demand a folder at a time (a replica's, or a folder in it) rather than
 queried live per scan. `CloudDirTree` parses this

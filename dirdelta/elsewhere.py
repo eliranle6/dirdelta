@@ -92,6 +92,8 @@ class Index(object):
         self._changes_meanwhile = []
         # How many times it was invalidated: a build begun before the last isn't of what's there
         self._nr_invalidated = 0
+        # How many files were removed (or moved) so far: what's read of one meanwhile may be another's
+        self._nr_removed = 0
         self._pending = []
         self._new = set()
         # How many files it has (once built), and the ones with a hash known, by algorithm
@@ -164,6 +166,7 @@ class Index(object):
     def invalidate(self):
         with self._lock:
             self._nr_invalidated += 1
+            self._nr_removed += 1
             self._by_name = self._names_by_dir = self._by_size = None
             self._by_hash = collections.defaultdict(set)
             self._hashed = collections.defaultdict(set)
@@ -221,12 +224,13 @@ class Index(object):
     def known(self, relpath):
         """{algorithm: hash} of the file's contents known without reading it"""
         self._take_hashes()
-        found = self._hashes.setdefault(relpath, {})
-        for algorithm in self.replica.known_hashes(relpath):
-            if algorithm not in found:
-                # Kept, as content_hashes() keeps what it works out
-                found[algorithm] = self.replica.content_hash(relpath, algorithm)
-        return {algorithm: value for algorithm, value in found.items() if value is not None}
+        with self._lock:
+            found = self._hashes.setdefault(relpath, {})
+            for algorithm in self.replica.known_hashes(relpath):
+                if algorithm not in found:
+                    # Kept, as content_hashes() keeps what it works out
+                    found[algorithm] = self.replica.content_hash(relpath, algorithm)
+            return {algorithm: value for algorithm, value in found.items() if value is not None}
 
     def hash_coverage(self, algorithm):
         """How much of its files (0 to 1) have their hashes by algorithm known (without reading
@@ -234,7 +238,8 @@ class Index(object):
         if not self.is_built():
             return None
         self._take_hashes()
-        return min(1, len(self._hashed[algorithm]) / self._nr_files) if self._nr_files else 1
+        with self._lock:
+            return min(1, len(self._hashed[algorithm]) / self._nr_files) if self._nr_files else 1
 
     def take_new(self):
         """The relpaths of the files whose hashes came (or were worked out) since it was last called"""
@@ -262,22 +267,31 @@ class Index(object):
         """The algorithms of the hashes known of its files without reading them (Drive's, or its
         hashing job's), the fastest to work out first"""
         self._take_hashes()
-        known = {algorithm for algorithm, _ in list(self._by_hash)}
+        with self._lock:
+            known = {algorithm for algorithm, _ in self._by_hash}
         return [algorithm for algorithm in _HASH_PREFERENCE if algorithm in known]
 
     def files_hashed(self, algorithm, value):
         """The relpaths of the files whose contents' hash by algorithm is value (of the ones known)"""
         self._take_hashes()
-        return set(self._by_hash.get((algorithm, value), set()))
+        with self._lock:
+            return set(self._by_hash.get((algorithm, value), set()))
 
     def names_in(self, dirpath):
         with self._lock:
             return set(self._names_by_dir.get(dirpath, set()))
 
     def date_taken(self, relpath):
-        if relpath not in self._dates_taken:
-            self._dates_taken[relpath] = self.replica.date_taken(relpath)
-        return self._dates_taken[relpath]
+        with self._lock:
+            if relpath in self._dates_taken:
+                return self._dates_taken[relpath]
+            nr_removed = self._nr_removed
+        # Read without the lock (it reads the file), and kept unless it may be another file's by now
+        date = self.replica.date_taken(relpath)
+        with self._lock:
+            if nr_removed == self._nr_removed:
+                self._dates_taken[relpath] = date
+        return date
 
     def modified_time(self, relpath):
         return self.replica.modified_time(relpath)
@@ -287,12 +301,19 @@ class Index(object):
         return self.content_hashes(relpath, [algorithm], should_stop)[algorithm]
 
     def content_hashes(self, relpath, algorithms, should_stop=None):
-        """{algorithm: hash} of the file's contents, the ones not worked out yet in one read"""
-        hashes = self._hashes.setdefault(relpath, {})
-        needed = [algorithm for algorithm in algorithms if algorithm not in hashes]
+        """{algorithm: hash} of the file's contents, the ones not worked out yet in one read (without
+        the lock: it may read a big file), kept unless the file was moved or removed meanwhile"""
+        with self._lock:
+            hashes = self._hashes.setdefault(relpath, {})
+            found = {algorithm: hashes[algorithm] for algorithm in algorithms if algorithm in hashes}
+        needed = [algorithm for algorithm in algorithms if algorithm not in found]
         if needed:
-            hashes.update(self.replica.content_hashes(relpath, needed, should_stop))
-        return {algorithm: hashes[algorithm] for algorithm in algorithms}
+            read = self.replica.content_hashes(relpath, needed, should_stop)
+            found.update(read)
+            with self._lock:
+                if self._hashes.get(relpath) is hashes:
+                    hashes.update(read)
+        return {algorithm: found[algorithm] for algorithm in algorithms}
 
     def add(self, relpath, size):
         """A file is at relpath now (unless it isn't built yet, when there's nothing to change, or
@@ -333,6 +354,7 @@ class Index(object):
                 self._hashed[algorithm].discard(relpath)
             self._hashes.pop(relpath, None)
             self._dates_taken.pop(relpath, None)
+            self._nr_removed += 1
 
     def move(self, relpath, new_relpath):
         with self._lock:

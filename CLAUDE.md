@@ -88,18 +88,17 @@ Developer tasks all live in the Makefile (`make` lists them): `test`,
 `clean`, `install`, `deploy`, `undeploy`. Keep new ones there too rather
 than adding shell scripts. `make clean`
 removes this copy's build output (and what older versions left in the repo), not the venv. It does not
-touch `~/.cache/dirdelta/files.sqlite` (the real Drive cache, `files.txt` imported once and kept as `files.txt.bak`, refreshed a folder at a
+touch `~/.cache/dirdelta/files.sqlite` (the real Drive cache, an old `files.txt` is imported once, refreshed a folder at a
 time: a replica's, at the start or from the main menu, or one in it, with the file
-picker's `r`; with a `files.txt.stale` next to it, listing the folders where a
+picker's `r`; with a `files.stale` next to it, listing the folders where a
 change dirdelta made to Drive was cut off before it was added to the cache, and a
-`files.txt.times`, when each folder's list was last updated and uploaded to the replica's
+`files.times`, when each folder's list was last updated and uploaded to the replica's
 `meta/files.jsonl`, see `drivemeta.py`),
 `~/.config/dirdelta/replicas.json` (the history, favorites and sorts, each sorted tree's recent dirs, what's known of each replica: its `last_update.txt`'s last entry, and the labels),
 `~/.config/dirdelta/mounts.json` (how the replicas' volumes were mounted),
 `~/.cache/dirdelta/ai.json` (what Claude said of files),
 `~/.cache/dirdelta/hashes.sqlite` (local files' hashes, those not kept in their replica's
-`meta/hashes.sqlite`, see `hashcache.py`; a `hashes.json` next to it is the old
-format's, unused since 2026-10-31),
+`meta/hashes.sqlite`, see `hashcache.py`),
 `~/.cache/dirdelta/downloads/` (Drive files downloaded for Claude or to open),
 `~/.cache/dirdelta/errors.log` (what went wrong in a picker's threads) or `secrets/`.
 
@@ -155,7 +154,7 @@ module:
 PYTHONPATH=tests bin/python -m unittest test_interactive_dir_sync -v
 ```
 
-Modules are tested where it's worth it, not for the sake of a test file each (810 tests, all passing as of 2026-11-04) except
+Modules are tested where it's worth it, not for the sake of a test file each (818 tests, all passing as of 2026-11-04) except
 the thin wiring in `main.py`/`dirsync_main.py`, covered only by running the
 app. Shared fakes:
 - `tests/helpers.py`: `scripted_option_picker` / `scripted_tree_picker` /

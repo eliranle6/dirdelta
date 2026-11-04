@@ -75,8 +75,13 @@ disk) has its mount remembered in `~/.config/dirdelta/mounts.json`. When it's us
 volume isn't mounted (its mount point would be an empty dir, where every file looks missing),
 dirdelta asks to mount it where it was, by its UUID, showing the command (`sudo mount ...`, or
 `mount TARGET` if `/etc/fstab` has it), or to connect its disk first; Back goes back to the menu. It's mounted
-read-write. A Windows partition that Windows left hibernated (or with Fast Startup) can't be: the
-error says to start Windows and shut it down fully.
+read-write. A Windows partition that Windows left hibernated (or with Fast Startup) comes up read-only:
+a warning says why, and what to do.
+
+A read-only replica (mounted so, or without write permission) still works, as a source. A sync or a sort warns
+at the start, saying why if it can tell, and you can go on copying its files elsewhere. Only what would change it
+is held back: copying into it, removing from it, moving or renaming in it. In a sort, a read-only inbox offers Copy and
+not Move or Remove (Enter in the tree beside it copies), and a read-only sorted tree can't have files put in it.
 
 Its sections, each under a grey heading: "Sync two replicas" (the two slots and the favorites),
 "Recent syncs", "Sort an inbox into a sorted tree" (a new sort: choose the inbox, then the sorted

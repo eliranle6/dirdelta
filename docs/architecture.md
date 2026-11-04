@@ -500,7 +500,7 @@ them) the replica's folder is marked stale
 (`with drivecache.changing(path):`, which unmarks it when the change ends, or
 fails cleanly, e.g. an `HttpError`, but not on a Ctrl-C unless the work under
 way was `settled` first; `mark_stale(path)`, a line with its path in Drive in a
-`files.txt.stale` file next to the cache), and the mark is taken away once
+`files.stale` file next to the cache), and the mark is taken away once
 the change is in the cache (`unmark_stale()`), unless it was there before: a
 change cut off in the middle (e.g. Ctrl-C during an upload, when Drive may
 or may not have the file) leaves it, so the next run's refresh prompt for a
@@ -510,7 +510,7 @@ there, and a refresh of that folder (or above it) clears the mark
 Drive (`/`).
 
 When each folder's list in the cache was last made as Drive has it is kept in
-`files.txt.times` (`drivecache.note_updated()`/`updated()`: a refresh of it,
+`files.times` (`drivecache.note_updated()`/`updated()`: a refresh of it,
 or a change dirdelta made in it, `CloudDirTree._cache_add()`, but not in its
 `meta/`), with the copy last uploaded to it (`note_uploaded()`/`uploaded()`:
 its modifiedTime, and `updated()` as of then). `drivemeta.py` keeps a Drive
@@ -790,7 +790,7 @@ round-trip. Tests (`tests/test_picker.py`) run a fake treepicker script.
 its label; `short_names()` and `labeled()` are for where there's less room, or the paths are what's listed. Labels are
 in `Replicas.labels`, by `label_key()`: each replica's identity (a local one's disk's UUID and path there, a Drive one's account and path). It reads
 them from the file when it changed, so nothing need be passed around; `drivemeta.check()` notes the account's user
-name in `files.txt.times`, so naming a replica asks nothing of Drive. `identity()` moved here from `replicalog.py`.
+name in `files.times`, so naming a replica asks nothing of Drive. `identity()` moved here from `replicalog.py`.
 The sync menu labels its two replicas, and the dashboard has an option for each replica it lists (not one that isn't
 mounted or there: what its path is on now isn't its disk); both run `label_screen.run()`.
 

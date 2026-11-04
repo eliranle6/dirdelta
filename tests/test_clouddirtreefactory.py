@@ -16,7 +16,7 @@ class CloudDirTreeFactoryTest(unittest.TestCase):
     def setUp(self):
         self.cache_dir = tempfile.mkdtemp(prefix='dirstuff-cloud-factory-')
         self.cache = os.path.join(self.cache_dir, 'sub', 'files.txt')
-        for patcher in (mock.patch('dirdelta.drivecache.FILE_LIST_CACHE', self.cache),
+        for patcher in (mock.patch('dirdelta.drivecache.LINES_FILE', self.cache),
                         mock.patch('dirdelta.clouddirtree.CloudDirTree')):
             self.addCleanup(patcher.stop)
             patcher.start()

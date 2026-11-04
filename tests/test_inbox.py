@@ -407,6 +407,13 @@ class InboxSortTest(unittest.TestCase):
         self.assertEqual(self.show.call_args.args[0], "That's dirdelta's")
         self.assertTrue(self.exists('inbox', 'a.txt'))
 
+    def test_a_big_inbox_is_listed_once_rather_than_per_file(self):
+        sorter = Sort(self.inbox, self.root)
+        files = sorter._inbox_files()
+        with mock.patch.object(sorter._inbox_tree, 'file_size', side_effect=AssertionError), \
+                mock.patch.object(sorter._inbox_tree, 'known_hash', side_effect=AssertionError):
+            sorter._load_cached(files)
+
     def test_the_dir_picker_leaves_out_what_cant_be_picked(self):
         self.sort([['a.txt'], None], ['Move it to a dir you pick', YES], dirs=[os.path.join(self.root, 'docs')])
         self.assertEqual(self.pick_under_dir.call_args.kwargs['excluded'], ['meta'])
@@ -771,7 +778,7 @@ class InboxSortTest(unittest.TestCase):
             f.write(json.dumps({'id': 'c', 'name': 'c.jpg', 'parents': ['trip'], 'size': '3',
                                 'mimeType': 'image/jpeg'}) + '\n')
         picks = [picker.Picked('', 'trip/c.jpg', ['trip/c.jpg']), None]
-        with mock.patch('dirdelta.drivecache.FILE_LIST_CACHE', cache), \
+        with mock.patch('dirdelta.drivecache.LINES_FILE', cache), \
                 helpers.scripted_files_picker(lambda relpaths: picks.pop(0)) as pick_files, \
                 helpers.answering_option_picker(['Read cloud/me/in/trip/ anew from Google Drive']) as pick_option, \
                 mock.patch('dirdelta.interactive_dir_sync.refresh_replica') as refresh:
@@ -1051,7 +1058,7 @@ class InboxSortTest(unittest.TestCase):
             f.write(json.dumps({'myDriveRootId': 'ROOT'}) + '\n')
             f.write(json.dumps({'id': 'me', 'name': 'me', 'parents': ['ROOT'],
                                 'mimeType': 'application/vnd.google-apps.folder'}) + '\n')
-        with mock.patch('dirdelta.drivecache.FILE_LIST_CACHE', cache):
+        with mock.patch('dirdelta.drivecache.LINES_FILE', cache):
             sorter = Sort(self.inbox, 'cloud/me')
             with self.assertRaises(inbox.drivecache.DriveCacheError):
                 Sort(self.inbox, 'cloud/nope')

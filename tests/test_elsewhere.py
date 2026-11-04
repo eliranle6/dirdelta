@@ -664,6 +664,86 @@ class ChangesDuringABuildTest(unittest.TestCase):
         self.assertEqual(errors, [])
 
 
+class _Slow(dirtree.DirTree):
+    """A replica whose file's being read when something happens"""
+    def __init__(self):
+        super(_Slow, self).__init__('/x')
+        self.during_read = lambda: None
+
+    def content_hashes(self, relpath, algorithms, should_stop=None):
+        self.during_read()
+        return {algorithm: 'read-of-' + relpath for algorithm in algorithms}
+
+    def date_taken(self, relpath):
+        self.during_read()
+        return 'date-of-' + relpath
+
+
+class ReadsWhileItChangesTest(unittest.TestCase):
+    def setUp(self):
+        self.replica = _Slow()
+        self.index = elsewhere.Index(self.replica)
+
+    def test_a_hash_read_is_kept(self):
+        self.assertEqual(self.index.content_hash('a', 'sha1'), 'read-of-a')
+        self.replica.during_read = lambda: self.fail('read again')
+        self.assertEqual(self.index.content_hash('a', 'sha1'), 'read-of-a')
+
+    def test_a_hash_read_while_the_file_moved_isnt_kept_as_its_path(self):
+        self.replica.during_read = lambda: self.index.move('a', 'b')
+        self.assertEqual(self.index.content_hash('a', 'sha1'), 'read-of-a')
+        self.assertEqual(self.index._hashes.get('a'), None)
+
+    def test_a_hash_read_while_the_file_was_removed_isnt_kept(self):
+        self.replica.during_read = lambda: self.index.remove('a')
+        self.index.content_hash('a', 'sha1')
+        self.assertEqual(self.index._hashes.get('a'), None)
+
+    def test_a_hash_isnt_read_under_the_lock(self):
+        def during_read():
+            # Another thread gets the lock meanwhile
+            got = []
+            thread = threading.Thread(target=lambda: got.append(self.index._lock.acquire(timeout=1)) or self.index._lock.release())
+            thread.start()
+            thread.join()
+            self.assertEqual(got, [True])
+        self.replica.during_read = during_read
+        self.index.content_hash('a', 'sha1')
+
+    def test_a_date_read_while_the_file_was_removed_isnt_kept(self):
+        self.replica.during_read = lambda: self.index.remove('a')
+        self.assertEqual(self.index.date_taken('a'), 'date-of-a')
+        self.assertNotIn('a', self.index._dates_taken)
+        self.replica.during_read = lambda: None
+        self.index.date_taken('a')
+        self.assertIn('a', self.index._dates_taken)
+
+    def test_many_threads_reading_while_files_change(self):
+        errors = []
+        is_done = threading.Event()
+
+        def read(number):
+            try:
+                while not is_done.is_set():
+                    self.index.content_hash('f%d' % (number % 5,), 'sha1')
+                    self.index.known('f%d' % (number % 5,))
+                    self.index.date_taken('f%d' % (number % 5,))
+                    self.index.hash_algorithms()
+                    self.index.files_hashed('sha1', 'x')
+            except Exception as error:
+                errors.append(error)
+        threads = [threading.Thread(target=read, args=(number,)) for number in range(4)]
+        for thread in threads:
+            thread.start()
+        for number in range(3000):
+            self.index.move('f%d' % (number % 5,), 'g%d' % (number,))
+            self.index.remove('g%d' % (number,))
+        is_done.set()
+        for thread in threads:
+            thread.join()
+        self.assertEqual(errors, [])
+
+
 class HashedReplicasTest(unittest.TestCase):
     """Two local replicas hashed by their jobs (hashing.py): src's small.txt is dst's renamed.dat,
     too small to be a candidate by its size"""

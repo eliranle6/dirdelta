@@ -19,7 +19,7 @@ hashcache.CACHE_FILE = os.path.join(_hash_cache_dir, 'hashes.sqlite')
 atexit.register(shutil.rmtree, _hash_cache_dir, ignore_errors=True)
 # Nor read, or import into, the real Drive cache (~/.cache/dirdelta): the tests that make its own patch
 # it, but a Drive replica's identity asks it for the root's id
-drivecache.FILE_LIST_CACHE = os.path.join(_hash_cache_dir, 'dirdelta', 'files.txt')
+drivecache.LINES_FILE = os.path.join(_hash_cache_dir, 'dirdelta', 'files.txt')
 # Nor read or write the real mounts' file (~/.config/dirdelta/mounts.json): the tests that may check
 # replicas' mounts (choose_replicas') import this module
 _mounts_dir = tempfile.mkdtemp(prefix='dirdelta-test-mounts-')
@@ -37,7 +37,7 @@ atexit.register(shutil.rmtree, _downloads_dir, ignore_errors=True)
 
 
 def remove_drive_cache(path):
-    """Remove the Drive cache that FILE_LIST_CACHE was pointed at path for: its database, and its old
+    """Remove the Drive cache that LINES_FILE was pointed at path for: its database, and its old
     file, imported or not"""
     database = os.path.splitext(path)[0] + '.sqlite'
     drivecache.close()

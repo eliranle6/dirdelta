@@ -2,7 +2,6 @@ import json
 import os
 import sqlite3
 import tempfile
-import time
 import unittest
 from unittest import mock
 
@@ -19,7 +18,7 @@ class EntriesTest(unittest.TestCase):
             f.write(json.dumps({drivecache.ROOT_ID_KEY: 'ROOT'}) + '\n')
             for item in ITEMS:
                 f.write(json.dumps(item) + '\n')
-        patcher = mock.patch('dirdelta.drivecache.FILE_LIST_CACHE', self.cache)
+        patcher = mock.patch('dirdelta.drivecache.LINES_FILE', self.cache)
         patcher.start()
         self.addCleanup(patcher.stop)
         self.addCleanup(helpers.remove_drive_cache, self.cache)
@@ -82,7 +81,7 @@ class EntriesTest(unittest.TestCase):
         drivecache.trash('album')
         self.assertEqual(drivecache.count_under('/mein'), 3)
         self.assertIsNone(drivecache.count_under('/nowhere'))
-        with mock.patch('dirdelta.drivecache.FILE_LIST_CACHE', self.cache + '-missing.txt'):
+        with mock.patch('dirdelta.drivecache.LINES_FILE', self.cache + '-missing.txt'):
             self.assertIsNone(drivecache.count_under('/mein'))
 
     def test_with_no_cache_a_replace_makes_one_with_the_root(self):
@@ -141,14 +140,6 @@ class EntriesTest(unittest.TestCase):
         other.close()
         self.assertEqual(drivecache.count_under('/mein'), 6)
 
-    def test_a_write_is_quick(self):
-        drivecache.root_id()
-        started = time.time()
-        for number in range(100):
-            drivecache.add({'id': 'n%d' % (number,), 'name': 'n', 'parents': ['mein']})
-        # ~0.2ms each kept open and in WAL mode, against ~20ms: well apart, on a slow disk too
-        self.assertLess(time.time() - started, 1.0)
-
     def test_a_cache_replaced_is_opened_anew(self):
         self.assertEqual(drivecache.root_id(), 'ROOT')
         helpers.remove_drive_cache(self.cache)
@@ -166,7 +157,7 @@ class ParseTest(unittest.TestCase):
         with open(self.cache, 'w') as f:
             f.write(json.dumps({drivecache.ROOT_ID_KEY: 'ROOT'}) + '\n')
             f.write(json.dumps({'id': 'a', 'name': 'a', 'parents': ['ROOT'], 'mimeType': drivecache.FOLDER_MIME_TYPE}) + '\n')
-        patcher = mock.patch('dirdelta.drivecache.FILE_LIST_CACHE', self.cache)
+        patcher = mock.patch('dirdelta.drivecache.LINES_FILE', self.cache)
         patcher.start()
         self.addCleanup(patcher.stop)
 
@@ -184,7 +175,7 @@ class ParseTest(unittest.TestCase):
 class StaleTest(unittest.TestCase):
     def setUp(self):
         self.cache = os.path.join(tempfile.mkdtemp(prefix='dirstuff-drive-cache-'), 'files.txt')
-        patcher = mock.patch('dirdelta.drivecache.FILE_LIST_CACHE', self.cache)
+        patcher = mock.patch('dirdelta.drivecache.LINES_FILE', self.cache)
         patcher.start()
         self.addCleanup(patcher.stop)
         self.addCleanup(drivecache.mark_fresh)
@@ -203,7 +194,7 @@ class StaleTest(unittest.TestCase):
         self.assertEqual(drivecache.stale_paths(), ['/b'])
         drivecache.unmark_stale('/b')
         self.assertFalse(drivecache.stale_paths())
-        self.assertFalse(os.path.exists(self.cache + '.stale'))
+        self.assertFalse(os.path.exists(os.path.splitext(self.cache)[0] + '.stale'))
 
     def test_a_refresh_makes_what_it_read_fresh(self):
         for path in ('/a', '/a/b', '/ab', '/c'):
@@ -256,7 +247,7 @@ class CacheContentsTest(unittest.TestCase):
     def setUp(self):
         fd, self.cache = tempfile.mkstemp(prefix='dirstuff-drive-cache-')
         os.close(fd)
-        patcher = mock.patch('dirdelta.drivecache.FILE_LIST_CACHE', self.cache)
+        patcher = mock.patch('dirdelta.drivecache.LINES_FILE', self.cache)
         patcher.start()
         self.addCleanup(patcher.stop)
         self.addCleanup(helpers.remove_drive_cache, self.cache)

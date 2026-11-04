@@ -57,6 +57,20 @@ class KeptHashesTest(unittest.TestCase):
         self.assertEqual(os.listdir(other_root), ['copy'])
         self.assertTrue(self.tree.has_file('y'))
 
+    def test_listed_says_sizes_and_the_hashes_of_what_hasnt_changed(self):
+        replica = localdiskdirtree.LocalReplica(self.root)
+        path = os.path.join(self.root, 'y')
+        # setUp hashed them
+        self.assertEqual(replica.listed('sha1')['y'], (1, hashlib.sha1(b'y').hexdigest()))
+        self.assertEqual(replica.listed('sha1')['d/x'], (3, hashlib.sha1(b'd/x').hexdigest()))
+        # Changed since: its size says so, and the hash is no more
+        with open(path, 'w') as f:
+            f.write('changed')
+        self.assertEqual(replica.listed('sha1')['y'], (7, None))
+        self.assertEqual(replica.listed('sha256')['d/x'], (3, None))
+        # As each file's asked for one by one
+        self.assertEqual(replica.listed('sha1')['d/x'][1], replica.known_hash('d/x', 'sha1'))
+
     def test_a_moved_file_and_dir(self):
         self.assertTrue(self.tree._move_file('y', 'e/y2'))
         self.assertTrue(self.tree._move_dir('d', 'f'))

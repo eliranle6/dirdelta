@@ -243,16 +243,20 @@ class InboxSort(filescreen.FilesScreen):
         self._opener = opening.Opener(self._inbox_tree, self._drive_lock)
         # What the AI was last asked (see _ask_ai()), to start from next time
         self._last_instruction = ''
+        # What the last listing of the inbox found (see _inbox_files())
+        self._listing = {}
 
     # The inbox's files
 
     def _inbox_files(self):
-        """The inbox's files' relpaths (in it), each dir's together, sorted"""
-        if self.inbox_is_cloud:
-            relpaths = self._inbox_tree.files_under('')
-        else:
-            relpaths = list(localscan.scan(self.inbox_path).files())
-        return sorted(relpaths, key=lambda relpath: relpath.split('/'))
+        """The inbox's files' relpaths (in it), each dir's together, sorted; their sizes and hashes kept
+        for what goes through all of them (see _listed())"""
+        self._listing = self._inbox_tree.listed('sha1')
+        return sorted(self._listing, key=lambda relpath: relpath.split('/'))
+
+    def _listed(self, relpath):
+        """(size, SHA-1 if it's known) of the inbox's file, as last listed, or else as it is"""
+        return self._listing.get(relpath) or (self._size(relpath), self._inbox_tree.known_hash(relpath, 'sha1'))
 
     def _is_in_inbox(self, relpath):
         """Whether the sorted tree's relpath is at or under the inbox, if the inbox is in it"""
@@ -264,7 +268,9 @@ class InboxSort(filescreen.FilesScreen):
     def _cache_key(self, file):
         """What Claude said of the inbox's file is kept by its contents' hash, once it's known; else,
         or from before, by its path and size"""
-        sha1 = self._inbox_tree.known_hash(file.relpath, 'sha1')
+        return self._keys(file, self._inbox_tree.known_hash(file.relpath, 'sha1'))
+
+    def _keys(self, file, sha1):
         path_key = self._path_key(file.relpath, file.size)
         return [ai.hash_key(sha1), path_key] if sha1 else [path_key]
 
@@ -272,8 +278,9 @@ class InboxSort(filescreen.FilesScreen):
         return ai.path_key(posixpath.join(self.inbox_path, relpath), size)
 
     def _load_cached(self, relpaths):
-        files = [ai.File(relpath, None, self._size(relpath)) for relpath in relpaths]
-        descriptions, recommendations = ai.cached(files, self._cache_key, self.root_path)
+        files = [ai.File(relpath, None, self._listed(relpath)[0]) for relpath in relpaths]
+        descriptions, recommendations = ai.cached(files, lambda file: self._keys(file, self._listed(file.relpath)[1]),
+                                                  self.root_path)
         self._descriptions.update(descriptions)
         self._recommendations.update(recommendations)
 
@@ -331,7 +338,7 @@ class InboxSort(filescreen.FilesScreen):
                               dryrun.label())
                 return
             self._load_cached(files)
-            self._junk_by_name = junk.find(files, {relpath: self._size(relpath) for relpath in files})
+            self._junk_by_name = junk.find(files, {relpath: self._listed(relpath)[0] for relpath in files})
             self._start_indexing()
             chosen = picker.pick_files(
                 self.inbox_path, files, header=header, picked=picked, label=LABEL,

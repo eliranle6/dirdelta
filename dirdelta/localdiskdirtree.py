@@ -124,6 +124,15 @@ class LocalReplica(dirtree.DirTree):
     def known_hash(self, relpath, algorithm):
         return hashcache.get(os.path.join(self._rootpath, relpath), algorithm)
 
+    def listed(self, algorithm):
+        kept = hashcache.known_under(self._rootpath)
+        found = {}
+        for relpath, (size, mtime_ns) in localscan.scan(self._rootpath, self.max_depth).files().items():
+            known = kept.get(relpath)
+            # As it was when it was hashed (see hashcache.get())
+            found[relpath] = (size, known[2].get(algorithm) if known and known[:2] == (size, mtime_ns) else None)
+        return found
+
     def content_hash(self, relpath, algorithm, should_stop=None):
         return self.content_hashes(relpath, [algorithm], should_stop)[algorithm]
 
@@ -247,10 +256,10 @@ class LocalReplica(dirtree.DirTree):
             return "it's on a read-only dir"
         return None
 
-    def _is_stuck(self, relpath, path):
-        """Whether what's at path can't leave its dir, as it's read-only (said): between filesystems, a
+    def _is_stuck(self, relpath):
+        """Whether what's at relpath can't leave its dir (cant_change(); said): between filesystems, a
         move is a copy then a removal, which would fail only after the copy was made"""
-        if os.access(os.path.dirname(path), os.W_OK):
+        if self.cant_change(relpath) is None:
             return False
         messages.print_line("Skipped %s: it's on a read-only dir, so it can only be copied" % (relpath,), "yellow")
         return True
@@ -259,7 +268,7 @@ class LocalReplica(dirtree.DirTree):
         to = to or self
         path = os.path.join(self._rootpath, dirpath)
         new_path = os.path.join(to.fullpath(), new_dirpath)
-        if self._is_stuck(dirpath, path):
+        if self._is_stuck(dirpath):
             return False
         if os.path.lexists(new_path):
             messages.print_line("Skipped %s/: %s is there already" % (dirpath, new_dirpath), "yellow")
@@ -282,7 +291,7 @@ class LocalReplica(dirtree.DirTree):
         to = to or self
         path = os.path.join(self._rootpath, relpath)
         new_path = os.path.join(to.fullpath(), new_relpath)
-        if self._is_stuck(relpath, path):
+        if self._is_stuck(relpath):
             return False
         if os.path.lexists(new_path):
             messages.print_line("Skipped %s: %s is there already" % (relpath, new_relpath), "yellow")

@@ -434,6 +434,12 @@ class DirTree(object):
         in the hash cache), else None"""
         return None
 
+    def listed(self, algorithm):
+        """{relpath: (size, its hash by algorithm if it's known without reading it, else None)} of all
+        its files, at once (a local one's in one listing and one query, not one of each per file)"""
+        return {file_entry.relpath: (self.file_size(file_entry.relpath), self.known_hash(file_entry.relpath, algorithm))
+                for file_entry in self.iter_files()}
+
     def known_hashes(self, relpath):
         """The algorithms whose hashes of the file at relpath are known without reading it (e.g.
         Drive's), the best first"""
