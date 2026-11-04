@@ -40,11 +40,17 @@ class NamesTest(unittest.TestCase):
         self.user.return_value = None
         self.assertEqual(replicanames.full('cloud/eliran'), 'Cloud:/eliran')
 
-    def test_a_disks_label_is_all_its_replicas(self):
+    def test_a_replicas_label_is_its_own_not_its_disks(self):
         self.label('/mnt/disk/a', 'blue WD')
-        self.assertEqual(replicanames.full('/mnt/disk/b'), 'blue WD:/mnt/disk/b')
-        self.assertEqual(replicanames.labeled('/mnt/disk/b'), 'blue WD:/mnt/disk/b')
-        self.assertEqual(replicanames.short_names(['/mnt/disk/b'])['/mnt/disk/b'], 'blue WD:b')
+        self.assertEqual(replicanames.labeled('/mnt/disk/a'), 'blue WD:/mnt/disk/a')
+        self.assertEqual(replicanames.labeled('/mnt/disk/b'), '/mnt/disk/b')
+        self.assertEqual(replicanames.label('/mnt/disk/b'), None)
+
+    def test_a_label_stays_wherever_its_disk_is_mounted(self):
+        self.label('/mnt/disk/a', 'mine')
+        self.mount.return_value = MOUNT._replace(target='/media/other')
+        replicanames.forget()
+        self.assertEqual(replicanames.label('/media/other/a'), 'mine')
 
     def test_a_drive_ones_label_is_its_own(self):
         self.label('cloud/a', 'photos')

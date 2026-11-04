@@ -310,7 +310,7 @@ def _add_replica(item, options, shown, known, names):
 
 def _label_option(name, known):
     """How the option that labels the replica named name is shown. Not of one that isn't there: what
-    its path is on now isn't its disk, whose label it would be"""
+    its path is on now isn't its disk, so it wouldn't be its identity, which its label is kept by"""
     if not paths.is_cloud_path(name) and (mounts.unmounted(name) is not None or not os.path.isdir(name)):
         return picker.Disabled("  Label the replica: its disk isn't mounted")
     current = known.labels.get(replicanames.label_key(name))

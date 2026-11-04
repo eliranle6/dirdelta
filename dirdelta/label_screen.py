@@ -10,10 +10,8 @@ NOTHING = "Nothing: go back"
 
 
 def _what(path):
-    """What the label of the replica at path is of"""
-    if paths.is_cloud_path(path):
-        return "%s (%s)" % (path, replicanames.disk_name(path))
-    return "the disk %s (which has %s)" % (replicanames.disk_name(path), path)
+    """The replica at path, as it's said here"""
+    return "%s (%s)" % (path, replicanames.disk_name(path))
 
 
 def run(known, replica_paths):
@@ -24,14 +22,11 @@ def run(known, replica_paths):
         for path in replica_paths:
             key = replicanames.label_key(path)
             current = known.labels.get(key)
-            # Two replicas on one disk have one label
-            if key not in [form[1] for form in forms.values()]:
-                forms["Label %s%s" % (_what(path), ": now '%s'" % (current,) if current else "")] = (path, key, False)
-                if current:
-                    forms["Remove the label '%s' of %s" % (current, _what(path))] = (path, key, True)
+            forms["Label %s%s" % (_what(path), ": now '%s'" % (current,) if current else "")] = (path, key, False)
+            if current:
+                forms["Remove the label '%s' of %s" % (current, _what(path))] = (path, key, True)
         answer = picker.pick_option([NOTHING] + list(forms),
-                                    header="A label says which replica is which, e.g. 'laptop' or 'blue WD ext. disk'.\n"
-                                           "A disk's label is of all the replicas on it.",
+                                    header="A label says which replica is which, e.g. 'laptop' or 'blue WD ext. disk'.",
                                     title="Labels")
         if answer not in forms:
             return

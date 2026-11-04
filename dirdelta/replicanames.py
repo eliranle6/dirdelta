@@ -1,7 +1,7 @@
 """What to call a replica on the screens, telling which disk or Drive account it's on, as the
 user labeled it if they did (kept in replicas.REPLICAS_FILE, see Replicas.labels), by what doesn't
-change when a path does: a local replica's label is its disk's (by the filesystem's UUID), so all the
-replicas on it have it, and a Drive one's is its own (by the account and the path). Shows nothing, and
+change when a path does: each replica's its own, by its identity() (a local one's disk's UUID and its
+path there, wherever it's mounted; a Drive one's account and path). Shows nothing, and
 asks nothing of Drive: see label_screen.py, and drivemeta.check() for the account's user name."""
 import os
 
@@ -15,9 +15,10 @@ SHORT_ID_LENGTH = 3
 LOCAL_DISK = 'LocalDisk'
 CLOUD = 'Cloud'
 
-# What was read: each local path's disk's UUID (a process's disks stay as they are, but see forget())
-# and the labels, and the file's state when they were read
+# What was read: each local path's disk's UUID and identity (a process's disks stay as they are, but
+# see forget()) and the labels, and the file's state when they were read
 _uuids = {}
+_identities = {}
 _labels = {}
 _labels_of = None
 
@@ -25,6 +26,7 @@ _labels_of = None
 def forget():
     """Read the disks anew (e.g. after one was mounted)"""
     _uuids.clear()
+    _identities.clear()
 
 
 def identity(path):
@@ -50,12 +52,12 @@ def _uuid(path):
 
 
 def label_key(path):
-    """What the label of the replica at path is kept by: its disk's UUID, or for a Drive one (or a
-    local one on a disk without one), its identity"""
+    """What the label of the replica at path is kept by: its identity"""
     if paths.is_cloud_path(path):
         return identity(path)
-    uuid = _uuid(path)
-    return 'uuid:%s' % (uuid,) if uuid else 'path:%s' % (os.path.realpath(path),)
+    if path not in _identities:
+        _identities[path] = identity(path)
+    return _identities[path]
 
 
 def labels():
@@ -102,7 +104,7 @@ def full(path):
 
 
 def labeled(path):
-    """path, after its disk's label if it has one (a Drive one: its label), else as it is (where
+    """path, after its label if it has one (a Drive one: its label alone), else as it is (where
     the paths are what's listed, e.g. the start menu's)"""
     named = label(path)
     if not named:

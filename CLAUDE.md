@@ -154,7 +154,7 @@ module:
 PYTHONPATH=tests bin/python -m unittest test_interactive_dir_sync -v
 ```
 
-Every module has a test file (772 tests, all passing as of 2026-11-03) except
+Every module has a test file (773 tests, all passing as of 2026-11-04) except
 the thin wiring in `main.py`/`dirsync_main.py`, covered only by running the
 app. Shared fakes:
 - `tests/helpers.py`: `scripted_option_picker` / `scripted_tree_picker` /
@@ -186,6 +186,8 @@ app. Shared fakes:
   written: `tests/helpers.py` points `mounts.MOUNTS_FILE` at a temp file, and
   `test_mounts` fakes `findmnt`, `lsblk`, `mount` (`subprocess.run`),
   `os.path.ismount` and `/dev/disk/by-uuid`.
+- The real Drive cache isn't read or imported: `tests/helpers.py` points
+  `drivecache.FILE_LIST_CACHE` at a temp path.
 - Drive is never contacted: `test_clouddirtree` writes a JSON-lines cache to
   a temp file (imported, as the old format is; `helpers.remove_drive_cache()` removes it), `test_driveapi` mocks `Credentials`/`build`, and the rest patch
   `driveapi.service()` with a fake (e.g. `test_clouddirtree`'s uploads, downloads

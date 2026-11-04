@@ -172,8 +172,9 @@ recommendations are both asked of `claude-haiku-5-5`.
 
 Screens say which disk or Drive account a replica is on, e.g. `LocalDisk(ABC):/mnt/eliran` (the end of the
 filesystem's UUID) or `Cloud(me):/eliran` (the account's user name, once dirdelta has asked Drive). "Label the
-replicas" in the sync menu names them: a local replica's label is its disk's, so all the replicas on that
-disk have it (`blue WD ext. disk:/mnt/eliran`), and a Drive one's is its own, by the account and the path.
+replicas" in the sync menu, or each replica's option in the Replicas dashboard, names it (`photos:/mnt/eliran`). A
+label is of that replica alone, by its disk's UUID and its path there, so it stays wherever the disk is mounted (a
+Drive one's, by the account and the path). It isn't shown while its disk isn't mounted, nor can one be given then.
 
 ### Rescanning a replica
 
