@@ -23,7 +23,7 @@ from dirdelta import exif
 from dirdelta import paths
 from dirdelta import text
 
-FILE_LIST_CACHE = os.path.expanduser('~/.cache/dirman/files.txt')
+FILE_LIST_CACHE = os.path.expanduser('~/.cache/dirdelta/files.txt')
 
 FOLDER_MIME_TYPE = 'application/vnd.google-apps.folder'
 # Google's own types (Docs, Sheets, Slides, shortcuts, ...): not files, so they can't be downloaded

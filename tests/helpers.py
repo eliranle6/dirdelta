@@ -17,9 +17,9 @@ from dirdelta import replicas
 _hash_cache_dir = tempfile.mkdtemp(prefix='dirdelta-test-hashes-')
 hashcache.CACHE_FILE = os.path.join(_hash_cache_dir, 'hashes.sqlite')
 atexit.register(shutil.rmtree, _hash_cache_dir, ignore_errors=True)
-# Nor read, or import into, the real Drive cache (~/.cache/dirman): the tests that make its own patch
+# Nor read, or import into, the real Drive cache (~/.cache/dirdelta): the tests that make its own patch
 # it, but a Drive replica's identity asks it for the root's id
-drivecache.FILE_LIST_CACHE = os.path.join(_hash_cache_dir, 'dirman', 'files.txt')
+drivecache.FILE_LIST_CACHE = os.path.join(_hash_cache_dir, 'dirdelta', 'files.txt')
 # Nor read or write the real mounts' file (~/.config/dirdelta/mounts.json): the tests that may check
 # replicas' mounts (choose_replicas') import this module
 _mounts_dir = tempfile.mkdtemp(prefix='dirdelta-test-mounts-')

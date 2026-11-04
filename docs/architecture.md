@@ -390,7 +390,7 @@ fixed, see known-issues.md #2 — and is now covered by
 Cloud state is never queried live per-scan. Instead:
 1. `replicafactory.create_dirtree_from_arg` calls `factory_interactive(rootpath)`
    for any path whose first component is `cloud`. It ensures a cache exists
-   (`drivecache.exists()`: `~/.cache/dirman/files.sqlite`, into which an old `files.txt` is imported, then kept as `.bak`), prompting
+   (`drivecache.exists()`: `~/.cache/dirdelta/files.sqlite`, into which an old `files.txt` is imported, then kept as `.bak`), prompting
    the user (`picker.pick_option`) to refresh the replica's folder in it if it
    already exists ("Refresh cloud/X from Google Drive"; the prompt says if the
    cache may be out of date there, see the stale marker below), or to continue

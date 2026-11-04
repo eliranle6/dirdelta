@@ -87,7 +87,7 @@ Developer tasks all live in the Makefile (`make` lists them): `test`,
 `clean`, `install`, `deploy`, `undeploy`. Keep new ones there too rather
 than adding shell scripts. `make clean`
 removes this copy's build output (and what older versions left in the repo), not the venv. It does not
-touch `~/.cache/dirman/files.sqlite` (the real Drive cache, `files.txt` imported once and kept as `files.txt.bak`, refreshed a folder at a
+touch `~/.cache/dirdelta/files.sqlite` (the real Drive cache, `files.txt` imported once and kept as `files.txt.bak`, refreshed a folder at a
 time: a replica's, at the start or from the main menu, or one in it, with the file
 picker's `r`; with a `files.txt.stale` next to it, listing the folders where a
 change dirdelta made to Drive was cut off before it was added to the cache, and a
@@ -223,6 +223,6 @@ Notes for whoever changes things next:
   in `dirdelta/dirtree.py`) — no hashing, no size/mtime comparison.
 - Local dirs are listed by `localscan.scan()`, which shells out to the real `find`
   binary (one run per listing) rather than using `os.walk`.
-- Cloud state is cached to disk (`~/.cache/dirman/files.sqlite`) rather than
+- Cloud state is cached to disk (`~/.cache/dirdelta/files.sqlite`) rather than
   queried live on every scan; refreshing a folder re-reads it from the Drive
   API.
