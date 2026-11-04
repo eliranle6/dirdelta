@@ -43,9 +43,26 @@ def service():
     if getattr(_local, 'service', None) is None:
         with _login_lock:
             if _shared_credentials is None:
-                _shared_credentials = _credentials()
+                _shared_credentials = _refreshed_one_at_a_time(_credentials())
         _local.service = build('drive', 'v3', credentials=_shared_credentials)
     return _local.service
+
+
+def _refreshed_one_at_a_time(creds):
+    """creds, shared by the threads, with its refresh() under a lock (Google's has none): a thread
+    that waited for another's refresh uses the token that got, rather than asking for one more. It
+    goes by the token, not by whether it's valid: a token Drive rejected looks valid until refreshed.
+    Returns creds."""
+    lock = threading.Lock()
+    refresh = creds.refresh
+
+    def refreshed_once(request):
+        token_seen = creds.token
+        with lock:
+            if creds.token == token_seen:
+                refresh(request)
+    creds.refresh = refreshed_once
+    return creds
 
 
 def _credentials():

@@ -1,11 +1,55 @@
+import datetime
 import os
 import threading
 import shutil
 import tempfile
+import time
 import unittest
 from unittest import mock
 
+from google.oauth2.credentials import Credentials
+
 from dirdelta import driveapi
+
+
+class RefreshTest(unittest.TestCase):
+    """Google's own credentials, with made-up values, and only its request for a token faked"""
+    def setUp(self):
+        self.creds = driveapi._refreshed_one_at_a_time(Credentials(
+            'old', refresh_token='made-up', token_uri='https://example.invalid', client_id='i', client_secret='s',
+            expiry=datetime.datetime(2000, 1, 1)))
+        self.tokens = iter(['new', 'newer'])
+        self.grants = 0
+
+    def grant(self, *_, **__):
+        self.grants += 1
+        time.sleep(0.05)
+        return next(self.tokens), 'made-up', datetime.datetime(2100, 1, 1), {}, None
+
+    def test_threads_needing_a_token_at_once_ask_for_one(self):
+        with mock.patch('google.oauth2.reauth.refresh_grant', side_effect=self.grant):
+            threads = [threading.Thread(target=self.creds.before_request, args=(mock.Mock(), 'GET', 'u', {})) for _ in range(5)]
+            for thread in threads:
+                thread.start()
+            for thread in threads:
+                thread.join()
+        self.assertEqual(self.grants, 1)
+        self.assertEqual(self.creds.token, 'new')
+
+    def test_a_token_rejected_while_it_looks_valid_is_still_refreshed(self):
+        with mock.patch('google.oauth2.reauth.refresh_grant', side_effect=self.grant):
+            self.creds.refresh(mock.Mock())
+            self.assertTrue(self.creds.valid)
+            self.creds.refresh(mock.Mock())
+        self.assertEqual(self.grants, 2)
+        self.assertEqual(self.creds.token, 'newer')
+
+    def test_a_failed_refresh_lets_the_next_one_try(self):
+        with mock.patch('google.oauth2.reauth.refresh_grant', side_effect=[OSError('no network'), ('new', 'made-up', datetime.datetime(2100, 1, 1), {}, None)]):
+            with self.assertRaises(OSError):
+                self.creds.refresh(mock.Mock())
+            self.creds.refresh(mock.Mock())
+        self.assertEqual(self.creds.token, 'new')
 
 
 class ServiceTest(unittest.TestCase):
