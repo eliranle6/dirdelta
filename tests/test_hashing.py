@@ -2,6 +2,7 @@ import hashlib
 import os
 import shutil
 import tempfile
+import threading
 import time
 import unittest
 from unittest import mock
@@ -33,6 +34,39 @@ class JobTest(unittest.TestCase):
         while self.job.progress().state != hashing.DONE:
             self.assertLess(time.monotonic(), deadline, "not done in time")
             time.sleep(0.01)
+
+    def test_a_scan_asked_for_during_one_comes_after_it_so_the_latest_stays(self):
+        started, go_on = threading.Event(), threading.Event()
+        listings = []
+
+        def slow_list(root, max_depth=None):
+            listings.append(root)
+            started.set()
+            self.assertTrue(go_on.wait(TIMEOUT))
+            return {'old': (1, 1)}
+        with mock.patch('dirdelta.hashing._list_files', side_effect=slow_list):
+            first = threading.Thread(target=self.job.scan)
+            first.start()
+            self.assertTrue(started.wait(TIMEOUT))
+            self.assertEqual(self.job.progress().state, hashing.SCANNING)
+            # These return at once; only the last is scanned, after the first
+            self.job.scan({'older': (1, 1)})
+            self.job.scan({'new': (1, 1)})
+            self.assertEqual(self.job.progress().state, hashing.SCANNING)
+            go_on.set()
+            first.join(TIMEOUT)
+        self.assertEqual(self.job.files(), ['new'])
+        self.assertEqual(len(listings), 1)
+        # And it's not left thinking one is going
+        self.job.scan({'next': (1, 1)})
+        self.assertEqual(self.job.files(), ['next'])
+
+    def test_a_scan_that_fails_lets_the_next_one_run(self):
+        with mock.patch('dirdelta.hashing._list_files', side_effect=ValueError('bad')):
+            with self.assertRaises(ValueError):
+                self.job.scan()
+        self.job.scan({'a': (1, 1)})
+        self.assertEqual(self.job.files(), ['a'])
 
     def test_scanning_lists_its_files_none_hashed_yet(self):
         self.assertEqual(self.job.progress().state, hashing.NOT_SCANNED)

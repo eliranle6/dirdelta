@@ -61,6 +61,9 @@ class Job(object):
         # Whether it was scanned, is being scanned, is hashing (started), and ever was
         self._is_scanned = False
         self._is_scanning = False
+        # Whether another scan was asked for during one, and what it's to take (see scan())
+        self._scan_again = False
+        self._listed_again = None
         self._is_started = False
         self._was_started = False
         # {relpath: (size, mtime_ns)} of its files, as of the scan, and {relpath: hash} of the ones
@@ -89,16 +92,36 @@ class Job(object):
     def scan(self, listed=None):
         """List its files (or take listed, {relpath: (size, mtime_ns)}, e.g. its tree's scan's),
         and tell which are hashed already (from the hash cache); the rest are left to hash. Again
-        after its files changed (e.g. copied into it): the hashed ones are kept."""
+        after its files changed (e.g. copied into it): the hashed ones are kept. One at a time, or an
+        older scan finishing later would undo a newer one: while one's going, this only asks for one
+        more after it (with the latest listed, if any), and returns."""
         with self._lock:
+            if self._is_scanning:
+                self._scan_again, self._listed_again = True, listed
+                return
             self._is_scanning = True
+        try:
+            while True:
+                self._scan_once(listed)
+                with self._lock:
+                    if not self._scan_again:
+                        self._is_scanning = False
+                        return
+                    listed, self._listed_again = self._listed_again, None
+                    self._scan_again = False
+        except BaseException:
+            with self._lock:
+                self._is_scanning = self._scan_again = False
+                self._listed_again = None
+            raise
+
+    def _scan_once(self, listed):
         try:
             if listed is None:
                 listed = _list_files(self.root, self.max_depth)
         except OSError as error:
             with self._lock:
                 self.error = str(error)
-                self._is_scanning = False
             return
         # What dirdelta keeps in the replica isn't its files (its hashes are in it, see hashcache.py)
         listed = {relpath: stamp for relpath, stamp in listed.items() if not paths.is_meta(relpath)}
@@ -120,7 +143,7 @@ class Job(object):
             self._first = collections.deque(relpath for relpath in self._first if relpath in listed)
             self._size_done = size_done
             self.error = None
-            self._is_scanned, self._is_scanning = True, False
+            self._is_scanned = True
             subscribers = list(self._subscribers)
         for subscriber in subscribers:
             for relpath, value in new.items():
