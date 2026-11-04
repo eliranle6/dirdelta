@@ -66,7 +66,7 @@ def prepare(replicas):
             continue
         job = hashing.job(replica.fullpath(), replica.max_depth)
         if job.progress().state == hashing.NOT_SCANNED:
-            if replica.file_stamps is not None:
+            if replica.file_stamps is not None and job.max_depth == replica.max_depth:
                 # Listed by the replica's scan already
                 job.scan(replica.file_stamps)
             else:

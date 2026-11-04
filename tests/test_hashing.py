@@ -259,6 +259,28 @@ class MachineTest(unittest.TestCase):
         self.assertIs(hashing.job_for(root), job)
         self.assertIn(job, hashing.jobs())
 
+    def test_a_replicas_job_goes_as_deep_as_the_deepest_asked_for(self):
+        root = tempfile.mkdtemp(prefix='dirdelta-job-')
+        self.addCleanup(shutil.rmtree, root)
+        self.addCleanup(hashing._jobs.pop, os.path.realpath(root), None)
+        job = hashing.job(root, 5)
+        with mock.patch.object(hashing.Job, 'scan_in_background') as scan:
+            self.assertIs(hashing.job(root, 3), job)
+            self.assertEqual(job.max_depth, 5)
+            # Not scanned yet: nothing to do again
+            self.assertIs(hashing.job(root, 9), job)
+            self.assertEqual(job.max_depth, 9)
+            scan.assert_not_called()
+            job.scan({})
+            self.assertIs(hashing.job(root, 9), job)
+            scan.assert_not_called()
+            self.assertIs(hashing.job(root), job)
+            self.assertIsNone(job.max_depth)
+            scan.assert_called_once_with()
+            self.assertIs(hashing.job(root, 20), job)
+            self.assertIsNone(job.max_depth)
+            scan.assert_called_once_with()
+
 
 if __name__ == '__main__':
     unittest.main()
