@@ -39,8 +39,8 @@ def scan_warning(where, errors):
     miss some; no lines if there are no errors."""
     if not errors:
         return []
-    lines = ["Couldn't read everything in %s (%d errors), so the diff may be wrong:" %
-             (where, len(errors))]
+    lines = ["Couldn't read everything in %s (%s), so the diff may be wrong:" %
+             (where, text.counted(len(errors), 'error'))]
     return lines + text.listed(["  " + error for error in errors], MAX_SCAN_ERRORS_SHOWN)
 
 
@@ -242,10 +242,20 @@ class LocalReplica(dirtree.DirTree):
     def exists(self, relpath):
         return os.path.lexists(os.path.join(self._rootpath, relpath))
 
+    def _is_stuck(self, relpath, path):
+        """Whether what's at path can't leave its dir, as it's read-only (said): between filesystems, a
+        move is a copy then a removal, which would fail only after the copy was made"""
+        if os.access(os.path.dirname(path), os.W_OK):
+            return False
+        messages.print_line("Skipped %s: it's on a read-only dir, so it can only be copied" % (relpath,), "yellow")
+        return True
+
     def _move_dir(self, dirpath, new_dirpath, to=None):
         to = to or self
         path = os.path.join(self._rootpath, dirpath)
         new_path = os.path.join(to.fullpath(), new_dirpath)
+        if self._is_stuck(dirpath, path):
+            return False
         if os.path.lexists(new_path):
             messages.print_line("Skipped %s/: %s is there already" % (dirpath, new_dirpath), "yellow")
             return False
@@ -267,6 +277,8 @@ class LocalReplica(dirtree.DirTree):
         to = to or self
         path = os.path.join(self._rootpath, relpath)
         new_path = os.path.join(to.fullpath(), new_relpath)
+        if self._is_stuck(relpath, path):
+            return False
         if os.path.lexists(new_path):
             messages.print_line("Skipped %s: %s is there already" % (relpath, new_relpath), "yellow")
             return False

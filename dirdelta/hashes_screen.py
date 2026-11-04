@@ -442,7 +442,8 @@ def _drive_lines(cloud):
     first = "  Drive's hashes, none read here: SHA-1 of %s of %s, SHA-256 of %s" % (
         "{:,}".format(nr_sha1), _files(nr_files), "{:,}".format(nr_sha256))
     if nr_sha256 < nr_files:
-        note = "  %s have no hash: Google's own files (Docs, Sheets...)" % (_files(nr_files - nr_sha256),)
+        nr_without = nr_files - nr_sha256
+        note = "  %s %s no hash: Google's own files (Docs, Sheets...)" % (_files(nr_without), "has" if nr_without == 1 else "have")
     else:
         note = "  All its files have Drive's hashes"
     return nr_files, size, first, note

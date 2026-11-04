@@ -7,7 +7,6 @@ import textwrap
 import threading
 import time
 
-from dirdelta import ai
 from dirdelta import aiplan
 from dirdelta import archives
 from dirdelta import dryrun

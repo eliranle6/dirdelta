@@ -20,7 +20,6 @@ import tempfile
 
 from dirdelta import clouddirtree
 from dirdelta import downloads
-from dirdelta import drivecache
 from dirdelta import dryrun
 from dirdelta import mounts
 from dirdelta import messages

@@ -57,9 +57,12 @@ for it (with `sudo` unless the line has `user`/`users`), else `sudo mount -t TYP
 -o rw,OPTIONS UUID=... TARGET`: read-write (even if it was read-only), with the
 filesystem's options (none of NTFS's, which are FUSE's own). sudo asks for the password
 on the terminal; a failure is shown (`messages.show`) and asked about again. If
-ntfs-3g refuses (Windows hibernated, or Fast Startup: "unclean file system"),
-it isn't mounted read-only instead: the error screen says to shut Windows down
-fully. Asked even in a dry run (it
+ntfs-3g refuses (Windows hibernated, or Fast Startup: "unclean file system"), the
+error screen says to shut Windows down fully; and if it mounts read-only instead,
+as 2022.10.3 does, exiting 0 (`_came_up_read_only()`, unless fstab's line says `ro`), a warning
+says so, and the same. A read-only replica still works as a source: a sync and a sort warn, copying from it
+goes on, and only what would change it is held back (`is_writable()`; `LocalReplica._is_stuck()` refuses a move out
+before it starts, as between filesystems the copy would be made before the removal failed). Asked even in a dry run (it
 changes the system, not files), never done without asking.
 
 ### `replicas.py` / `choose_replicas.py`

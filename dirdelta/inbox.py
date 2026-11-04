@@ -278,9 +278,21 @@ class InboxSort(filescreen.FilesScreen):
 
     # The screens
 
+    def _warn_if_read_only(self):
+        """Say what can't be done if the inbox or the sorted tree is read-only, and what still can"""
+        lines = []
+        if not interactive_dir_sync.is_writable(self._inbox_tree):
+            lines.append("%s is read-only: you can still copy its files to the sorted tree, but they can't be "
+                         "moved out of it or removed." % (self.inbox_path,))
+        if not interactive_dir_sync.is_writable(self._root_tree):
+            lines.append("%s is read-only: no files can go into it." % (self.root_path,))
+        if lines:
+            messages.show("Read-only", lines, dryrun.label(), 'yellow')
+
     def run(self):
         """Let the user pick some of the inbox's files, then choose what to do with them (_act()),
         and back to the picker, where they were, until they quit, or the inbox is empty"""
+        self._warn_if_read_only()
         header = ("Files in %s, to sort into %s. Pick some, then choose what to do with them." %
                   (replicanames.full(self.inbox_path), replicanames.full(self.root_path)))
         keys = (self.REFRESH_KEY if self.inbox_is_cloud else '') + hashes_screen.KEY + aiplan_screen.KEY + contextmenu.KEY + archive_screen.KEY
@@ -727,7 +739,10 @@ class InboxSort(filescreen.FilesScreen):
         ])
         # The ones that can't be done aren't offered, nor one that does the same as another (Claude's
         # dir under the file's own name, when Claude keeps the name)
-        offered = collections.OrderedDict((key, action) for key, action in actions.items() if action.why_not is None)
+        # (Nor, from a read-only inbox, what takes files out of it: copying them is left)
+        is_stuck = not interactive_dir_sync.is_writable(self._inbox_tree)
+        offered = collections.OrderedDict((key, action) for key, action in actions.items() if action.why_not is None
+                                          and not (is_stuck and action.verb in (MOVE, REMOVE)))
         # Similar actions together, a blank line between each kind (opening and reading anew, the
         # picker's keys, together)
         kinds = [(ASK,), (MOVE,), (COPY,), (REMOVE,), (OPEN, READ)]
@@ -1143,7 +1158,7 @@ class InboxSort(filescreen.FilesScreen):
         elif relpath is not None and key and key in self.SIBLING_DIR_KEYS:
             # Beside it: in its dir (beside the root, there's none: in it)
             relpath = self._new_dir(posixpath.dirname(relpath), verb, count, base)
-        return relpath if in_inbox else self._not_the_inbox(relpath)
+        return self._not_dirdeltas(relpath) if in_inbox else self._not_the_inbox(relpath)
 
     def _rename_sorted_dir(self, relpath):
         """cc in the dir picker: rename the sorted tree's dir at relpath (see renaming.py), but the
@@ -1176,9 +1191,19 @@ class InboxSort(filescreen.FilesScreen):
             return None
         return _join(parent, *parts)
 
+    def _not_dirdeltas(self, relpath):
+        """relpath (a dir in the inbox or the sorted tree), unless it's where dirdelta keeps its own
+        files, or in it (then it says so, and it's None)"""
+        if relpath is not None and paths.is_meta(relpath):
+            messages.show("That's dirdelta's", ["%s/ has dirdelta's own files: pick another dir." % (paths.META_DIR,)],
+                          dryrun.label())
+            return None
+        return relpath
+
     def _not_the_inbox(self, relpath):
-        """relpath (a dir in the sorted tree), unless it's the inbox or in it (then it says so, and
-        it's None)"""
+        """relpath (a dir in the sorted tree), unless it's the inbox or in it, or dirdelta's own (then
+        it says so, and it's None)"""
+        relpath = self._not_dirdeltas(relpath)
         if relpath is not None and self._is_in_inbox(relpath):
             messages.show("That's the inbox", ["Pick a dir of %s that isn't in the inbox." % (self.root_path,)],
                           dryrun.label())

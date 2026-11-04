@@ -272,7 +272,7 @@ class DashboardTest(unittest.TestCase):
         nr_files, size, first, note = hashes_screen._drive_lines(cloud)
         self.assertEqual((nr_files, size), (3, 30))
         self.assertEqual(first, "  Drive's hashes, none read here: SHA-1 of 1 of 3 files, SHA-256 of 2")
-        self.assertEqual(note, "  1 file have no hash: Google's own files (Docs, Sheets...)")
+        self.assertEqual(note, "  1 file has no hash: Google's own files (Docs, Sheets...)")
 
 
 class MarksTest(unittest.TestCase):

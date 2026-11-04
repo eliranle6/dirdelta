@@ -194,6 +194,8 @@ def _mount(mount, command):
     error = _run(command)
     if error is None:
         messages.print_line("Mounted %s." % (mount.target,))
+        if _came_up_read_only(mount):
+            messages.show("Mounted read-only: %s" % (mount.target,), _read_only_lines(mount), dryrun.label(), 'yellow')
         return True
     lines = ["%s failed:" % (shlex.join(command),)] + error.splitlines()
     if any(unclean in error.lower() for unclean in UNCLEAN_NTFS_ERRORS):
@@ -202,6 +204,28 @@ def _mount(mount, command):
                   "Shift when choosing Shut down, or turn Fast Startup off), then try again."]
     messages.show("Cannot mount %s" % (mount.target,), lines, dryrun.label(), 'red')
     return False
+
+
+def _came_up_read_only(mount):
+    """Whether mount, just mounted, is read-only though it was asked to be read-write (ntfs-3g does
+    so, and succeeds, when Windows hibernated), not because fstab's line says it's to be"""
+    now = current_mount(mount.target)
+    if now is None or now.target != mount.target or 'ro' not in now.vfs_options.split(','):
+        return False
+    return 'ro' not in (_fstab_options(mount.target) or '').split(',')
+
+
+def _read_only_lines(mount):
+    """What to say of mount, which came up read-only"""
+    lines = ["It's mounted, but read-only: you can still copy its files to other replicas, but nothing "
+             "can be copied into it, removed from it or moved in it."]
+    if mount.fstype in ('ntfs', 'ntfs-3g'):
+        lines += ["", "Windows probably didn't shut down fully (it hibernated, or Fast Startup is on), which makes "
+                  "writing to it unsafe. In Windows, turn both off with this, as an Administrator:", "  powercfg /h off",
+                  "or for once, hold Shift when choosing Shut down. Then unmount it and run dirdelta again."]
+    else:
+        lines += ["", "Its filesystem may have errors, or the disk be write-protected (see sudo dmesg)."]
+    return lines
 
 
 def _run(command):

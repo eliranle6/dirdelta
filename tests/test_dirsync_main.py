@@ -32,7 +32,7 @@ class ScanErrorsWarningTest(unittest.TestCase):
 
     def test_errors_are_listed(self):
         self.assertEqual(self.warning(["find: '/some/dir/a': Permission denied"]), [
-            "Couldn't read everything in /some/dir (1 errors), so the diff may be wrong:",
+            "Couldn't read everything in /some/dir (1 error), so the diff may be wrong:",
             "  find: '/some/dir/a': Permission denied",
         ])
 
@@ -185,10 +185,11 @@ class MainMenuTest(unittest.TestCase):
         a = localdiskdirtree.LocalDiskDirTree('/a', silent=True)
         b = dirtree.DirTree('cloud/b')
         self.assertEqual(self.options(a, b), ['Files only in /a', 'Files only in /b', 'Rescan /a', 'Replicas dashboard', dirsync_main.BACK])
-        title, lines, _ = self.show.call_args.args
+        title, lines = self.show.call_args.args[:2]
         self.assertEqual(title, 'Read-only')
         self.assertEqual(len(lines), 1)
         self.assertIn('/a is read-only', lines[0])
+        self.assertIn('you can still copy', lines[0])
 
     def test_writable_replicas_get_no_read_only_message(self):
         a = localdiskdirtree.LocalDiskDirTree('/a', silent=True)

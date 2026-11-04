@@ -20,7 +20,7 @@ the dependencies are in one venv next to those (`make venv`), which the Makefile
 
 Deep dives live in `docs/`:
 - `docs/architecture.md` — module-by-module breakdown and data flow (scan → diff → pick → copy/remove)
-- `docs/known-issues.md` — bugs and dead code, with file:line: what's open is under "Still open" at its end, the fixed ones kept as history
+- `docs/known-issues.md` — bugs and dead code, with file:line, the fixed ones kept as history
 - `docs/glossary.md` — project-specific terms (replica, dirtree, cloud path convention, etc.)
 - `docs/improvement-ideas.md` — what's left to do, not implemented: a backlog to pick from
 - `lib/treepicker/CLAUDE.md` and `lib/treepicker/docs/improvement-ideas.md` — treepicker's own (read before changing picker behavior; picker changes are made in treepicker, not here)
@@ -154,7 +154,7 @@ module:
 PYTHONPATH=tests bin/python -m unittest test_interactive_dir_sync -v
 ```
 
-Every module has a test file (773 tests, all passing as of 2026-11-04) except
+Every module has a test file (785 tests, all passing as of 2026-11-04) except
 the thin wiring in `main.py`/`dirsync_main.py`, covered only by running the
 app. Shared fakes:
 - `tests/helpers.py`: `scripted_option_picker` / `scripted_tree_picker` /

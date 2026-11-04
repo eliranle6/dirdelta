@@ -3,6 +3,13 @@ import unittest
 from dirdelta import text
 
 
+class CountedTest(unittest.TestCase):
+    def test_one_and_many(self):
+        self.assertEqual(text.counted(1, 'error'), '1 error')
+        self.assertEqual(text.counted(0, 'error'), '0 errors')
+        self.assertEqual(text.counted(3, 'error'), '3 errors')
+
+
 class FilesTest(unittest.TestCase):
     def test_one_or_more(self):
         self.assertEqual(text.files(1), "1 file")

@@ -43,6 +43,20 @@ class KeptHashesTest(unittest.TestCase):
         self.assertEqual(localdiskdirtree.hashcache.get(os.path.join(other_root, 'e', 'y2'), 'sha1'),
                          hashlib.sha1(b'y').hexdigest())
 
+    @unittest.skipIf(os.geteuid() == 0, "root can write anywhere")
+    def test_a_read_only_ones_files_arent_moved_out_but_can_be_copied(self):
+        other_root = tempfile.mkdtemp(prefix='dirdelta-other-', dir=os.path.dirname(self.root))
+        self.addCleanup(shutil.rmtree, other_root, ignore_errors=True)
+        other = localdiskdirtree.LocalReplica(other_root)
+        os.chmod(self.root, 0o555)
+        self.addCleanup(os.chmod, self.root, 0o755)
+        with mock.patch('dirdelta.dryrun.DRYRUN', False):
+            self.assertEqual(self.tree.move_files([('y', 'y')], other), [])
+            self.assertEqual(self.tree.copy_files_within([('y', 'copy')], other), [('y', 'copy')])
+        # Nothing left behind by the move: only the copy
+        self.assertEqual(os.listdir(other_root), ['copy'])
+        self.assertTrue(self.tree.has_file('y'))
+
     def test_a_moved_file_and_dir(self):
         self.assertTrue(self.tree._move_file('y', 'e/y2'))
         self.assertTrue(self.tree._move_dir('d', 'f'))

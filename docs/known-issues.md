@@ -1,9 +1,8 @@
 # Known issues / dead code
 
 Issues 1-15 were found by reading the code on 2026-07-13 and numbered
-2026-07-19; 16-24 were found later, mostly by running it, and 25-26 on
-2026-11-03. What's open is under "Still open", at the end: all the rest is
-fixed. Fixed entries are kept, struck through,
+2026-07-19; 16-24 were found later, mostly by running it, and 25 on
+2026-11-03. As of 2026-11-04 all are fixed. Fixed entries are kept, struck through,
 because their notes explain why the code looks the way it does. File paths
 are relative to `dirdelta/` unless noted ("old picker" files were in the
 old Python picker library, removed on 2026-10-24, so its entries here are
@@ -217,22 +216,11 @@ history).
   Google Docs/Sheets/shortcuts are left out (they're not files to sync), and
   a cloud folder that isn't there is an error rather than an empty tree.
 
-## Still open
-
-25. **A read-only mount is reported as a success, with no reason given**
-  (`mounts.py:194`). When Windows is hibernated (or Fast Startup is on: its
-  `hiberfil.sys` starts with `HIBR`), `ntfs-3g` 2022.10.3 mounts the partition
-  read-only even with `-o rw`, and exits 0. `_mount()` throws away the output of
-  a command that succeeded, so it says "Mounted /mnt/win.", and its advice to shut
-  Windows down fully only shows if the mount fails, which it doesn't. All the user sees
-  is Copy, Remove and Rename greyed out with "it's read-only". To fix: after mounting,
-  check whether the volume really is `rw`, and if not, say why and what to do
-  (`powercfg /h off` in Windows, or Shift when choosing Shut down).
-
-26. **The cloud flow has never been run end to end against real Drive** (it needs Drive
-  credentials); its pieces are only covered by unit tests with a fake Drive. That
-  includes moves and copies between two Drive folders, as an inbox and its sorted
-  tree are since 2026-11-02 (`move_files(moves, to)`), which is the riskiest. To check,
-  on a throwaway Drive folder with `DRYRUN=0`: a file moved from a Drive inbox to a
-  Drive sorted tree, a whole folder, and into a new folder; the same with the inbox
-  in the sorted tree; an upload, trashing, and refreshing a folder.
+25. ~~**A read-only mount was reported as a success, with no reason given.** When Windows is
+  hibernated (or Fast Startup is on: its `hiberfil.sys` starts with `HIBR`), `ntfs-3g` 2022.10.3
+  mounts the partition read-only even with `-o rw`, and exits 0, so the advice for a failed
+  mount never showed, and all the user saw was Copy, Remove and Rename greyed out.~~ **FIXED**
+  (2026-11-04): after mounting, `mounts._came_up_read_only()` checks, and a warning says why and
+  what to do. It's only a warning: a read-only replica's files can still be copied out, in a sync or
+  a sort (only what would change it is held back). A volume mounted read-only before dirdelta
+  started gets the general read-only warning, without the reason.

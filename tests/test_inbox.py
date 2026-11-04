@@ -392,6 +392,47 @@ class InboxSortTest(unittest.TestCase):
         with mock.patch.object(sorter._inbox_tree, 'known_hash', return_value='abc'):
             self.assertEqual(sorter._cache_key(file), [ai.hash_key('abc'), path_key])
 
+    def test_a_file_cant_be_moved_into_dirdeltas_own_dir(self):
+        for picked in (os.path.join(self.root, 'meta'), os.path.join(self.root, 'meta', 'sub')):
+            self.show.reset_mock()
+            self.sort([['a.txt'], None], ['Move it to a dir you pick'], dirs=[picked], is_dry_run=False)
+            self.assertEqual(self.show.call_args.args[0], "That's dirdelta's")
+            self.assertTrue(self.exists('inbox', 'a.txt'))
+        self.assertFalse(self.exists('sorted', 'meta', 'a.txt'))
+
+    def test_a_new_dir_in_dirdeltas_own_is_refused_too(self):
+        with mock.patch('dirdelta.messages.ask', return_value='meta/new'):
+            self.sort([['a.txt'], None], ['Move it to a dir you pick'], dirs=[('o', os.path.join(self.root, 'docs'))],
+                      is_dry_run=False)
+        self.assertEqual(self.show.call_args.args[0], "That's dirdelta's")
+        self.assertTrue(self.exists('inbox', 'a.txt'))
+
+    def test_a_dir_named_meta_deeper_in_is_the_users(self):
+        self.assertEqual(self.sorter_for_meta()._not_dirdeltas('docs/meta'), 'docs/meta')
+
+    def sorter_for_meta(self):
+        return Sort(self.inbox, self.root)
+
+    def read_only_inbox(self):
+        patcher = mock.patch('dirdelta.interactive_dir_sync.is_writable', side_effect=lambda tree: tree.fullpath() != os.path.realpath(self.inbox))
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def test_from_a_read_only_inbox_only_copying_is_left_and_its_said(self):
+        self.read_only_inbox()
+        self.sort([['a.txt'], None], [NOTHING])
+        self.assertEqual(self.show.call_args_list[0].args[0], 'Read-only')
+        self.assertIn('you can still copy', self.show.call_args_list[0].args[1][0])
+        options = helpers.labels_of(self.pick_option.call_args.args[0])
+        self.assertTrue(any(option.startswith('Copy it') for option in options))
+        self.assertFalse(any(option.startswith(('Move', 'Remove')) for option in options))
+
+    def test_a_copy_from_a_read_only_inbox_goes_through(self):
+        self.read_only_inbox()
+        self.sort([['a.txt'], None], ['Copy it to a dir you pick', YES], dirs=[os.path.join(self.root, 'docs')], is_dry_run=False)
+        self.assertTrue(self.exists('sorted', 'docs', 'a.txt'))
+        self.assertTrue(self.exists('inbox', 'a.txt'))
+
     def test_the_menu_starts_with_nothing(self):
         self.sort([['a.txt'], None], [NOTHING])
         # Each kind of action apart, after a blank line (skipped when moving)

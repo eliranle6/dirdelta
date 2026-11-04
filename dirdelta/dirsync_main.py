@@ -91,7 +91,7 @@ def _sync(replica_a, replica_b, replica_a_path, replica_b_path, known_replicas=N
     LABELS = "Label the replicas"
     read_only = _read_only_lines(replica_a, replica_a_path) + _read_only_lines(replica_b, replica_b_path)
     if read_only:
-        messages.show("Read-only", read_only, dryrun.label())
+        messages.show("Read-only", read_only, dryrun.label(), 'yellow')
     # Each way, the files in one replica that aren't in the other, to pick and then copy, remove or
     # rename (interactive_dir_sync): found once, in the background, with each option saying how
     # many there are once they are. Each replica's files by name (for finding where the other has a
@@ -309,8 +309,8 @@ def _rescan(replica):
 
 
 def _read_only_lines(replica, replica_path):
-    """Why nothing will be copied into, removed from or moved in the replica, if it's read-only"""
+    """What can't be done with the replica, and what can, if it's read-only"""
     if not interactive_dir_sync.is_writable(replica):
-        return ["%s is read-only (no write permission): dirdelta won't copy files into it, "
-                "remove files from it or move them in it." % (replica_path,)]
+        return ["%s is read-only (no write permission): you can still copy its files to the other replica, "
+                "but dirdelta won't copy files into it, remove files from it or move them in it." % (replica_path,)]
     return []

@@ -1,6 +1,11 @@
 """Small texts said everywhere, said one way: counts of files, lists cut short, sizes and durations"""
 
 
+def counted(count, noun):
+    """'1 error', or 'N errors': count of noun, in the plural unless it's one"""
+    return "%d %s%s" % (count, noun, "" if count == 1 else "s")
+
+
 def files(count, grouped=False):
     """'1 file', or 'N files' (with grouped, N with thousands separators: '17,427 files')"""
     if count == 1:

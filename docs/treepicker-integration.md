@@ -8,8 +8,7 @@ kind of tree picker: a search keystroke takes milliseconds, and it opens
 /usr/share in ~0.5s. So dirdelta runs `treepicker` as a subprocess for every
 pick and every menu (`dirdelta/picker.py`), and no longer uses curses itself.
 
-Done as of 2026-10-23 (see the plan below). That the cloud flow hasn't been run end to end is in
-`known-issues.md` (#26).
+Done as of 2026-10-23 (see the plan below).
 
 ## How dirdelta talks to treepicker
 

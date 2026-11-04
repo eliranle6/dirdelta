@@ -127,8 +127,7 @@ class MountsTest(unittest.TestCase):
         self.assertEqual(pick.call_args[0][0][0],
                          'Mount it (runs: sudo mount -t ntfs -o rw UUID=9618289F1828807B /mnt/win)')
         # Not NTFS's FUSE options
-        self.assertEqual(self.commands[-1], ['sudo', 'mount', '-t', 'ntfs', '-o', 'rw', 'UUID=9618289F1828807B',
-                                             '/mnt/win'])
+        self.assertIn(['sudo', 'mount', '-t', 'ntfs', '-o', 'rw', 'UUID=9618289F1828807B', '/mnt/win'], self.commands)
 
     def test_an_unconnected_disk_is_waited_for(self):
         self.keep(DISK)
@@ -146,6 +145,39 @@ class MountsTest(unittest.TestCase):
         self.assertIn("isn't connected", headers[0])
         self.assertIn("isn't connected", headers[1])
         self.assertIn("Mount it?", headers[2])
+
+    def mount_coming_up(self, vfs_options, fstab=None, mount=WIN):
+        """Mount WIN by the fake command; it comes up with vfs_options. Returns what's shown."""
+        self.keep(mount)
+        self.connect(mount)
+        self.answers['mount'] = lambda command: self.mounted.add(mount.target) or (0, '')
+        now = mount._replace(vfs_options=vfs_options)
+        with helpers.answering_option_picker([mounts.MOUNT]), \
+                mock.patch('dirdelta.mounts.current_mount', return_value=now), \
+                mock.patch('dirdelta.mounts._fstab_options', return_value=fstab), \
+                mock.patch('dirdelta.messages.show') as show:
+            self.assertTrue(mounts.ensure_mounted(mount.target))
+        return show
+
+    def test_one_that_comes_up_read_only_says_so_and_why(self):
+        show = self.mount_coming_up('ro,relatime')
+        title, lines = show.call_args.args[:2]
+        self.assertEqual(title, 'Mounted read-only: /mnt/win')
+        self.assertTrue(any('powercfg /h off' in line for line in lines))
+
+    def test_one_that_comes_up_read_write_says_nothing_more(self):
+        self.mount_coming_up('rw,relatime').assert_not_called()
+
+    def test_one_fstab_says_is_read_only_says_nothing_more(self):
+        self.mount_coming_up('ro,relatime', fstab='ro,user').assert_not_called()
+
+    def test_one_not_ntfs_doesnt_blame_windows(self):
+        lines = self.mount_coming_up('ro', mount=DISK).call_args.args[1]
+        self.assertFalse(any('Windows' in line for line in lines))
+
+    def test_what_findmnt_says_isnt_of_it_says_nothing_more(self):
+        with mock.patch('dirdelta.mounts.current_mount', return_value=WIN._replace(target='/', vfs_options='ro')):
+            self.assertFalse(mounts._came_up_read_only(WIN))
 
     def test_a_failed_mount_is_said_and_asked_again(self):
         self.keep(DISK)
