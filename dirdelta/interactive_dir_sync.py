@@ -56,6 +56,37 @@ def _find_missing(src, dst):
         "%s or %s" % (src.fullpath(), dst.fullpath()), errors))
 
 
+def scan_errors_warning(tree):
+    """A warning's lines if scanning the (local) tree couldn't read everything; else none."""
+    return localdiskdirtree.scan_warning(tree.fullpath(), getattr(tree, 'scan_errors', []))
+
+
+def rescan_replica(replica):
+    """Scan the local replica anew, on a screen, saying if it couldn't read everything. Returns whether
+    it was; if not (stopped, or it isn't there), it's as it was."""
+    name = replica.fullpath()
+    is_done, error = False, None
+    with messages.progress_screen("Rescanning %s" % (name,), dryrun.label(), wait=False):
+        try:
+            replica.rescan()
+            is_done = True
+        except OSError as failure:
+            error = failure
+    if error is not None:
+        messages.show("Couldn't rescan it", [str(error)], dryrun.label(), 'red')
+    warning = scan_errors_warning(replica) if is_done else []
+    if warning:
+        messages.show("Warning: couldn't read everything", warning, dryrun.label(), 'red')
+    return is_done
+
+
+def _read_anew(replica, relpath):
+    """Read the replica anew (on Drive, its folder at relpath). Returns whether it was."""
+    if isinstance(replica, clouddirtree.CloudDirTree):
+        return refresh_replica(replica, relpath)
+    return localdiskdirtree.is_local(replica) and rescan_replica(replica)
+
+
 def refresh_replica(replica, relpath=''):
     """Read the cloud replica's folder at relpath (default: all of it) anew from Drive
     (CloudDirTree.refresh_from_drive()). Returns whether it was; if not, it's said why (on a screen),
@@ -179,6 +210,8 @@ class InteractiveDirSync(filescreen.FilesScreen):
                      [(self.REFRESH_KEY_NAME, ('read the folder anew from Drive, ' if clouds else '') + 'list the tree on the right anew'),
                       hashes_screen.KEY_HINT])
         picked, selected = [], None
+        # Where to go on in the side tree, after what was done there
+        side_start = None
         while True:
             src_job = hashing.job_for(self._src.fullpath()) if is_local(self._src) else None
             if src_job is not None:
@@ -202,7 +235,8 @@ class InteractiveDirSync(filescreen.FilesScreen):
                     side=picker.Side(dst_name, self._side_items(), True, self._side_follow,
                                      self.SIDE_REMOVE_KEY + contextmenu.KEY + self.REFRESH_KEY,
                                      [('Enter', 'choose what to do'), (self.SIDE_REMOVE_KEY, 'remove'), contextmenu.KEY_HINT,
-                                      (self.REFRESH_KEY_NAME, filescreen.SIDE_REFRESH_HINTS[self._dst in clouds])]),
+                                      (self.REFRESH_KEY_NAME, filescreen.SIDE_REFRESH_HINTS[self._dst in clouds])],
+                                     side_start),
                     enter_picks_selection=True,
                     none_picked_key_hints=[('Enter', 'Pick & choose what to do')],
                     # Ctrl-X opens the selected one (the picked ones: the menu's Open)
@@ -218,6 +252,7 @@ class InteractiveDirSync(filescreen.FilesScreen):
             if chosen is None:
                 return
             selected = chosen.selected
+            side_start = chosen.side_selected if chosen.key == picker.SIDE_KEY else None
             chosen, left_picked = self._shared_key(chosen, missing)
             if chosen is None:
                 picked = left_picked
@@ -225,11 +260,12 @@ class InteractiveDirSync(filescreen.FilesScreen):
             key = chosen.key
             # What the action menu's action was (Copy and Remove change only the files they do)
             self._last_action = None
-            # Ctrl-R there reads what's selected there, in dst; here, what's selected here, in each
-            to_refresh = [(replica, selected) for replica in clouds]
+            # Ctrl-R there reads dst anew (on Drive, what's selected there); here, each replica (on Drive,
+            # what's selected here)
+            to_refresh = [(replica, selected) for replica in (self._src, self._dst)]
             if key == picker.SIDE_KEY and chosen.side_pressed == self.REFRESH_KEY:
                 key = self.REFRESH_KEY
-                to_refresh = [(self._dst, chosen.side_selected)] if self._dst in clouds else []
+                to_refresh = [(self._dst, chosen.side_selected)]
             if key == renaming.PRESSED:
                 picked = chosen.files
                 renamed = self._rename_selected(selected)
@@ -262,11 +298,13 @@ class InteractiveDirSync(filescreen.FilesScreen):
                 # What changed outside dirdelta shows there now
                 self._side_listing.invalidate()
                 for replica, relpath in to_refresh:
-                    if refresh_replica(replica, relpath):
+                    if _read_anew(replica, relpath):
                         self.has_changed = True
                         self._index_of(replica).invalidate()
                         # Its files may have other contents now
                         self.checked.clear()
+                        for job in hashes_screen.jobs_of([replica]):
+                            job.scan_in_background()
                 is_changed = self.has_changed
             else:
                 if done is None:

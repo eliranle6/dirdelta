@@ -453,6 +453,40 @@ class InboxSortTest(unittest.TestCase):
         self.assertTrue(os.path.exists(os.path.join(self.inbox, 'a.txt')))
         self.refresh_replica.assert_not_called()
 
+    def test_ctrl_r_in_the_side_tree_stays_there_but_a_move_from_it_doesnt(self):
+        sorter = Sort(self.inbox, self.root)
+        picks = [picker.Picked(picker.SIDE_KEY, 'a.txt', ['a.txt'], 'docs', Sort.REFRESH_KEY),
+                 picker.Picked(picker.SIDE_KEY, 'a.txt', ['a.txt'], 'docs'), None]
+        with mock.patch('dirdelta.picker.pick_files', side_effect=picks) as pick_files, \
+                mock.patch.object(Sort, '_move_to_side', return_value=None):
+            sorter.run()
+        self.assertEqual([call.kwargs['side'].start for call in pick_files.call_args_list], [None, 'docs', None])
+
+    def test_ctrl_r_forgets_what_was_found_and_indexes_again(self):
+        sorter = Sort(self.inbox, self.root)
+        sorter._inbox_index.build()
+        sorter._root_index.build()
+        sorter._checked['a.txt'] = {'x': True}
+        sorter._indexing = 'finished'
+        sorter._read_inbox_anew('a.txt')
+        self.assertFalse(sorter._inbox_index.is_built())
+        self.assertFalse(sorter._root_index.is_built())
+        self.assertEqual(sorter._checked, {})
+        self.assertIsNone(sorter._indexing)
+
+    def test_ctrl_r_on_a_drive_inbox_forgets_only_if_it_was_read(self):
+        sorter = Sort(self.inbox, self.root)
+        sorter._inbox_index.build()
+        sorter._checked['a.txt'] = {'x': True}
+        with mock.patch('dirdelta.interactive_dir_sync.refresh_replica', return_value=False) as refresh:
+            sorter._read_anew(sorter._inbox_tree, sorter._inbox_index, True, 'a.txt')
+        refresh.assert_called_once_with(sorter._inbox_tree, 'a.txt')
+        self.assertTrue(sorter._inbox_index.is_built())
+        with mock.patch('dirdelta.interactive_dir_sync.refresh_replica', return_value=True):
+            sorter._read_anew(sorter._inbox_tree, sorter._inbox_index, True, 'a.txt')
+        self.assertFalse(sorter._inbox_index.is_built())
+        self.assertEqual(sorter._checked, {})
+
     def test_the_dir_picker_leaves_out_what_cant_be_picked(self):
         self.sort([['a.txt'], None], ['Move it to a dir you pick', YES], dirs=[os.path.join(self.root, 'docs')])
         self.assertEqual(self.pick_under_dir.call_args.kwargs['excluded'], ['meta'])

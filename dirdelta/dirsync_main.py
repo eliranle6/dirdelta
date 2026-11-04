@@ -52,7 +52,7 @@ def _run(args):
         dirtree_b = replicafactory.create_dirtree_from_arg(args.dir_b_path, args.max_depth)
         if dirtree_b is None:
             return
-        warnings = scan_errors_warning(dirtree_a) + scan_errors_warning(dirtree_b)
+        warnings = interactive_dir_sync.scan_errors_warning(dirtree_a) + interactive_dir_sync.scan_errors_warning(dirtree_b)
         if warnings:
             messages.show("Warning: couldn't read everything", warnings, dryrun.label(), 'red')
     # Both are dirs (or Drive's), so they're the history's latest; and what's known of each (its
@@ -75,11 +75,6 @@ def _run(args):
         result = _sync(dirtree_a, dirtree_b, args.dir_a_path, args.dir_b_path, known_replicas, changes)
     replicalog.offer_entries(changes, trees, known_replicas)
     return result
-
-
-def scan_errors_warning(tree):
-    """A warning's lines if scanning the (local) tree couldn't read everything; else none."""
-    return localdiskdirtree.scan_warning(tree.fullpath(), getattr(tree, 'scan_errors', []))
 
 
 def _sync(replica_a, replica_b, replica_a_path, replica_b_path, known_replicas=None, changes=None):
@@ -173,7 +168,7 @@ def _sync(replica_a, replica_b, replica_a_path, replica_b_path, known_replicas=N
             messages.print_line("Finding the files that each lacks...")
         concurrent.futures.wait([way.missing for way in ways])
         if option in rescans:
-            if _rescan(rescans[option]):
+            if interactive_dir_sync.rescan_replica(rescans[option]):
                 indexes[rescans[option]].invalidate()
                 for way in ways:
                     # Its files may have other contents now
@@ -288,25 +283,6 @@ class _Action(object):
         with picker.place("Files in %s" % (replicanames.full(self.src_path),)):
             sync.browse()
         return sync.has_changed
-
-
-def _rescan(replica):
-    """Scan the local replica anew, on a screen, saying if it couldn't read everything. Returns whether
-    it was; if not (stopped, or it isn't there), it's as it was."""
-    name = replica.fullpath()
-    is_done, error = False, None
-    with messages.progress_screen("Rescanning %s" % (name,), dryrun.label(), wait=False):
-        try:
-            replica.rescan()
-            is_done = True
-        except OSError as failure:
-            error = failure
-    if error is not None:
-        messages.show("Couldn't rescan it", [str(error)], dryrun.label(), 'red')
-    warning = scan_errors_warning(replica) if is_done else []
-    if warning:
-        messages.show("Warning: couldn't read everything", warning, dryrun.label(), 'red')
-    return is_done
 
 
 def _read_only_lines(replica, replica_path):

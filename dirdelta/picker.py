@@ -156,9 +156,10 @@ Picked = collections.namedtuple('Picked', ['key', 'selected', 'files', 'side_sel
 # relpath, '' the root), and follow, if given: called with the picker's selected relpath each time
 # it moves (on a thread of its own), returning the side tree's relpath to select (or its closest
 # dir there), or None to leave it where it is; keys: other keys that end picking there, as Enter;
-# key_hints: the keys row while moving in it ([(key, what it does)])
-Side = collections.namedtuple('Side', ['root_name', 'items', 'is_enter_picking', 'follow', 'keys', 'key_hints'],
-                              defaults=(False, None, '', ()))
+# key_hints: the keys row while moving in it ([(key, what it does)]); start: start moving in it, on
+# this relpath or its closest dir there ('' its root), rather than in the tree it's beside (None)
+Side = collections.namedtuple('Side', ['root_name', 'items', 'is_enter_picking', 'follow', 'keys', 'key_hints', 'start'],
+                              defaults=(False, None, '', (), None))
 # What a Picked's key is when Enter in the side tree ended it (a byte no key prints)
 SIDE_KEY = '\x1d'
 
@@ -508,6 +509,8 @@ def _run(args, input_items, shown_as=None, label=None, previews=None, on_selecti
             command.extend(['--side-key', SIDE_KEY])
         if side.keys:
             command.extend(['--side-expect', side.keys])
+        if side.start is not None:
+            command.extend(['--side-start', side.start or '.'])
         for key, text in side.key_hints:
             command.extend(['--side-hint', key, text])
         if side.follow is not None:

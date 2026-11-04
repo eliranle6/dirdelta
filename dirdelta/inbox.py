@@ -333,6 +333,8 @@ class InboxSort(filescreen.FilesScreen):
                        "  [junk? ...]              it may be removed (by its name or size, or as Claude says)"] +
                       (hashes_screen.HELP_LINES[1:] if self._jobs() else []))
         picked, selected = [], None
+        # Where to go on in the sorted tree, after Ctrl-R there
+        side_start = None
         is_first = True
         while True:
             files = self._inbox_files()
@@ -355,7 +357,8 @@ class InboxSort(filescreen.FilesScreen):
                 notify_keys=DESCRIBE_KEY + OPEN_KEY, enter_picks_selection=True, twice_keys=renaming.KEY,
                 side=picker.Side(self.root_path, self._side_items(), True, self._side_follow, self.REFRESH_KEY,
                                  [('Enter', ('copy' if self.MOVE_TO in self._cant_be_done() else 'move') + ' the files here'),
-                                  (self.REFRESH_KEY_NAME, filescreen.SIDE_REFRESH_HINTS[self.root_is_cloud])]),
+                                  (self.REFRESH_KEY_NAME, filescreen.SIDE_REFRESH_HINTS[self.root_is_cloud])],
+                                 side_start),
                 none_picked_key_hints=[('Enter', 'Pick & choose what to do')],
                 on_notify=lambda key, selected, picked, files=files: self._on_key(key, selected, picked, files),
                 on_selection=functools.partial(elsewhere.check_contents, files, self._inbox_tree,
@@ -365,6 +368,9 @@ class InboxSort(filescreen.FilesScreen):
                 self._finish_describing()
                 return
             selected = chosen.selected
+            # After moving files, the next ones to pick are in the inbox's tree
+            side_start = (chosen.side_selected if chosen.key == picker.SIDE_KEY and
+                          chosen.side_pressed == self.REFRESH_KEY else None)
             chosen, left_picked = self._shared_key(chosen, files)
             if chosen is None:
                 picked = left_picked
@@ -486,21 +492,32 @@ class InboxSort(filescreen.FilesScreen):
         return self._side_listing.items()
 
     def _read_inbox_anew(self, relpath):
-        """Ctrl-R: the inbox's folder of relpath, if it's on Drive, and the sorted tree's list"""
-        if self.inbox_is_cloud:
-            with self._drive_lock:
-                interactive_dir_sync.refresh_replica(self._inbox_tree, relpath)
-        self._side_listing.invalidate()
+        """Ctrl-R: the inbox (on Drive, its folder of relpath), and the sorted tree if it's local"""
+        self._read_anew(self._inbox_tree, self._inbox_index, self.inbox_is_cloud, relpath)
+        if not self.root_is_cloud:
+            self._read_anew(self._root_tree, self._root_index, False, '')
 
     def _read_side_anew(self, relpath):
-        """Ctrl-R in the sorted tree beside the picker: its folder of relpath, if it's on Drive, and its list"""
-        if self.root_is_cloud:
+        """Ctrl-R in the sorted tree beside the picker: it (on Drive, its folder of relpath)"""
+        self._read_anew(self._root_tree, self._root_index, self.root_is_cloud, relpath)
+
+    def _read_anew(self, tree, index, is_cloud, relpath):
+        """What's known of the replica of tree and index, read anew when next needed (a local one's is
+        asked of its disk; a Drive one's folder of relpath is read now), if it could be"""
+        if is_cloud:
             with self._drive_lock:
-                if interactive_dir_sync.refresh_replica(self._root_tree, relpath):
-                    self._root_index.invalidate()
-                    # Its files may have other contents now
-                    self._checked.clear()
+                if not interactive_dir_sync.refresh_replica(tree, relpath):
+                    return
+        elif not interactive_dir_sync.rescan_replica(tree):
+            return
+        index.invalidate()
+        # Its files may have other contents now
+        self._checked.clear()
+        # Built again, in the background (see _start_indexing())
+        self._indexing = None
         self._side_listing.invalidate()
+        for job in hashes_screen.jobs_of([tree]):
+            job.scan_in_background()
 
     def _warn_if_not_all_read(self):
         """Say so if the inbox or the sorted tree couldn't all be listed, as a sync does: what can't be

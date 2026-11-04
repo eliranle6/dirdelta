@@ -465,7 +465,7 @@ class RefreshKeyTest(unittest.TestCase):
         self.browse(self.local, self.cloud, [picker.Picked(Sync.REFRESH_KEY, 'x/new.mp3', []), None])
         self.refresh.assert_called_once_with(self.cloud, 'x/new.mp3')
 
-    def test_without_a_drive_replica_the_key_lists_the_side_tree_anew(self):
+    def test_the_side_tree_is_listed_anew_and_is_gone_back_to_after_the_key_there(self):
         other = dirtree.DirTree('/other')
         other.add_file_by_relpath('a.mp3')
         with mock.patch('dirdelta.sidetree._listed', return_value=([], [])) as listed:
@@ -479,7 +479,8 @@ class RefreshKeyTest(unittest.TestCase):
         self.assertEqual(calls[0].kwargs['keys'], Sync.REFRESH_KEY + '#a:e')
         self.assertIn(Sync.REFRESH_KEY, calls[0].kwargs['side'].keys)
         self.assertEqual(calls[1].kwargs['picked'], ['a.mp3'])
-        self.assertFalse(self.sync.has_changed)
+        # After the key in the side tree, it's where the picker starts; only then
+        self.assertEqual([call.kwargs['side'].start for call in calls], [None, None, 'x', None])
 
     def test_the_key_in_the_side_tree_reads_whats_selected_there_only_in_dst(self):
         self.local.add_file_by_relpath('x/new.mp3')
@@ -522,6 +523,45 @@ class _TwoDirsTestCase(unittest.TestCase):
             self.addCleanup(patcher.stop)
         self.sync = Sync(localdiskdirtree.LocalDiskDirTree(self.src_path, silent=True),
                          localdiskdirtree.LocalDiskDirTree(self.dst_path, silent=True))
+
+
+class ReadingLocalReplicasAnewTest(_TwoDirsTestCase):
+    """Ctrl-R, for what changed outside dirdelta"""
+
+    def press(self, chosen):
+        """browse(), the key pressed as chosen says after dst got a.txt from outside dirdelta; returns
+        pick_files's calls"""
+        answers = [chosen, None]
+
+        def pick_files(root, items, **kwargs):
+            answer = answers.pop(0)
+            if answer is not None:
+                helpers.make_files(self.dst_path, ['a.txt'])
+            return answer
+        self.sync.src_index.build()
+        self.sync.dst_index.build()
+        self.sync.checked['a.txt'] = {'x': True}
+        with mock.patch('dirdelta.picker.pick_files', side_effect=pick_files) as called:
+            self.sync.browse()
+        return called.call_args_list
+
+    def test_what_each_lacks_is_found_anew(self):
+        calls = self.press(picker.Picked(Sync.REFRESH_KEY, 'b.txt', ['a.txt', 'b.txt']))
+        self.assertEqual(sorted(calls[1].args[1]), ['b.txt', 'c.txt'])
+        self.assertEqual(calls[1].kwargs['picked'], ['b.txt'])
+        self.assertEqual(calls[1].kwargs['selected'], 'b.txt')
+        self.assertTrue(self.sync.has_changed)
+        self.assertEqual(self.sync.checked, {})
+        self.assertFalse(self.sync.src_index.is_built())
+        self.assertFalse(self.sync.dst_index.is_built())
+        self.assertIn('f a.txt', calls[1].kwargs['side'].items)
+
+    def test_in_the_side_tree_only_dst_is_and_it_stays_there(self):
+        calls = self.press(picker.Picked(picker.SIDE_KEY, 'b.txt', [], 'old/d.txt', Sync.REFRESH_KEY))
+        self.assertEqual(sorted(calls[1].args[1]), ['b.txt', 'c.txt'])
+        self.assertTrue(self.sync.src_index.is_built())
+        self.assertFalse(self.sync.dst_index.is_built())
+        self.assertEqual(calls[1].kwargs['side'].start, 'old/d.txt')
 
 
 class AskAITest(_TwoDirsTestCase):

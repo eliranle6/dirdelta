@@ -21,14 +21,14 @@ class ScanErrorsWarningTest(unittest.TestCase):
     def warning(self, scan_errors):
         tree = dirtree.DirTree('/some/dir')
         tree.scan_errors = scan_errors
-        return dirsync_main.scan_errors_warning(tree)
+        return interactive_dir_sync.scan_errors_warning(tree)
 
     def test_no_errors_no_warning(self):
         self.assertEqual(self.warning([]), [])
 
     def test_trees_without_scan_errors_get_no_warning(self):
         # E.g. cloud trees, which aren't scanned with find
-        self.assertEqual(dirsync_main.scan_errors_warning(dirtree.DirTree('cloud/mein')), [])
+        self.assertEqual(interactive_dir_sync.scan_errors_warning(dirtree.DirTree('cloud/mein')), [])
 
     def test_errors_are_listed(self):
         self.assertEqual(self.warning(["find: '/some/dir/a': Permission denied"]), [

@@ -174,6 +174,25 @@ class DashboardTest(unittest.TestCase):
         self.assertEqual(pick.call_count, 2)
         self.assertEqual(pick.call_args.kwargs['selected'], label)
 
+    def test_a_replica_without_a_job_can_be_hashed_from_it(self):
+        path = os.path.realpath(tempfile.mkdtemp(prefix='dirdelta-dashboard-'))
+        self.addCleanup(shutil.rmtree, path)
+        hash_it = (hashes_screen._HASH, path)
+        with mock.patch.object(hashing.Job, 'start') as start, mock.patch.object(hashing.Job, 'scan_in_background') as scan:
+            pick = self.dashboard(None, [hash_it, hashes_screen.BACK], trees=[], other_paths=[path])
+            options = [option.id for option in pick.call_args.args[0] if isinstance(option, picker.Option)]
+        start.assert_called_once_with()
+        scan.assert_called_once_with()
+        # Shown anew, as its job's: it can be paused there
+        self.assertEqual(pick.call_count, 2)
+        self.assertEqual(pick.call_args.kwargs['selected'], (hashes_screen._TOGGLE, path))
+        self.assertNotIn(hash_it, options)
+
+    def test_a_replica_thats_not_there_cant_be_hashed(self):
+        path = '/not/there/at/all'
+        self.dashboard(None, [hashes_screen.BACK], trees=[], other_paths=[path])
+        self.assertIsInstance(self.shown[(hashes_screen._HASH, path)], picker.Disabled)
+
     def test_what_the_label_option_says(self):
         with mock.patch('dirdelta.hashes_screen.os.path.isdir', return_value=True), \
                 mock.patch('dirdelta.replicanames.label_key', return_value='uuid:U'):

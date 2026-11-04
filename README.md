@@ -270,9 +270,9 @@ picked; Yes goes ahead. Its progress fills the screen under a top line saying wh
 stopped, `Enter` goes back to the picker, where you were, without the files done; `q` goes back
 to the main menu. With a cloud replica, the menu also has "Refresh cloud/X from Google
 Drive", which reads that folder anew from Drive (as the refresh offered at the start does), for when
-it changed outside dirdelta, and in the file picker `Ctrl-R` reads just the selected folder anew. In the file picker, `Ctrl-R` also
-lists the tree on the right anew, whatever the replicas (for what changed outside dirdelta); pressed in
-that tree, it reads the folder selected there, if that replica is on Drive.
+it changed outside dirdelta, and in the file picker `Ctrl-R` reads just the selected folder anew. Whatever the replicas, `Ctrl-R` also
+takes in what changed outside dirdelta: both trees and what each lacks are found anew. Pressed in the tree on
+the right, it does so for that replica (on Drive, the folder selected there), and you stay there.
 A Drive replica's file list is kept in it too, in `meta/files.jsonl`: uploaded while a sync (or a
 sort into it) goes on, a minute at most after it changed, and once more at the end (not in a dry
 run). At the start, if the copy there is newer than this machine's cache (another machine's), it's

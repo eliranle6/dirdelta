@@ -67,7 +67,7 @@ Like fzf: dirdelta starts `treepicker`, which draws on the terminal itself
   `--side-root`, `--side-select FD`, `--side-key`): the inbox's sorted tree, or a sync's other
   replica (`sidetree.items()`), in the lower part of the right column; Ctrl-L moves in it, Ctrl-H
   back. It follows the selected file (`Side.follow`: Claude's dir, a copy's or a same-named file's
-  place), and in an inbox's sort Enter there moves the files into its dir (`_move_to_side()`).
+  place), and in an inbox's sort Enter there moves the files into its dir (`_move_to_side()`). `Side.start` (`--side-start PATH`) starts in it, on PATH or its closest dir there.
 - While a search filters the tree, Space on a dir picks only the matches under it.
 - The inbox's picker: Enter with nothing picked picks the selected node, as Space would
   (`--enter-picks-selection`, `pick_files(enter_picks_selection=True)`).

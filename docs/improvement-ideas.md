@@ -3,7 +3,7 @@
 Not implemented: proposed changes, a backlog to pick from. The ones done so far (the 2026-10-23
 and 2026-10-24 reviews' #1-25; naming a cloud replica as given, the COPY/REMOVE label, greying
 out an option with nothing to do, faster uploads, and trashing whole Drive folders, 2026-10-27;
-refreshing a cloud folder at a time: at the start, from the main menu, or with `r` in the file
+refreshing a cloud folder at a time: at the start, from the main menu, or with `Ctrl-R` in the file
 picker, 2026-10-29; showing where the other replica has a file of the same name, beside the file
 picker, one picker per direction with Copy, Remove and Rename in it, sorting an inbox with
 Claude's help, 2026-10-29; remembering how a replica's volume was mounted and offering to mount
@@ -30,7 +30,6 @@ Ordered by how easy they are, easiest first (2026-10-30).
    1.1 A Drive file whose cache line is from before 2026-10-29 has only SHA-256 (4,840 of 21,131
        files, 2026-10-31), so a local file (hashed by SHA-1) is found there by hash only once its
        folder is read anew from Drive (or when it's compared, which reads it for SHA-256).
-       Hashing whole replicas isn't offered in picker mode, nor from the start menu.
    1.2 Files copied before 2026-10-29 have the time of their copy as their modification time, so
        theirs say little.
    1.3 Some photos have no date taken: CR3 and RAF raws (not TIFF files). HEIF's and the TIFF raws'
@@ -158,7 +157,7 @@ Ordered by how easy they are, easiest first (2026-10-30).
        scope, a "restricted" one, fine for the user's own app left in Testing (which Google
        doesn't review), but its sign-ins then expire every 7 days.
    5.9 Either way the laptop's Drive cache doesn't know of these uploads: a refresh of the
-       folder they went into (at the start, from the menu, or `r` in the file picker) picks them up, and the laptop's replica gets them by a sync
+       folder they went into (at the start, from the menu, or `Ctrl-R` in the file picker) picks them up, and the laptop's replica gets them by a sync
        from `cloud/...`.
 
 6. **One combined diff tree of both replicas, decided per file or dir.** Today's flow is per

@@ -332,6 +332,16 @@ class PickerTest(unittest.TestCase):
         self.assertEqual(args[args.index('--side-root') + 1], 'sorted')
         self.assertEqual(args[args.index('--side-key') + 1], picker.SIDE_KEY)
 
+    def test_it_can_start_in_the_side_tree(self):
+        for start, argument in (('docs', 'docs'), ('', '.')):
+            self.answer('|a|a/1.txt')
+            picker.pick_files('/r', ['a/1.txt'], side=picker.Side('sorted', ['d docs'], True, start=start))
+            args, _ = self.call()
+            self.assertEqual(args[args.index('--side-start') + 1], argument)
+        self.answer('|a|a/1.txt')
+        picker.pick_files('/r', ['a/1.txt'], side=picker.Side('sorted', ['d docs'], True))
+        self.assertNotIn('--side-start', self.call()[0])
+
     def test_pick_files_with_keys_ended_by_enter_returns_the_picks(self):
         self.answer('|a|a/1.txt')
         self.assertEqual(picker.pick_files('/r', ['a/1.txt', 'b/2.txt'], keys='r'),
