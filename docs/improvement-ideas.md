@@ -32,8 +32,9 @@ Ordered by how easy they are, easiest first (2026-10-30).
        folder is read anew from Drive (or when it's compared, which reads it for SHA-256).
    1.2 Files copied before 2026-10-29 have the time of their copy as their modification time, so
        theirs say little.
-   1.3 Some photos have no date taken: CR3 and RAF raws (not TIFF files). HEIF's and the TIFF raws'
-       reading was tested only on files built by the tests, not on a camera's or phone's.
+   1.3 HEIF's and the TIFF raws' dates taken were tested only on files built by the tests, not on
+       a camera's or phone's. (CR3's and RAF's, read since 2026-11-05, were also checked on a
+       Canon EOS R's and a Fujifilm X-T3's files from raw.pixls.us.)
 
 2. **Sort an inbox: what's left.** Sorting an inbox into a sorted tree, with Claude's descriptions
    and recommendations, is there (2026-10-29: `inbox.py`, `ai.py`). What's left:

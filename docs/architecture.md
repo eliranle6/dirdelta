@@ -753,8 +753,9 @@ the picked files not compared yet, then `sure_matches()`.
 Dates taken are the replicas' `date_taken()`: Drive's
 `imageMediaMetadata.time`, or a local photo's EXIF `DateTimeOriginal`
 (`exif.date_taken()`: a JPEG's header up to its EXIF segment, a HEIF
-file's EXIF item, found through its `meta` box's `iinf` and `iloc`, or a
-TIFF-based raw's start), read
+file's EXIF item, found through its `meta` box's `iinf` and `iloc`, a
+TIFF-based raw's start, a Canon CR3's `CMT2` (then `CMT1`) box in its `moov`
+box's Canon `uuid` box, or a Fujifilm RAF's embedded JPEG), read
 only for files with candidates. Modification times are `modified_time()`:
 `lstat` locally, Drive's `modifiedTime`; copies keep them (`shutil.copy2`,
 `os.utime` after a download, `modifiedTime` in an upload's body).

@@ -61,6 +61,30 @@ def _heif(tiff, iloc_version=0):
     return ftyp + meta(offset) + _box(b'mdat', payload)
 
 
+def _one_ifd_tiff(tag, date=b'2024:07:01 14:03:22\0', order='<'):
+    """A TIFF of one IFD with date in tag (as a CR3's CMT boxes are)"""
+    marker = b'II' if order == '<' else b'MM'
+    ifd = struct.pack(order + 'H', 1) + struct.pack(order + 'HHII', tag, 2, len(date), 8 + 2 + 12 + 4)
+    return marker + struct.pack(order + 'HI', 42, 8) + ifd + struct.pack(order + 'I', 0) + date
+
+
+def _cr3(cmt1=None, cmt2=None, uuid=None):
+    """A CR3's boxes: ftyp, then moov with Canon's uuid box holding the CMT boxes given"""
+    uuid = uuid or bytes.fromhex('85c0b687820f11e08111f4ce462b6a48')
+    cmts = b''.join(_box(kind, tiff) for kind, tiff in ((b'CMT1', cmt1), (b'CMT2', cmt2)) if tiff)
+    moov = _box(b'moov', _box(b'mvhd', b'\0' * 20, version=0) + _box(b'uuid', uuid + _box(b'CNCV', b'x') + cmts))
+    return _box(b'ftyp', b'crx \0\0\0\1crx isom') + moov + _box(b'mdat', b'raw data')
+
+
+def _raf(jpeg):
+    """A RAF's header pointing at jpeg, its embedded JPEG, after some padding"""
+    jpeg_offset = 160
+    # The magic, the format's version, the camera's id, its name (32 bytes), the directory's version
+    header = b'FUJIFILMCCD-RAW ' + b'0201' + b'FF383501' + b'X-T3'.ljust(32, b'\0') + b'0100' + b'\0' * 20
+    header += struct.pack('>II', jpeg_offset, len(jpeg))
+    return header.ljust(jpeg_offset, b'\0') + jpeg + b'raw data'
+
+
 class DateTakenTest(unittest.TestCase):
     def setUp(self):
         self.dir = tempfile.mkdtemp(prefix='dirdelta-exif-')
@@ -111,6 +135,30 @@ class DateTakenTest(unittest.TestCase):
         self.assertEqual(self.date(_tiff(), name='IMG_1.CR2'), '2024-07-01 14:03:22')
         self.assertEqual(self.date(_tiff(order='>'), name='DSC_1.nef'), '2024-07-01 14:03:22')
         self.assertIsNone(self.date(b'not a tiff at all', name='x.dng'))
+
+    def test_cr3s_exif_ifd(self):
+        cr3 = _cr3(cmt1=_one_ifd_tiff(0x0132, b'2024:07:01 15:00:00\0'), cmt2=_one_ifd_tiff(0x9003))
+        self.assertEqual(self.date(cr3, name='IMG_1.CR3'), '2024-07-01 14:03:22')
+        self.assertEqual(self.date(_cr3(cmt2=_one_ifd_tiff(0x9003, order='>')), name='x.cr3'),
+                         '2024-07-01 14:03:22')
+
+    def test_cr3s_ifd0_if_theres_no_original(self):
+        self.assertEqual(self.date(_cr3(cmt1=_one_ifd_tiff(0x0132), cmt2=_one_ifd_tiff(0x9004 + 100)),
+                                   name='x.cr3'), '2024-07-01 14:03:22')
+
+    def test_a_cr3_without_its_boxes_or_broken_is_none(self):
+        self.assertIsNone(self.date(_cr3(), name='x.cr3'))
+        self.assertIsNone(self.date(_cr3(cmt2=_one_ifd_tiff(0x9003), uuid=b'\1' * 16), name='x.cr3'))
+        self.assertIsNone(self.date(_cr3(cmt2=_one_ifd_tiff(0x9003))[:70], name='x.cr3'))
+        self.assertIsNone(self.date(b'not a cr3', name='x.cr3'))
+
+    def test_raf(self):
+        self.assertEqual(self.date(_raf(_jpeg(order='>')), name='DSCF1.RAF'), '2024-07-01 14:03:22')
+
+    def test_a_raf_without_exif_or_broken_is_none(self):
+        self.assertIsNone(self.date(_raf(b'\xff\xd8\xff\xda'), name='x.raf'))
+        self.assertIsNone(self.date(_raf(_jpeg())[:100], name='x.raf'))
+        self.assertIsNone(self.date(_jpeg(), name='x.raf'))
 
     def test_upper_case_extension(self):
         self.assertEqual(self.date(_jpeg(), name='IMG.JPG'), '2024-07-01 14:03:22')

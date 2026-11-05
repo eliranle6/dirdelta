@@ -1,13 +1,15 @@
 """When a photo was taken, from its EXIF data (DateTimeOriginal), read from a JPEG's header, a HEIF
-(HEIC) file's EXIF item, or a TIFF-based raw photo's (CR2, NEF, ARW, DNG, ...) IFDs: enough to tell
-two photos of the same name apart, without a library for it. Other formats (CR3, RAF) aren't read:
-their date is unknown."""
+(HEIC) file's EXIF item, a TIFF-based raw photo's (CR2, NEF, ARW, DNG, ...) IFDs, a Canon CR3's
+CMT boxes or a Fujifilm RAF's embedded JPEG: enough to tell two photos of the same name apart,
+without a library for it."""
 import os
 import struct
 
 # The extensions of the files read (others aren't, to save reading them)
 JPEG_EXTENSIONS = ('.jpg', '.jpeg', '.jpe')
 HEIF_EXTENSIONS = ('.heic', '.heif')
+CR3_EXTENSIONS = ('.cr3',)
+RAF_EXTENSIONS = ('.raf',)
 # Raw photos that are TIFF files (with their own magic numbers, some: ORF's, RW2's), and TIFFs
 TIFF_EXTENSIONS = ('.cr2', '.nef', '.nrw', '.arw', '.srf', '.sr2', '.dng', '.orf', '.rw2', '.pef',
                    '.srw', '.3fr', '.erf', '.kdc', '.mef', '.mos', '.iiq', '.tif', '.tiff')
@@ -21,30 +23,44 @@ _DATE_TIME_ORIGINAL_TAG = 0x9003
 _DATE_TIME_TAG = 0x0132
 # A JPEG segment marker without a length after it
 _STANDALONE_MARKERS = set(range(0xD0, 0xDA)) | {0x01}
+# The uuid box in a CR3's moov box that holds its metadata (CMT1: IFD0, CMT2: the EXIF IFD, as TIFFs)
+_CANON_UUID = bytes.fromhex('85c0b687820f11e08111f4ce462b6a48')
+# A RAF's start, and where in it its embedded JPEG's offset is (then its length), big-endian
+_RAF_MAGIC = b'FUJIFILMCCD-RAW '
+_RAF_JPEG_OFFSET = 84
 
 
 def date_taken(path):
-    """When the JPEG or HEIF photo at path was taken, 'YYYY-MM-DD HH:MM:SS', or None if it isn't one,
+    """When the photo at path was taken, 'YYYY-MM-DD HH:MM:SS', or None if it isn't one read here,
     has no date, or can't be read"""
     lower = path.lower()
-    if not lower.endswith(JPEG_EXTENSIONS + HEIF_EXTENSIONS + TIFF_EXTENSIONS):
+    if not lower.endswith(JPEG_EXTENSIONS + HEIF_EXTENSIONS + TIFF_EXTENSIONS + CR3_EXTENSIONS +
+                          RAF_EXTENSIONS):
         return None
     try:
         with open(path, 'rb') as f:
             if lower.endswith(JPEG_EXTENSIONS):
-                exif = _exif_segment(f)
+                tiffs = [_exif_segment(f)]
             elif lower.endswith(HEIF_EXTENSIONS):
-                exif = _heif_exif(f)
+                tiffs = [_heif_exif(f)]
+            elif lower.endswith(CR3_EXTENSIONS):
+                tiffs = _cr3_tiffs(f)
+            elif lower.endswith(RAF_EXTENSIONS):
+                tiffs = [_raf_exif(f)]
             else:
-                exif = f.read(MAX_TIFF_HEADER)
+                tiffs = [f.read(MAX_TIFF_HEADER)]
     except (OSError, struct.error, IndexError, ValueError):
         return None
-    if exif is None:
-        return None
-    try:
-        return _tiff_date(exif)
-    except (struct.error, IndexError, KeyError, ValueError):
-        return None
+    for tiff in tiffs:
+        if tiff is None:
+            continue
+        try:
+            date = _tiff_date(tiff)
+        except (struct.error, IndexError, KeyError, ValueError):
+            date = None
+        if date:
+            return date
+    return None
 
 
 def normalized(date):
@@ -108,6 +124,39 @@ def _heif_exif(f):
         data += f.read(min(length, MAX_EXIF_SIZE - len(data)))
     header_offset = struct.unpack('>I', data[:4])[0]
     return data[4 + header_offset:]
+
+
+def _cr3_tiffs(f):
+    """A Canon CR3's TIFFs with dates, the EXIF IFD's (CMT2) first, then IFD0's (CMT1): boxes in
+    the moov box's Canon uuid box, each a TIFF of one IFD"""
+    end = os.fstat(f.fileno()).st_size
+    moov = next(((start, box_end) for kind, start, box_end in _boxes(f, 0, end) if kind == b'moov'), None)
+    if moov is None:
+        return []
+    for kind, start, box_end in _boxes(f, *moov):
+        if kind != b'uuid':
+            continue
+        f.seek(start)
+        if f.read(16) != _CANON_UUID:
+            continue
+        found = {child: (child_start, child_end) for child, child_start, child_end in _boxes(f, start + 16, box_end)}
+        tiffs = []
+        for name in (b'CMT2', b'CMT1'):
+            if name in found:
+                child_start, child_end = found[name]
+                f.seek(child_start)
+                tiffs.append(f.read(min(child_end - child_start, MAX_TIFF_HEADER)))
+        return tiffs
+    return []
+
+
+def _raf_exif(f):
+    """The TIFF data of a Fujifilm RAF's embedded JPEG's EXIF segment, or None"""
+    header = f.read(_RAF_JPEG_OFFSET + 4)
+    if not header.startswith(_RAF_MAGIC):
+        return None
+    f.seek(struct.unpack('>I', header[_RAF_JPEG_OFFSET:])[0])
+    return _exif_segment(f)
 
 
 def _boxes(f, start, end):
@@ -206,6 +255,11 @@ def _tiff_date(tiff):
             date = normalized(text(exif_ifd[_DATE_TIME_ORIGINAL_TAG]))
             if date:
                 return date
+    # A TIFF whose first IFD is the EXIF IFD itself (a CR3's CMT2)
+    if _DATE_TIME_ORIGINAL_TAG in ifd0:
+        date = normalized(text(ifd0[_DATE_TIME_ORIGINAL_TAG]))
+        if date:
+            return date
     if _DATE_TIME_TAG in ifd0:
         return normalized(text(ifd0[_DATE_TIME_TAG]))
     return None
