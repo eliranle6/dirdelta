@@ -33,7 +33,6 @@ def scan_warning(where, errors, so="the diff may be wrong"):
 
 class LocalReplica(LocalInfo, LocalCopying, LocalRemoving, LocalMoving, dirtree.DirTree):
 
-
     """A local dir, whose files are asked of the disk, not of a tree of them (it has none: dirdiff
     diffs two local dirs, and an inbox's are listed): what it says is as things are now. What keeps a
     tree too is LocalDiskDirTree, told of each change by _file_added() and the like; what listens

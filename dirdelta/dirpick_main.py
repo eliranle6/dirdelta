@@ -1,3 +1,4 @@
+"""Picker mode: pick a file or dir under a path, then print it, or run a program (-x) on it"""
 import os
 
 from dirdelta.trees import paths

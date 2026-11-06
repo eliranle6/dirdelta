@@ -20,7 +20,6 @@ from dirdelta.ui import sidetree
 class InteractiveDirSync(Browsing, Keys, Lists, Menu, Copying, AskAI, Renames,
                          filescreen.FilesScreen):
 
-
     """The files in src that aren't in dst, which the user picks and then copies to dst, removes
     from src, or renames to match where the other replica has them (see elsewhere.py), again and
     again, until they're done. With them, the files both have at the same paths that differ

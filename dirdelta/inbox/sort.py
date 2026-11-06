@@ -43,7 +43,6 @@ class InboxSort(Listing, Screen, Keys, Side, Previews, Copies, Menu, Destination
                 Claude, ClaudeDirs, ClaudeFiles, Dirs, AskAI, Approval, Transfer,
                 filescreen.FilesScreen):
 
-
     """The inbox at inbox_path and the sorted tree at root_path (local dirs, or cloud paths)"""
     NOTHING = "Nothing: back to the files"
     # What the picker's keys do on the selected file, in the menu too: opening it (Ctrl-X), reading

@@ -14,7 +14,6 @@ from dirdelta.util import text
 
 class Opener(Downloading, Status):
 
-
     """Opens files of tree (a DirTree), by their relpaths. Files are downloaded under drive_lock (a
     threading.Lock), if given, shared with whatever else downloads them or changes tree: two downloads
     of a file would write the same .part (downloads.get())."""
@@ -100,7 +99,6 @@ class Opener(Downloading, Status):
         opening files (else that one opens them)"""
         if self._enqueue(relpaths, files):
             self._work()
-
 
     def local_path(self, relpath, max_size=None):
         """Where the file at relpath is on this machine, to read it there: a Drive file's downloaded

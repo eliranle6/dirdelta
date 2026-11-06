@@ -1,3 +1,4 @@
+"""A Drive replica's tree, after asking whether to refresh its file list from Drive first"""
 import time
 
 from dirdelta.drive import clouddirtree

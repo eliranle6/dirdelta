@@ -1,3 +1,5 @@
+"""dirdelta's entry point: the arguments, then the start menu (no path), picker mode (one path), sync
+mode (two) or sorting an inbox (--sort); each local replica's volume is checked to be mounted first"""
 import argparse
 import os
 import sys

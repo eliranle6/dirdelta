@@ -6,7 +6,7 @@ dirdelta's own Python tree takes ~3s. `treepicker`, from the C++ project at
 /home/eliran/code/treepicker (github.com/eliranle6/treepicker), shows the same
 kind of tree picker: a search keystroke takes milliseconds, and it opens
 /usr/share in ~0.5s. So dirdelta runs `treepicker` as a subprocess for every
-pick and every menu (`dirdelta/picker.py`), and no longer uses curses itself.
+pick and every menu (`dirdelta/ui/picker/`), and no longer uses curses itself.
 
 Done as of 2026-10-23 (see the plan below).
 
@@ -132,7 +132,7 @@ treepicker, each a commit:
 8. [done] `--max-depth N` for scanning a dir
 
 dirdelta, each a commit:
-9. [done] `dirdelta/picker.py`: runs treepicker (tree → stdin, stdout → picked
+9. [done] `dirdelta/ui/picker/`: runs treepicker (tree → stdin, stdout → picked
    entries), with tests using a fake treepicker script
 10. [done] Use it for the sync picker (`interactive_dir_sync.py`), menus
    (`menu.py`, since folded into `dirsync_main.py`; `clouddirtreefactory.py`) and picker mode (`dirpick_main.py`)

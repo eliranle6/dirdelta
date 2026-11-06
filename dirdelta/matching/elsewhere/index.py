@@ -11,7 +11,6 @@ from dirdelta.trees import paths
 
 class Index(IndexHashes, IndexFiles):
 
-
     """A replica's files by name (and the big ones by size), built once (in the background, by
     find_previews(), or by sure_matches()), and then kept up to date by the replica, which tells it
     of the files copied into it, removed from it or moved in it (add(), remove(), move(); see

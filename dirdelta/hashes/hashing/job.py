@@ -21,7 +21,6 @@ from dirdelta.hashes.hashing.states import (ALGORITHM,
 
 class Job(JobScanning, JobFiles):
 
-
     """Hashing a local replica's files (see the module's doc)"""
 
     def __init__(self, root, max_depth=None):
@@ -57,7 +56,6 @@ class Job(JobScanning, JobFiles):
     def name(self):
         """The replica's name for the screens: its dir's name"""
         return os.path.basename(self.root) or self.root
-
 
     def start(self):
         """Hash the files left, in the background (resuming, if paused)"""

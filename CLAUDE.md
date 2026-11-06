@@ -11,7 +11,7 @@ them, tagged `>`, `<` (newer or older here) or `≠`, to copy either way over th
 This is the main repo (github.com/eliranle6/dirdelta). Its pickers and menus are `treepicker`, a C++ program
 from its own repo (github.com/eliranle6/treepicker), vendored as a git submodule at
 `lib/treepicker` (its own history/remote, pinned to a specific commit here) and
-built with `make`; `dirdelta/picker.py` runs it as a subprocess (see
+built with `make`; `dirdelta/ui/picker/` runs it as a subprocess (see
 `docs/treepicker-integration.md`). The old Python picker library that was
 the UI before is gone (removed 2026-10-24). On the original dev machine this directory sits
 inside a local `dirstuff/` folder alongside a Python venv and an `unused/`
@@ -117,7 +117,9 @@ dirstuff/                    the original dev machine's local folder, not a git 
 └── dirdelta/                 THIS repo
     ├── bin/                   sync.sh, pick.sh: sync and picker mode from source; python, builddir
     ├── Makefile               dev tasks: build, test, clean, install, deploy, undeploy
-    ├── dirdelta/              the application (see docs/architecture.md)
+    ├── dirdelta/              the application, in packages by what they're about: trees/, drive/,
+    │                          hashes/, matching/, claude/, known/, ui/, screens/, sync/, inbox/,
+    │                          util/ (see docs/architecture.md, "Its layout", for the map)
     ├── secrets/               Google OAuth secrets — never print/edit
     ├── tests/                 unittest suite + tests/fixtures/{alpha,bravo}
     └── lib/
@@ -144,7 +146,7 @@ commit-adjacent-copy them anywhere.
 make test             # or ARGS=-v, ARGS='-k pattern', ARGS=test_inbox (one module), or other unittest flags
 ```
 
-It runs `tests/run.py` with `PYTHONPATH=.` (imports look like `from dirdelta import dirtree`):
+It runs `tests/run.py` with `PYTHONPATH=.` (imports look like `from dirdelta.trees import dirtree`):
 each `tests/test_*.py` in a process of its own, as many at once as there are CPUs, the biggest
 first, summed up as unittest would (a module's output is shown if it failed, or with `-v`), with
 `TMPDIR=/dev/shm` when there is one (SQLite's syncs to a disk were half the time). That takes ~4 s
@@ -154,8 +156,11 @@ modules must not depend on each other. Then treepicker's own C++ tests run with
 `make clean` cleans the submodule too.
 
 Patch targets must use the same module names the code imports
-(`'dirdelta.dryrun.DRYRUN'`): a bare `import dryrun` would load a second
-copy of the module that the app never sees. To run one
+(`'dirdelta.util.dryrun.DRYRUN'`): a bare `import dryrun` would load a second
+copy of the module that the app never sees. And a name is patched where it's looked up: a
+package's `__init__` re-exports names (`picker.pick_option`), but what its own modules call is
+patched in the module that defines it (`'dirdelta.claude.ai.query._run_query'`; see
+docs/architecture.md, "Its layout"). To run one
 module:
 
 ```bash
@@ -169,25 +174,25 @@ or reads private state, counts calls to an inner function, restates a constant o
 escape codes, column widths) or works out its expected value with the code it tests, nor one that
 another test, or another module's, already covers. Shared fakes:
 - `tests/helpers.py`: `scripted_option_picker` / `scripted_tree_picker` /
-  `scripted_files_picker` / `scripted_dir_picker` patch `dirdelta.picker`'s functions to return
+  `scripted_files_picker` / `scripted_dir_picker` patch `dirdelta.ui.picker`'s functions to return
   scripted answers, so no test runs treepicker, plus `make_files` for
-  temp dir fixtures. `tests/test_picker.py` tests `picker.py` itself against
+  temp dir fixtures. `tests/test_picker.py` tests `ui/picker/` itself against
   a fake treepicker script. App tests build their own `tempfile.mkdtemp()` trees
   rather than using `tests/fixtures/`, so they never depend on (or modify)
   the repo.
 - The real hash cache isn't written: `tests/helpers.py` points
   `hashcache.CACHE_FILE` at a temp file when it's imported, and every test
-  module that hashes files imports it. Hashing jobs (`hashing.py`) are made
+  module that hashes files imports it. Hashing jobs (`hashes/hashing/`) are made
   with `hashing.Job(...)` directly, or `hashing.job()` with a cleanup that pops
-  it from `hashing._jobs`; tests that hash without the pool's threads set
+  it from `hashing.registry._jobs`; tests that hash without the pool's threads set
   `job._is_started` and call `job._take()`/`job._hash()` themselves.
-- Claude is never asked in the tests: `test_ai` patches `ai._run_query` or the
-  SDK's `query`, and `test_inbox` patches `ai._run_query`; `ai.CACHE_FILE` goes
+- Claude is never asked in the tests: `test_ai` patches `ai.query._run_query` or the
+  SDK's `query`, and `test_inbox` patches `ai.query._run_query`; `ai.config.CACHE_FILE` goes
   to a temp file. A manual run with a scratch `HOME` can't reach Claude Code's
   login (it's under the real `HOME`); `CLAUDE_CONFIG_DIR=~/.claude` gets it,
   but then Claude Code writes a `.claude.json` into `~/.claude` (2026-10-29).
 - The real `~/.config/dirdelta/replicas.json` is never written: tests patch
-  `dirdelta.replicas.REPLICAS_FILE` to a temp file (`test_replicas`), or
+  `dirdelta.known.replicas.REPLICAS_FILE` to a temp file (`test_replicas`), or
   `replicas.load`/`replicas.save`. A manual run that shouldn't touch it can set
   `HOME` to a scratch dir (but that hides the real Drive cache too).
 - Nothing is downloaded into the real `~/.cache/dirdelta/downloads`: `tests/helpers.py`
@@ -200,7 +205,9 @@ another test, or another module's, already covers. Shared fakes:
   `test_mounts` fakes `findmnt`, `lsblk`, `mount` (`subprocess.run`),
   `os.path.ismount` and `/dev/disk/by-uuid`.
 - The real Drive cache isn't read or imported: `tests/helpers.py` points
-  `drivecache.FILE_LIST_CACHE` at a temp path.
+  `drivecache.names.LINES_FILE` at a temp path (the database is next to it).
+- Nothing goes to the desktop's trash: `helpers.fake_trash()` patches
+  `localdiskdirtree.fs._trash`.
 - Drive is never contacted: `test_clouddirtree` writes a JSON-lines cache to
   a temp file (imported, as the old format is; `helpers.remove_drive_cache()` removes it), `test_driveapi` mocks `Credentials`/`build`, and the rest patch
   `driveapi.service()` with a fake (e.g. `test_clouddirtree`'s uploads, downloads
@@ -225,7 +232,7 @@ Notes for whoever changes things next:
 ## Conventions observed in the code
 
 - Python, plus treepicker (C++, built by `make`). Modules inside `dirdelta/` import each other
-  as `from dirdelta import x` (never bare `import x`, which only worked in
+  as `from dirdelta.package import x` (never bare `import x`, which only worked in
   Python 2 or when `dirdelta/` itself happened to be on `sys.path`), so the
   same code runs from source via `python -m dirdelta` and installed via
   `make install` (`pip install .`, a pbr-based `setup.py`).
@@ -233,8 +240,8 @@ Notes for whoever changes things next:
   ahead of the latest tag (dirdelta 1.4.0 vs. v1.3.2). The root
   `requirements.txt` lists the third-party dependencies.
 - The diff itself is path-only (see `DirTree.get_unknown_entries_in_given_dirtree`
-  in `dirdelta/dirtree.py`, and `dirdiff.py`) — no hashing, no size/mtime comparison.
-  What it finds is then looked for elsewhere by contents (`hashing.py`, `elsewhere.py`).
+  in `dirdelta/trees/dirtree/`, and `dirdiff.py`) — no hashing, no size/mtime comparison.
+  What it finds is then looked for elsewhere by contents (`hashes/hashing/`, `matching/elsewhere/`).
   The files at the same paths are compared apart (`differing.py`), by the sizes and the hashes
   already known (`listed()`), never by reading them; modification times only say which is newer.
 - Local dirs are listed by `localscan.scan()`, which shells out to the real `find`
@@ -242,3 +249,7 @@ Notes for whoever changes things next:
 - Cloud state is cached to disk (`~/.cache/dirdelta/files.sqlite`) rather than
   queried live on every scan; refreshing a folder re-reads it from the Drive
   API.
+- Files are kept short (a rule of thumb of ~100 lines, more where splitting would break up one
+  thing), and a directory to about ten modules. A module that grows past that becomes a package
+  (its `__init__` re-exporting what callers use), and a big class keeps its state in one object
+  with its methods in mixins, a module each.

@@ -12,7 +12,6 @@ from dirdelta.trees.dirtree.listeners import Listeners
 
 class DirTree(Listeners, Copying, Changes, DirMoves, FilesInfo):
 
-
     """A tree of a dir's files and dirs: each node's data is its entry (DirEntry or FileEntry), and
     its id is the entry's relpath (the root's is '').
 
@@ -50,7 +49,6 @@ class DirTree(Listeners, Copying, Changes, DirMoves, FilesInfo):
         self._tree = treelib.Tree()
         root = entries.DirEntry(name='/', relpath='', fullpath=self._rootpath)
         self._root = self._tree.create_node(identifier='', tag=root.name, data=root)
-
 
     # The tree's nodes (treelib.Node: identifier, tag, data)
 
@@ -115,7 +113,6 @@ class DirTree(Listeners, Copying, Changes, DirMoves, FilesInfo):
             data=_file,
             parent=parent_dir_node)
         return file_entry.data
-
 
     def get_unknown_entries_in_given_dirtree(self, other):
         unknown_files_dirtree = DirTree(other._rootpath)

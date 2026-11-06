@@ -35,7 +35,6 @@ def factory(rootpath):
 
 class CloudDirTree(Fetching, Uploads, Folders, Moves, Removals, WholeFolders, dirtree.DirTree):
 
-
     """A dir tree representing a directory on the cloud (Google Drive). Files are copied into it by
     uploading them, out of it by downloading them, and removed from it to Drive's trash: a folder all
     of whose files are removed, as one.
