@@ -64,8 +64,8 @@ class Menu(object):
         options[self.OPEN] = ("Open %s with %s program%s" %
                               ("it" if len(relpaths) == 1 else "the " + count,
                                "its" if len(relpaths) == 1 else "their", "" if len(relpaths) == 1 else "s"),
-                              None if len(relpaths) <= opening.MAX_OPENED else
-                              "can't: more than %d at once" % (opening.MAX_OPENED,))
+                              None if len(relpaths) <= opening.names.MAX_OPENED else
+                              "can't: more than %d at once" % (opening.names.MAX_OPENED,))
         if clouds:
             options[self.READ_ANEW] = ("Read %s anew from Google Drive" %
                                        (' and '.join(os.path.join(replica.displayname(), folder).rstrip('/') + '/'

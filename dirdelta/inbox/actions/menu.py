@@ -190,7 +190,7 @@ class Menu(object):
                                    said=(OPEN, " look in it, unpacking nothing"))),
             (self.OPEN, _Action("Open %s with %s program%s" %
                                 (they, "its" if is_one else "their", "" if is_one else "s"),
-                                None if len(relpaths) <= opening.MAX_OPENED else "too many", OPEN, [],
+                                None if len(relpaths) <= opening.names.MAX_OPENED else "too many", OPEN, [],
                                 lambda: self._open(relpaths))),
             (self.READ_ANEW, _Action("Read %s/ anew from Google Drive" % (_join(self.inbox_path, folder),),
                                      None if self.inbox_is_cloud else "not Drive's", READ, [],

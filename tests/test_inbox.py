@@ -748,7 +748,7 @@ class InboxSortTest(unittest.TestCase):
         self.assertEqual(self.pick_files.call_args.kwargs['picked'], ['a.txt', 'b.jpg'])
 
     def test_too_many_to_open_arent_offered_to(self):
-        with mock.patch('dirdelta.ui.opening.MAX_OPENED', 2):
+        with mock.patch('dirdelta.ui.opening.names.MAX_OPENED', 2):
             self.sort([['a.txt', 'b.jpg', 'trip/c.jpg'], None], [NOTHING])
         self.assertFalse(any(option.startswith('Open') for option in helpers.labels_of(self.pick_option.call_args.args[0])))
 
