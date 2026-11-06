@@ -254,7 +254,10 @@ class CloudDirTree(dirtree.DirTree):
                             messages.print_line("Copy failed: %s" % (error,), "red")
                             copied(False)
                             continue
-                        under_way[executor.submit(self._upload, file_entry, parent_id)] = file_entry
+                        # Inside replacing(), the file there gets it as its new version
+                        replaced_id = (self._cloud_ids.get(file_entry.relpath)
+                                       if self._is_replacing and self.has_file(file_entry.relpath) else None)
+                        under_way[executor.submit(self._upload, file_entry, parent_id, replaced_id)] = file_entry
                         if len(under_way) == UPLOAD_THREADS:
                             break
                     if not under_way:
@@ -282,15 +285,21 @@ class CloudDirTree(dirtree.DirTree):
         self._copy_files([file_entry], source, lambda _: None, results.append)
         return results[0]
 
-    def _upload(self, file_entry, parent_id):
-        """Upload file_entry into the folder with parent_id, on any thread. Returns what Drive says
-        of the new file (its id, ...), with what it was made with. Raises HttpError or OSError if it
-        can't."""
+    def _upload(self, file_entry, parent_id, replaced_id=None):
+        """Upload file_entry into the folder with parent_id, on any thread: a new file, or with
+        replaced_id, a new version of that one (Drive keeps the old one among its versions). Returns
+        what Drive says of the file (its id, ...), with what it was made with. Raises HttpError or
+        OSError if it can't."""
         path = file_entry.full_filesystem_path()
         media = MediaFileUpload(path, resumable=os.path.getsize(path) >= RESUMABLE_MIN_SIZE)
         # When it was modified, as on the disk, rather than when it was uploaded
         body = {'name': os.path.basename(file_entry.relpath), 'parents': [parent_id],
                 'modifiedTime': drivecache.rfc3339(os.path.getmtime(path))}
+        if replaced_id is not None:
+            updated = driveapi.service().files().update(
+                fileId=replaced_id, body={'modifiedTime': body['modifiedTime']}, media_body=media,
+                fields=drivecache.FILE_FIELDS).execute(num_retries=NUM_RETRIES)
+            return dict(body, **updated)
         created = driveapi.service().files().create(
             body=body, media_body=media, fields=drivecache.FILE_FIELDS).execute(num_retries=NUM_RETRIES)
         return dict(body, **created)
@@ -322,6 +331,9 @@ class CloudDirTree(dirtree.DirTree):
             messages.print_line("Copy failed: %s" % (error,), "red")
             return False
         self._cache_add(md)
+        if self.has_file(file_entry.relpath):
+            # Replaced (see replacing()): what listens drops what it knew of the old version
+            self._tell_removed(file_entry.relpath)
         self.add_file_by_relpath(file_entry.relpath)
         self._cloud_ids[file_entry.relpath] = md['id']
         self._infos[file_entry.relpath] = _info_of(md)

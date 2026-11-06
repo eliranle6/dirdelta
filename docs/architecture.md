@@ -559,6 +559,25 @@ It scans both dirs in C++ (~1s for two 119k-file dirs, where building their
 Python trees took ~6s). `programs.find(name)` finds treepicker and
 dirdiff: this copy's build (`DIRDELTA_PROGRAMS_DIR`, set by `bin/python` and make), next to the running python, `PATH`.
 
+### `differing.py`
+The files both replicas have at the same path that differ (`docs/plans.md`, plan A): `find(src, dst)`
+lists both (`listed('sha1')`: size and known hash of each, a local one by one `find` and one query of
+the hash cache) and returns `{relpath: Change(src_size, dst_size, src_mtime, dst_mtime, by)}`, `by`
+being `BY_SIZE`, or `BY_CONTENTS` for the same size with both hashes known and different (one unknown:
+not counted). `flipped()` is the other way's; `tag()`, `styled_tag()` and `preview_lines()` are what
+the pickers show, their mark and color by `newer()` (modification times, within 2 s the same):
+`>` blue newer here, `<` red older here, `≠` yellow when the times don't say (`mark()`, `style()`). `dirsync_main._find_all()`
+finds them once per pair, on a thread, with both ways' diffs (`_Way.differs`, a future, the second
+way's flipped); `InteractiveDirSync` lists them with the missing files (`_listed()`, kept in
+`differs`), adds their tags to `shown_as` (once, then with what's sent again) and their previews
+before `elsewhere`'s (`_find_previews()`), and leaves them out of what's about the missing ones
+(Rename, `elsewhere`'s previews and checks, Ask AI). Copy over one runs inside the destination's
+`replacing()` (`DirTree`): `LocalReplica._replace_file()` copies to `.dirdelta-part.NAME` next to
+it, moves the old one to the trash (`gio trash`), then renames the copy over it; Drive's
+`_upload()` with the file's id does `files.update` with the new media (a new version). Either tells
+its listeners remove then add. Copy back (`COPY_BACK`, "Replace it with its version in B") is the
+same into src (`_copy_back()`); which were done is what an `_Added` listener heard.
+
 ### `interactive_dir_sync.py`
 `InteractiveDirSync(src, dst)`. Its diff (`_missing()`): for two local dirs,
 `dirdiff`, run anew for each action (so the dirs' own trees are never

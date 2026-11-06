@@ -4,6 +4,7 @@ import threading
 import time
 
 from dirdelta import clouddirtree
+from dirdelta import differing
 from dirdelta import drivemeta
 from dirdelta import dryrun
 from dirdelta import elsewhere
@@ -99,6 +100,8 @@ def _sync(replica_a, replica_b, replica_a_path, replica_b_path, known_replicas=N
                                     (ways[1], replica_b_path, replica_a_path)):
         label = "Files only in %s" % (src_path,)
         actions[label] = _Action(src_path, dst_path, way, changes)
+    # The files both have that differ (differing.py), alone, a's way (Copy replaces b's, Copy back a's)
+    actions[DIFFER] = _Action(replica_a_path, replica_b_path, ways[0], changes, only_differing=True)
     # A cloud replica's folder can be read anew from Drive, if Drive changed since the cache was made
     refreshes = {"Refresh %s file list from Google Drive" % (path,): replica
                  for replica, path in ((replica_a, replica_a_path), (replica_b, replica_b_path))
@@ -106,8 +109,7 @@ def _sync(replica_a, replica_b, replica_a_path, replica_b_path, known_replicas=N
     # A local one can be scanned anew, if its files changed meanwhile, outside dirdelta
     rescans = {"Rescan %s" % (path,): replica for replica, path in ((replica_a, replica_a_path), (replica_b, replica_b_path))
                if hashes_screen.is_local(replica)}
-    for way in ways:
-        way.find_missing()
+    _find_all(ways)
     jobs = hashes_screen.jobs_of([replica_a, replica_b])
     # What each way found last, noted in known_replicas (once each time they're found)
     noted = []
@@ -164,16 +166,16 @@ def _sync(replica_a, replica_b, replica_a_path, replica_b_path, known_replicas=N
             continue
         # An action may change the trees (or dirs) that the other way may still be diffing, so
         # both are waited for
-        if not all(way.missing.done() for way in ways):
+        if not all(way.missing.done() and way.differs.done() for way in ways):
             messages.print_line("Finding the files that each lacks...")
-        concurrent.futures.wait([way.missing for way in ways])
+        concurrent.futures.wait([way.missing for way in ways] + [way.differs for way in ways])
         if option in rescans:
             if interactive_dir_sync.rescan_replica(rescans[option]):
                 indexes[rescans[option]].invalidate()
                 for way in ways:
                     # Its files may have other contents now
                     way.checked.clear()
-                    way.find_missing()
+                _find_all(ways)
                 for job in hashes_screen.jobs_of([rescans[option]]):
                     job.scan_in_background()
             continue
@@ -183,7 +185,7 @@ def _sync(replica_a, replica_b, replica_a_path, replica_b_path, known_replicas=N
                 for way in ways:
                     # Its files may have other contents now
                     way.checked.clear()
-                    way.find_missing()
+                _find_all(ways)
             continue
         # Copying, removing and renaming change the files (unless it's a dry run), and so what each
         # lacks, and so does reading a replica anew from Drive (in the file picker)
@@ -192,13 +194,41 @@ def _sync(replica_a, replica_b, replica_a_path, replica_b_path, known_replicas=N
                 # The way shown cleared its own; its files may have other contents for this one too
                 if actions[option].was_read_anew:
                     way.checked.clear()
-                way.find_missing()
+            _find_all(ways)
             # Files copied into a local replica (or moved in it) are hashed too
             for job in jobs:
                 job.scan_in_background()
 
 
 _files = text.files
+
+# The sync menu's option of the files both replicas have that differ
+DIFFER = "Files that differ"
+
+
+def _differ(count):
+    return "differs" if count == 1 else "differ"
+
+
+def _find_all(ways):
+    """Start finding (again) what each way lacks, and the files both have that differ: once, for
+    both ways (the second's, flipped)"""
+    for way in ways:
+        way.find_missing()
+    way_a, way_b = ways
+    way_a.differs, way_b.differs = concurrent.futures.Future(), concurrent.futures.Future()
+
+    def find(futures=(way_a.differs, way_b.differs)):
+        try:
+            changes = differing.find(way_a.src, way_a.dst)
+        except Exception as error:
+            for future in futures:
+                future.set_exception(error)
+        else:
+            futures[0].set_result(changes)
+            futures[1].set_result(differing.flipped(changes))
+    threading.Thread(target=find, daemon=True).start()
+
 
 # The sync menu's first line: whether the two are in sync (see syncstate.py), as each way finds
 # their files
@@ -218,7 +248,11 @@ def _state_line(ways, path_a, path_b):
     only_a, only_b = [len(future.result().relpaths) for future in futures]
     state = syncstate.State(syncstate.found(only_a, only_b), only_a, only_b, None, [])
     mark, color = syncstate.mark(state)
-    return picker.Skipped(picker.styled([(mark + " ", color), (syncstate.describe(state, path_a, path_b), color)]))
+    differ = ways[0].differs
+    nr_differ = len(differ.result()) if differ.done() and differ.exception() is None else 0
+    return picker.Skipped(picker.styled([(mark + " ", color), (syncstate.describe(state, path_a, path_b), color),
+                                         ("; %s at the same paths %s" % (_files(nr_differ), _differ(nr_differ)) if nr_differ else "",
+                                          differing.STYLE)]))
 
 
 # How often the "loading" dots of a menu option change, in seconds
@@ -237,6 +271,8 @@ class _Way(object):
         # elsewhere.check_contents()), kept so each is compared once
         self.checked = {}
         self.missing = None
+        # A future of the files both have that differ, src's way (differing.find(), see _find_all())
+        self.differs = None
 
     def find_missing(self):
         """Start finding them (again), on a thread of its own, which doesn't keep dirdelta from
@@ -255,35 +291,54 @@ class _Way(object):
 class _Action(object):
     """A main menu option: the files of a way (interactive_dir_sync), from the replica at src_path to
     the one at dst_path. Their names are worked out each time, as a replica may be labeled meanwhile."""
-    def __init__(self, src_path, dst_path, way, changes=None):
+    def __init__(self, src_path, dst_path, way, changes=None, only_differing=False):
+        """With only_differing, it's the files that differ only (see DIFFER)"""
         self.src_path = src_path
         self.dst_path = dst_path
         self.way = way
         self.changes = changes
+        self.only_differing = only_differing
 
     def shown_as(self):
         """The label, with how many files it's about, or that they're still being found. With none,
         it can't be picked (a picker.Disabled): it would only say so. Once the files are found
         again (after a live action), it may be picked again."""
-        label = "Files only in %s" % (replicanames.full(self.src_path),)
-        missing = self.way.missing
-        if not missing.done():
+        if self.only_differing:
+            label = "%s at the same paths in both" % (DIFFER,)
+        else:
+            label = "Files only in %s" % (replicanames.full(self.src_path),)
+        missing, differs = self.way.missing, self.way.differs
+        if differs is None:
+            # Not looked for
+            differs = concurrent.futures.Future()
+            differs.set_result({})
+        if not missing.done() or (self.only_differing and not differs.done()):
             dots = int(time.monotonic() / DOTS_INTERVAL) % 4
             return "%s (loading%s)" % (label, '.' * dots)
+        nr_differ = len(differs.result()) if differs.done() and differs.exception() is None else 0
+        if self.only_differing:
+            if differs.exception() is not None:
+                return "%s (couldn't compare them)" % (label,)
+            if nr_differ == 0:
+                return picker.Disabled("%s: none" % (label,))
+            return "%s (%s)" % (label, _files(nr_differ))
         if missing.exception() is not None:
             return "%s (couldn't count the files)" % (label,)
         count = len(missing.result().relpaths)
-        if count == 0:
+        # The ones that differ are in its picker too
+        and_differ = ", and %d that %s" % (nr_differ, _differ(nr_differ)) if nr_differ else ""
+        if count == 0 and not nr_differ:
             return picker.Disabled("%s: none, %s has them all" % (label, replicanames.full(self.dst_path)))
-        return "%s (%s)" % (label, _files(count))
+        return "%s (%s%s)" % (label, _files(count), and_differ)
 
     def run(self):
         """Returns whether the replicas' files changed meanwhile (see InteractiveDirSync)"""
         way = self.way
         sync = interactive_dir_sync.InteractiveDirSync(way.src, way.dst, way.missing,
                                                        way.indexes[way.src], way.indexes[way.dst],
-                                                       way.checked, self.changes)
-        with picker.place("Files in %s" % (replicanames.full(self.src_path),)):
+                                                       way.checked, self.changes, way.differs,
+                                                       self.only_differing)
+        with picker.place(DIFFER if self.only_differing else "Files in %s" % (replicanames.full(self.src_path),)):
             sync.browse()
         self.was_read_anew = sync.was_read_anew
         return sync.has_changed

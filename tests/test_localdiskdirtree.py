@@ -283,6 +283,51 @@ class LocalDiskDirTreeTest(unittest.TestCase):
         self.assertFalse(tree._is_trashing)
         self.assertEqual(tree.REMOVED_TO, "")
 
+    def replace(self, content='new version', copy=None):
+        """Copy src's a.txt (of content) over dst's (of 'old'), inside replacing(); copy, if given,
+        is shutil.copy2's fake. Returns the tree, the trash and what listened."""
+        helpers.make_files(self.src_root, ['a.txt'])
+        helpers.make_files(self.dst_root, ['a.txt'])
+        with open(os.path.join(self.src_root, 'a.txt'), 'w') as f:
+            f.write(content)
+        with open(os.path.join(self.dst_root, 'a.txt'), 'w') as f:
+            f.write('old')
+        trash = helpers.fake_trash(self)
+        dst = localdiskdirtree.LocalDiskDirTree(self.dst_root, silent=True)
+        dst.update_from_filesystem()
+        listener = mock.Mock()
+        dst.add_listener(listener)
+        with mock.patch('dirdelta.dryrun.DRYRUN', False), mock.patch('dirdelta.messages.print_line'), \
+                mock.patch('dirdelta.localdiskdirtree.shutil.copy2', side_effect=copy or shutil.copy2), \
+                dst.replacing():
+            dst.copy_in([entries.FileEntry('a.txt', 'a.txt', os.path.join(self.src_root, 'a.txt'))])
+        return dst, trash, listener
+
+    def test_a_copy_replacing_a_file_sends_the_old_one_to_the_trash(self):
+        dst, trash, listener = self.replace()
+        with open(os.path.join(self.dst_root, 'a.txt')) as f:
+            self.assertEqual(f.read(), 'new version')
+        with open(os.path.join(trash, 'a.txt')) as f:
+            self.assertEqual(f.read(), 'old')
+        self.assertEqual(sorted(os.listdir(self.dst_root)), ['a.txt'])
+        self.assertTrue(dst.has_file('a.txt'))
+        # What listens forgets the old one, then knows the new one
+        self.assertEqual([call[0] for call in listener.method_calls], ['remove', 'add'])
+        self.assertFalse(dst._is_replacing)
+
+    def test_a_replacing_copy_that_fails_leaves_the_old_one(self):
+        def copy(src, dst):
+            with open(dst, 'w') as f:
+                f.write('par')
+            raise OSError('disk full')
+        dst, trash, listener = self.replace(copy=copy)
+        with open(os.path.join(self.dst_root, 'a.txt')) as f:
+            self.assertEqual(f.read(), 'old')
+        self.assertEqual(os.listdir(trash), [])
+        # No part of the copy left next to it
+        self.assertEqual(sorted(os.listdir(self.dst_root)), ['a.txt'])
+        self.assertEqual(listener.method_calls, [])
+
     def test_removing_files_removes_the_dirs_left_empty(self):
         with mock.patch('dirdelta.dryrun.DRYRUN', False):
             tree = self._remove(['a/b/1.txt', 'a/b/c/2.txt', 'a/d/3.txt', 'e/4.txt'],

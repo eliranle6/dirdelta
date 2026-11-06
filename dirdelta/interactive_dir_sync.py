@@ -12,6 +12,7 @@ from dirdelta import archive_screen
 from dirdelta import archives
 from dirdelta import clouddirtree
 from dirdelta import contextmenu
+from dirdelta import differing
 from dirdelta import dirdiff
 from dirdelta import drivecache
 from dirdelta import elsewhere
@@ -123,11 +124,29 @@ def can_copy(src, dst):
 _files = text.files
 
 
+class _Added(object):
+    """A tree's listener (see DirTree.add_listener()) that keeps which files were made (or replaced)"""
+    def __init__(self):
+        self.relpaths = set()
+
+    def add(self, relpath, size):
+        self.relpaths.add(relpath)
+
+    def remove(self, relpath):
+        pass
+
+    def move(self, relpath, new_relpath):
+        pass
+
+
 class InteractiveDirSync(filescreen.FilesScreen):
     """The files in src that aren't in dst, which the user picks and then copies to dst, removes
     from src, or renames to match where the other replica has them (see elsewhere.py), again and
-    again, until they're done."""
+    again, until they're done. With them, the files both have at the same paths that differ
+    (differing.py), tagged: Copy replaces dst's version of one, Copy back src's."""
     COPY = 'copy'
+    # Copying dst's versions of picked files that differ to src, replacing src's
+    COPY_BACK = 'copy back'
     REMOVE = 'remove'
     # Moving dst's files of the same names to the picked files' paths, or the picked files to
     # theirs
@@ -144,7 +163,7 @@ class InteractiveDirSync(filescreen.FilesScreen):
     SHORTCUTS = {READ_ANEW: 'Ctrl-R', ASK_AI: aiplan_screen.KEY_NAME, EXPLORE: archive_screen.KEY_NAME}
     # The label of each action's confirmation, so what it's for shows at a glance (magenta, not
     # red: red is LIVE's)
-    LABELS = {COPY: ('COPY', 'blue'), REMOVE: ('REMOVE', 'magenta'),
+    LABELS = {COPY: ('COPY', 'blue'), COPY_BACK: ('COPY', 'blue'), REMOVE: ('REMOVE', 'magenta'),
               RENAME_IN_DST: ('RENAME', 'cyan'), RENAME_IN_SRC: ('RENAME', 'cyan')}
 
     # The action menu's first option, so it's the one selected at first: doing nothing
@@ -152,15 +171,21 @@ class InteractiveDirSync(filescreen.FilesScreen):
     # The key that removes what's selected in the tree beside the picker (dst's)
     SIDE_REMOVE_KEY = 'd'
 
-    def __init__(self, src, dst, missing=None, src_index=None, dst_index=None, checked=None, changes=None):
+    def __init__(self, src, dst, missing=None, src_index=None, dst_index=None, checked=None, changes=None,
+                 differs=None, only_differing=False):
         """missing: a future (concurrent.futures.Future) of find_missing(src, dst), e.g. found in
-        the background, to use rather than finding it again. src_index, dst_index: the replicas'
+        the background, to use rather than finding it again; differs, likewise, of
+        differing.find(src, dst). With only_differing, only the files that differ are shown. src_index, dst_index: the replicas'
         elsewhere.Index, kept by the caller so they're built once, and kept up to date here.
         checked: which of src's files' matches have the same contents (see
         elsewhere.check_contents()), kept by the caller too, so each is compared once."""
         self._src = src
         self._dst = dst
         self._missing_future = missing
+        self._differs_future = differs
+        self._only_differing = only_differing
+        # The files shown that differ ({relpath: differing.Change}), as of the last diff
+        self.differs = {}
         self.src_index = src_index or elsewhere.Index(src)
         self.dst_index = dst_index or elsewhere.Index(dst)
         # The action menu's last action done (see browse())
@@ -194,7 +219,7 @@ class InteractiveDirSync(filescreen.FilesScreen):
         """Let the user pick some of the files of src that dst lacks, then choose what to do with
         them (_act()): after that, or after choosing nothing, pick again, where they were, with the
         files done no longer there (or, in a dry run, no longer picked), until they quit."""
-        missing = self._missing()
+        missing = self._listed()
         if not missing:
             self._say_nothing()
             return
@@ -203,7 +228,9 @@ class InteractiveDirSync(filescreen.FilesScreen):
         jobs = hashes_screen.jobs_of([self._src, self._dst])
         src_name, dst_name = (replicanames.full(replica.displayname() if not is_local(replica) else replica.fullpath())
                               for replica in (self._src, self._dst))
-        header = "%s lacks these. Pick some, then choose what to do with them." % (dst_name,)
+        header = ("%s has other versions of these. Pick some, then choose what to do with them." % (dst_name,)
+                  if self._only_differing else
+                  "%s lacks these. Pick some, then choose what to do with them." % (dst_name,))
         keys = self.REFRESH_KEY + hashes_screen.KEY + aiplan_screen.KEY + contextmenu.KEY + archive_screen.KEY
         # The keys row has little room: the rest are in the menu (:), and ?
         key_hints = [('Enter', 'choose what to do'), contextmenu.KEY_HINT]
@@ -225,11 +252,23 @@ class InteractiveDirSync(filescreen.FilesScreen):
             files = set(missing)
             shown_before = missing
 
-            def shown_as(marks=marks, src_job=src_job):
-                """The hashing tags (Marks), and the downloads' to open the files (opening.py)"""
+            # The files that differ, whose tags are sent once (then with what's sent of them again)
+            differs = dict(self.differs)
+            untagged = set(differs)
+
+            def shown_as(marks=marks, src_job=src_job, differs=differs, untagged=untagged):
+                """The hashing tags (Marks), the downloads' to open the files (opening.py), and the
+                files that differ's (differing.py)"""
                 shown = marks() if marks is not None else {'': picker.segments(self._opener.status_parts())}
-                return opening.with_tags(shown, self._opener, lambda relpath: (
-                    marks.text(relpath) if marks is not None else os.path.basename(relpath)))
+
+                def name_of(relpath):
+                    return marks.text(relpath) if marks is not None else os.path.basename(relpath)
+                shown = opening.with_tags(shown, self._opener, name_of)
+                for relpath in untagged | (set(shown) & set(differs)):
+                    shown[relpath] = (shown.get(relpath) or name_of(relpath)) + differing.styled_tag(differs[relpath])
+                untagged.clear()
+                return shown
+            only_missing = [relpath for relpath in missing if relpath not in differs]
             try:
                 chosen = picker.pick_files(
                     src_name, missing, header=header, picked=picked,
@@ -246,9 +285,8 @@ class InteractiveDirSync(filescreen.FilesScreen):
                     # Ctrl-X opens the selected one (the picked ones: the menu's Open)
                     on_notify=lambda key, selected, picked: self._opener.press([selected], files),
                     help_lines=picker.key_help_lines(more_keys) + (hashes_screen.HELP_LINES if jobs else []),
-                    previews=functools.partial(elsewhere.find_previews, missing, self._src, self.dst_index,
-                                               checked=self.checked, src_index=self.src_index),
-                    on_selection=functools.partial(elsewhere.check_contents, missing, self._src,
+                    previews=functools.partial(self._find_previews, only_missing, differs),
+                    on_selection=functools.partial(elsewhere.check_contents, only_missing, self._src,
                                                    self.src_index, self.dst_index, self.checked),
                     # A photo's picture below that
                     images=images.of_replica(self._src))
@@ -278,7 +316,7 @@ class InteractiveDirSync(filescreen.FilesScreen):
                 if renamed is None:
                     continue
                 new_relpath, moves = renamed
-                missing = self._missing()
+                missing = self._listed()
                 if not missing:
                     self._say_nothing()
                     return
@@ -291,8 +329,8 @@ class InteractiveDirSync(filescreen.FilesScreen):
             if key == aiplan_screen.KEY:
                 # About the picked ones, or with none picked, all of them: the AI picks (and it's told
                 # where the selection is)
-                done = self._ask_ai(chosen.files or missing,
-                                    chosen.files or (contextmenu.under(missing, selected) if selected else []))
+                done = self._ask_ai(chosen.files or only_missing,
+                                    chosen.files or (contextmenu.under(only_missing, selected) if selected else []))
             elif key == picker.SIDE_KEY:
                 done = self._act_in_dst(chosen.side_selected, chosen.side_pressed == self.SIDE_REMOVE_KEY)
             elif not key:
@@ -321,18 +359,21 @@ class InteractiveDirSync(filescreen.FilesScreen):
                     continue
                 is_changed = bool(done) and not dryrun.DRYRUN
                 self.has_changed = self.has_changed or is_changed
-            if is_changed and self._last_action in (self.COPY, self.REMOVE):
-                # Only the ones done aren't missing now (copied to dst, or removed from src): no
-                # need to diff the replicas anew, which for local ones scans them both
+            if is_changed and self._last_action in (self.COPY, self.COPY_BACK, self.REMOVE):
+                # Only the ones done aren't missing now (copied to dst, or removed from src), or
+                # differ (copied either way): no need to diff the replicas anew, which for local
+                # ones scans them both
                 done_now = set(done)
                 missing = [relpath for relpath in missing if relpath not in done_now]
+                for relpath in done_now:
+                    self.differs.pop(relpath, None)
                 if not missing:
                     self._say_nothing()
                     return
             elif is_changed:
                 # Diffed anew (the trees as they are now: no background finding)
-                self._missing_future = None
-                missing = self._missing()
+                self._missing_future = self._differs_future = None
+                missing = self._listed()
                 if not missing:
                     self._say_nothing()
                     return
@@ -438,8 +479,11 @@ class InteractiveDirSync(filescreen.FilesScreen):
         return self._side_listing.items()
 
     def _side_follow(self, relpath):
-        """Where in dst src's file at relpath is related to, for the tree beside the picker: a file
-        of its name there (the first, by path), or else its own path (the closest dir dst has)"""
+        """Where in dst src's file at relpath is related to, for the tree beside the picker: its
+        other version, if it's one that differs; else a file of its name there (the first, by path),
+        or else its own path (the closest dir dst has)"""
+        if relpath in self.differs:
+            return relpath
         if self.dst_index.is_built():
             named = self.dst_index.files_named(os.path.basename(relpath))
             if named:
@@ -450,9 +494,45 @@ class InteractiveDirSync(filescreen.FilesScreen):
         return self.src_index if replica is self._src else self.dst_index
 
     def _say_nothing(self):
-        messages.show("Nothing to do",
-                      ["%s has all of %s's files." % (self._dst.displayname(), self._src.displayname())],
-                      dryrun.label())
+        if self._only_differing:
+            lines = ["No file at the same path in %s and %s differs." % (self._src.displayname(), self._dst.displayname())]
+        else:
+            lines = ["%s has all of %s's files." % (self._dst.displayname(), self._src.displayname())]
+        messages.show("Nothing to do", lines, dryrun.label())
+
+    def _listed(self):
+        """The relpaths of the files to show: src's that dst lacks (see _missing()), and those that
+        differ (see _differs(), kept in differs), each dir's together"""
+        missing = [] if self._only_differing else self._missing()
+        self.differs = self._differs()
+        if not self.differs:
+            return missing
+        return sorted(set(missing) | set(self.differs), key=lambda relpath: relpath.split('/'))
+
+    def _differs(self):
+        """The files both have that differ, src's way (differing.find()), saying if they couldn't be
+        compared (then there are none)"""
+        try:
+            if self._differs_future is not None:
+                return self._differs_future.result()
+            return differing.find(self._src, self._dst)
+        except Exception as error:
+            messages.show("Warning: couldn't compare the files both have",
+                          ["So the ones that differ aren't shown: %s" % (error,)], dryrun.label(), 'red')
+            return {}
+
+    def _find_previews(self, missing, differs, send):
+        """The pickers' previews: the files that differ's (differing.preview_lines()) at once, then
+        where dst may have the missing ones (elsewhere.find_previews())"""
+        if differs:
+            can_replace = can_copy(self._src, self._dst)
+            send({relpath: differing.preview_lines(change, self._dst.displayname(), can_replace)
+                  for relpath, change in differs.items()})
+        if not missing:
+            send(default=[])
+            return
+        elsewhere.find_previews(missing, self._src, self.dst_index, send, checked=self.checked,
+                                src_index=self.src_index)
 
     def _missing(self):
         """The relpaths of src's files that dst lacks (see find_missing()), warning if scanning
@@ -476,19 +556,22 @@ class InteractiveDirSync(filescreen.FilesScreen):
             selected = relpaths[0]
         clouds = [replica for replica in (self._src, self._dst) if isinstance(replica, clouddirtree.CloudDirTree)]
         folder = os.path.dirname(selected) if self._src.has_file(selected) else selected
-        if not self.dst_index.is_built():
-            messages.print_line("Looking for files of the same names in %s..." % (self._dst.displayname(),))
-        # The ones that may be in dst, moved or renamed: their contents are compared before a Rename
-        may_be_there = elsewhere.may_be_elsewhere(relpaths, self._src, self.dst_index, self.checked,
-                                                  self.src_index)
+        # The ones that differ (dst has another version of each), and the others, which dst lacks
+        changed = [relpath for relpath in relpaths if relpath in self.differs]
+        only_here = [relpath for relpath in relpaths if relpath not in self.differs]
+        may_be_there = []
+        if only_here:
+            if not self.dst_index.is_built():
+                messages.print_line("Looking for files of the same names in %s..." % (self._dst.displayname(),))
+            # The ones that may be in dst, moved or renamed: their contents are compared before a Rename
+            may_be_there = elsewhere.may_be_elsewhere(only_here, self._src, self.dst_index, self.checked,
+                                                      self.src_index)
         nr_renamed_in_src = sum(1 for relpath in may_be_there if self._src.cant_move(relpath) is None)
         src_name, dst_name = self._src.displayname(), self._dst.displayname()
         count = _files(len(relpaths))
         options = {
-            self.COPY: ("Copy the %s to %s" % (count, dst_name),
-                        None if can_copy(self._src, self._dst) else
-                        "can't: %s" % ("it's read-only" if not is_writable(self._dst) else
-                                       "both are Google Drive's",)),
+            self.COPY: (self._copy_label(relpaths, changed, self._src, self._dst),
+                        self._cant_copy(self._src, self._dst)),
             self.REMOVE: ("Remove the %s from %s" % (count, src_name),
                           None if is_writable(self._src) else "can't: it's read-only"),
             # Each counts the picked files that may be in dst, moved or renamed. The replica last,
@@ -500,8 +583,14 @@ class InteractiveDirSync(filescreen.FilesScreen):
                                  (_files(nr_renamed_in_src), src_name),
                                  self._cant_rename(self._src, nr_renamed_in_src)),
         }
+        if changed:
+            options[self.COPY_BACK] = (("Replace it with its version in %s" if len(relpaths) == 1 else
+                                        "Replace these with their versions in %s" if not only_here else
+                                        "Replace the %d of these that differ with their versions in %%s" % (len(changed),)) %
+                                       (dst_name,), self._cant_copy(self._dst, self._src))
         options[self.ASK_AI] = ("Ask AI what to do with %s, and review its plan" %
-                                ("it" if len(relpaths) == 1 else "the " + count,), None)
+                                ("it" if len(relpaths) == 1 else "the " + count,),
+                                None if only_here else "can't: it's for the files %s lacks" % (dst_name,))
         if len(relpaths) == 1 and archives.is_archive(relpaths[0]):
             options[self.EXPLORE] = ("Explore it: what's in the zip", None)
         options[self.OPEN] = ("Open %s with %s program%s" %
@@ -522,11 +611,17 @@ class InteractiveDirSync(filescreen.FilesScreen):
             return picker.Option(action, label, prefixes[label] + label if reason is None else
                                  picker.Disabled(picker.unstyled(prefixes[label]) + "%s: %s" % (label, reason)))
         # Similar actions together, a blank line between each kind
-        kinds = [[self.ASK_AI], [self.COPY], [self.REMOVE], [self.RENAME_IN_DST, self.RENAME_IN_SRC], [self.EXPLORE, self.OPEN, self.READ_ANEW]]
+        kinds = [[self.ASK_AI], [self.COPY, self.COPY_BACK], [self.REMOVE], [self.RENAME_IN_DST, self.RENAME_IN_SRC],
+                 [self.EXPLORE, self.OPEN, self.READ_ANEW]]
         choices = picker.grouped([[picker.Option(self.NOTHING, self.NOTHING, prefixes[self.NOTHING] + self.NOTHING)]] +
                                  [[option(action) for action in kind if action in options] for kind in kinds])
-        header = ("%s picked in %s, which %s lacks. What to do with them?" %
-                  (count, src_name, dst_name))
+        if not changed:
+            header = "%s picked in %s, which %s lacks. What to do with them?" % (count, src_name, dst_name)
+        elif not only_here:
+            header = "%s picked in %s, which %s has other versions of. What to do with them?" % (count, src_name, dst_name)
+        else:
+            header = ("%s picked in %s: %d %s lacks, %d it has other versions of. What to do with them?" %
+                      (count, src_name, len(only_here), dst_name, len(changed)))
         action = picker.pick_option(choices, header=header, title="What to do")
         if action not in options:
             return None
@@ -544,7 +639,69 @@ class InteractiveDirSync(filescreen.FilesScreen):
         if action == self.EXPLORE:
             self._explore(relpaths[0], set(relpaths))
             return None
+        if action == self.COPY_BACK:
+            return self._copy_back(changed)
         return self._copy_or_remove(action, relpaths)
+
+    def _copy_label(self, relpaths, changed, src, dst):
+        """The action menu's Copy (src to dst): of the files at relpaths, changed are the ones dst has
+        other versions of, which it replaces"""
+        count = _files(len(relpaths))
+        if not changed:
+            return "Copy the %s to %s" % (count, dst.displayname())
+        if len(changed) == len(relpaths):
+            return "Copy these versions of the %s to %s, replacing its" % (count, dst.displayname())
+        return "Copy the %s to %s, replacing its other versions of %d" % (count, dst.displayname(), len(changed))
+
+    def _cant_copy(self, src, dst):
+        """Why src's files can't be copied into dst, or None if they can"""
+        if can_copy(src, dst):
+            return None
+        return "can't: %s" % ("it's read-only" if not is_writable(dst) else "both are Google Drive's",)
+
+    def _copy_back(self, relpaths):
+        """Copy dst's versions of the files at relpaths (which differ) to src, replacing src's, once
+        the user confirms. Returns the ones done (in a dry run, the ones it would have done), or None
+        if the user didn't confirm."""
+        src_name, dst_name = self._src.displayname(), self._dst.displayname()
+        lines = (["Copy %s's versions of %s to %s, replacing its?" % (dst_name, _files(len(relpaths)), src_name)] +
+                 text.listed(["  %s" % (relpath,) for relpath in relpaths], self.MAX_FILES_LISTED) +
+                 self._dst.copy_notes(relpaths) + [self._replaced_note(self._src, len(relpaths))])
+        newer_here = [relpath for relpath in relpaths if differing.newer(self.differs[relpath]) > 0]
+        if newer_here:
+            lines.append("Careful: %s newer here than in %s, so this replaces %s with an older version." %
+                         (_files(len(newer_here)) + (" is" if len(newer_here) == 1 else " are"), dst_name,
+                          "it" if len(newer_here) == 1 else "them"))
+        if dryrun.DRYRUN:
+            lines.append(dryrun.NOTE)
+        if not self._said_yes(lines, self.LABELS[self.COPY_BACK]):
+            return None
+        self._last_action = self.COPY_BACK
+        title = "Copying %s from %s to %s" % (_files(len(relpaths)), dst_name, src_name)
+        if dryrun.DRYRUN:
+            title += " (a dry run)"
+        files = [entries.FileEntry(os.path.basename(relpath), relpath, os.path.join(self._dst.fullpath(), relpath))
+                 for relpath in relpaths]
+        added = _Added()
+        self._src.add_listener(added)
+        try:
+            with messages.progress_screen(title, dryrun.label()), self._src.replacing():
+                self._src.copy_in(files, self._dst)
+        finally:
+            self._src.remove_listener(added)
+        if dryrun.DRYRUN:
+            return relpaths
+        done = [relpath for relpath in relpaths if relpath in added.relpaths]
+        self._note(self._src, 'copied', len(done), dst_name)
+        return done
+
+    def _replaced_note(self, replica, count):
+        """A confirmation's line of what happens to the replica's count versions replaced"""
+        if is_local(replica):
+            where = "to the trash"
+        else:
+            where = "kept by Drive as an older version"
+        return "%s's versions of %s are replaced (%s)." % (replica.displayname(), "it" if count == 1 else "the " + _files(count), where)
 
     def _copy_or_remove(self, action, relpaths, to_trash=False):
         """Copy the files at relpaths to dst, or remove them from src (action), once the user confirms.
@@ -563,16 +720,26 @@ class InteractiveDirSync(filescreen.FilesScreen):
             title = "Removing %s from %s" % (count, src_name)
         if dryrun.DRYRUN:
             title += " (a dry run)"
-        with messages.progress_screen(title, dryrun.label()), (self._src.trashing() if to_trash else
-                                                               contextlib.nullcontext()):
-            if action == self.COPY:
-                self._copy(files)
-            else:
-                self._remove(files)
+        # Copied over dst's other versions of the ones that differ
+        replacing = (self._dst.replacing() if action == self.COPY and any(relpath in self.differs for relpath in relpaths)
+                     else contextlib.nullcontext())
+        added = _Added()
+        self._dst.add_listener(added)
+        try:
+            with messages.progress_screen(title, dryrun.label()), (self._src.trashing() if to_trash else
+                                                                   contextlib.nullcontext()), replacing:
+                if action == self.COPY:
+                    self._copy(files)
+                else:
+                    self._remove(files)
+        finally:
+            self._dst.remove_listener(added)
         if dryrun.DRYRUN:
             return relpaths
         if action == self.COPY:
-            done = [relpath for relpath in relpaths if self._dst.has_file(relpath)]
+            # (The ones that differ were there before: the ones copied are the ones made)
+            done = [relpath for relpath in relpaths if relpath in added.relpaths or
+                    (relpath not in self.differs and self._dst.has_file(relpath))]
             self._note(self._dst, 'copied', len(done), self._src.displayname())
         else:
             done = [relpath for relpath in relpaths if not self._src.has_file(relpath)]
@@ -623,6 +790,12 @@ class InteractiveDirSync(filescreen.FilesScreen):
         user approves of its plan, if it answers with one (each kind once they confirm it, as if they
         chose it). Returns the files done (in a dry run,
         the ones it would have done), or None if none were."""
+        relpaths = [relpath for relpath in relpaths if relpath not in self.differs]
+        if not relpaths:
+            messages.show("Nothing to ask about", ["AI is asked about the files %s lacks, not those it has other versions of." %
+                                                   (self._dst.displayname(),)], dryrun.label())
+            return None
+        focus = [relpath for relpath in focus if relpath not in self.differs]
         messages.print_line("Looking through %s and %s..." % (self._src.displayname(), self._dst.displayname()))
         self.src_index.build()
         self.dst_index.build()
@@ -741,9 +914,21 @@ class InteractiveDirSync(filescreen.FilesScreen):
                                                    self._dst.displayname())
         else:
             question = "Remove %s from %s?" % (_files(len(relpaths)), replica.displayname())
-        lines = [question] + text.listed(["  %s" % (relpath,) for relpath in relpaths], self.MAX_FILES_LISTED)
+        changed = [relpath for relpath in relpaths if relpath in self.differs]
+        lines = [question] + text.listed(["  %s%s" % (relpath, "  (replaces %s's)" % (self._dst.displayname(),)
+                                                       if action == self.COPY and relpath in self.differs else "")
+                                          for relpath in relpaths], self.MAX_FILES_LISTED)
         lines += (self._src.copy_notes(relpaths) if action == self.COPY else
                   replica.removal_notes(relpaths))
+        if changed and action == self.COPY:
+            lines.append(self._replaced_note(self._dst, len(changed)))
+            older = [relpath for relpath in changed if differing.newer(self.differs[relpath]) < 0]
+            if older:
+                lines.append("Careful: %s older here than in %s, so Copy replaces %s." %
+                             (_files(len(older)) + (" is" if len(older) == 1 else " are"), self._dst.displayname(),
+                              "a newer version" if len(older) == 1 else "newer versions"))
+        elif changed and replica is self._src:
+            lines.append("%s has other versions of %s of them, which stay." % (self._dst.displayname(), len(changed)))
         if dryrun.DRYRUN:
             lines.append(dryrun.NOTE)
         if not self._said_yes(lines, self.LABELS[action]):

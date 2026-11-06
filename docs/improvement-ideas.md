@@ -86,7 +86,12 @@ Ordered by how easy they are, easiest first (2026-10-30). Ideas 3, 2.1 and 6 hav
          (labels, previews, `Ctrl-I`), whole-dir plans in `_approve()`, tests. Drive's folder move
          and the approval's tree are there.
 
-3. **Compare sizes or contents of the files at the same path.** The diff is by path only, so a
+3. **Compare sizes or contents of the files at the same path.** Done (2026-11-06, `differing.py`, as
+   `docs/plans.md`'s plan A says, but by the replicas' `listed()` rather than a new dirdiff option):
+   tagged in the same pickers, Copy replaces the other's version, Replace copies it back. Left: comparing
+   same-sized files whose hash isn't known on request (the pickers don't, so as not to read them), and
+   finding them anew when hashing ends meanwhile (a rescan does). What it said before:
+   The diff is by path only, so a
    file at the same path on both sides counts as the same, even if one was edited or is a
    half-copied file, and it's in neither direction's list. (Idea 1 is the other case: a file at
    different paths, moved or renamed. Its machinery is there now, and this would reuse it: comparing

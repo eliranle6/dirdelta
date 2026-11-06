@@ -6,6 +6,15 @@ the same path that differ), 2.1 (an inbox's sort reaching the sorted tree's othe
 
 ## A. Files at the same path that differ (idea 3)
 
+Done (2026-11-06). What differs from the plan below: no dirdiff option (step 1): both replicas'
+`listed()` gives each file's size and known hash in one listing (find, and one query of the hash
+cache), for a local one and Drive's alike, found once per pair in the background
+(`dirsync_main._find_all()`). The tag's mark and color say which side is newer: `[> newer here, ...]` in blue, `[< older here, ...]`
+in red (and a "Careful" line in the confirmation), `≠` in yellow when the times don't say; not green
+(hashed) nor orange (progress). Copy
+back is the action menu's "Replace it with its version in B". Comparing same-sized files with a hash
+unknown, on request, is left (see improvement-ideas.md, 3).
+
 ### What there is to show
 
 For a pair of replicas, each path is one of:

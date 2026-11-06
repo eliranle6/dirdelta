@@ -1,4 +1,5 @@
 import collections
+import contextlib
 import os
 
 import treelib
@@ -33,6 +34,8 @@ class DirTree(object):
     """
     # What remove_files() says about the removed files' fate, after "removed N of M files from X"
     REMOVED_TO = ""
+    # Whether copying a file in where it has one already replaces that one (see replacing())
+    _is_replacing = False
 
     @classmethod
     def from_file_entries(cls, files, filesystem_dirpath):
@@ -187,6 +190,18 @@ class DirTree(object):
             else:
                 self._copy_files(files, source, starting, copied)
         self._batch(work, ('Copy', 'copied', 'copies', 'to ' + self.displayname()), lambda: nr_copied, len(files))
+
+    @contextlib.contextmanager
+    def replacing(self):
+        """Inside, copy_in() replaces a file the tree has already at a copy's path (another version
+        of it, see differing.py), as a tree of its kind can: a local dir's goes to the desktop's trash,
+        a Drive file gets the copy as its new version (Drive keeps the old one). Outside, a tree
+        doesn't expect one there."""
+        self._is_replacing = True
+        try:
+            yield
+        finally:
+            self._is_replacing = False
 
     def remove_files(self, file_entries):
         """Remove the files, and drop them from the tree (so the next diff doesn't list them). A dry

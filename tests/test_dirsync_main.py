@@ -5,6 +5,7 @@ import unittest
 from unittest import mock
 
 from dirdelta import clouddirtree
+from dirdelta import differing
 from dirdelta import dirsync_main
 from dirdelta import picker
 from dirdelta import dirtree
@@ -63,6 +64,11 @@ class MainMenuTest(unittest.TestCase):
         patcher = mock.patch('dirdelta.interactive_dir_sync.find_missing', side_effect=find_missing)
         patcher.start()
         self.addCleanup(patcher.stop)
+        # The files both have that differ, /a's way (none unless a test says so)
+        self.differ = {}
+        patcher = mock.patch('dirdelta.differing.find', side_effect=lambda src, dst: dict(self.differ))
+        patcher.start()
+        self.addCleanup(patcher.stop)
 
     def shown(self, replica_a, replica_b):
         """What the main menu's options are shown as, once each way's files are found"""
@@ -88,7 +94,8 @@ class MainMenuTest(unittest.TestCase):
         for b, rescans in ((localdiskdirtree.LocalDiskDirTree('/b', silent=True), ['Rescan /a', 'Rescan /b']),
                            (dirtree.DirTree('cloud/b'), ['Rescan /a'])):
             a = localdiskdirtree.LocalDiskDirTree('/a', silent=True)
-            self.assertEqual(self.options(a, b), ['Files only in /a', 'Files only in /b'] + rescans + ['Replicas dashboard', dirsync_main.BACK])
+            self.assertEqual(self.options(a, b), ['Files only in /a', 'Files only in /b', dirsync_main.DIFFER] + rescans +
+                             ['Replicas dashboard', dirsync_main.BACK])
 
     def test_back_and_q_go_back_to_the_start_menu(self):
         a = localdiskdirtree.LocalDiskDirTree('/a', silent=True)
@@ -184,7 +191,8 @@ class MainMenuTest(unittest.TestCase):
         self.writable = set()
         a = localdiskdirtree.LocalDiskDirTree('/a', silent=True)
         b = dirtree.DirTree('cloud/b')
-        self.assertEqual(self.options(a, b), ['Files only in /a', 'Files only in /b', 'Rescan /a', 'Replicas dashboard', dirsync_main.BACK])
+        self.assertEqual(self.options(a, b), ['Files only in /a', 'Files only in /b', dirsync_main.DIFFER, 'Rescan /a',
+                                              'Replicas dashboard', dirsync_main.BACK])
         title, lines = self.show.call_args.args[:2]
         self.assertEqual(title, 'Read-only')
         self.assertEqual(len(lines), 1)
@@ -216,11 +224,54 @@ class MainMenuTest(unittest.TestCase):
         self.assertEqual(self.shown(a, b), [
             'Files only in LocalDisk:/a (3 files)',
             'Files only in LocalDisk:/b (1 file)',
+            picker.Disabled('Files that differ at the same paths in both: none'),
             'Rescan /a',
             'Rescan /b',
             'Replicas dashboard: files, last updates, hashes',
             dirsync_main.BACK,
         ])
+
+    def test_the_files_that_differ_are_counted_in_each_way_and_on_their_own(self):
+        a = localdiskdirtree.LocalDiskDirTree('/a', silent=True)
+        b = localdiskdirtree.LocalDiskDirTree('/b', silent=True)
+        self.differ = {'d1': differing.Change(1, 2, None, None, differing.BY_SIZE),
+                       'd2': differing.Change(3, 3, None, None, differing.BY_CONTENTS)}
+        self.assertEqual(self.shown(a, b)[:3], [
+            'Files only in LocalDisk:/a (3 files, and 2 that differ)',
+            'Files only in LocalDisk:/b (1 file, and 2 that differ)',
+            'Files that differ at the same paths in both (2 files)',
+        ])
+        self.assertTrue(picker.unstyled(self.state_line.text).endswith("; 2 files at the same paths differ"))
+
+    def test_a_way_with_only_files_that_differ_can_still_be_picked(self):
+        a = localdiskdirtree.LocalDiskDirTree('/a', silent=True)
+        b = localdiskdirtree.LocalDiskDirTree('/b', silent=True)
+        self.missing['/b'] = []
+        self.differ = {'d1': differing.Change(1, 2, None, None, differing.BY_SIZE)}
+        self.assertEqual(self.shown(a, b)[1], 'Files only in LocalDisk:/b (0 files, and 1 that differs)')
+
+    def test_the_files_that_differ_are_found_once_for_both_ways(self):
+        a = localdiskdirtree.LocalDiskDirTree('/a', silent=True)
+        b = localdiskdirtree.LocalDiskDirTree('/b', silent=True)
+        change = differing.Change(1, 2, 10, 20, differing.BY_SIZE)
+        self.differ = {'d': change}
+        ways = [dirsync_main._Way(a, b, {}), dirsync_main._Way(b, a, {})]
+        with mock.patch('dirdelta.differing.find', return_value={'d': change}) as find:
+            dirsync_main._find_all(ways)
+            self.assertEqual(ways[0].differs.result(timeout=5), {'d': change})
+            self.assertEqual(ways[1].differs.result(timeout=5), {'d': differing.Change(2, 1, 20, 10, differing.BY_SIZE)})
+        find.assert_called_once_with(a, b)
+
+    def test_the_files_that_differ_option_browses_them_alone_from_as_side(self):
+        a = localdiskdirtree.LocalDiskDirTree('/a', silent=True)
+        b = localdiskdirtree.LocalDiskDirTree('/b', silent=True)
+        self.differ = {'d1': differing.Change(1, 2, None, None, differing.BY_SIZE)}
+        answers = [dirsync_main.DIFFER, dirsync_main.BACK]
+        with mock.patch('dirdelta.picker.pick_option', side_effect=lambda *_, **__: answers.pop(0)), \
+                mock.patch('dirdelta.picker.pick_files', return_value=None) as pick_files:
+            dirsync_main._sync(a, b, '/a', '/b')
+        self.assertEqual([call.args[1] for call in pick_files.call_args_list], [['d1']])
+        self.assertIn('other versions', pick_files.call_args.kwargs['header'])
 
     def test_the_first_line_says_whether_theyre_in_sync(self):
         a = localdiskdirtree.LocalDiskDirTree('/a', silent=True)
@@ -327,6 +378,16 @@ class MainMenuTest(unittest.TestCase):
         self.assertEqual(shown, {'Files only in LocalDisk:/a (loading%s)' % (dots,) for dots in ('', '.', '..', '...')})
         way.missing.set_result(interactive_dir_sync.Missing(['x', 'y'], []))
         self.assertEqual(action.shown_as(), 'Files only in LocalDisk:/a (2 files)')
+
+    def test_the_files_that_differ_option_is_loading_until_theyre_found(self):
+        way = dirsync_main._Way(None, None, {})
+        way.missing = concurrent.futures.Future()
+        way.missing.set_result(interactive_dir_sync.Missing([], []))
+        way.differs = concurrent.futures.Future()
+        action = dirsync_main._Action('/a', '/b', way, only_differing=True)
+        self.assertIn('(loading', action.shown_as())
+        way.differs.set_exception(OSError('no'))
+        self.assertEqual(action.shown_as(), "Files that differ at the same paths in both (couldn't compare them)")
 
     def test_an_option_whose_files_couldnt_be_found_says_so(self):
         way = dirsync_main._Way(None, None, {})

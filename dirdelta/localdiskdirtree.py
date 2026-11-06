@@ -177,6 +177,8 @@ class LocalReplica(dirtree.DirTree):
             messages.print_line("Skipped %s: %s" % (file_entry.relpath, reason), "yellow")
             return False
         dest_path = os.path.join(self._rootpath, file_entry.relpath)
+        if self._is_replacing and os.path.lexists(dest_path):
+            return self._replace_file(file_entry, source, dest_path)
         did_dest_exist = os.path.exists(dest_path)
         try:
             dest_dirpath = os.path.dirname(dest_path)
@@ -199,6 +201,33 @@ class LocalReplica(dirtree.DirTree):
         except BaseException:
             self._drop_copy(dest_path, did_dest_exist)
             raise
+        self._file_added(file_entry.relpath)
+        return True
+
+    def _replace_file(self, file_entry, source, dest_path):
+        """_copy_file() over the file at dest_path (inside replacing()): copied next to it first, so a
+        copy that fails leaves it as it was; then it goes to the desktop's trash, and the copy takes
+        its place. Returns whether it was replaced."""
+        part_path = os.path.join(os.path.dirname(dest_path), PART_PREFIX + os.path.basename(dest_path))
+        try:
+            try:
+                if source is not None:
+                    source.fetch_file(file_entry.relpath, part_path)
+                else:
+                    self._copy_local_file_to_tree_with_path(file_entry.full_filesystem_path(), part_path)
+                _trash(dest_path)
+                os.rename(part_path, dest_path)
+            except BaseException:
+                if os.path.lexists(part_path):
+                    os.unlink(part_path)
+                raise
+        except OSError as error:
+            messages.print_line("Copy failed: %s" % (error,), "red")
+            return False
+        # Its hashes, if they were put, are the copy's
+        hashcache.move(part_path, dest_path)
+        # What listens drops what it knew of the old one
+        self._file_removed(file_entry.relpath)
         self._file_added(file_entry.relpath)
         return True
 
@@ -317,10 +346,7 @@ class LocalReplica(dirtree.DirTree):
     def _remove_file(self, file_entry):
         try:
             if self._is_trashing:
-                result = subprocess.run(['gio', 'trash', file_entry.full_filesystem_path()],
-                                        stdout=subprocess.PIPE, stderr=subprocess.STDOUT, universal_newlines=True)
-                if result.returncode != 0:
-                    raise OSError(result.stdout.strip() or "gio trash failed")
+                _trash(file_entry.full_filesystem_path())
             else:
                 os.unlink(file_entry.full_filesystem_path())
         except OSError as error:
@@ -409,6 +435,19 @@ class LocalDiskDirTree(LocalReplica):
             self._move_subtree(dirpath, new_dirpath, to)
         elif dirpath in self:
             self.remove_node(dirpath)
+
+
+# What a replacing copy is named next to the file it replaces, until it does (see _replace_file())
+PART_PREFIX = '.dirdelta-part.'
+
+
+def _trash(path):
+    """Move the file at path to the desktop's trash (gio trash), where it can be restored from.
+    Raises OSError if it can't."""
+    result = subprocess.run(['gio', 'trash', path], stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                            universal_newlines=True)
+    if result.returncode != 0:
+        raise OSError(result.stdout.strip() or "gio trash failed")
 
 
 def _rename(path, new_path):

@@ -125,3 +125,17 @@ def make_files(root, relpaths):
         os.makedirs(os.path.dirname(path), exist_ok=True)
         with open(path, 'w') as f:
             f.write(relpath)
+
+
+def fake_trash(test):
+    """Patch the desktop's trash (gio trash, see localdiskdirtree._trash()) for the test: a trashed
+    file is moved into a temp dir (returned) instead, by its name"""
+    trash_dir = tempfile.mkdtemp(prefix='dirdelta-test-trash-')
+    test.addCleanup(shutil.rmtree, trash_dir, ignore_errors=True)
+
+    def trash(path):
+        shutil.move(path, os.path.join(trash_dir, os.path.basename(path)))
+    patcher = mock.patch('dirdelta.localdiskdirtree._trash', side_effect=trash)
+    patcher.start()
+    test.addCleanup(patcher.stop)
+    return trash_dir

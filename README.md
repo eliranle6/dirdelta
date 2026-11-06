@@ -203,6 +203,21 @@ back; `Ctrl-L` and `Ctrl-H` do too). `d` there removes the selected file or dir,
 offers it, so you needn't go to the other direction's picker. Removing
 one version of a repository this way makes the other replica's version show up as missing, ready to copy.
 
+### Files that differ
+
+A file both replicas have at the same path, but not alike, shows in each direction's file picker with the
+missing ones, tagged by which is newer (by modification time): `[> newer here, 2.1 MB vs 1.9 MB]` in blue,
+`[< older here, same size, other contents]` in red, or `[≠ 3 B vs 4 B]` in yellow when the times don't say (`/<`
+finds the ones older here). Copy over a newer version, or Replace over one, says "Careful" in its confirmation. They differ by size, or, at the same size, by their hashes when both are known (a
+local file's once it's hashed, a Drive file's always); files never read just for this. Modification times
+only say which is newer. The preview shows both versions.
+
+Copy then replaces the other replica's version: a local one goes to the desktop's trash (the copy is made
+next to it first, so a failed copy leaves it as it was), and a Drive file gets the copy as a new version
+(Drive keeps the old one among its versions). "Replace it with its version in X" goes the other way, and
+Remove removes only this side's version. The sync menu counts them ("Files only in A (12 files, and 3 that
+differ)"), and "Files that differ at the same paths in both" shows only them, from the first replica's side.
+
 ### Pictures of the files
 
 In the file pickers, the selected photo (an image, a PDF's first page, a Drive file's thumbnail) shows

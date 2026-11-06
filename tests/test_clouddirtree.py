@@ -301,6 +301,29 @@ class CloudDirTreeChangesTest(unittest.TestCase):
         self.assertIn('1.mp3', relpaths)
         self.assertFalse(clouddirtree.drivecache.stale_paths())
 
+    def test_a_copy_replacing_a_file_makes_a_new_version_of_it(self):
+        files = self.service.files.return_value
+        files.update.side_effect = lambda **kwargs: mock.Mock(execute=lambda **_: {
+            'id': kwargs['fileId'], 'name': 'song.mp3', 'size': '7', 'sha1Checksum': 'abc'})
+        removed = []
+        self.tree.add_listener(mock.Mock(remove=removed.append))
+        with self.tree.replacing():
+            self.upload(['song.mp3', 'album/new.mp3'])
+        # The one there gets the copy as its new version (Drive keeps the old one); the other is made
+        self.assertEqual(files.update.call_args.kwargs['fileId'], 'song')
+        self.assertEqual(set(files.update.call_args.kwargs['body']), {'modifiedTime'})
+        self.assertEqual(self.creates(), [{'name': 'new.mp3', 'parents': ['album']}])
+        self.assertEqual(removed, ['song.mp3'])
+        self.assertEqual(self.tree.file_size('song.mp3'), 7)
+        tree = clouddirtree.factory('cloud/mein')
+        self.assertEqual(tree.file_size('song.mp3'), 7)
+        self.assertEqual(sorted(entry.relpath for entry in tree.iter_files() if entry.relpath.startswith('song')),
+                         ['song.mp3'])
+
+    def test_a_copy_outside_replacing_doesnt_update(self):
+        self.upload(['album/new.mp3'])
+        self.service.files.return_value.update.assert_not_called()
+
     def test_writing_a_file_there_makes_a_new_version_of_it(self):
         files = self.service.files.return_value
         files.update.side_effect = lambda **kwargs: mock.Mock(execute=lambda **_: {
