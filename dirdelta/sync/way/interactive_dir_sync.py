@@ -71,7 +71,7 @@ class InteractiveDirSync(Browsing, Keys, Lists, Menu, Copying, AskAI, Renames,
         # The action menu's last action done (see browse())
         self._last_action = None
         self.checked = checked if checked is not None else {}
-        # Where what's changed live is noted (a replicalog.Changes, by the replicas' displaynames),
+        # Where what's changed live is noted (a log_entries.Changes, by the replicas' displaynames),
         # for the entries of their logs, if anywhere
         self.changes = changes
         # Whether the replicas' files changed here (copied, removed, moved, or read anew from

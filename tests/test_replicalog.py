@@ -10,6 +10,7 @@ from dirdelta.trees import localdiskdirtree
 from dirdelta.known import mounts
 from dirdelta.known import replicalog
 from dirdelta.known import replicas
+from dirdelta.known import log_entries
 
 LOG = """15.12.2025 - copied DCIM pictures from old pixel 8 (not whatsapp pictures)
 17.05.2026 - removed old money.ods
@@ -102,7 +103,7 @@ class ReadWriteTest(unittest.TestCase):
 
 class ChangesTest(unittest.TestCase):
     def test_what_changed_in_each_replica_added_up(self):
-        changes = replicalog.Changes()
+        changes = log_entries.Changes()
         changes.note('/b', 'copied', 2, 'cloud/a')
         changes.note('cloud/a', 'removed', 1)
         changes.note('/b', 'copied', 10, 'cloud/a')
@@ -125,7 +126,7 @@ class LogEntriesTest(unittest.TestCase):
             log.write("1.1.2026 - started\n")
         self.trees = [(localdiskdirtree.LocalDiskDirTree(path, silent=True), path) for path in (self.a, self.b)]
         self.known = replicas.Replicas()
-        self.changes = replicalog.Changes()
+        self.changes = log_entries.Changes()
         self.changes.note(self.b, 'copied', 2, self.a)
         self.changes.note(self.b, 'removed', 1)
         for patcher in (mock.patch('dirdelta.known.replicas.save'), mock.patch('dirdelta.ui.messages.show'),
@@ -144,7 +145,7 @@ class LogEntriesTest(unittest.TestCase):
     def offer(self, answers, edited=None):
         with helpers.answering_option_picker(answers) as pick, \
                 mock.patch('dirdelta.ui.messages.ask', return_value=edited):
-            replicalog.offer_entries(self.changes, self.trees, self.known)
+            log_entries.offer_entries(self.changes, self.trees, self.known)
         return pick
 
     def test_added_to_the_changed_replicas_log(self):
@@ -156,25 +157,25 @@ class LogEntriesTest(unittest.TestCase):
         info = self.known.known['id:' + self.b]
         self.assertEqual(info['last_entry']['text'], "copied 2 files from %s; removed 1 file" % (self.a,))
         self.assertIsNotNone(info['changed'])
-        replicalog.replicas.save.assert_called_with(self.known)
+        replicas.save.assert_called_with(self.known)
 
     def test_edited_first_and_only_its_own_log(self):
-        pick = self.offer([replicalog.EDIT_ENTRY, "Add it to its"], edited="copied the trip's photos")
+        pick = self.offer([log_entries.EDIT_ENTRY, "Add it to its"], edited="copied the trip's photos")
         self.assertEqual(pick.call_args.args[0],
-                         [replicalog.NO_ENTRY, "Add it to its last_update.txt (%s)" % (self.b,), replicalog.EDIT_ENTRY])
+                         [log_entries.NO_ENTRY, "Add it to its last_update.txt (%s)" % (self.b,), log_entries.EDIT_ENTRY])
         self.assertEqual(self.log(self.b), "1.1.2026 - started\n%s - copied the trip's photos\n" % (self.today,))
         # The other replica's log isn't of this one's changes
         self.assertIsNone(self.log(self.a))
 
     def test_none_added_but_its_change_is_known(self):
-        self.offer([replicalog.NO_ENTRY])
+        self.offer([log_entries.NO_ENTRY])
         self.assertEqual(self.log(self.b), "1.1.2026 - started\n")
         self.assertIsNotNone(self.known.known['id:' + self.b]['changed'])
 
     def test_nothing_changed_nothing_offered(self):
         with mock.patch('dirdelta.ui.picker.pick_option', side_effect=AssertionError('asked')):
-            replicalog.offer_entries(replicalog.Changes(), self.trees, self.known)
-        replicalog.replicas.save.assert_not_called()
+            log_entries.offer_entries(log_entries.Changes(), self.trees, self.known)
+        replicas.save.assert_not_called()
 
 
 if __name__ == '__main__':

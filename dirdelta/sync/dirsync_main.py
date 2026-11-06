@@ -1,7 +1,6 @@
 """Sync mode: the menu of a pair of replicas, until it goes back to the start menu"""
 from dirdelta.drive import drivemeta
 from dirdelta.hashes import hashcache
-from dirdelta.known import replicalog
 from dirdelta.known import replicanames
 from dirdelta.known import replicas
 from dirdelta.screens import hashes_screen
@@ -13,6 +12,7 @@ from dirdelta.trees import replicafactory
 from dirdelta.ui import messages
 from dirdelta.ui import picker
 from dirdelta.util import dryrun
+from dirdelta.known import log_entries
 
 
 def run(args):
@@ -45,7 +45,7 @@ def _run(args):
     known_replicas = replicas.load()
     known_replicas.record(args.dir_a_path, args.dir_b_path)
     trees = [(dirtree_a, args.dir_a_path), (dirtree_b, args.dir_b_path)]
-    replicalog.note_seen(trees, known_replicas)
+    log_entries.note_seen(trees, known_replicas)
     replicas.save(known_replicas)
     # The local replicas' files' hashes, which find a file by its contents: hashed in the
     # background, if the user wants, and kept in each (see hashcache.use_replica())
@@ -54,16 +54,16 @@ def _run(args):
             hashcache.use_replica(tree.fullpath())
     if not hashes_screen.offer(hashes_screen.prepare([dirtree_a, dirtree_b])):
         return
-    changes = replicalog.Changes()
+    changes = log_entries.Changes()
     # A Drive replica's file list is kept in it too, as it changes (see drivemeta.py)
     with drivemeta.kept([(args.dir_a_path, dirtree_a), (args.dir_b_path, dirtree_b)]):
         result = _sync(dirtree_a, dirtree_b, args.dir_a_path, args.dir_b_path, known_replicas, changes)
-    replicalog.offer_entries(changes, trees, known_replicas)
+    log_entries.offer_entries(changes, trees, known_replicas)
     return result
 
 
 def _sync(replica_a, replica_b, replica_a_path, replica_b_path, known_replicas=None, changes=None):
     """The main menu, until the user quits. With known_replicas (a Replicas, saved when changed),
     it also makes the pair a favorite, or not. changes: where the files changed live are noted (a
-    replicalog.Changes), if anywhere."""
+    log_entries.Changes), if anywhere."""
     return SyncMenu(replica_a, replica_b, replica_a_path, replica_b_path, known_replicas, changes).run()

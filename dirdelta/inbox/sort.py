@@ -22,7 +22,6 @@ from dirdelta.inbox.previews import Previews
 from dirdelta.inbox.screen import Screen
 from dirdelta.inbox.side import Side
 from dirdelta.inbox.actions.transfer import Transfer
-from dirdelta.known import replicalog
 from dirdelta.known import replicanames
 from dirdelta.known import replicas
 from dirdelta.matching import elsewhere
@@ -33,6 +32,7 @@ from dirdelta.ui import filescreen
 from dirdelta.ui import opening
 from dirdelta.ui import picker
 from dirdelta.ui import sidetree
+from dirdelta.known import log_entries
 
 
 class InboxError(Exception):
@@ -94,7 +94,7 @@ class InboxSort(Listing, Screen, Keys, Side, Previews, Copies, Menu, Destination
         self._known_replicas = known_replicas
         # What's changed live in the sorted tree, for its log's entry (see replicalog.py). An inbox
         # has no log: it's where files wait to be sorted, not a replica to keep track of
-        self.changes = replicalog.Changes()
+        self.changes = log_entries.Changes()
         for path in (self.inbox_path, self.root_path):
             if not paths.is_cloud_path(path) and not os.path.isdir(path):
                 raise InboxError("%s is not a directory" % (path,))
@@ -178,7 +178,7 @@ def _run(inbox_path, root_path, known_replicas):
     sort = InboxSort(inbox_path, root_path, known_replicas)
     if known_replicas is not None:
         known_replicas.record_sort(sort.inbox_path, sort.root_path)
-        replicalog.note_seen(sort.log_trees(), known_replicas)
+        log_entries.note_seen(sort.log_trees(), known_replicas)
         replicas.save(known_replicas)
     names = replicanames.short_names([sort.inbox_path, sort.root_path])
     with picker.place("Sort %s \u2192 %s" % (names[sort.inbox_path], names[sort.root_path])):
@@ -186,4 +186,4 @@ def _run(inbox_path, root_path, known_replicas):
             return
         sort.run()
     if known_replicas is not None:
-        replicalog.offer_entries(sort.changes, sort.log_trees(), known_replicas)
+        log_entries.offer_entries(sort.changes, sort.log_trees(), known_replicas)

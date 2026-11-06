@@ -85,6 +85,6 @@ class AskAI(object):
         return done or None
 
     def _note(self, replica, verb, count, source=None):
-        """Note a live change of the replica's files (see replicalog.Changes.note())"""
+        """Note a live change of the replica's files (see log_entries.Changes.note())"""
         if self.changes is not None:
             self.changes.note(replica.displayname(), verb, count, source)

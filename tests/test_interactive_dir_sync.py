@@ -14,9 +14,9 @@ from dirdelta.hashes import hashing
 from dirdelta.sync.way import interactive_dir_sync
 from dirdelta.trees import localdiskdirtree
 from dirdelta.ui import picker
-from dirdelta.known import replicalog
 from dirdelta.sync import replica_ops
 from dirdelta.ui import messages
+from dirdelta.known import log_entries
 
 Sync = interactive_dir_sync.InteractiveDirSync
 YES = Sync.CONFIRM_YES
@@ -76,13 +76,13 @@ class InteractiveDirSyncTest(unittest.TestCase):
         self.assertIn('Copy complete: copied 1 of 1 files to %s' % (self.dst_root,), self.messages)
 
     def test_live_changes_are_noted_for_the_replicas_logs(self):
-        changes = replicalog.Changes()
+        changes = log_entries.Changes()
         with mock.patch('dirdelta.util.dryrun.DRYRUN', False):
             self._browse([['sub/b.txt'], ['sub/c.txt'], None], ['Copy', YES, 'Remove', YES, SURE], changes=changes)
         self.assertEqual(changes.summary(self.dst_root), "copied 1 file from %s" % (self.src_root,))
         self.assertEqual(changes.summary(self.src_root), "removed 1 file")
         # Not in a dry run
-        changes = replicalog.Changes()
+        changes = log_entries.Changes()
         self._browse([['sub/b.txt'], None], ['Copy', YES], changes=changes)
         self.assertEqual(changes.paths(), [])
 

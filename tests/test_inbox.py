@@ -16,7 +16,6 @@ from dirdelta.drive import drivecache
 from dirdelta.hashes import hashing
 from dirdelta.inbox import constants
 from dirdelta.inbox import formatting
-from dirdelta.known import replicalog
 from dirdelta.known import replicas
 from dirdelta.matching import elsewhere
 from dirdelta.ui import messages
@@ -24,6 +23,7 @@ from dirdelta.ui import picker
 from dirdelta.ui import renaming
 from dirdelta.ui import sidetree
 from dirdelta.hashes import hashcache
+from dirdelta.known import log_entries
 
 Sort = inbox.InboxSort
 NOTHING = Sort.NOTHING
@@ -238,7 +238,7 @@ class InboxSortTest(unittest.TestCase):
         known = replicas.Replicas()
         picks = [['a.txt'], None]
         with helpers.scripted_files_picker(lambda relpaths: picks.pop(0)), \
-                helpers.answering_option_picker(['Move it to a dir you pick', YES, 'Add it to its', replicalog.NO_ENTRY]) as pick, \
+                helpers.answering_option_picker(['Move it to a dir you pick', YES, 'Add it to its', log_entries.NO_ENTRY]) as pick, \
                 mock.patch('dirdelta.ui.picker.pick_under_dir', return_value=('', os.path.join(self.root, 'docs'))), \
                 mock.patch('dirdelta.ui.picker.view_files', return_value=True), \
                 mock.patch('dirdelta.known.replicas.save'), mock.patch('dirdelta.util.dryrun.DRYRUN', False), \

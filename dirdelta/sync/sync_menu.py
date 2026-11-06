@@ -27,7 +27,7 @@ BACK = "Back to the start menu"
 class SyncMenu(object):
     """The main menu of a sync of replica_a and replica_b (at their paths), until the user goes back.
     With known_replicas (a Replicas, saved when changed), it also makes the pair a favorite, or not.
-    changes: where the files changed live are noted (a replicalog.Changes), if anywhere."""
+    changes: where the files changed live are noted (a log_entries.Changes), if anywhere."""
     ADD_FAVORITE = "Add to favorites"
     REMOVE_FAVORITE = "Remove from favorites"
     DASHBOARD = hashes_screen.TITLE
