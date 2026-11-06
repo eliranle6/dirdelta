@@ -33,10 +33,12 @@ class Screen(object):
         if not replica_ops.is_writable(self._inbox_tree):
             cant |= {self.MOVE_TO, self.MOVE_RECOMMENDED, self.MOVE_TO_CLAUDES_DIR, self.MOVE_TO_CLAUDES_DIR_TYPED,
                      self.MOVE_TO_CLAUDES_NAMES, self.MOVE_TO_TYPED, self.MOVE_IN_INBOX,
-                     self.REMOVE, self.REMOVE_COPIES, self.REMOVE_JUNK}
+                     self.MOVE_DIR, self.MOVE_DIR_TO, self.MOVE_DIR_TO_TYPED,
+                     self.REMOVE, self.REMOVE_COPIES, self.REMOVE_JUNK, self.REMOVE_DIR}
         if not replica_ops.is_writable(self._root_tree):
             cant |= {self.MOVE_TO, self.MOVE_RECOMMENDED, self.MOVE_TO_CLAUDES_DIR, self.MOVE_TO_CLAUDES_DIR_TYPED,
-                     self.MOVE_TO_CLAUDES_NAMES, self.MOVE_TO_TYPED, self.COPY_TO}
+                     self.MOVE_TO_CLAUDES_NAMES, self.MOVE_TO_TYPED, self.COPY_TO,
+                     self.MOVE_DIR, self.MOVE_DIR_TO, self.MOVE_DIR_TO_TYPED}
         return cant
 
     def _warn_if_read_only(self):

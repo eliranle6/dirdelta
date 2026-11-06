@@ -11,6 +11,7 @@ from dirdelta.drive import clouddirtree
 from dirdelta.drive import drivecache
 from dirdelta.known import log_entries
 from dirdelta.known import replicas
+from dirdelta.ui import picker
 from inbox_support import InboxSortTest, NOTHING, SURE, Sort, YES
 
 
@@ -66,6 +67,12 @@ class ReplicasTest(InboxSortTest):
         options = helpers.labels_of(self.pick_option.call_args.args[0])
         self.assertTrue(any(option.startswith('Copy it') for option in options))
         self.assertFalse(any(option.startswith(('Move', 'Remove')) for option in options))
+
+    def test_a_read_only_inbox_s_dir_isnt_moved_whole_either(self):
+        self.read_only_inbox()
+        self.sort([picker.Picked('', 'trip', ['trip/c.jpg']), None], [NOTHING])
+        options = helpers.labels_of(self.pick_option.call_args.args[0])
+        self.assertFalse([option for option in options if 'the dir' in option and not option.startswith('Ask')])
 
     def test_into_a_read_only_sorted_tree_nothing_is_offered(self):
         self.read_only_root()

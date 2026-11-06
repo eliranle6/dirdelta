@@ -3,13 +3,11 @@ import os
 import posixpath
 import shutil
 
-from dirdelta.inbox.constants import ASK, DESCRIBED, LABEL, OPEN, READ, REMOVE, VERB_COLORS
+from dirdelta.inbox.constants import ASK, LABEL, OPEN, READ, REMOVE, VERB_COLORS
 from dirdelta.inbox.formatting import bracket, files_text, fitting, join_path
 from dirdelta.known import replicas
-from dirdelta.ui import messages
 from dirdelta.ui import opening
 from dirdelta.ui import picker
-from dirdelta.util import dryrun
 
 
 class Destinations(object):
@@ -36,14 +34,19 @@ class Destinations(object):
             plan = self._typed_name(plan)
         return None if plan is None else self._approve(self.MOVE_TO, plan)
 
-    def _dir_to_a_dir(self, dirpath, relpaths):
+    def _dir_to_a_dir(self, dirpath, relpaths, is_typed=False):
         """Move the inbox's dir at dirpath (its files: relpaths) into a dir the user chooses, under its
-        own name, as a whole; offered first next time, if it went"""
+        own name (is_typed: one they type), as a whole; offered first next time, if it went"""
         destination = self._choose_dir('move', "%s of %s/" % (files_text(len(relpaths)), dirpath))
         if destination is None:
             return None
-        done = self._approve(self.MOVE_TO, [(relpath, join_path(destination, posixpath.basename(dirpath),
-                                                             relpath[len(dirpath) + 1:])) for relpath in relpaths])
+        name = posixpath.basename(dirpath)
+        if is_typed:
+            name = self._typed_dir_name(dirpath, destination)
+            if name is None:
+                return None
+        done = self._approve(self.MOVE_TO, [(relpath, join_path(destination, name, relpath[len(dirpath) + 1:]))
+                                            for relpath in relpaths])
         if done and self._known_replicas is not None:
             self._known_replicas.record_dir(self.root_path, destination)
             replicas.save(self._known_replicas)
@@ -91,24 +94,3 @@ class Destinations(object):
         for text, (color, names) in parts:
             brackets.append((bracket(names, picker.display_width(text)), color))
         return [path_line, picker.segments(brackets)]
-
-    def _typed_name(self, plan):
-        """plan (one file: [(relpath, its path in the sorted tree)]) with the name the user types for
-        it there, starting as Claude's (or its own); None if they typed none, or one that can't be"""
-        (relpath, target), = plan
-        recommendation = self._claude.recommendation(relpath)
-        default = os.path.basename(self._target(relpath) if recommendation and self._target(relpath)
-                                   else relpath)
-        lines = ["Moving %s" % (posixpath.join(self.inbox_path, relpath),),
-                 "to %s/" % (join_path(self.root_path, os.path.dirname(target)),)]
-        if self._claude.description(relpath) is not None:
-            lines.append(DESCRIBED % (self._claude.description(relpath),))
-        lines += ["", "Its name there (Enter to keep it as it is; an empty one, or Ctrl-C, to go back):"]
-        name = messages.ask("The file's name in %s" % (self.root_path,), lines, "> ", default, dryrun.label())
-        if name is None:
-            return None
-        if '/' in name or name in ('.', '..'):
-            messages.show("Not a name", ["%r can't be a file's name: it's a name, without '/'." % (name,)],
-                          dryrun.label(), 'red')
-            return None
-        return [(relpath, join_path(os.path.dirname(target), name))]

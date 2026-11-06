@@ -106,6 +106,16 @@ class DirsTest(InboxSortTest):
         self.assertTrue(self.exists('sorted', 'photos', 'trip', 'c.jpg'))
         self.assertFalse(self.exists('inbox', 'trip'))
 
+    def test_the_dir_moves_whole_into_a_picked_dir_under_a_typed_name(self):
+        with mock.patch('dirdelta.ui.messages.ask', return_value='rome 2024') as ask:
+            self.sort([picker.Picked('', 'trip', ['trip/c.jpg']), None],
+                      ["Move the dir trip/ (1 file) into a dir you pick, under a name you type", YES],
+                      dirs=[os.path.join(self.root, 'photos')])
+        # Starting as its own name
+        self.assertEqual(ask.call_args.args[3], 'trip')
+        self.assertTrue(self.exists('sorted', 'photos', 'rome 2024', 'c.jpg'))
+        self.assertFalse(self.exists('inbox', 'trip'))
+
     def test_the_dir_is_removed_as_claude_says(self):
         self.cache_dir_recommendation('trip', {'action': 'remove', 'path': '', 'summary': 'copies',
                                                'reason': 'all copies of photos/'})

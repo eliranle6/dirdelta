@@ -127,6 +127,7 @@ The map (each module's docstring's first line; generated from the code):
     - `menu_moves.py`: The action menu's options that move or copy the picked files
     - `menu_options.py`: The action menu's options but the moves: asking Claude or the AI, removing, opening
     - `transfer.py`: Moving, copying and removing the inbox's files
+    - `typed_names.py`: Names the user types for the files and dirs moved into the sorted tree
   - `ai/`: The inbox sort's Claude: describing and placing files and dirs, and the AI's plans
     - `ask_ai.py`: Asking the AI what to do with the inbox's files (see aiplan.py)
     - `claude.py`: Asking Claude about the inbox's files in the background: describing them, and where they go

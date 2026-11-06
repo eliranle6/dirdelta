@@ -98,6 +98,7 @@ class Menu(MenuOptions, MenuMoves):
         your_dir = ("<a dir you pick>/", YOUR_DIR)
         inbox_root = (self.inbox_path.rstrip('/') + '/', THE_INBOX)
         typed = ("<a name you type>", YOUR_NAME)
+        typed_dir_name = ("<a name you type>/", YOUR_NAME)
         it = "it" if is_one else of_picked(len(recommended), len(relpaths))
         they = "it" if is_one else "the %s" % (count,)
         def to_a_dir(action):

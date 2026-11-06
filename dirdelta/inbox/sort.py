@@ -21,6 +21,7 @@ from dirdelta.inbox.previews import Previews
 from dirdelta.inbox.screen import Screen
 from dirdelta.inbox.side import Side
 from dirdelta.inbox.actions.transfer import Transfer
+from dirdelta.inbox.actions.typed_names import TypedNames
 from dirdelta.known import replicanames
 from dirdelta.known import replicas
 from dirdelta.matching import elsewhere
@@ -38,7 +39,7 @@ class InboxError(Exception):
     pass
 
 
-class InboxSort(Listing, Screen, Keys, Side, Previews, Copies, Menu, Destinations,
+class InboxSort(Listing, Screen, Keys, Side, Previews, Copies, Menu, Destinations, TypedNames,
                 Claude, ClaudeDirs, ClaudeFiles, Dirs, AskAI, Approval, Transfer,
                 filescreen.FilesScreen):
 
@@ -56,6 +57,7 @@ class InboxSort(Listing, Screen, Keys, Side, Previews, Copies, Menu, Destination
     ASK_DIR = 'ask about the dir'
     MOVE_DIR = "move the dir to Claude's"
     MOVE_DIR_TO = 'move the dir to'
+    MOVE_DIR_TO_TYPED = 'move the dir to, typing its name'
     REMOVE_DIR = 'remove the dir'
     # The picker's keys that do an option of the menu, shown before it
     # (Ctrl-X opens the selected one, not the picked ones: Open has no key)

@@ -22,6 +22,10 @@ class MenuMoves(object):
                                        (f.the_dir, path_of(f.root, f.your_dir, f.own_dir_name)) if f.whole_dir else "",
                                        None if f.whole_dir else "not a dir", MOVE, [f.root, f.your_dir, f.own_dir_name],
                                        lambda: self._dir_to_a_dir(f.whole_dir, f.relpaths))),
+            (self.MOVE_DIR_TO_TYPED, Action("Move %s into a dir you pick, under a name you type: %s" %
+                                             (f.the_dir, path_of(f.root, f.your_dir, f.typed_dir_name)) if f.whole_dir else "",
+                                             None if f.whole_dir else "not a dir", MOVE, [f.root, f.your_dir, f.typed_dir_name],
+                                             lambda: self._dir_to_a_dir(f.whole_dir, f.relpaths, is_typed=True))),
             (self.MOVE_RECOMMENDED, Action("Move %s to Claude's recommendation: %s" %
                                             (f.it, path_of(f.root, f.claudes_dir, f.claudes_name))
                                             if f.is_one or len(f.destinations) == 1 else

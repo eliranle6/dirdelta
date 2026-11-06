@@ -109,8 +109,8 @@ them, with "Nothing" selected first:
   to do with it: move it (its own name or a better one, under the dir where it belongs, or into an
   existing dir, merging), split it (its files don't go together: ask about each), or remove it.
   `Enter` on the dir then offers "Move the dir ... to Claude's recommendation", "Move the dir ...
-  into a dir you pick" (keeping its name) and "Remove the dir ..., as Claude says", each moving or
-  removing all of its files, a local dir with one rename. What Claude said is kept by the dir's
+  into a dir you pick" (keeping its name, or under a name you type) and "Remove the dir ..., as
+  Claude says", each moving or removing all of its files, a local dir with one rename. What Claude said is kept by the dir's
   path, its number of files and their size: a dir that changed is asked about again.
 - `Ctrl-X` in the picker opens the selected file (or dir) with its program (`xdg-open`), as a
   double-click would; "Open" in the menu opens the picked files (up to 10), and has no key (a
