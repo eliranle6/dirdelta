@@ -5,7 +5,7 @@ per process: see helpers.py), the slowest first, and sums them up as unittest wo
 
 With no modules named, all the test_*.py under tests/ (in folders mirroring dirdelta's packages; a
 module is named by its file's name, which is unique). A module imports helpers.py (tests/) and the
-support modules beside it (its own folder) by name. Each module's output is shown if it failed, or
+support modules of its folder and the ones above it by name. Each module's output is shown if it failed, or
 with -v."""
 import concurrent.futures
 import json
@@ -35,7 +35,12 @@ def test_modules():
 
 def run_one(module, args):
     """Runs module's tests, its output on stderr, and prints how many ran, failed and so on"""
-    sys.path[:0] = [os.path.dirname(test_modules()[module]), TESTS]
+    # Its folder's support modules, and those of the folders above it, up to helpers.py's
+    folders, folder = [], os.path.dirname(test_modules()[module])
+    while folder != TESTS:
+        folders.append(folder)
+        folder = os.path.dirname(folder)
+    sys.path[:0] = folders + [TESTS]
     program = unittest.main(module=None, argv=['run.py'] + args + [module], exit=False)
     result = program.result
     print(MARK + json.dumps([result.testsRun, len(result.failures), len(result.errors), len(result.skipped),

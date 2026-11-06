@@ -351,7 +351,7 @@ live Remove deletes real files.
 ## Tests
 
 ```bash
-make test             # or make test ARGS=-v, or ARGS=test_inbox for one module
+make test             # or make test ARGS=-v, or ARGS=test_inbox_moves for one module
 ```
 
 The test modules run in parallel, a process each (`tests/run.py`). It also runs treepicker's own tests (in `lib/treepicker`), which need Google Test (`libgtest-dev`).

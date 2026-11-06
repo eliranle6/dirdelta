@@ -8,15 +8,11 @@ import time
 import unittest
 from unittest import mock
 
+from clouddirtree_support import FOLDER, drive_item
 from dirdelta.drive import clouddirtree
 from dirdelta.drive import drivecache
 from dirdelta.drive import drivemeta
 
-FOLDER = 'application/vnd.google-apps.folder'
-
-
-def drive_item(id, name, parent, mime='audio/mpeg'):
-    return {'id': id, 'name': name, 'parents': [parent], 'mimeType': mime}
 
 
 ITEMS = [drive_item('mein', 'mein', 'ROOT', FOLDER), drive_item('song', 'song.mp3', 'mein'),

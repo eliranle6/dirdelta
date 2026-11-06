@@ -1,3 +1,4 @@
+"""A local replica: its scan, its files' info and hashes, and rescanning it"""
 import hashlib
 import os
 import shutil
@@ -5,11 +6,12 @@ import tempfile
 import unittest
 from unittest import mock
 
+import helpers
+from dirdelta.hashes import hashcache
 from dirdelta.trees import dirtree
 from dirdelta.trees import entries
 from dirdelta.trees import localdiskdirtree
-import helpers
-from dirdelta.hashes import hashcache
+from localdiskdirtree_support import LocalDiskDirTreeTest
 
 
 class KeptHashesTest(unittest.TestCase):
@@ -72,40 +74,9 @@ class KeptHashesTest(unittest.TestCase):
         # As each file's asked for one by one
         self.assertEqual(replica.listed('sha1')['d/x'][1], replica.known_hash('d/x', 'sha1'))
 
-class LocalDiskDirTreeTest(unittest.TestCase):
-    def setUp(self):
-        self.src_root = tempfile.mkdtemp(prefix='dirstuff-localdiskdirtree-src-')
-        self.dst_root = tempfile.mkdtemp(prefix='dirstuff-localdiskdirtree-dst-')
 
-    def tearDown(self):
-        shutil.rmtree(self.src_root, ignore_errors=True)
-        shutil.rmtree(self.dst_root, ignore_errors=True)
-
-    def _copy_subdir_file(self):
-        src = localdiskdirtree.LocalDiskDirTree(self.src_root, silent=True)
-        src.add_file_by_relpath('subdir/file.txt')
-        os.makedirs(os.path.join(self.src_root, 'subdir'))
-        with open(os.path.join(self.src_root, 'subdir', 'file.txt'), 'w') as f:
-            f.write('content')
-
-        dst = localdiskdirtree.LocalDiskDirTree(self.dst_root, silent=True)
-        with mock.patch('dirdelta.ui.messages.print_line'):
-            dst.copy_inner_entries_from_dirtree(src)
-        return dst
-
-    def test_copy_creates_missing_dirs(self):
-        with mock.patch('dirdelta.util.dryrun.DRYRUN', False):
-            self._copy_subdir_file()
-        with open(os.path.join(self.dst_root, 'subdir', 'file.txt')) as f:
-            self.assertEqual(f.read(), 'content')
-
-    def test_dry_run_copy_creates_no_dirs(self):
-        with mock.patch('dirdelta.util.dryrun.DRYRUN', True):
-            dst = self._copy_subdir_file()
-        self.assertFalse(os.path.exists(os.path.join(self.dst_root, 'subdir')))
-        # Nor nodes in the tree
-        self.assertEqual(list(dst.iter_files()), [])
-
+class ScanTest(LocalDiskDirTreeTest):
+    """Scanning, and what's known of the files"""
 
     @unittest.skipIf(os.geteuid() == 0, 'root can read anything')
     def test_scan_errors_are_kept_once(self):
@@ -119,218 +90,6 @@ class LocalDiskDirTreeTest(unittest.TestCase):
 
         self.assertEqual(len(tree.scan_errors), 1)
         self.assertIn('Permission denied', tree.scan_errors[0])
-
-    def test_ctrl_c_stops_copying_and_drops_the_partial_file(self):
-        src = localdiskdirtree.LocalDiskDirTree(self.src_root, silent=True)
-        for name in ['1.txt', '2.txt', '3.txt']:
-            with open(os.path.join(self.src_root, name), 'w') as f:
-                f.write(name)
-            src.add_file_by_relpath(name)
-        dst = localdiskdirtree.LocalDiskDirTree(self.dst_root, silent=True)
-
-        real_copy = localdiskdirtree.copying.shutil.copy2
-
-        def copy(source, dest):
-            if source.endswith('2.txt'):
-                with open(dest, 'w') as f:
-                    f.write('part')
-                raise KeyboardInterrupt()
-            real_copy(source, dest)
-
-        printed = []
-        with mock.patch('dirdelta.util.dryrun.DRYRUN', False), \
-                mock.patch('dirdelta.trees.localdiskdirtree.copying.shutil.copy2', side_effect=copy), \
-                mock.patch('dirdelta.ui.messages.print_line', side_effect=lambda line, *_: printed.append(line)):
-            dst.copy_inner_entries_from_dirtree(src)
-
-        self.assertEqual(sorted(os.listdir(self.dst_root)), ['1.txt'])
-        self.assertIsNone(dst.get_node('2.txt'))
-        self.assertIn('Stopped (Ctrl-C)', printed)
-        self.assertEqual(printed[-1], 'Copy stopped: copied 1 of 3 files to %s' % (os.path.realpath(self.dst_root),))
-
-    def test_ctrl_c_while_copying_keeps_a_file_that_was_there(self):
-        # A file the tree didn't know of (e.g. find couldn't read it) isn't deleted
-        os.makedirs(os.path.join(self.src_root, 'd'))
-        with open(os.path.join(self.src_root, 'd', 'x.txt'), 'w') as f:
-            f.write('new')
-        src = localdiskdirtree.LocalDiskDirTree(self.src_root, silent=True)
-        src.add_file_by_relpath('d/x.txt')
-        os.makedirs(os.path.join(self.dst_root, 'd'))
-        with open(os.path.join(self.dst_root, 'd', 'x.txt'), 'w') as f:
-            f.write('old')
-        dst = localdiskdirtree.LocalDiskDirTree(self.dst_root, silent=True)
-
-        with mock.patch('dirdelta.util.dryrun.DRYRUN', False), \
-                mock.patch('dirdelta.trees.localdiskdirtree.copying.shutil.copy2', side_effect=KeyboardInterrupt()), \
-                mock.patch('dirdelta.ui.messages.print_line'):
-            dst.copy_inner_entries_from_dirtree(src)
-
-        with open(os.path.join(self.dst_root, 'd', 'x.txt')) as f:
-            self.assertEqual(f.read(), 'old')
-
-    def test_ctrl_c_stops_removing(self):
-        tree = localdiskdirtree.LocalDiskDirTree(self.src_root, silent=True)
-        entries = []
-        for name in ['1.txt', '2.txt']:
-            open(os.path.join(self.src_root, name), 'w').close()
-            entries.append(tree.add_file_by_relpath(name))
-        real_unlink = os.unlink
-
-        def unlink(path):
-            if path.endswith('2.txt'):
-                raise KeyboardInterrupt()
-            real_unlink(path)
-
-        printed = []
-        with mock.patch('dirdelta.util.dryrun.DRYRUN', False), \
-                mock.patch('dirdelta.trees.localdiskdirtree.fs.os.unlink', side_effect=unlink), \
-                mock.patch('dirdelta.ui.messages.print_line', side_effect=lambda line, *_: printed.append(line)):
-            tree.remove_files(entries)
-
-        self.assertEqual(sorted(os.listdir(self.src_root)), ['2.txt'])
-        self.assertIsNotNone(tree.get_node('2.txt'))
-        self.assertEqual(printed[-1], 'Remove stopped: removed 1 of 2 files from %s' % (os.path.realpath(self.src_root),))
-
-
-    def _remove(self, relpaths, existing):
-        """Remove relpaths from a src_root holding existing (relpaths: a trailing '/' an empty dir)"""
-        for relpath in existing:
-            path = os.path.join(self.src_root, relpath)
-            if relpath.endswith('/'):
-                os.makedirs(path, exist_ok=True)
-            else:
-                os.makedirs(os.path.dirname(path), exist_ok=True)
-                with open(path, 'w') as f:
-                    f.write(relpath)
-        tree = localdiskdirtree.factory(self.src_root, silent=True)
-        with mock.patch('dirdelta.ui.messages.print_line') as print_line:
-            tree.remove_files([tree.get_node(relpath).data for relpath in relpaths])
-        self.lines = [call.args[0] for call in print_line.call_args_list]
-        return tree
-
-    def _left(self):
-        found = []
-        for dirpath, dirnames, filenames in os.walk(self.src_root):
-            for name in dirnames + filenames:
-                found.append(os.path.relpath(os.path.join(dirpath, name), self.src_root))
-        return sorted(found)
-
-    def test_a_file_that_cant_be_removed_is_said_and_the_rest_go_on(self):
-        tree = self._scan(['a.txt', 'b.txt'])
-        real_unlink = os.unlink
-        with mock.patch('dirdelta.util.dryrun.DRYRUN', False), \
-                mock.patch('dirdelta.ui.messages.print_line') as print_line, \
-                mock.patch('dirdelta.trees.localdiskdirtree.fs.os.unlink',
-                           side_effect=lambda path: (_ for _ in ()).throw(PermissionError('denied'))
-                           if path.endswith('a.txt') else real_unlink(path)):
-            tree.remove_files([tree.get_node('a.txt').data, tree.get_node('b.txt').data])
-        self.assertTrue(os.path.exists(os.path.join(self.src_root, 'a.txt')))
-        self.assertFalse(os.path.exists(os.path.join(self.src_root, 'b.txt')))
-        self.assertIsNotNone(tree.get_node('a.txt'))
-        print_line.assert_any_call('Remove failed: denied', 'red')
-
-    def test_trashing_moves_files_to_the_trash_with_gio(self):
-        tree = self._scan(['a.txt', 'b.txt'])
-        results = {'a.txt': (1, "gio: no trash here"), 'b.txt': (0, "")}
-
-        def run(command, **_):
-            self.assertEqual(command[:2], ['gio', 'trash'])
-            code, said = results[os.path.basename(command[2])]
-            if code == 0:
-                os.unlink(command[2])
-            return mock.Mock(returncode=code, stdout=said)
-        with mock.patch('dirdelta.util.dryrun.DRYRUN', False), \
-                mock.patch('dirdelta.ui.messages.print_line') as print_line, \
-                mock.patch('dirdelta.trees.localdiskdirtree.fs.subprocess.run', side_effect=run), \
-                mock.patch('dirdelta.trees.localdiskdirtree.fs.os.unlink', wraps=os.unlink) as unlink:
-            with tree.trashing():
-                tree.remove_files([tree.get_node('a.txt').data, tree.get_node('b.txt').data])
-            # Only gio removed b.txt (the fake's own unlink); a.txt is kept, and said
-            self.assertEqual(unlink.call_count, 1)
-        self.assertTrue(os.path.exists(os.path.join(self.src_root, 'a.txt')))
-        self.assertFalse(os.path.exists(os.path.join(self.src_root, 'b.txt')))
-        print_line.assert_any_call('Remove failed: gio: no trash here', 'red')
-        self.assertIn('(to the trash)', print_line.call_args_list[-1].args[0])
-        # Removing for good again, after
-        self.assertFalse(tree._is_trashing)
-        self.assertEqual(tree.REMOVED_TO, "")
-
-    def replace(self, content='new version', copy=None):
-        """Copy src's a.txt (of content) over dst's (of 'old'), inside replacing(); copy, if given,
-        is shutil.copy2's fake. Returns the tree, the trash and what listened."""
-        helpers.make_files(self.src_root, ['a.txt'])
-        helpers.make_files(self.dst_root, ['a.txt'])
-        with open(os.path.join(self.src_root, 'a.txt'), 'w') as f:
-            f.write(content)
-        with open(os.path.join(self.dst_root, 'a.txt'), 'w') as f:
-            f.write('old')
-        trash = helpers.fake_trash(self)
-        dst = localdiskdirtree.LocalDiskDirTree(self.dst_root, silent=True)
-        dst.update_from_filesystem()
-        listener = mock.Mock()
-        dst.add_listener(listener)
-        with mock.patch('dirdelta.util.dryrun.DRYRUN', False), mock.patch('dirdelta.ui.messages.print_line'), \
-                mock.patch('dirdelta.trees.localdiskdirtree.copying.shutil.copy2', side_effect=copy or shutil.copy2), \
-                dst.replacing():
-            dst.copy_in([entries.FileEntry('a.txt', 'a.txt', os.path.join(self.src_root, 'a.txt'))])
-        return dst, trash, listener
-
-    def test_a_copy_replacing_a_file_sends_the_old_one_to_the_trash(self):
-        dst, trash, listener = self.replace()
-        with open(os.path.join(self.dst_root, 'a.txt')) as f:
-            self.assertEqual(f.read(), 'new version')
-        with open(os.path.join(trash, 'a.txt')) as f:
-            self.assertEqual(f.read(), 'old')
-        self.assertEqual(sorted(os.listdir(self.dst_root)), ['a.txt'])
-        self.assertTrue(dst.has_file('a.txt'))
-        # What listens forgets the old one, then knows the new one
-        self.assertEqual([call[0] for call in listener.method_calls], ['remove', 'add'])
-        self.assertFalse(dst._is_replacing)
-
-    def test_a_replacing_copy_that_fails_leaves_the_old_one(self):
-        def copy(src, dst):
-            with open(dst, 'w') as f:
-                f.write('par')
-            raise OSError('disk full')
-        dst, trash, listener = self.replace(copy=copy)
-        with open(os.path.join(self.dst_root, 'a.txt')) as f:
-            self.assertEqual(f.read(), 'old')
-        self.assertEqual(os.listdir(trash), [])
-        # No part of the copy left next to it
-        self.assertEqual(sorted(os.listdir(self.dst_root)), ['a.txt'])
-        self.assertEqual(listener.method_calls, [])
-
-    def test_removing_files_removes_the_dirs_left_empty(self):
-        with mock.patch('dirdelta.util.dryrun.DRYRUN', False):
-            tree = self._remove(['a/b/1.txt', 'a/b/c/2.txt', 'a/d/3.txt', 'e/4.txt'],
-                                ['a/b/1.txt', 'a/b/c/2.txt', 'a/d/3.txt', 'e/4.txt', 'e/5.txt', 'f/'])
-        # f was empty already, and wasn't removed from
-        self.assertEqual(self._left(), ['e', 'e/5.txt', 'f'])
-        self.assertNotIn('a', tree)
-        self.assertIn('Removed 4 dirs left empty', self.lines)
-
-    def test_a_dir_with_anything_left_in_it_is_kept(self):
-        with mock.patch('dirdelta.util.dryrun.DRYRUN', False):
-            self._remove(['a/1.txt'], ['a/1.txt', 'a/.hidden', 'a/sub/'])
-        self.assertEqual(self._left(), ['a', 'a/.hidden', 'a/sub'])
-
-    def test_the_root_is_kept_even_if_left_empty(self):
-        with mock.patch('dirdelta.util.dryrun.DRYRUN', False):
-            self._remove(['1.txt'], ['1.txt'])
-        self.assertTrue(os.path.isdir(self.src_root))
-        self.assertEqual(self._left(), [])
-
-    def test_a_dry_run_removes_no_dirs(self):
-        with mock.patch('dirdelta.util.dryrun.DRYRUN', True):
-            self._remove(['a/1.txt'], ['a/1.txt'])
-        self.assertEqual(self._left(), ['a', 'a/1.txt'])
-
-    def _scan(self, relpaths, **kwargs):
-        for relpath in relpaths:
-            path = os.path.join(self.src_root, relpath)
-            os.makedirs(os.path.dirname(path), exist_ok=True)
-            open(path, 'w').close()
-        return localdiskdirtree.factory(self.src_root, silent=True, **kwargs)
 
     def test_scan_has_files_and_dirs_hidden_ones_too(self):
         tree = self._scan(['visible.txt', 'sub/nested.txt', '.hidden/inner.txt', '.hidden_at_root.txt'])
@@ -356,51 +115,6 @@ class LocalDiskDirTreeTest(unittest.TestCase):
         self.assertEqual(tree.file_size('y.txt'), 5)
         self.assertIsNone(tree.file_size('nope.txt'))
 
-    def test_move_moves_the_file_and_removes_the_dirs_left_empty(self):
-        tree = self._scan(['old/x.txt', 'keep/y.txt'])
-        with mock.patch('dirdelta.util.dryrun.DRYRUN', False), mock.patch('dirdelta.ui.messages.print_line'):
-            self.assertEqual(tree.move_files([('old/x.txt', 'new/sub/x.txt')]),
-                             [('old/x.txt', 'new/sub/x.txt')])
-        self.assertTrue(os.path.isfile(os.path.join(self.src_root, 'new/sub/x.txt')))
-        self.assertFalse(os.path.exists(os.path.join(self.src_root, 'old')))
-        self.assertIsNotNone(tree.get_node('new/sub/x.txt'))
-        self.assertTrue(tree.has_file('new/sub/x.txt'))
-        self.assertFalse(tree.has_file('old/x.txt'))
-
-    def test_a_whole_dir_is_moved_as_one(self):
-        tree = self._scan(['old/a.txt', 'old/sub/b.txt', 'keep/c.txt', 'keep/d.txt'])
-        moves = [('old/a.txt', 'new/dir/a.txt'), ('old/sub/b.txt', 'new/dir/sub/b.txt'), ('keep/c.txt', 'k/c.txt')]
-        self.assertEqual(tree.dir_moves(moves),
-                         ([('old', 'new/dir', [('old/a.txt', 'new/dir/a.txt'), ('old/sub/b.txt', 'new/dir/sub/b.txt')])],
-                          [('keep/c.txt', 'k/c.txt')]))
-        with mock.patch('dirdelta.util.dryrun.DRYRUN', False), mock.patch('dirdelta.ui.messages.print_line'), \
-                mock.patch('dirdelta.trees.localdiskdirtree.fs.os.rename', wraps=os.rename) as rename:
-            self.assertEqual(sorted(tree.move_files(moves)), sorted(moves))
-        # One rename for the dir, one for the other file
-        self.assertEqual(len(rename.call_args_list), 2)
-        self.assertTrue(os.path.isfile(os.path.join(self.src_root, 'new/dir/sub/b.txt')))
-        self.assertFalse(os.path.exists(os.path.join(self.src_root, 'old')))
-        self.assertIsNotNone(tree.get_node('new/dir/sub/b.txt'))
-
-    def test_a_dir_with_more_in_it_or_a_new_place_thats_taken_isnt_moved_as_one(self):
-        tree = self._scan(['old/a.txt', 'old/other.txt', 'two/a.txt', 'there/x'])
-        self.assertEqual(tree.dir_moves([('old/a.txt', 'new/a.txt')])[0], [])
-        self.assertEqual(tree.dir_moves([('two/a.txt', 'there/a.txt')])[0], [])
-        # A renamed file isn't a dir's move
-        self.assertEqual(tree.dir_moves([('two/a.txt', 'new/b.txt')])[0], [])
-
-    def test_move_never_overwrites(self):
-        tree = self._scan(['x.txt', 'y.txt'])
-        with mock.patch('dirdelta.util.dryrun.DRYRUN', False), mock.patch('dirdelta.ui.messages.print_line'):
-            self.assertEqual(tree.move_files([('x.txt', 'y.txt')]), [])
-        self.assertTrue(os.path.isfile(os.path.join(self.src_root, 'x.txt')))
-
-    def test_dry_run_moves_nothing(self):
-        tree = self._scan(['x.txt'])
-        with mock.patch('dirdelta.util.dryrun.DRYRUN', True), mock.patch('dirdelta.ui.messages.print_line'):
-            self.assertEqual(tree.move_files([('x.txt', 'y.txt')]), [])
-        self.assertTrue(os.path.isfile(os.path.join(self.src_root, 'x.txt')))
-
     def test_content_hash_reads_the_file_and_can_be_stopped(self):
         tree = self._scan(['x.txt'])
         with open(os.path.join(self.src_root, 'x.txt'), 'wb') as f:
@@ -411,19 +125,6 @@ class LocalDiskDirTreeTest(unittest.TestCase):
             tree.content_hash('x.txt', 'sha256', should_stop=lambda: True)
         self.assertEqual(tree.local_path('x.txt'), os.path.join(os.path.realpath(self.src_root), 'x.txt'))
 
-    def test_a_copy_keeps_its_modification_time(self):
-        os.makedirs(os.path.join(self.src_root, 'sub'))
-        path = os.path.join(self.src_root, 'sub', 'file.txt')
-        with open(path, 'w') as f:
-            f.write('content')
-        os.utime(path, (1000000, 1000000))
-        src = localdiskdirtree.LocalDiskDirTree(self.src_root, silent=True)
-        src.add_file_by_relpath('sub/file.txt')
-        dst = localdiskdirtree.LocalDiskDirTree(self.dst_root, silent=True)
-        with mock.patch('dirdelta.ui.messages.print_line'), mock.patch('dirdelta.util.dryrun.DRYRUN', False):
-            dst.copy_inner_entries_from_dirtree(src)
-        self.assertEqual(dst.modified_time('sub/file.txt'), 1000000)
-        self.assertIsNone(dst.modified_time('nope'))
 
 class RescanTest(unittest.TestCase):
     def setUp(self):
@@ -458,6 +159,7 @@ class RescanTest(unittest.TestCase):
         with self.assertRaises(OSError):
             tree.rescan()
         self.assertEqual(self.files(tree), ['a.txt', 'd/b.txt'])
+
 
 if __name__ == '__main__':
     unittest.main()

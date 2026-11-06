@@ -128,7 +128,7 @@ def make_files(root, relpaths):
 
 
 def fake_trash(test):
-    """Patch the desktop's trash (gio trash, see localdiskdirtree._trash()) for the test: a trashed
+    """Patch the desktop's trash (gio trash, see localdiskdirtree.fs.trash()) for the test: a trashed
     file is moved into a temp dir (returned) instead, by its name"""
     trash_dir = tempfile.mkdtemp(prefix='dirdelta-test-trash-')
     test.addCleanup(shutil.rmtree, trash_dir, ignore_errors=True)

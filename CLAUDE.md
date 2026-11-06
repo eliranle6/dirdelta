@@ -143,11 +143,11 @@ commit-adjacent-copy them anywhere.
 ## Tests
 
 ```bash
-make test             # or ARGS=-v, ARGS='-k pattern', ARGS=test_inbox (one module), or other unittest flags
+make test             # or ARGS=-v, ARGS='-k pattern', ARGS=test_inbox_moves (one module), or other unittest flags
 ```
 
 It runs `tests/run.py` with `PYTHONPATH=.` (imports look like `from dirdelta.trees import dirtree`):
-each `tests/test_*.py` in a process of its own, as many at once as there are CPUs, the biggest
+each `test_*.py` under `tests/` in a process of its own, as many at once as there are CPUs, the biggest
 first, summed up as unittest would (a module's output is shown if it failed, or with `-v`), with
 `TMPDIR=/dev/shm` when there is one (SQLite's syncs to a disk were half the time). That takes ~4 s
 rather than ~17 s one after another. Each process has its own fakes of the caches (see below), so
@@ -164,8 +164,15 @@ docs/architecture.md, "Its layout"). To run one
 module:
 
 ```bash
-PYTHONPATH=tests bin/python -m unittest test_interactive_dir_sync -v
+make test ARGS='-v test_inbox_moves'      # or: PYTHONPATH=. bin/python tests/run.py -v test_inbox_moves
 ```
+
+`tests/` mirrors `dirdelta/`'s packages (`tests/inbox/`, `tests/drive/clouddirtree/`, ...), each test
+module named for what it tests (`test_inbox_moves.py`); module names are unique, as the runner finds
+them by name. A big class's tests are split by topic into modules of their own, their shared fixture
+(setUp and helpers) a base class in a support module (`inbox_support.py`, not collected: no `test_`
+prefix), which a test module imports by name: the runner puts its folder and the ones above it, up to
+`tests/` (helpers.py), on the path.
 
 Modules are tested where it's worth it, not for the sake of a test file each (778 tests, all passing as of 2026-11-06; 150 were removed then as redundant, white-box or pinning styling) except
 the thin wiring in `main.py`/`dirsync_main.py`, covered only by running the
@@ -176,7 +183,7 @@ another test, or another module's, already covers. Shared fakes:
 - `tests/helpers.py`: `scripted_option_picker` / `scripted_tree_picker` /
   `scripted_files_picker` / `scripted_dir_picker` patch `dirdelta.ui.picker`'s functions to return
   scripted answers, so no test runs treepicker, plus `make_files` for
-  temp dir fixtures. `tests/test_picker.py` tests `ui/picker/` itself against
+  temp dir fixtures. `tests/ui/picker/` tests `ui/picker/` itself against
   a fake treepicker script. App tests build their own `tempfile.mkdtemp()` trees
   rather than using `tests/fixtures/`, so they never depend on (or modify)
   the repo.
@@ -187,7 +194,7 @@ another test, or another module's, already covers. Shared fakes:
   it from `hashing.registry._jobs`; tests that hash without the pool's threads set
   `job._is_started` and call `job._take()`/`job._hash()` themselves.
 - Claude is never asked in the tests: `test_ai` patches `ai.query.run_query` or the
-  SDK's `query`, and `test_inbox` patches `ai.query.run_query`; `ai.config.CACHE_FILE` goes
+  SDK's `query`, and the inbox's tests patch `ai.query.run_query`; `ai.config.CACHE_FILE` goes
   to a temp file. A manual run with a scratch `HOME` can't reach Claude Code's
   login (it's under the real `HOME`); `CLAUDE_CONFIG_DIR=~/.claude` gets it,
   but then Claude Code writes a `.claude.json` into `~/.claude` (2026-10-29).
@@ -197,7 +204,7 @@ another test, or another module's, already covers. Shared fakes:
   `HOME` to a scratch dir (but that hides the real Drive cache too).
 - Nothing is downloaded into the real `~/.cache/dirdelta/downloads`: `tests/helpers.py`
   points `downloads.DOWNLOADS_DIR` at a temp dir. `test_opening` patches `subprocess.Popen`
-  for `Ctrl-X`'s `xdg-open` (`test_inbox` and `test_interactive_dir_sync` patch `Opener.open_in_background`); a manual run can put a fake `xdg-open` first on `PATH`.
+  for `Ctrl-X`'s `xdg-open` (the inbox's and the sync's tests patch `Opener.open_in_background`); a manual run can put a fake `xdg-open` first on `PATH`.
 - The real `~/.config/dirdelta/settings.json` isn't read or written: `tests/helpers.py` (and
   `test_picker`) point `settings.SETTINGS_FILE` at a temp file.
 - Nothing is mounted, and the real `~/.config/dirdelta/mounts.json` isn't read or
@@ -208,9 +215,9 @@ another test, or another module's, already covers. Shared fakes:
   `drivecache.names.LINES_FILE` at a temp path (the database is next to it).
 - Nothing goes to the desktop's trash: `helpers.fake_trash()` patches
   `localdiskdirtree.fs.trash`.
-- Drive is never contacted: `test_clouddirtree` writes a JSON-lines cache to
+- Drive is never contacted: the Drive tree's tests (`clouddirtree_support.py`) write a JSON-lines cache to
   a temp file (imported, as the old format is; `helpers.remove_drive_cache()` removes it), `test_driveapi` mocks `Credentials`/`build`, and the rest patch
-  `driveapi.service()` with a fake (e.g. `test_clouddirtree`'s uploads, downloads
+  `driveapi.service()` with a fake (e.g. the Drive tree's uploads, downloads
   and trashing).
 
 `tests/fixtures/{alpha,bravo}` are sample trees for manual runs (see
