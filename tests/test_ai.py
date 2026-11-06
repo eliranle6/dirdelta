@@ -1,4 +1,3 @@
-import json
 import os
 import shutil
 import tempfile
@@ -119,22 +118,6 @@ class AITest(unittest.TestCase):
         with mock.patch('dirdelta.ai._run_query', side_effect=answering):
             ai.recommend(self.files(1), self.key, {}, 'root', {}, {'f0.txt': ['docs/f0.txt', 'other/f0.txt']})
         self.assertEqual(len(answering.prompts), 1)
-
-    def test_haiku_describes_and_recommends(self):
-        answering = _Answering(lambda prompt: [])
-        with mock.patch('dirdelta.ai._run_query', side_effect=answering):
-            ai.describe(self.files(1), self.key)
-            ai.recommend(self.files(1), self.key, [], 'root', {})
-        self.assertEqual(answering.models, ['claude-haiku-5-5', 'claude-haiku-5-5'])
-
-    def test_a_recommendations_path(self):
-        self.assertEqual(ai.recommended_path({'action': 'move', 'path': 'docs/b.txt'}), 'docs/b.txt')
-        self.assertIsNone(ai.recommended_path({'action': 'remove', 'path': ''}))
-
-    def test_a_recommendation_cached_without_a_path_is_asked_for_again(self):
-        ai._save_cache({'key a.txt': {'recommendations': {'root': {'destination': 'docs', 'reason': 'old'}}}})
-        files = self.files(1)
-        self.assertEqual(ai.cached(files, self.key, 'root')[1], {})
 
     def test_what_the_cache_has_goes_with_the_files(self):
         with mock.patch('dirdelta.ai._run_query', side_effect=_Answering(

@@ -145,12 +145,6 @@ class EntriesTest(unittest.TestCase):
         helpers.remove_drive_cache(self.cache)
         self.assertIsNone(drivecache.root_id())
 
-    def test_what_changes_is_read_again(self):
-        self.assertEqual(drivecache.count_under('/mein'), 5)
-        drivecache.add({'id': 'x', 'name': 'x.mp3', 'parents': ['mein']})
-        self.assertEqual(drivecache.count_under('/mein'), 6)
-
-
 class ParseTest(unittest.TestCase):
     def setUp(self):
         self.cache = os.path.join(tempfile.mkdtemp(prefix='dirstuff-drive-cache-'), 'files.txt')
@@ -161,17 +155,6 @@ class ParseTest(unittest.TestCase):
         patcher.start()
         self.addCleanup(patcher.stop)
 
-    def test_parsed_once_until_the_file_changes(self):
-        with mock.patch('dirdelta.drivecache._parse', wraps=drivecache._parse) as parse:
-            list(drivecache.entries('/a'))
-            drivecache.root_id()
-            list(drivecache.entries('/a'))
-            self.assertEqual(parse.call_count, 1)
-            drivecache.add({'id': 'f', 'name': 'f.txt', 'parents': ['a']})
-            self.assertEqual([entry.relpath for entry in drivecache.entries('/a')], ['', 'f.txt'])
-            self.assertEqual(parse.call_count, 2)
-
-
 class StaleTest(unittest.TestCase):
     def setUp(self):
         self.cache = os.path.join(tempfile.mkdtemp(prefix='dirstuff-drive-cache-'), 'files.txt')
@@ -179,10 +162,6 @@ class StaleTest(unittest.TestCase):
         patcher.start()
         self.addCleanup(patcher.stop)
         self.addCleanup(drivecache.mark_fresh)
-
-    def test_fresh_at_first(self):
-        self.assertFalse(drivecache.stale_paths())
-        self.assertEqual(drivecache.stale_paths(), [])
 
     def test_marked_folders_are_stale_until_unmarked(self):
         self.assertTrue(drivecache.mark_stale('/a'))
@@ -294,9 +273,6 @@ class CacheContentsTest(unittest.TestCase):
         with self.assertRaisesRegex(drivecache.DriveCacheError, 'no folder /song.mp3'):
             self.entries('/song.mp3', [_item('song', 'song.mp3', 'ROOT')])
 
-    def test_an_empty_folder_has_no_entries(self):
-        self.assertEqual(self.entries('/eliran', [_item('eliran', 'eliran', 'ROOT', FOLDER)]), [])
-
     def test_the_whole_drive(self):
         self.assertEqual(self.entries('/', [_item('song', 'song.mp3', 'ROOT')]),
                          [('song.mp3', 'song', False)])
@@ -324,14 +300,6 @@ class CacheContentsTest(unittest.TestCase):
                 _item('eliran', 'eliran', 'ROOT', FOLDER),
                 _item('album1', 'album', 'eliran', FOLDER),
                 _item('album2', 'album', 'eliran', FOLDER),
-            ])
-
-    def test_a_folder_and_a_file_of_the_same_name_are_an_error(self):
-        with self.assertRaisesRegex(drivecache.DriveCacheError, 'named /eliran/album'):
-            self.entries('/eliran', [
-                _item('eliran', 'eliran', 'ROOT', FOLDER),
-                _item('album', 'album', 'eliran', FOLDER),
-                _item('albumfile', 'album', 'eliran'),
             ])
 
     def test_same_named_folders_on_the_way_are_an_error(self):

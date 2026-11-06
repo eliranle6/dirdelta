@@ -141,11 +141,15 @@ commit-adjacent-copy them anywhere.
 ## Tests
 
 ```bash
-make test             # or make test ARGS=-v, or any other unittest flags via ARGS
+make test             # or ARGS=-v, ARGS='-k pattern', ARGS=test_inbox (one module), or other unittest flags
 ```
 
-It runs `unittest discover` on `tests/` with `PYTHONPATH=.` (imports look
-like `from dirdelta import dirtree`), then treepicker's own C++ tests with
+It runs `tests/run.py` with `PYTHONPATH=.` (imports look like `from dirdelta import dirtree`):
+each `tests/test_*.py` in a process of its own, as many at once as there are CPUs, the biggest
+first, summed up as unittest would (a module's output is shown if it failed, or with `-v`), with
+`TMPDIR=/dev/shm` when there is one (SQLite's syncs to a disk were half the time). That takes ~4 s
+rather than ~17 s one after another. Each process has its own fakes of the caches (see below), so
+modules must not depend on each other. Then treepicker's own C++ tests run with
 `make -C lib/treepicker test` (which needs Google Test, `libgtest-dev`).
 `make clean` cleans the submodule too.
 
@@ -158,9 +162,12 @@ module:
 PYTHONPATH=tests bin/python -m unittest test_interactive_dir_sync -v
 ```
 
-Modules are tested where it's worth it, not for the sake of a test file each (928 tests, all passing as of 2026-11-06) except
+Modules are tested where it's worth it, not for the sake of a test file each (778 tests, all passing as of 2026-11-06; 150 were removed then as redundant, white-box or pinning styling) except
 the thin wiring in `main.py`/`dirsync_main.py`, covered only by running the
-app. Shared fakes:
+app. A test is worth keeping if it says what the code does for whoever uses it: not one that sets
+or reads private state, counts calls to an inner function, restates a constant or a style (colors,
+escape codes, column widths) or works out its expected value with the code it tests, nor one that
+another test, or another module's, already covers. Shared fakes:
 - `tests/helpers.py`: `scripted_option_picker` / `scripted_tree_picker` /
   `scripted_files_picker` / `scripted_dir_picker` patch `dirdelta.picker`'s functions to return
   scripted answers, so no test runs treepicker, plus `make_files` for

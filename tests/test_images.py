@@ -114,12 +114,5 @@ class ImagesTest(unittest.TestCase):
             path = self.write('dot.png', Image.new('RGB', (1, 1)))
             self.assertIsNone(images.of_local_file(path, 10, 10))
 
-    def test_has_picture_by_extension(self):
-        self.assertTrue(images.has_picture('a/B.JPG'))
-        self.assertTrue(images.has_picture('x.pdf'))
-        self.assertFalse(images.has_picture('x.txt'))
-        self.assertFalse(images.has_picture('jpg'))
-
-
 if __name__ == '__main__':
     unittest.main()

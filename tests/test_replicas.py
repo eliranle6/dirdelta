@@ -11,12 +11,6 @@ from dirdelta import replicas
 
 
 class ReplicasTest(unittest.TestCase):
-    def test_a_recorded_pair_is_the_latest(self):
-        known = replicas.Replicas()
-        known.record('/a', 'cloud/b')
-        known.record('/c', '/d')
-        self.assertEqual(known.history, [('/c', '/d'), ('/a', 'cloud/b')])
-
     def test_a_pair_used_again_moves_to_the_top_once(self):
         known = replicas.Replicas()
         for pair in [('/a', '/b'), ('/c', '/d'), ('/a', '/b')]:

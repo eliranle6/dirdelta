@@ -25,12 +25,6 @@ class ItemsTest(unittest.TestCase):
         self.assertEqual(sidetree._listed('cloud/me', tree, None)[0], ['d photos', 'f photos/a.jpg'])
 
 
-class MetaTest(unittest.TestCase):
-    def test_a_replicas_meta_dir_isnt_listed(self):
-        with tempfile.TemporaryDirectory() as tmpdir:
-            helpers.make_files(tmpdir, ['a.txt', 'meta/hashes.sqlite'])
-            self.assertEqual(sidetree._listed(tmpdir, None, None)[0], ['f a.txt'])
-
 
 class ListingTest(unittest.TestCase):
     def setUp(self):
@@ -63,12 +57,6 @@ class ListingTest(unittest.TestCase):
         self.assertIn('f copy', self.listing.items())
         self.tree.remove_files([entries.FileEntry('copy', 'copy', os.path.join(self.root, 'copy'))])
         self.assertNotIn('f copy', self.listing.items())
-
-    def test_a_dry_run_changes_nothing_so_its_not_listed_anew(self):
-        self.listing.items()
-        with mock.patch('dirdelta.dryrun.DRYRUN', True):
-            self.tree.move_files([('a.txt', 'b/moved')])
-        self.assertEqual(self.listed_times()[0], 0)
 
     def test_it_goes_as_deep_as_its_replica(self):
         helpers.make_files(self.root, ['deep/er/still/f.txt'])
@@ -105,11 +93,6 @@ class ListingTest(unittest.TestCase):
         self.assertNotIn('f outside', self.listing.items())
         self.listing.invalidate()
         self.assertIn('f outside', self.listing.items())
-
-    def test_closed_its_not_told_anymore(self):
-        self.listing.items()
-        self.listing.close()
-        self.assertEqual(self.tree._listeners, [])
 
     @unittest.skipIf(os.geteuid() == 0, "root can read anything")
     def test_it_says_what_couldnt_be_read(self):

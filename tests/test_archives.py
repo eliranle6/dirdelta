@@ -34,10 +34,6 @@ class MembersTest(unittest.TestCase):
         with self.assertRaises(archives.ArchiveError):
             archives.members(self.path)
 
-    def test_one_thats_not_there(self):
-        with self.assertRaises(archives.ArchiveError):
-            archives.members(self.path)
-
     def test_is_archive(self):
         self.assertTrue(archives.is_archive('a/B.ZIP'))
         self.assertFalse(archives.is_archive('a.zip.txt'))

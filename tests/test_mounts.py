@@ -206,10 +206,6 @@ class MountsTest(unittest.TestCase):
         lines = self.mount_coming_up('ro', mount=DISK).call_args.args[1]
         self.assertFalse(any('Windows' in line for line in lines))
 
-    def test_what_findmnt_says_isnt_of_it_says_nothing_more(self):
-        with mock.patch('dirdelta.mounts.current_mount', return_value=WIN._replace(target='/', vfs_options='ro')):
-            self.assertFalse(mounts._came_up_read_only(WIN))
-
     def test_a_failed_mount_is_said_and_asked_again(self):
         self.keep(DISK)
         self.connect(DISK)

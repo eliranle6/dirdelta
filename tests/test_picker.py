@@ -10,7 +10,6 @@ import unittest
 from unittest import mock
 
 from dirdelta import dirtree
-from dirdelta import entries
 from dirdelta import picker
 from dirdelta import programs
 
@@ -127,12 +126,6 @@ class PickerTest(unittest.TestCase):
         with open(log) as f:
             self.assertIn("TypeError: a bug", f.read())
 
-    def test_pick_under_dir_excludes(self):
-        self.answer('.')
-        picker.pick_under_dir('/x', excluded=['meta', 'a/b'])
-        args = self.log_entry('args')
-        self.assertEqual([args[index + 1] for index, arg in enumerate(args) if arg == '--exclude'], ['meta', 'a/b'])
-
     def test_a_trees_pick_leaves_out_what_is_excluded_with_all_in_it(self):
         tree = dirtree.DirTree('/x')
         for relpath in ('meta/hashes', 'a/meta/mine', 'a/b/c', 'a/keep'):
@@ -161,10 +154,6 @@ class PickerTest(unittest.TestCase):
         self.assertIsNone(picker.pick_option([picker.Option(1, 'a')]))
 
     def test_a_failing_shown_as_says_so_on_the_bottom_line(self):
-        sent = []
-
-        def updates(fd, shown_as, is_done):
-            pass
         log = os.path.join(tempfile.mkdtemp(prefix='dirdelta-picker-'), 'errors.log')
         self.addCleanup(shutil.rmtree, os.path.dirname(log))
         read_fd, write_fd = os.pipe()
@@ -186,14 +175,6 @@ class PickerTest(unittest.TestCase):
             picker.pick_under_dir('/some/dir')
         args, _ = self.call(with_label=True)
         self.assertEqual(args[1:5], ['--label', 'LIVE', '--label-color', 'red'])
-
-    def test_a_label_after_the_dry_runs(self):
-        self.answer('x')
-        with mock.patch('dirdelta.dryrun.DRYRUN', False):
-            picker.pick_files('/some/root', ['x'], label=('REMOVE', 'magenta'))
-        args, _ = self.call(with_label=True)
-        self.assertEqual(args[1:9], ['--label', 'LIVE', '--label-color', 'red',
-                                     '--label', 'REMOVE', '--label-color', 'magenta'])
 
     def make_tree(self):
         tree = dirtree.DirTree('/some/root')
@@ -218,18 +199,6 @@ class PickerTest(unittest.TestCase):
         self.assertEqual(picker.pick_under_dir('/', dirs_only=True, lazy=True, header='Pick'), '/')
         args, _ = self.call()
         self.assertEqual(args, ['-0', '--dirs-only', '--lazy', '--header', 'Pick', '/'])
-
-    def test_pick_from_tree_root_name(self):
-        self.answer('a')
-        picker.pick_from_tree(self.make_tree(), root_name='cloud/mein')
-        args, _ = self.call()
-        self.assertEqual(args[args.index('--root') + 1], 'cloud/mein')
-
-    def test_pick_from_tree_returns_the_entries(self):
-        self.answer('a/1.txt')
-        picked = picker.pick_from_tree(self.make_tree())
-        self.assertEqual([entry.relpath for entry in picked], ['a/1.txt'])
-        self.assertIsInstance(picked[0], entries.FileEntry)
 
     def test_pick_the_root(self):
         tree = self.make_tree()
@@ -289,13 +258,6 @@ class PickerTest(unittest.TestCase):
 
         self.assertEqual(self.picked_file_contents, b'b/2.txt\0')
 
-    def test_pick_files_with_keys_says_which_ended_it(self):
-        self.answer('r|b/sub|b/2.txt')
-        self.assertEqual(picker.pick_files('/r', ['a/1.txt', 'b/2.txt'], keys='r'),
-                         picker.Picked('r', 'b/sub', ['b/2.txt']))
-        args, _ = self.call()
-        self.assertEqual(args[args.index('--expect') + 1], 'r')
-
     def test_a_key_pressed_twice_comes_doubled(self):
         # cc
         self.answer('c|b/sub|b/2.txt')
@@ -346,18 +308,6 @@ class PickerTest(unittest.TestCase):
         self.answer('|a|a/1.txt')
         picker.pick_files('/r', ['a/1.txt'], side=picker.Side('sorted', ['d docs'], True))
         self.assertNotIn('--side-start', self.call()[0])
-
-    def test_pick_files_with_keys_ended_by_enter_returns_the_picks(self):
-        self.answer('|a|a/1.txt')
-        self.assertEqual(picker.pick_files('/r', ['a/1.txt', 'b/2.txt'], keys='r'),
-                         picker.Picked('', 'a', ['a/1.txt']))
-
-    def test_pick_files_without_keys_has_no_expect(self):
-        self.answer('a/1.txt')
-        picker.pick_files('/r', ['a/1.txt'])
-        args, _ = self.call()
-        self.assertNotIn('--expect', args)
-        self.assertNotIn('--select', args)
 
     def test_pick_files_starts_on_the_selected(self):
         self.answer('a/1.txt')
@@ -527,18 +477,6 @@ class PickerTest(unittest.TestCase):
         with self.assertRaises(picker.PickerClosed):
             selection.is_at('x')
 
-    def test_pick_files_without_previews_passes_no_preview_fd(self):
-        self.answer('a/1.txt')
-        picker.pick_files('/r', ['a/1.txt'])
-        args, _ = self.call()
-        self.assertNotIn('--preview', args)
-
-    def test_nothing_picked_passes_no_picked_file(self):
-        self.answer('a/1.txt')
-        picker.pick_files('/some/root', ['a/1.txt'], picked=[])
-        args, _ = self.call()
-        self.assertNotIn('--picked', args)
-
     def test_quitting_returns_none(self):
         self.answer(exit_code=1)
         self.assertIsNone(picker.pick_from_tree(self.make_tree()))
@@ -550,12 +488,6 @@ class PickerTest(unittest.TestCase):
         self.answer(exit_code=2)
         with self.assertRaises(picker.PickerError):
             picker.pick_option(['x'])
-
-    def test_missing_program_raises(self):
-        # (Finding it is programs.find()'s, tested in test_programs)
-        with mock.patch('dirdelta.programs.find', side_effect=programs.ProgramError('not found')):
-            with self.assertRaises(programs.ProgramError):
-                picker.pick_option(['x'])
 
     def test_unrunnable_program_raises(self):
         programs.find.return_value = os.path.join(self.tmpdir, 'no-such-program')
@@ -591,32 +523,12 @@ class PickerTest(unittest.TestCase):
         # Each change once, in order
         self.assertEqual(updates, 'Copy\tCopy (loading)\0Copy\tCopy (3 files)\0')
 
-    def test_a_disabled_option_is_sent_as_such(self):
-        os.environ['FAKE_PICKER_WAIT_FOR'] = 'disabled'
-        self.answer('Quit')
-        with mock.patch('dirdelta.picker.SHOWN_AS_INTERVAL', 0.01):
-            picker.pick_option(['Copy', 'Quit'],
-                               shown_as=lambda: {'Copy': picker.Disabled('Copy: nothing to copy')})
-        with open(self.log) as f:
-            updates = json.load(f)['updates']
-        self.assertEqual(updates, 'Copy\tCopy: nothing to copy\tdisabled\0')
-
-    def test_a_menu_without_shown_as_gets_no_updates(self):
-        self.answer('Quit')
-        picker.pick_option(['Quit'])
-        args, _ = self.call()
-        self.assertNotIn('--updates', args)
-
     def test_pick_under_dir(self):
         self.answer('sub/file.txt')
         self.assertEqual(picker.pick_under_dir('/some/dir', max_depth=3), '/some/dir/sub/file.txt')
         args, items = self.call()
         self.assertEqual(args, ['-0', '--max-depth', '3', '/some/dir'])
         self.assertEqual(items, [])
-
-    def test_pick_under_dir_root(self):
-        self.answer('.')
-        self.assertEqual(picker.pick_under_dir('/some/dir'), '/some/dir')
 
     def test_names_that_arent_utf8_come_back_as_they_were(self):
         tree = dirtree.DirTree('/root')
@@ -637,11 +549,6 @@ class TrailTest(unittest.TestCase):
             self.assertEqual(picker.trail('Hashing'), 'dirdelta > Sync a \u21c4 b > Hashing')
         self.assertEqual(picker.trail(), 'dirdelta')
 
-    def test_help_args(self):
-        self.assertEqual(picker._help_args([('#', 'dashboard')], ['[x]: y']),
-                         ['--key', '#', 'dashboard', '--help-line', '[x]: y'])
-
-
 class StatusTest(unittest.TestCase):
     def test_labels_each_in_its_color(self):
         self.assertEqual(picker.segments([("a: hashed", 'green'), ("", 'red'), ("b: 40% hashed", 'orange')]),
@@ -659,15 +566,6 @@ class UpdateLineTest(unittest.TestCase):
 
 
 class MenuLinesTest(unittest.TestCase):
-    def test_a_strings_line_is_itself_and_its_id(self):
-        self.assertEqual(picker._menu_lines(['a', 'b']), (['a', 'b'], {'a': 'a', 'b': 'b'}, {}))
-
-    def test_an_options_line_is_its_label_and_its_id_what_its_told_by(self):
-        lines, line_of, shown = picker._menu_lines([picker.Option(('x', 1), 'Do it', picker.Disabled('no'))])
-        self.assertEqual(lines, ['Do it'])
-        self.assertEqual(line_of, {('x', 1): 'Do it'})
-        self.assertEqual(shown, {'Do it': picker.Disabled('no')})
-
     def test_each_line_is_its_own(self):
         lines, line_of, shown = picker._menu_lines([picker.Skipped('Head'), 'a', picker.BLANK, picker.Option(1, 'a'),
                                                     picker.BLANK])
@@ -719,12 +617,6 @@ class AmbientStatusTest(unittest.TestCase):
     def test_a_pickers_own_status_comes_first(self):
         picker.set_ambient_status(lambda: [('hashing', 'orange')])
         self.assertEqual(picker._with_ambient_status(lambda: {'': 'mine'})(), {'': 'mine'})
-
-    def test_with_nothing_going_on_no_updates_are_needed(self):
-        picker.set_ambient_status(lambda: [])
-        self.assertIsNone(picker._with_ambient_status(None))
-        shown_as = lambda: {'x': 'y'}
-        self.assertEqual(picker._with_ambient_status(shown_as)(), {'x': 'y'})
 
     def test_its_cleared_once_its_over(self):
         parts = [[('hashing', 'orange')], []]

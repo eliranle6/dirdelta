@@ -28,16 +28,18 @@ venv:
 help:
 	@echo "make venv       make the venv of dirdelta's dependencies (in $(VENV))"
 	@echo "make build      build dirdelta's C++ programs (treepicker, dirdiff, in $(OUT))"
-	@echo "make test       run the unit tests (ARGS=-v for per-test output)"
+	@echo "make test       run the unit tests, in parallel (ARGS=-v for per-test output, ARGS=test_x for one module)"
 	@echo "make clean      remove caches and build output (keeps the venv, secrets/)"
 	@echo "make install    pip install dirdelta (and its C++ programs) into \$$PYTHON's environment"
 	@echo "make deploy     install a dirdelta command into ~/.local/bin via pipx; rerun to update"
 	@echo "make undeploy   remove the deployed command"
 
 # The repo root makes the dirdelta package importable. treepicker runs its own tests.
-# Some tests run dirdiff, so the programs are built first
+# Some tests run dirdiff, so the programs are built first. The modules run in parallel (tests/run.py),
+# their temp files in memory if there's /dev/shm (SQLite's syncs to a disk were half the time)
+TEST_TMPDIR := $(if $(wildcard /dev/shm),/dev/shm,$(TMPDIR))
 test: build
-	PYTHONPATH=. $(PYTHON) -m unittest discover -s tests $(ARGS)
+	TMPDIR=$(TEST_TMPDIR) PYTHONPATH=. $(PYTHON) tests/run.py $(ARGS)
 	$(TREEPICKER) test
 
 # (Also what older versions left in the repo)

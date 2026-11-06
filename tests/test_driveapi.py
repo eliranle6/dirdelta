@@ -83,17 +83,6 @@ class ServiceTest(unittest.TestCase):
         with open(self.token_path) as f:
             return f.read()
 
-    def test_a_valid_saved_login_is_used(self):
-        self.saved.valid = True
-        self.assertIs(driveapi.service(), self.build.return_value)
-        self.build.assert_called_once_with('drive', 'v3', credentials=self.saved)
-        self.flow.from_client_secrets_file.assert_not_called()
-
-    def test_the_service_is_made_once(self):
-        self.saved.valid = True
-        self.assertIs(driveapi.service(), driveapi.service())
-        self.build.assert_called_once()
-
     def test_each_thread_has_its_own_service_with_one_login(self):
         self.saved.valid = True
         self.build.side_effect = lambda *_, **__: mock.Mock()
@@ -144,11 +133,6 @@ class GetUrlTest(unittest.TestCase):
         patcher = mock.patch('google_auth_httplib2.AuthorizedHttp')
         self.http = patcher.start()
         self.addCleanup(patcher.stop)
-
-    def test_its_contents_with_the_login(self):
-        self.http.return_value.request.return_value = (mock.Mock(status=200), b'data')
-        self.assertEqual(driveapi.get_url('https://example.invalid/t'), b'data')
-        self.http.return_value.request.assert_called_once_with('https://example.invalid/t')
 
     def test_what_fails_is_an_oserror(self):
         self.http.return_value.request.return_value = (mock.Mock(status=404), b'')

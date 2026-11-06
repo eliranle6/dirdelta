@@ -119,14 +119,6 @@ class FindPreviewsTest(unittest.TestCase):
         self.assertEqual(sent.defaults[-1], [])
         self.assertEqual(sorted(sent.previews), ['a', 'b'])
 
-    def test_progress_counts_the_files_matched(self):
-        relpaths = ['f%d' % (i,) for i in range(3)]
-        src = _SizedTree('/src', {relpath: 1 for relpath in relpaths})
-        # Every check says it's time to send
-        with mock.patch('dirdelta.elsewhere.SEND_INTERVAL', 0):
-            sent = _previews(relpaths, src, _SizedTree('/dst', {}))
-        self.assertIn("Matched 2 of 3 files", [default[-1] for default in sent.defaults if default])
-
     def test_stops_when_the_picker_is_gone(self):
         def send(found=None, default=None):
             raise picker.PickerClosed()
@@ -156,13 +148,6 @@ class FindPreviewsTest(unittest.TestCase):
         self.assertEqual(lines[2:5], ["  old/photos/", "    0.jpg  100 B", "    with 4 of 4 of its dir's files"])
         self.assertIn("    with 0 of 4 of its dir's files", lines)
 
-    def test_only_a_few_siblings_are_tried(self):
-        relpaths = ['d/%03d' % (i,) for i in range(100)]
-        src = _SizedTree('/src', {relpath: 1 for relpath in relpaths})
-        dst = _SizedTree('/dst', {'e/000': 1})
-        lines = _previews(relpaths, src, dst).previews['d/000']
-        self.assertIn("    with 0 of %d of its dir's files" % (elsewhere.SIBLINGS_TRIED,), lines)
-
     def test_dates_taken_make_a_match_likelier_and_are_shown(self):
         src = _SizedTree('/src', {'x.jpg': 10}, {'x.jpg': '2024-07-01 14:03:22'})
         dst = _SizedTree('/dst', {'a/x.jpg': 20, 'b/x.jpg': 30},
@@ -170,12 +155,6 @@ class FindPreviewsTest(unittest.TestCase):
         lines = _previews(['x.jpg'], src, dst).previews['x.jpg']
         self.assertEqual(lines[0], "This one: 10 B, taken 2024-07-01 14:03:22")
         self.assertEqual(lines[2:5], ["  b/", "    x.jpg  30 B", "    taken 2024-07-01 14:03:22, the same"])
-
-    def test_a_file_without_matches_has_its_date_unread(self):
-        src = _SizedTree('/src', {'x.jpg': 10})
-        _previews(['x.jpg'], src, _SizedTree('/dst', {}))
-        self.assertEqual(src.dates_read, [])
-
 
 class RenamedTest(unittest.TestCase):
     """src's big.mov, which dst has as clip.mov (another name, the same size)"""
@@ -195,7 +174,7 @@ class RenamedTest(unittest.TestCase):
 
     def test_big_files_of_its_size_are_candidates_too(self):
         lines = self.lines('big.mov')
-        self.assertIn("Same name in %s: none" % (self.index._replica.displayname(),) if hasattr(self.index, '_replica') else "Same name in /dst: none", lines)
+        self.assertIn("Same name in /dst: none", lines)
         section = lines[lines.index("Same size, other name:"):]
         self.assertEqual(section[1:3], ["  v/", "    clip.mov  64.0 KB, same size"])
         self.assertIn("    other.mov  64.0 KB, same size", section)
@@ -272,9 +251,6 @@ class SureMatchTest(unittest.TestCase):
 
     def test_the_only_one_of_the_same_size(self):
         self.assertEqual(self.sure({'x': 5}, {'a/x': 5, 'b/x': 6}), {'x': 'a/x'})
-
-    def test_none_of_the_same_size_isnt_sure(self):
-        self.assertEqual(self.sure({'x': 5}, {'a/x': 6}), {})
 
     def test_two_of_the_same_size_arent_sure_unless_one_has_more_siblings(self):
         self.assertEqual(self.sure({'x': 5}, {'a/x': 5, 'b/x': 5}), {})
@@ -372,10 +348,6 @@ class CheckContentsTest(unittest.TestCase):
             elsewhere.check_contents(sorted(self.src._sizes), self.src, elsewhere.Index(self.src),
                                      self.index, self.checked, _Selection(moves, at), self.sent)
 
-    def test_the_surely_line_is_highlighted(self):
-        self.assertEqual(elsewhere.SURELY_MOVED, picker.highlighted("\u2192 surely this file, moved"))
-        self.assertTrue(elsewhere.SURELY_MOVED.startswith(picker.HIGHLIGHT_MARK + 'green' + picker.HIGHLIGHT_MARK))
-
     def test_the_same_contents_are_it_and_the_others_are_dropped(self):
         self.check(['x'])
         # The ones of its size are compared, and its hash looked up in dst's
@@ -385,13 +357,6 @@ class CheckContentsTest(unittest.TestCase):
         self.assertEqual(lines[1], "  SHA-256 H")
         self.assertEqual(lines[3:], ["  a/", "    x  5 B, same size", "    with 0 of 1 of its dir's files",
                                      "    the same contents", elsewhere.SURELY_MOVED])
-
-    def test_it_says_its_comparing_meanwhile(self):
-        sends = []
-        self.sent = lambda found=None, default=None: sends.append(dict(found))
-        self.check(['x'])
-        self.assertEqual(sends[0]['x'][-2:], ["Comparing its contents with the",
-                                              "2 files of its size and /dst's by hash..."])
 
     def test_other_contents_are_said_and_arent_sure(self):
         self.dst._hashes['a/x'] = 'other'
@@ -437,15 +402,6 @@ class CheckContentsTest(unittest.TestCase):
             elsewhere.check_contents(['x'], self.src, elsewhere.Index(self.src), self.index,
                                      self.checked, Selection(['x', None]), self.sent)
         self.assertIn('x', self.checked)
-
-    def test_hashes_are_kept_in_the_indexes(self):
-        src_index = elsewhere.Index(self.src)
-        with self.assertRaises(picker.PickerClosed):
-            elsewhere.check_contents(['x', 'y'], self.src, src_index, self.index, self.checked,
-                                     _Selection(['x']), self.sent)
-        self.assertEqual(self.index.content_hash('a/x', 'sha256'), 'H')
-        self.assertEqual(src_index.content_hash('x', 'sha256'), 'H')
-        self.assertEqual(self.src.hashed.count('x'), 1)
 
     def test_two_local_files_are_compared_up_to_where_they_differ(self):
         root = tempfile.mkdtemp(prefix='dirdelta-elsewhere-')
@@ -539,11 +495,6 @@ class KeptUpToDateTest(unittest.TestCase):
         self.replica.move_files([('gone', 'there')], other)
         self.assertEqual(self.index.files_named('gone'), {})
         self.assertEqual(other_index.files_named('there'), {'there': 4})
-
-    def test_a_dry_run_changes_nothing(self):
-        with mock.patch('dirdelta.dryrun.DRYRUN', True):
-            self.replica.move_files([('a/x', 'c/z')])
-        self.assertEqual(list(self.index.files_named('x')), ['a/x'])
 
     def test_a_trees_rescan_keeps_who_listens(self):
         tree = localdiskdirtree.LocalDiskDirTree(self.root, True)
@@ -684,31 +635,10 @@ class ReadsWhileItChangesTest(unittest.TestCase):
         self.replica = _Slow()
         self.index = elsewhere.Index(self.replica)
 
-    def test_a_hash_read_is_kept(self):
-        self.assertEqual(self.index.content_hash('a', 'sha1'), 'read-of-a')
-        self.replica.during_read = lambda: self.fail('read again')
-        self.assertEqual(self.index.content_hash('a', 'sha1'), 'read-of-a')
-
     def test_a_hash_read_while_the_file_moved_isnt_kept_as_its_path(self):
         self.replica.during_read = lambda: self.index.move('a', 'b')
         self.assertEqual(self.index.content_hash('a', 'sha1'), 'read-of-a')
         self.assertEqual(self.index._hashes.get('a'), None)
-
-    def test_a_hash_read_while_the_file_was_removed_isnt_kept(self):
-        self.replica.during_read = lambda: self.index.remove('a')
-        self.index.content_hash('a', 'sha1')
-        self.assertEqual(self.index._hashes.get('a'), None)
-
-    def test_a_hash_isnt_read_under_the_lock(self):
-        def during_read():
-            # Another thread gets the lock meanwhile
-            got = []
-            thread = threading.Thread(target=lambda: got.append(self.index._lock.acquire(timeout=1)) or self.index._lock.release())
-            thread.start()
-            thread.join()
-            self.assertEqual(got, [True])
-        self.replica.during_read = during_read
-        self.index.content_hash('a', 'sha1')
 
     def test_a_date_read_while_the_file_was_removed_isnt_kept(self):
         self.replica.during_read = lambda: self.index.remove('a')

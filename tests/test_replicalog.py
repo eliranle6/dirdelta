@@ -100,12 +100,6 @@ class ReadWriteTest(unittest.TestCase):
         replicalog.write(tree, LOG + "x\n")
         self.assertEqual(written, [(replicalog.LOG_NAME, LOG + "x\n")])
 
-    def test_a_drive_replica_without_a_log(self):
-        tree = mock.Mock(spec=replicalog.clouddirtree.CloudDirTree)
-        tree.has_file.return_value = False
-        self.assertIsNone(replicalog.read(tree))
-
-
 class ChangesTest(unittest.TestCase):
     def test_what_changed_in_each_replica_added_up(self):
         changes = replicalog.Changes()

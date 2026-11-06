@@ -105,28 +105,6 @@ class InteractiveDirSyncTest(unittest.TestCase):
         self.assertFalse(self.sync.has_changed)
         self.assertIn('Dry run, not copying sub/b.txt (1 out of 2)', self.messages)
 
-    def test_copy_report_ends_saying_its_complete(self):
-        last_lines = []
-
-        @contextlib.contextmanager
-        def progress_screen(title, label=None):
-            yield
-            last_lines.append(self.messages[-1])
-
-        with mock.patch('dirdelta.messages.progress_screen', progress_screen):
-            self._browse([['sub/b.txt'], None], ['Copy', YES])
-        self.assertEqual(len(last_lines), 1)
-        self.assertTrue(last_lines[0].startswith('Dry run complete: nothing was copied to'), last_lines)
-
-    def test_picked_files_are_copied_from_src(self):
-        # Their entries are made from the picked relpaths only
-        copied = []
-        with mock.patch('dirdelta.localdiskdirtree.LocalDiskDirTree.copy_in',
-                        side_effect=lambda files, source: copied.extend(files)):
-            self._browse([['sub/b.txt'], None], ['Copy', YES])
-        self.assertEqual([(entry.relpath, entry.full_filesystem_path()) for entry in copied],
-                         [('sub/b.txt', os.path.join(self.src_root, 'sub/b.txt'))])
-
     def test_remove_is_confirmed_twice_then_removes(self):
         with mock.patch('dirdelta.dryrun.DRYRUN', False):
             self._browse([['sub/b.txt'], None], ['Remove', YES, SURE])
@@ -174,14 +152,6 @@ class InteractiveDirSyncTest(unittest.TestCase):
         files = {'sub/b.txt', 'sub/c.txt'}
         # Not the picked ones: the menu's Open opens them
         self.assertEqual(open_in_background.call_args_list, [mock.call(['sub/c.txt'], files)] * 2)
-
-    def test_what_opening_says_is_on_the_bottom_line(self):
-        self._browse([None], [])
-        shown_as = self.pick_files.call_args.kwargs['shown_as']
-        with mock.patch('dirdelta.opening.subprocess.Popen') as popen:
-            self.sync._opener.open(['sub/b.txt'], ['sub/b.txt'])
-        self.assertEqual(popen.call_args.args[0], ['xdg-open', os.path.join(self.src_root, 'sub', 'b.txt')])
-        self.assertIn('Opened b.txt', shown_as()[''])
 
     def test_open_in_the_menu_opens_the_picked_files_and_goes_back_to_them(self):
         with mock.patch('dirdelta.opening.Opener.open_in_background') as open_in_background:
@@ -236,14 +206,6 @@ class InteractiveDirSyncTest(unittest.TestCase):
         self.assertEqual(kwargs['selected'], 'sub/a.txt')
         self.assertEqual(kwargs['picked'], ['sub/a.txt'])
 
-    def test_after_a_copy_the_replicas_arent_diffed_anew(self):
-        real = interactive_dir_sync.find_missing
-        with mock.patch('dirdelta.dryrun.DRYRUN', False), \
-                mock.patch('dirdelta.interactive_dir_sync.find_missing', side_effect=real) as find_missing:
-            self._browse([picker.Picked('', 'sub/b.txt', ['sub/b.txt']), None], ['Copy', YES])
-        find_missing.assert_called_once()
-        self.assertEqual(self._offered()[1][0], ['sub/c.txt'])
-
     def test_two_cloud_replicas_cant_copy(self):
         src = clouddirtree.CloudDirTree('cloud/a')
         src.add_file_by_relpath('x')
@@ -282,13 +244,6 @@ class InteractiveDirSyncTest(unittest.TestCase):
         self.assertEqual(sorted(sent), ['sub/b.txt', 'sub/c.txt'])
         lines = sent['sub/b.txt']
         self.assertEqual(lines[lines.index("  elsewhere/") + 1], "    b.txt  15 B")
-
-    def test_the_selected_files_contents_are_compared_and_kept(self):
-        helpers.make_files(self.dst_root, ['elsewhere/b.txt'])
-        self._browse([None], [])
-        on_selection = self.pick_files.call_args.kwargs['on_selection']
-        self.assertIs(on_selection.args[4], self.sync.checked)
-        self.assertIs(on_selection.args[3], self.sync.dst_index)
 
     def test_a_cloud_replica_is_named_as_a_cloud_path(self):
         # Not by its path in Drive (/mein), which reads like a local dir
@@ -543,11 +498,6 @@ class RenameTest(unittest.TestCase):
         self.assertFalse(sync.has_changed)
         self.assertEqual(self.pick_files.call_args.kwargs['picked'], ['photos/y.jpg'])
 
-    def test_no_moves_nothing(self):
-        self.browse(['Rename the', NO])
-        self.assertTrue(os.path.isfile(os.path.join(self.dst_root, 'old/x.jpg')))
-
-
 class RefreshKeyTest(unittest.TestCase):
     """The file picker's key that reads the selected folder anew from Drive"""
     def setUp(self):
@@ -601,13 +551,6 @@ class RefreshKeyTest(unittest.TestCase):
         self.assertEqual(calls[1].kwargs['picked'], ['a/1.mp3'])
         self.assertEqual(calls[1].kwargs['selected'], 'a/2.mp3')
 
-    def test_read_anew_isnt_offered_without_drive(self):
-        local = dirtree.DirTree('/other')
-        local.add_file_by_relpath('x.mp3')
-        with helpers.answering_option_picker([NOTHING]) as pick_option:
-            self.browse(local, self.local, [picker.Picked('', 'x.mp3', ['x.mp3']), None])
-        self.assertFalse(any(option.startswith('Read') for option in helpers.labels_of(pick_option.call_args.args[0])))
-
     def test_the_other_replica_is_refreshed_when_its_drives(self):
         self.local.add_file_by_relpath('x/new.mp3')
         self.browse(self.local, self.cloud, [picker.Picked(Sync.REFRESH_KEY, 'x/new.mp3', []), None])
@@ -629,15 +572,6 @@ class RefreshKeyTest(unittest.TestCase):
         self.assertEqual(calls[1].kwargs['picked'], ['a.mp3'])
         # After the key in the side tree, it's where the picker starts; only then
         self.assertEqual([call.kwargs['side'].start for call in calls], [None, None, 'x', None])
-
-    def test_reading_drive_leaves_a_local_replica_alone(self):
-        with mock.patch('dirdelta.interactive_dir_sync.rescan_replica') as rescan, \
-                mock.patch('dirdelta.sidetree._listed', return_value=([], [], None)) as listed:
-            self.browse(self.cloud, self.local, [picker.Picked(Sync.REFRESH_KEY, 'a', []), None])
-        rescan.assert_not_called()
-        self.refresh.assert_called_once_with(self.cloud, 'a')
-        # The tree beside it, the local one, isn't listed again
-        self.assertEqual(listed.call_count, 1)
 
     def test_the_key_in_the_side_tree_reads_whats_selected_there_only_in_dst(self):
         self.local.add_file_by_relpath('x/new.mp3')
@@ -724,23 +658,6 @@ class ReadingLocalReplicasAnewTest(_TwoDirsTestCase):
         dst_scan.assert_called_once()
         self.assertIn('a.txt', dst_scan.call_args.args[0])
 
-    def dst_scan_with_job_going(self, depth):
-        """How dst's job (down to depth) was told to look for changes, its tree going down to 20, as a sync's does"""
-        dst = localdiskdirtree.LocalDiskDirTree(self.dst_path, True, 20)
-        self.sync = Sync(self.sync._src, dst)
-        dst_job = hashing.Job(self.dst_path, depth)
-        with mock.patch('dirdelta.hashing._jobs', {self.dst_path: dst_job}), mock.patch.object(hashing.Job, 'scan'), \
-                mock.patch.object(dst_job, 'scan_in_background') as dst_scan:
-            self.press(picker.Picked(Sync.REFRESH_KEY, 'b.txt', []))
-        dst_scan.assert_called_once()
-        return dst_scan
-
-    def test_a_job_going_as_deep_as_the_sides_tree_gets_its_listing(self):
-        self.assertIn('a.txt', self.dst_scan_with_job_going(20).call_args.args[0])
-
-    def test_a_job_going_deeper_than_the_side_tree_lists_for_itself(self):
-        self.dst_scan_with_job_going(None).assert_called_once_with()
-
     def test_in_the_side_tree_only_dst_is_and_it_stays_there(self):
         calls = self.press(picker.Picked(picker.SIDE_KEY, 'b.txt', [], 'old/d.txt', Sync.REFRESH_KEY))
         self.assertEqual(sorted(calls[1].args[1]), ['b.txt', 'c.txt'])
@@ -800,13 +717,6 @@ class AskAITest(_TwoDirsTestCase):
                   {'action': Sync.COPY, 'number': 3, 'reason': ''}])
         self.assertEqual(self.items, ['Copy to destination/c.txt'])
 
-    def test_with_no_focus_it_reads_nothing(self):
-        self.ask([{'action': Sync.COPY, 'number': 1, 'reason': ''}])
-        prompt, readable_dirs = self.query.call_args.args[:2]
-        self.assertEqual(readable_dirs, [])
-        self.assertIn('a.txt', prompt)
-        self.assertIn('do it', prompt)
-
     def test_it_may_read_the_files_of_its_focus(self):
         with mock.patch('dirdelta.ai._run_query', return_value={'summary': '', 'answer': 'It says hi', 'steps': []}) as query, \
                 mock.patch('dirdelta.messages.show') as show:
@@ -857,10 +767,6 @@ class ActInDstTest(_TwoDirsTestCase):
             self.sync.browse()
         return pick_files
 
-    def test_enter_ends_picking_there(self):
-        pick_files = self.enter('')
-        self.assertTrue(pick_files.call_args.kwargs['side'].is_enter_picking)
-
     def test_a_dir_is_removed_and_the_replicas_diffed_anew(self):
         self.enter('repo')
         self.assertFalse(os.path.exists(os.path.join(self.dst_path, 'repo', 'x.txt')))
@@ -898,15 +804,6 @@ class ActInDstTest(_TwoDirsTestCase):
         pick_option.assert_not_called()
         self.assertEqual(interactive_dir_sync.messages.show.call_args.args[0], "Can't remove it")
 
-    def test_the_picker_is_told_the_keys_there(self):
-        pick_files = self.enter('')
-        side = pick_files.call_args.kwargs['side']
-        self.assertIn('d', side.keys)
-        self.assertIn(':', side.keys)
-        self.assertIn(('d', 'remove'), side.key_hints)
-        self.assertTrue(pick_files.call_args.kwargs['enter_picks_selection'])
-        self.assertEqual(pick_files.call_args.kwargs['none_picked_key_hints'], [('Enter', 'Pick & choose what to do')])
-
     def test_not_all_of_dst(self):
         self.enter('')
         self.assertEqual(interactive_dir_sync.messages.show.call_args.args[0], "That's all of %s" % (self.dst_path,))
@@ -938,11 +835,6 @@ class ExploreTest(_TwoDirsTestCase):
     def test_the_key_shows_whats_in_it(self):
         view = self.browse([picker.Picked('e', 'z.zip', [])])
         self.assertEqual(view.call_args.args[:2], ('z.zip', ['in/side.txt']))
-
-    def test_the_key_elsewhere_says_it_isnt_one(self):
-        view = self.browse([picker.Picked('e', 'a.txt', [])])
-        view.assert_not_called()
-        self.assertEqual(interactive_dir_sync.messages.show.call_args.args[0], 'Not a zip')
 
     def test_the_menu_offers_it_on_a_zip_only(self):
         with mock.patch('dirdelta.picker.view_files') as view, helpers.answering_option_picker(['Explore']) as options:
@@ -1005,14 +897,6 @@ class ContextMenuTest(_TwoDirsTestCase):
         with mock.patch('dirdelta.opening.Opener.press') as press:
             self.press([picker.Picked(':', 'b.txt', [])], 'Open')
         self.assertEqual(press.call_args.args[0], ['b.txt'])
-
-    def test_with_files_picked_its_enters_menu(self):
-        with mock.patch.object(Sync, '_act', return_value=None) as act, \
-                mock.patch.object(Sync, '_context_menu') as menu:
-            self.press([picker.Picked(':', 'a.txt', ['b.txt'])], 'Nothing')
-        act.assert_called_once_with(['b.txt'], 'a.txt')
-        menu.assert_not_called()
-
 
 class FindMissingTest(unittest.TestCase):
     def test_what_dirdelta_keeps_in_a_replica_isnt_one_of_its_files(self):

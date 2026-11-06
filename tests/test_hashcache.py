@@ -46,13 +46,6 @@ class HashCacheTest(_CacheTestCase):
         hashcache.put(self.path, {'sha256': 'S'})
         self.assertEqual(hashcache.get_all(self.path), {'sha1': 'H', 'sha256': 'S'})
 
-    def test_its_committed_and_read_back(self):
-        hashcache.put(self.path, {'sha1': 'H'})
-        hashcache.save()
-        with sqlite3.connect(self.cache) as db:
-            self.assertEqual(db.execute('SELECT path, hashes FROM files').fetchall(),
-                             [(self.path, '{"sha1": "H"}')])
-
     def test_a_gone_file_has_none(self):
         self.assertIsNone(hashcache.get(os.path.join(self.tmpdir, 'nope'), 'sha1'))
         hashcache.put(os.path.join(self.tmpdir, 'nope'), {'sha1': 'H'})

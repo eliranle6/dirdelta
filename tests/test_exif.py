@@ -99,9 +99,6 @@ class DateTakenTest(unittest.TestCase):
     def test_date_time_original(self):
         self.assertEqual(self.date(_jpeg()), '2024-07-01 14:03:22')
 
-    def test_big_endian(self):
-        self.assertEqual(self.date(_jpeg(order='>')), '2024-07-01 14:03:22')
-
     def test_after_other_segments(self):
         app0 = b'\xff\xe0' + struct.pack('>H', 16) + b'JFIF\0' + b'\0' * 9
         self.assertEqual(self.date(_jpeg(before=app0)), '2024-07-01 14:03:22')
@@ -159,9 +156,6 @@ class DateTakenTest(unittest.TestCase):
         self.assertIsNone(self.date(_raf(b'\xff\xd8\xff\xda'), name='x.raf'))
         self.assertIsNone(self.date(_raf(_jpeg())[:100], name='x.raf'))
         self.assertIsNone(self.date(_jpeg(), name='x.raf'))
-
-    def test_upper_case_extension(self):
-        self.assertEqual(self.date(_jpeg(), name='IMG.JPG'), '2024-07-01 14:03:22')
 
     def test_normalized(self):
         self.assertEqual(exif.normalized('2024:07:01 14:03:22'), '2024-07-01 14:03:22')

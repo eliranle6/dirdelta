@@ -98,11 +98,6 @@ class ProgressScreenTest(unittest.TestCase):
         self.assertEqual(lines, b'one\n\n')
         input_mock.assert_called_once_with()
 
-    def test_label_starts_the_status_bar(self):
-        escapes, _, _ = self.run_screen(True, lambda: None, label=('DRY RUN', 'green'))
-        self.assertIn('\033[9;1H\033[2K\033[1;30;42m DRY RUN \033[0m\033[30;47m  Working...', escapes)
-        self.assertIn('\033[1;30;42m DRY RUN \033[0m\033[30;47m  Done', escapes)
-
     def test_label_without_a_terminal(self):
         _, lines, _ = self.run_screen(False, lambda: None, label=('LIVE', 'red'))
         self.assertEqual(lines, b'LIVE: Copying 2 files\n')

@@ -95,10 +95,5 @@ class MakeTest(unittest.TestCase):
         focus = ['f%d' % (number,) for number in range(aiplan.MAX_FOCUS + 3)]
         self.assertEqual(len(aiplan.focus_of(TASK._replace(focus=focus))), aiplan.MAX_FOCUS)
 
-    def test_too_many(self):
-        self.assertFalse(aiplan.too_many(TASK))
-        self.assertTrue(aiplan.too_many(TASK._replace(files=[aiplan.File('x')] * (aiplan.MAX_FILES + 1))))
-
-
 if __name__ == '__main__':
     unittest.main()

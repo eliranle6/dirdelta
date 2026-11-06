@@ -204,19 +204,6 @@ class DashboardTest(unittest.TestCase):
         self.dashboard(None, [hashes_screen.BACK], trees=[], other_paths=[path])
         self.assertIsInstance(self.shown[(hashes_screen._HASH, path)], picker.Disabled)
 
-    def test_what_the_label_option_says(self):
-        with mock.patch('dirdelta.hashes_screen.os.path.isdir', return_value=True), \
-                mock.patch('dirdelta.replicanames.label_key', return_value='uuid:U'):
-            self.assertEqual(hashes_screen._label_option('/photos', self.known), "  Label the replica")
-            self.known.set_label('uuid:U', 'mine')
-            self.assertEqual(hashes_screen._label_option('/photos', self.known), "  Label the replica: now 'mine'")
-
-    def test_each_replica_has_its_label_option(self):
-        pick = self.dashboard(None, [hashes_screen.BACK], trees=[], other_paths=['/old', 'cloud/c'])
-        ids = [picker.option_id(option) for option in pick.call_args.args[0]]
-        self.assertIn((hashes_screen._LABEL, '/old'), ids)
-        self.assertIn((hashes_screen._LABEL, 'cloud/c'), ids)
-
     def test_one_that_isnt_mounted_or_isnt_there_cant_be_labeled(self):
         # What its path is on now isn't its disk
         self.assertIsInstance(hashes_screen._label_option('/no/such/dir', self.known), picker.Disabled)

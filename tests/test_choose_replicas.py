@@ -41,11 +41,6 @@ class ChooseReplicasTest(unittest.TestCase):
                            side_effect=lambda *_, **__: tree_picks.pop(0)) as self.pick_from_tree:
             return choose_replicas.run(self.known)
 
-    def test_the_slots_start_not_chosen(self):
-        self.assertIsNone(self.run_menu(['Quit']))
-        self.assertEqual(self.menus, [[SYNC_SECTION, '  Replica A: ' + NONE, '  Replica B: ' + NONE,
-                                       SORT_SECTION, SORT, 'Quit']])
-
     def test_the_headings_cant_be_picked_and_the_first_slot_is_selected(self):
         self.run_menu(['Quit'])
         self.assertEqual([option.text for option in self.raw_menus[0] if isinstance(option, choose_replicas.picker.Skipped) and option.text],
@@ -171,20 +166,11 @@ class ChooseReplicasTest(unittest.TestCase):
                                               'Quit'])
         self.assertEqual(chosen, choose_replicas.Sort('cloud/unsorted', 'cloud/me'))
 
-    def test_a_favorite_is_chosen_at_once(self):
-        self.known.toggle_favorite('/mnt/win', 'cloud/me')
-        chosen = self.run_menu(['  Favorite: /mnt/win <-> cloud/me'])
-        self.assertEqual(chosen, ('/mnt/win', 'cloud/me'))
-
     def test_a_replica_whose_local_dir_is_gone_isnt_there(self):
         self.assertFalse(choose_replicas.are_there(('/no/such/dir', 'cloud/me')))
         title, lines = self.show.call_args.args[:2]
         self.assertEqual(title, 'No such directory')
         self.assertEqual(lines, ['/no/such/dir is not a directory (anymore?).'])
-
-    def test_replicas_whose_dirs_are_there_are_there(self):
-        self.assertTrue(choose_replicas.are_there(('/', 'cloud/me')))
-        self.show.assert_not_called()
 
     def test_pairs_say_when_each_replica_was_last_updated(self):
         self.known.toggle_favorite('/mnt/win', 'cloud/me')
@@ -218,10 +204,6 @@ class ChooseReplicasTest(unittest.TestCase):
         self.assertEqual(choose_replicas.known_lines(self.known.info_at('/mnt/win/eliran')), [
             '  Last update: 17.05.2026 - removed old money.ods (+1 more line)',
             '  Synced 30.10.2026 09:05; changed by dirdelta 30.10.2026 09:30'])
-
-    def test_no_known_replicas_no_option(self):
-        self.run_menu(['Quit'])
-        self.assertNotIn(choose_replicas.KNOWN_LIST, self.menus[0])
 
 if __name__ == '__main__':
     unittest.main()

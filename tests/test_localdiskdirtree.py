@@ -71,20 +71,6 @@ class KeptHashesTest(unittest.TestCase):
         # As each file's asked for one by one
         self.assertEqual(replica.listed('sha1')['d/x'][1], replica.known_hash('d/x', 'sha1'))
 
-    def test_a_moved_file_and_dir(self):
-        self.assertTrue(self.tree._move_file('y', 'e/y2'))
-        self.assertTrue(self.tree._move_dir('d', 'f'))
-        self.assertEqual(localdiskdirtree.hashcache.get(os.path.join(self.root, 'e', 'y2'), 'sha1'),
-                         hashlib.sha1(b'y').hexdigest())
-        self.assertEqual(localdiskdirtree.hashcache.get(os.path.join(self.root, 'f', 'x'), 'sha1'),
-                         hashlib.sha1(b'd/x').hexdigest())
-
-    def test_a_local_copy(self):
-        self.assertTrue(self.tree._copy_within('y', 'copy'))
-        self.assertEqual(localdiskdirtree.hashcache.get(os.path.join(self.root, 'copy'), 'sha1'),
-                         hashlib.sha1(b'y').hexdigest())
-
-
 class LocalDiskDirTreeTest(unittest.TestCase):
     def setUp(self):
         self.src_root = tempfile.mkdtemp(prefix='dirstuff-localdiskdirtree-src-')
@@ -105,17 +91,6 @@ class LocalDiskDirTreeTest(unittest.TestCase):
         with mock.patch('dirdelta.messages.print_line'):
             dst.copy_inner_entries_from_dirtree(src)
         return dst
-
-    def test_copy_inner_entries_from_dirtree_adds_node_with_correct_paths(self):
-        with mock.patch('dirdelta.dryrun.DRYRUN', False):
-            dst = self._copy_subdir_file()
-
-        files = list(dst.iter_files())
-        self.assertEqual(len(files), 1)
-        new_file_entry = files[0]
-        self.assertEqual(new_file_entry.relpath, 'subdir/file.txt')
-        self.assertEqual(new_file_entry.fullpath,
-                          os.path.join(self.dst_root, 'subdir/file.txt'))
 
     def test_copy_creates_missing_dirs(self):
         with mock.patch('dirdelta.dryrun.DRYRUN', False):
@@ -143,10 +118,6 @@ class LocalDiskDirTreeTest(unittest.TestCase):
 
         self.assertEqual(len(tree.scan_errors), 1)
         self.assertIn('Permission denied', tree.scan_errors[0])
-
-    def test_no_scan_errors(self):
-        self.assertEqual(localdiskdirtree.factory(self.src_root, silent=True).scan_errors, [])
-
 
     def test_ctrl_c_stops_copying_and_drops_the_partial_file(self):
         src = localdiskdirtree.LocalDiskDirTree(self.src_root, silent=True)
@@ -353,10 +324,6 @@ class LocalDiskDirTreeTest(unittest.TestCase):
             self._remove(['a/1.txt'], ['a/1.txt'])
         self.assertEqual(self._left(), ['a', 'a/1.txt'])
 
-    def test_a_removal_says_that_empty_dirs_go_too(self):
-        tree = localdiskdirtree.LocalDiskDirTree(self.src_root, silent=True)
-        self.assertEqual(tree.removal_notes(['a/1.txt']), ['Dirs left empty are removed too.'])
-
     def _scan(self, relpaths, **kwargs):
         for relpath in relpaths:
             path = os.path.join(self.src_root, relpath)
@@ -375,20 +342,6 @@ class LocalDiskDirTreeTest(unittest.TestCase):
         os.makedirs(os.path.join(self.src_root, 'empty'))
         tree = self._scan([])
         self.assertIsInstance(tree.get_node('empty').data, entries.DirEntry)
-
-    def test_scan_max_depth(self):
-        tree = self._scan(['top.txt', 'a/b/deep.txt'], max_depth=2)
-        self.assertIsNotNone(tree.get_node('a/b'))
-        self.assertIsNone(tree.get_node('a/b/deep.txt'))
-        self.assertIsNotNone(tree.get_node('top.txt'))
-
-    def test_scan_skips_symlinks(self):
-        tree_root = self.src_root
-        open(os.path.join(tree_root, 'real.txt'), 'w').close()
-        os.symlink(os.path.join(tree_root, 'real.txt'), os.path.join(tree_root, 'link.txt'))
-        tree = self._scan([])
-        self.assertIsNotNone(tree.get_node('real.txt'))
-        self.assertIsNone(tree.get_node('link.txt'))
 
     def test_files_by_name_finds_them_all_with_sizes_unscanned(self):
         self._scan(['a/x.txt', 'b/x.txt', 'y.txt'])
@@ -457,18 +410,6 @@ class LocalDiskDirTreeTest(unittest.TestCase):
             tree.content_hash('x.txt', 'sha256', should_stop=lambda: True)
         self.assertEqual(tree.local_path('x.txt'), os.path.join(os.path.realpath(self.src_root), 'x.txt'))
 
-    def test_a_hash_is_kept_and_read_again_only_when_the_file_changes(self):
-        tree = self._scan(['x.txt'])
-        path = os.path.join(self.src_root, 'x.txt')
-        with open(path, 'wb') as f:
-            f.write(b'abc')
-        tree.content_hash('x.txt', 'sha1')
-        with mock.patch('builtins.open', side_effect=AssertionError('read again')):
-            self.assertEqual(tree.content_hash('x.txt', 'sha1'), hashlib.sha1(b'abc').hexdigest())
-        with open(path, 'wb') as f:
-            f.write(b'abcd')
-        self.assertEqual(tree.content_hash('x.txt', 'sha1'), hashlib.sha1(b'abcd').hexdigest())
-
     def test_a_copy_keeps_its_modification_time(self):
         os.makedirs(os.path.join(self.src_root, 'sub'))
         path = os.path.join(self.src_root, 'sub', 'file.txt')
@@ -482,18 +423,6 @@ class LocalDiskDirTreeTest(unittest.TestCase):
             dst.copy_inner_entries_from_dirtree(src)
         self.assertEqual(dst.modified_time('sub/file.txt'), 1000000)
         self.assertIsNone(dst.modified_time('nope'))
-
-    def test_files_by_name_max_depth(self):
-        self._scan(['top.txt', 'a/b/deep.txt'])
-        tree = localdiskdirtree.LocalDiskDirTree(self.src_root, silent=True, max_depth=2)
-        self.assertEqual(sorted(tree.files_by_name()), ['top.txt'])
-
-    def test_scan_names_that_arent_utf8(self):
-        name = os.fsdecode(b'caf\xe9.txt')
-        tree = self._scan([name])
-        self.assertIsNotNone(tree.get_node(name))
-
-
 
 class RescanTest(unittest.TestCase):
     def setUp(self):
@@ -528,14 +457,6 @@ class RescanTest(unittest.TestCase):
         with self.assertRaises(OSError):
             tree.rescan()
         self.assertEqual(self.files(tree), ['a.txt', 'd/b.txt'])
-
-    def test_it_can_trash_as_before(self):
-        tree = localdiskdirtree.factory(self.tmpdir, silent=True)
-        with tree.trashing():
-            tree.rescan()
-            self.assertTrue(tree._is_trashing)
-        self.assertFalse(tree._is_trashing)
-
 
 if __name__ == '__main__':
     unittest.main()

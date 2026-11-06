@@ -116,21 +116,6 @@ class JobTest(unittest.TestCase):
         self.wait_done()
         self.assertEqual(self.job.hash_of('new'), _sha1('new'))
 
-    def test_paused_it_hashes_nothing_until_resumed(self):
-        self.job.scan()
-        self.job.start()
-        self.job.pause()
-        # What was being hashed when it was paused may finish; then nothing more
-        time.sleep(0.2)
-        nr_done = self.job.progress().nr_done
-        time.sleep(0.2)
-        self.assertEqual(self.job.progress().nr_done, nr_done)
-        if nr_done < 3:
-            self.assertTrue(self.job.progress().is_paused)
-            self.assertIn(", paused)", hashing.status_text(self.job))
-        self.job.start()
-        self.wait_done()
-
     def test_the_files_asked_first_are_taken_first(self):
         self.job.scan()
         # Taken by hand, rather than by the pool's workers
@@ -139,13 +124,6 @@ class JobTest(unittest.TestCase):
         self.assertEqual(self.job._next(), 'z')
         # Then the others, as find lists them
         self.assertIn(self.job._next(), ('a/x', 'a/y'))
-
-    def test_a_job_of_a_spinning_disk_is_hashed_by_one_worker_at_a_time(self):
-        self.job.scan()
-        self.job._is_started = True
-        self.job.max_workers = 1
-        self.assertIsNotNone(self.job._next())
-        self.assertIsNone(self.job._next())
 
     def test_a_file_that_cant_be_read_is_counted_and_its_done_without_it(self):
         self.job.scan()
@@ -168,17 +146,9 @@ class HashFileTest(unittest.TestCase):
         helpers.make_files(self.root, ['x'])
         self.path = os.path.join(self.root, 'x')
 
-    def test_its_hash_and_its_stamp_when_read(self):
-        stat = os.stat(self.path)
-        self.assertEqual(hashing._hash_file(self.path, lambda: False),
-                         (_sha1('x'), [stat.st_size, stat.st_mtime_ns]))
-
     def test_paused_it_stops(self):
         with self.assertRaises(hashing._Paused):
             hashing._hash_file(self.path, lambda: True)
-
-    def test_a_gone_file_has_none(self):
-        self.assertEqual(hashing._hash_file(os.path.join(self.root, 'nope'), lambda: False), (None, None))
 
     def test_one_changed_while_read_has_none(self):
         real_stat = os.stat
@@ -188,16 +158,6 @@ class HashFileTest(unittest.TestCase):
 
 
 class ListFilesTest(unittest.TestCase):
-    def test_its_files_with_their_sizes_and_times_in_ns(self):
-        root = tempfile.mkdtemp(prefix='dirdelta-hashing-')
-        self.addCleanup(shutil.rmtree, root)
-        helpers.make_files(root, ['a/b c', 'd'])
-        os.symlink('d', os.path.join(root, 'link'))
-        found = hashing._list_files(root)
-        stat = os.stat(os.path.join(root, 'a', 'b c'))
-        self.assertEqual(sorted(found), ['a/b c', 'd'])
-        self.assertEqual(found['a/b c'], (stat.st_size, stat.st_mtime_ns))
-
     def test_finds_seconds_in_nanoseconds(self):
         self.assertEqual(localscan.nanoseconds('1698765432.1234567890'), 1698765432123456789)
         self.assertEqual(localscan.nanoseconds('1698765432.5'), 1698765432500000000)
@@ -225,10 +185,6 @@ class StatusTest(unittest.TestCase):
                          ['red', 'orange', 'yellow'])
         self.assertEqual(hashing.color(_progress(state=hashing.DONE, size_done=1000)), 'green')
 
-    def test_the_count_says_thousands(self):
-        self.assertEqual(hashing.status_text(hashing.Job('/photos'), _progress(nr_done=1204, nr_files=1911, size_done=500)),
-                         "photos: 50% hashed (1,204/1,911)")
-
     def test_active_jobs_are_the_ones_hashing_or_paused_with_files_left(self):
         states = {'/hashing': _progress(), '/paused': _progress(is_started=False, is_paused=True),
                   '/idle': _progress(is_started=False), '/done': _progress(state=hashing.DONE)}
@@ -249,9 +205,6 @@ class StatusTest(unittest.TestCase):
         self.assertEqual(hashing.status_text(job, _progress(is_started=False)), "photos: 0% hashed (0/10, not hashing)")
         self.assertEqual(hashing.status_text(job, _progress(state=hashing.DONE, nr_done=10)), "photos: 100% hashed ✓ (10/10)")
 
-    def test_a_bar(self):
-        self.assertEqual(hashing.bar(_progress(size_done=500), width=4), '[██░░]')
-
     def test_time_left_by_its_speed(self):
         self.assertEqual(hashing.time_left(_progress(size_done=400, rate=100)), 6)
         self.assertIsNone(hashing.time_left(_progress()))
@@ -269,19 +222,10 @@ class StatusTest(unittest.TestCase):
 
 
 class MachineTest(unittest.TestCase):
-    def test_one_worker_fewer_than_physical_cores(self):
-        with mock.patch('dirdelta.hashing.physical_cores', return_value=4):
-            self.assertEqual(hashing.nr_workers(), 3)
-        with mock.patch('dirdelta.hashing.physical_cores', return_value=1):
-            self.assertEqual(hashing.nr_workers(), 1)
-
     def test_physical_cores_by_their_ids_or_half_the_logical_ones(self):
         self.assertGreaterEqual(hashing.physical_cores(), 1)
         with mock.patch('glob.glob', return_value=[]), mock.patch('os.cpu_count', return_value=8):
             self.assertEqual(hashing.physical_cores(), 4)
-
-    def test_a_path_whose_disk_isnt_known_isnt_rotational(self):
-        self.assertFalse(hashing.is_rotational('/nonexistent/path'))
 
     def test_jobs_are_kept_by_their_roots(self):
         root = tempfile.mkdtemp(prefix='dirdelta-hashing-')

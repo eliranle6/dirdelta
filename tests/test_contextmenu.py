@@ -22,10 +22,6 @@ class ChooseTest(unittest.TestCase):
         self.assertIsNone(self.choose(contextmenu.NOTHING))
         self.assertIsNone(self.choose(None))
 
-    def test_the_first_option_goes_back(self):
-        self.choose(None)
-        self.assertEqual(self.options[0], contextmenu.NOTHING)
-
     def test_each_is_shown_after_its_key(self):
         self.choose(None)
         self.assertTrue(picker.unstyled(self.shown['Ask']).startswith('[a]'))

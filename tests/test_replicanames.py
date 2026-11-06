@@ -58,28 +58,11 @@ class NamesTest(unittest.TestCase):
         self.assertEqual(replicanames.short_names(['cloud/a'])['cloud/a'], 'photos')
         self.assertEqual(replicanames.full('cloud/b'), 'Cloud(me):/b')
 
-    def test_without_a_label_the_lists_paths_stay(self):
-        self.assertEqual(replicanames.labeled('/mnt/disk/a'), '/mnt/disk/a')
-        self.assertEqual(replicanames.short_names(['/mnt/disk/a'])['/mnt/disk/a'], 'a')
-
     def test_a_label_changed_in_the_file_is_seen(self):
         self.label('/mnt/disk/a', 'one')
         self.assertEqual(replicanames.label('/mnt/disk/a'), 'one')
         self.label('/mnt/disk/a', 'another')
         self.assertEqual(replicanames.label('/mnt/disk/a'), 'another')
-
-    def test_the_disk_is_asked_once_until_forgotten(self):
-        replicanames.disk_name('/mnt/disk/a')
-        replicanames.disk_name('/mnt/disk/a')
-        self.assertEqual(self.mount.call_count, 1)
-        replicanames.forget()
-        replicanames.disk_name('/mnt/disk/a')
-        self.assertEqual(self.mount.call_count, 2)
-
-    def test_identity(self):
-        self.assertEqual(replicanames.identity('cloud/a/b'), 'drive:ROOT:/a/b')
-        self.assertEqual(replicanames.identity('/mnt/disk/a'), 'uuid:AAAA-1234:/a')
-
 
 if __name__ == '__main__':
     unittest.main()

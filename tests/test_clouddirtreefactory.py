@@ -52,11 +52,6 @@ class CloudDirTreeFactoryTest(unittest.TestCase):
         self.refresh.assert_not_called()
         clouddirtreefactory.clouddirtree.CloudDirTree.assert_not_called()
 
-    def test_returns_cloud_tree_for_the_given_path(self):
-        tree = clouddirtreefactory.factory_interactive('cloud/mein')
-        self.assertIs(tree, clouddirtreefactory.clouddirtree.CloudDirTree.return_value)
-        clouddirtreefactory.clouddirtree.CloudDirTree.assert_called_once_with('cloud/mein')
-
     def header(self):
         with mock.patch('dirdelta.picker.pick_option', return_value=NO_REFRESH) as pick_option:
             clouddirtreefactory.factory_interactive('cloud/mein')

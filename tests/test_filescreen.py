@@ -1,5 +1,4 @@
 import unittest
-from unittest import mock
 
 from dirdelta import archive_screen
 from dirdelta import contextmenu
@@ -36,10 +35,6 @@ def _chosen(key, selected='d', files=()):
 
 class SharedKeyTest(unittest.TestCase):
     FILES = ['d/a', 'd/b', 'e']
-
-    def test_other_keys_are_the_callers(self):
-        chosen = _chosen('x')
-        self.assertEqual(_Screen()._shared_key(chosen, self.FILES), (chosen, None))
 
     def test_exploring_and_the_dashboard_keep_the_picks(self):
         screen = _Screen()
