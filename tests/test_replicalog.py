@@ -6,10 +6,10 @@ import unittest
 from unittest import mock
 
 import helpers
-from dirdelta import localdiskdirtree
-from dirdelta import mounts
-from dirdelta import replicalog
-from dirdelta import replicas
+from dirdelta.trees import localdiskdirtree
+from dirdelta.known import mounts
+from dirdelta.known import replicalog
+from dirdelta.known import replicas
 
 LOG = """15.12.2025 - copied DCIM pictures from old pixel 8 (not whatsapp pictures)
 17.05.2026 - removed old money.ods
@@ -44,22 +44,22 @@ class ParseTest(unittest.TestCase):
 class IdentityTest(unittest.TestCase):
     def test_a_local_replica_by_its_filesystem_and_the_path_in_it(self):
         mount = mounts.Mount('/mnt/win', '/dev/sda3', 'ntfs', 'rw', '', 'UUID1', 'OS')
-        with mock.patch('dirdelta.mounts.current_mount', return_value=mount), \
+        with mock.patch('dirdelta.known.mounts.current_mount', return_value=mount), \
                 mock.patch('os.path.realpath', side_effect=lambda path: path):
             self.assertEqual(replicalog.identity('/mnt/win/Users/eliran'), 'uuid:UUID1:/Users/eliran')
             self.assertEqual(replicalog.identity('/mnt/win'), 'uuid:UUID1:/')
-        with mock.patch('dirdelta.mounts.current_mount', return_value=None):
+        with mock.patch('dirdelta.known.mounts.current_mount', return_value=None):
             self.assertEqual(replicalog.identity('/tmp'), 'path:%s' % (os.path.realpath('/tmp'),))
 
     def test_a_drive_replica_by_the_account_and_its_path(self):
-        with mock.patch('dirdelta.drivecache.root_id', return_value='ROOT'):
+        with mock.patch('dirdelta.drive.drivecache.root_id', return_value='ROOT'):
             self.assertEqual(replicalog.identity('cloud//eliran/'), 'drive:ROOT:/eliran')
 
     def test_whether_its_disk_is_connected(self):
         tmpdir = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, tmpdir)
         open(os.path.join(tmpdir, 'UUID1'), 'w').close()
-        with mock.patch('dirdelta.mounts.BY_UUID_DIR', tmpdir):
+        with mock.patch('dirdelta.known.mounts.BY_UUID_DIR', tmpdir):
             self.assertTrue(replicalog.is_disk_connected('uuid:UUID1:/x'))
             self.assertFalse(replicalog.is_disk_connected('uuid:UUID2:/x'))
             self.assertTrue(replicalog.is_disk_connected('drive:ROOT:/eliran'))
@@ -128,8 +128,8 @@ class LogEntriesTest(unittest.TestCase):
         self.changes = replicalog.Changes()
         self.changes.note(self.b, 'copied', 2, self.a)
         self.changes.note(self.b, 'removed', 1)
-        for patcher in (mock.patch('dirdelta.replicas.save'), mock.patch('dirdelta.messages.show'),
-                        mock.patch('dirdelta.replicalog.identity', side_effect=lambda path: 'id:' + path)):
+        for patcher in (mock.patch('dirdelta.known.replicas.save'), mock.patch('dirdelta.ui.messages.show'),
+                        mock.patch('dirdelta.known.replicalog.identity', side_effect=lambda path: 'id:' + path)):
             patcher.start()
             self.addCleanup(patcher.stop)
         self.today = datetime.date.today().strftime('%d.%m.%Y')
@@ -143,7 +143,7 @@ class LogEntriesTest(unittest.TestCase):
 
     def offer(self, answers, edited=None):
         with helpers.answering_option_picker(answers) as pick, \
-                mock.patch('dirdelta.messages.ask', return_value=edited):
+                mock.patch('dirdelta.ui.messages.ask', return_value=edited):
             replicalog.offer_entries(self.changes, self.trees, self.known)
         return pick
 
@@ -172,7 +172,7 @@ class LogEntriesTest(unittest.TestCase):
         self.assertIsNotNone(self.known.known['id:' + self.b]['changed'])
 
     def test_nothing_changed_nothing_offered(self):
-        with mock.patch('dirdelta.picker.pick_option', side_effect=AssertionError('asked')):
+        with mock.patch('dirdelta.ui.picker.pick_option', side_effect=AssertionError('asked')):
             replicalog.offer_entries(replicalog.Changes(), self.trees, self.known)
         replicalog.replicas.save.assert_not_called()
 

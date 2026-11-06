@@ -4,15 +4,15 @@ import unittest
 from unittest import mock
 
 import helpers
-from dirdelta import localdiskdirtree
-from dirdelta import replicafactory
+from dirdelta.trees import localdiskdirtree
+from dirdelta.trees import replicafactory
 
 
 class CreateDirtreeFromArgTest(unittest.TestCase):
     def setUp(self):
         self.root = tempfile.mkdtemp(prefix='dirstuff-replicafactory-')
         helpers.make_files(self.root, ['top.txt', 'a/b/deep.txt'])
-        patcher = mock.patch('dirdelta.messages.print_line')
+        patcher = mock.patch('dirdelta.ui.messages.print_line')
         patcher.start()
         self.addCleanup(patcher.stop)
 
@@ -25,7 +25,7 @@ class CreateDirtreeFromArgTest(unittest.TestCase):
         self.assertEqual(sorted(e.relpath for e in tree.iter_files()), ['a/b/deep.txt', 'top.txt'])
 
     def test_cloud_path_goes_to_the_cloud_factory(self):
-        with mock.patch('dirdelta.clouddirtreefactory.factory_interactive') as factory:
+        with mock.patch('dirdelta.drive.clouddirtreefactory.factory_interactive') as factory:
             tree = replicafactory.create_dirtree_from_arg('cloud/mein')
         factory.assert_called_once_with('cloud/mein')
         self.assertIs(tree, factory.return_value)

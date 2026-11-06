@@ -10,10 +10,10 @@ from unittest import mock
 
 from googleapiclient.errors import HttpError
 
-from dirdelta import clouddirtree
-from dirdelta import dirtree
-from dirdelta import entries
-from dirdelta import localdiskdirtree
+from dirdelta.drive import clouddirtree
+from dirdelta.trees import dirtree
+from dirdelta.trees import entries
+from dirdelta.trees import localdiskdirtree
 import helpers
 
 FOLDER = 'application/vnd.google-apps.folder'
@@ -49,7 +49,7 @@ class CloudDirTreeTest(unittest.TestCase):
             f.write(json.dumps({'myDriveRootId': 'ROOT'}) + '\n')
             for item in ITEMS:
                 f.write(json.dumps(item) + '\n')
-        patcher = mock.patch('dirdelta.drivecache.LINES_FILE', self.cache)
+        patcher = mock.patch('dirdelta.drive.drivecache.LINES_FILE', self.cache)
         patcher.start()
         self.addCleanup(patcher.stop)
         self.addCleanup(helpers.remove_drive_cache, self.cache)
@@ -192,11 +192,11 @@ class CloudDirTreeChangesTest(unittest.TestCase):
         files.list.side_effect = lambda q, **_: mock.Mock(
             execute=lambda **_: {'files': self.listed(q)})
         self.local_dir = tempfile.mkdtemp(prefix='dirstuff-cloud-local-')
-        for patcher in (mock.patch('dirdelta.drivecache.LINES_FILE', self.cache),
-                        mock.patch('dirdelta.driveapi.service', return_value=self.service),
-                        mock.patch('dirdelta.clouddirtree.MediaFileUpload'),
-                        mock.patch('dirdelta.messages.print_line'),
-                        mock.patch('dirdelta.dryrun.DRYRUN', False)):
+        for patcher in (mock.patch('dirdelta.drive.drivecache.LINES_FILE', self.cache),
+                        mock.patch('dirdelta.drive.driveapi.service', return_value=self.service),
+                        mock.patch('dirdelta.drive.clouddirtree.MediaFileUpload'),
+                        mock.patch('dirdelta.ui.messages.print_line'),
+                        mock.patch('dirdelta.util.dryrun.DRYRUN', False)):
             patcher.start()
             self.addCleanup(patcher.stop)
         self.addCleanup(helpers.remove_drive_cache, self.cache)
@@ -246,7 +246,7 @@ class CloudDirTreeChangesTest(unittest.TestCase):
         self.assertEqual(self.creates(with_times=True)[0]['modifiedTime'], '2024-07-01T14:03:22.000000Z')
 
     def test_a_small_file_is_uploaded_in_one_request_and_a_big_one_resumably(self):
-        with mock.patch('dirdelta.clouddirtree.RESUMABLE_MIN_SIZE', 5):
+        with mock.patch('dirdelta.drive.clouddirtree.RESUMABLE_MIN_SIZE', 5):
             self.upload(['small.mp3'], content='1234')
             self.upload(['big.mp3'], content='12345')
         clouddirtree.MediaFileUpload.assert_has_calls([
@@ -260,7 +260,7 @@ class CloudDirTreeChangesTest(unittest.TestCase):
             both_under_way.wait()
             return {'id': body['name']}
         self.create_result = create_result
-        with mock.patch('dirdelta.clouddirtree.UPLOAD_THREADS', 2):
+        with mock.patch('dirdelta.drive.clouddirtree.UPLOAD_THREADS', 2):
             self.upload(['1.mp3', '2.mp3'])
         self.assertIn('Copy complete: copied 2 of 2 files to cloud/mein', self.lines())
 
@@ -269,8 +269,8 @@ class CloudDirTreeChangesTest(unittest.TestCase):
             if line.startswith('Copying 3.mp3'):
                 raise KeyboardInterrupt
         clouddirtree.messages.print_line.side_effect = print_line
-        with mock.patch('dirdelta.clouddirtree.UPLOAD_THREADS', 2), \
-                mock.patch('dirdelta.messages.note_stopped'):
+        with mock.patch('dirdelta.drive.clouddirtree.UPLOAD_THREADS', 2), \
+                mock.patch('dirdelta.ui.messages.note_stopped'):
             self.upload(['1.mp3', '2.mp3', '3.mp3', '4.mp3'])
         self.assertEqual(sorted(body['name'] for body in self.creates()), ['1.mp3', '2.mp3'])
         self.assertIn('2.mp3', self.tree)
@@ -349,8 +349,8 @@ class CloudDirTreeChangesTest(unittest.TestCase):
         never = threading.Event()
         self.addCleanup(never.set)
         self.create_result = lambda body: never.wait(5) and {'id': 'late'}
-        with mock.patch('dirdelta.clouddirtree.UPLOAD_THREADS', 2), \
-                mock.patch('dirdelta.messages.note_stopped'):
+        with mock.patch('dirdelta.drive.clouddirtree.UPLOAD_THREADS', 2), \
+                mock.patch('dirdelta.ui.messages.note_stopped'):
             self.upload(['1.mp3', '2.mp3'])
         self.assertNotIn('1.mp3', self.tree)
         self.assertTrue(clouddirtree.drivecache.stale_paths())
@@ -387,7 +387,7 @@ class CloudDirTreeChangesTest(unittest.TestCase):
         self.assertIsNotNone(clouddirtree.factory('cloud/mein').get_node('a/b'))
 
     def test_big_levels_are_split_into_batches(self):
-        with mock.patch('dirdelta.clouddirtree.MAX_BATCH_SIZE', 2):
+        with mock.patch('dirdelta.drive.clouddirtree.MAX_BATCH_SIZE', 2):
             self.upload(['a/1.mp3', 'b/2.mp3', 'c/3.mp3'])
         self.assertEqual(self.service.new_batch_http_request.call_count, 2)
         self.assertEqual(len([body for body in self.creates() if 'id' in body]), 3)
@@ -411,7 +411,7 @@ class CloudDirTreeChangesTest(unittest.TestCase):
         self.assertTrue(any(line.startswith("Couldn't make folder a") for line in self.lines()))
 
     def test_dry_run_uploads_nothing(self):
-        with mock.patch('dirdelta.dryrun.DRYRUN', True):
+        with mock.patch('dirdelta.util.dryrun.DRYRUN', True):
             self.upload(['new.mp3'])
         self.service.files.return_value.create.assert_not_called()
         self.assertNotIn('new.mp3', self.tree)
@@ -511,7 +511,7 @@ class CloudDirTreeChangesTest(unittest.TestCase):
         self.assertEqual(self.trashed(), ['track'])
 
     def test_a_dry_run_says_which_folders_it_would_trash(self):
-        with mock.patch('dirdelta.dryrun.DRYRUN', True):
+        with mock.patch('dirdelta.util.dryrun.DRYRUN', True):
             self.remove(['album/track.mp3', 'song.mp3'])
         self.service.files.return_value.update.assert_not_called()
         self.service.files.return_value.list.assert_not_called()
@@ -669,7 +669,7 @@ class CloudDirTreeChangesTest(unittest.TestCase):
         self.assertIn('song.mp3', self.tree)
 
     def test_dry_run_moves_nothing(self):
-        with mock.patch('dirdelta.dryrun.DRYRUN', True):
+        with mock.patch('dirdelta.util.dryrun.DRYRUN', True):
             self.assertEqual(self.tree.move_files([('song.mp3', 'moved.mp3')]), [])
         self.service.files.return_value.update.assert_not_called()
         self.assertIn('song.mp3', self.tree)
@@ -677,14 +677,14 @@ class CloudDirTreeChangesTest(unittest.TestCase):
     def test_a_thumbnail_is_got_at_the_size_asked_for(self):
         self.service.files.return_value.get.return_value.execute.return_value = {
             'thumbnailLink': 'https://lh3.example/t/abc=s220'}
-        with mock.patch('dirdelta.driveapi.get_url', return_value=b'png') as get_url:
+        with mock.patch('dirdelta.drive.driveapi.get_url', return_value=b'png') as get_url:
             self.assertEqual(self.tree.thumbnail('album/track.mp3', 300), b'png')
         self.service.files.return_value.get.assert_called_once_with(fileId='track', fields='thumbnailLink')
         get_url.assert_called_once_with('https://lh3.example/t/abc=s300')
 
     def test_no_thumbnail(self):
         self.service.files.return_value.get.return_value.execute.return_value = {}
-        with mock.patch('dirdelta.driveapi.get_url') as get_url:
+        with mock.patch('dirdelta.drive.driveapi.get_url') as get_url:
             self.assertIsNone(self.tree.thumbnail('album/track.mp3', 300))
             self.assertIsNone(self.tree.thumbnail('not/there.jpg', 300))
             self.service.files.return_value.get.return_value.execute.side_effect = _http_error()
@@ -702,7 +702,7 @@ class CloudDirTreeChangesTest(unittest.TestCase):
         def downloader(local_file, request):
             local_file.write(b'track content')
             return mock.Mock(next_chunk=mock.Mock(return_value=(None, True)))
-        with mock.patch('dirdelta.clouddirtree.MediaIoBaseDownload', side_effect=downloader):
+        with mock.patch('dirdelta.drive.clouddirtree.MediaIoBaseDownload', side_effect=downloader):
             local = self.download_to_local_dir(['album/track.mp3'])
         self.service.files.return_value.get_media.assert_called_once_with(fileId='track')
         with open(os.path.join(self.local_dir, 'album', 'track.mp3'), 'rb') as f:
@@ -718,7 +718,7 @@ class CloudDirTreeChangesTest(unittest.TestCase):
             return mock.Mock(next_chunk=mock.Mock(side_effect=[(mock.Mock(resumable_progress=5), False),
                                                                (mock.Mock(resumable_progress=13), True)]))
         got = []
-        with mock.patch('dirdelta.clouddirtree.MediaIoBaseDownload', side_effect=downloader):
+        with mock.patch('dirdelta.drive.clouddirtree.MediaIoBaseDownload', side_effect=downloader):
             self.tree.fetch_file('album/track.mp3', os.path.join(self.local_dir, 'track.mp3'), progress=got.append)
         self.assertEqual(got, [5, 13])
         self.assertEqual(made['chunksize'], clouddirtree.PROGRESS_CHUNK_SIZE)
@@ -728,7 +728,7 @@ class CloudDirTreeChangesTest(unittest.TestCase):
         def downloader(local_file, request):
             local_file.write(b'track content')
             return mock.Mock(next_chunk=mock.Mock(return_value=(None, True)))
-        with mock.patch('dirdelta.clouddirtree.MediaIoBaseDownload', side_effect=downloader):
+        with mock.patch('dirdelta.drive.clouddirtree.MediaIoBaseDownload', side_effect=downloader):
             self.download_to_local_dir(['album/track.mp3'])
         self.assertEqual(os.path.getmtime(os.path.join(self.local_dir, 'album', 'track.mp3')), 1719842602)
 
@@ -739,7 +739,7 @@ class CloudDirTreeChangesTest(unittest.TestCase):
         def downloader(local_file, request):
             local_file.write(b'content')
             return mock.Mock(next_chunk=mock.Mock(return_value=(None, True)))
-        with mock.patch('dirdelta.clouddirtree.MediaIoBaseDownload', side_effect=downloader):
+        with mock.patch('dirdelta.drive.clouddirtree.MediaIoBaseDownload', side_effect=downloader):
             local = self.download_to_local_dir(['Budget.gsheet', 'song.mp3'])
         self.assertEqual(os.listdir(self.local_dir), ['song.mp3'])
         self.assertNotIn('Budget.gsheet', local)
@@ -751,7 +751,7 @@ class CloudDirTreeChangesTest(unittest.TestCase):
         def downloader(local_file, request):
             local_file.write(b'part of it')
             return mock.Mock(next_chunk=mock.Mock(side_effect=_http_error()))
-        with mock.patch('dirdelta.clouddirtree.MediaIoBaseDownload', side_effect=downloader):
+        with mock.patch('dirdelta.drive.clouddirtree.MediaIoBaseDownload', side_effect=downloader):
             local = self.download_to_local_dir(['song.mp3', 'album/track.mp3'])
         self.assertEqual(os.listdir(self.local_dir), ['album'])
         self.assertEqual(os.listdir(os.path.join(self.local_dir, 'album')), [])
@@ -816,7 +816,7 @@ class CloudDirTreeChangesTest(unittest.TestCase):
         self.drive_has([_item('mein', 'mein', 'ROOT', FOLDER)] +
                        [_item('f%d' % (i,), 'f%d' % (i,), 'mein', FOLDER) for i in range(5)] +
                        [_item('x%d' % (i,), 'x.mp3', 'f%d' % (i,)) for i in range(5)])
-        with mock.patch('dirdelta.clouddirtree.MAX_FOLDERS_PER_QUERY', 2):
+        with mock.patch('dirdelta.drive.clouddirtree.MAX_FOLDERS_PER_QUERY', 2):
             self.tree.refresh_from_drive()
         # mein by name, what's in it, then f0-f4 two at a time
         self.assertEqual(len(self.queries()), 1 + 1 + 3)
@@ -879,7 +879,7 @@ class CloudDirTreeChangesTest(unittest.TestCase):
 
     def test_refresh_expects_as_many_as_the_cache_has_there(self):
         self.drive_has(self.DRIVE_NOW)
-        with mock.patch('dirdelta.messages.print_progress') as print_progress:
+        with mock.patch('dirdelta.ui.messages.print_progress') as print_progress:
             self.tree.refresh_from_drive()
         # The cache has 5 in mein: song.mp3, album, its track.mp3 and the two dup.mp3
         self.assertEqual(print_progress.call_args_list[0].args[0],

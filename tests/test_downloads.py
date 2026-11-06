@@ -6,14 +6,14 @@ import unittest
 from unittest import mock
 
 import helpers  # noqa: F401 (its DOWNLOADS_DIR is a temp dir, patched again here)
-from dirdelta import downloads
+from dirdelta.util import downloads
 
 
 class DownloadsTest(unittest.TestCase):
     def setUp(self):
         self.tmpdir = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, self.tmpdir)
-        patcher = mock.patch('dirdelta.downloads.DOWNLOADS_DIR', os.path.join(self.tmpdir, 'downloads'))
+        patcher = mock.patch('dirdelta.util.downloads.DOWNLOADS_DIR', os.path.join(self.tmpdir, 'downloads'))
         patcher.start()
         self.addCleanup(patcher.stop)
         self.fetched = []
@@ -47,7 +47,7 @@ class DownloadsTest(unittest.TestCase):
         self.assertEqual(os.listdir(downloads.DOWNLOADS_DIR), [])
 
     def test_the_least_recently_used_go_beyond_max_bytes(self):
-        with mock.patch('dirdelta.downloads.MAX_BYTES', 10):
+        with mock.patch('dirdelta.util.downloads.MAX_BYTES', 10):
             first = downloads.get('cloud/1', 4, self.fetch('1111'))
             second = downloads.get('cloud/2', 4, self.fetch('2222'))
             # Used again: newer than the second

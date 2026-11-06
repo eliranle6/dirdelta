@@ -5,10 +5,10 @@ import unittest
 from unittest import mock
 
 import helpers
-from dirdelta import clouddirtree
-from dirdelta import entries
-from dirdelta import localdiskdirtree
-from dirdelta import sidetree
+from dirdelta.drive import clouddirtree
+from dirdelta.trees import entries
+from dirdelta.trees import localdiskdirtree
+from dirdelta.ui import sidetree
 
 
 class ItemsTest(unittest.TestCase):
@@ -33,15 +33,15 @@ class ListingTest(unittest.TestCase):
         helpers.make_files(self.root, ['a.txt', 'meta/h', 'in/y', 'b/x'])
         self.tree = localdiskdirtree.LocalReplica(self.root)
         self.listing = sidetree.Listing(self.root, self.tree, 'in')
-        patcher = mock.patch('dirdelta.dryrun.DRYRUN', False)
+        patcher = mock.patch('dirdelta.util.dryrun.DRYRUN', False)
         patcher.start()
         self.addCleanup(patcher.stop)
-        patcher = mock.patch('dirdelta.messages.print_line')
+        patcher = mock.patch('dirdelta.ui.messages.print_line')
         patcher.start()
         self.addCleanup(patcher.stop)
 
     def listed_times(self, times=2):
-        with mock.patch('dirdelta.localscan.scan', wraps=sidetree.localscan.scan) as scan:
+        with mock.patch('dirdelta.trees.localscan.scan', wraps=sidetree.localscan.scan) as scan:
             for _ in range(times):
                 found = self.listing.items()
         return scan.call_count, found

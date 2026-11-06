@@ -7,7 +7,7 @@ import unittest
 from unittest import mock
 
 import helpers
-from dirdelta import mounts
+from dirdelta.known import mounts
 
 WIN = mounts.Mount('/mnt/win', '/dev/sda3', 'ntfs', 'rw,relatime', 'rw,user_id=0,group_id=0,allow_other',
                    '9618289F1828807B', 'OS')
@@ -33,14 +33,14 @@ class MountsTest(unittest.TestCase):
         self.mounted = set()
         self.answers = {}
         self.commands = []
-        for patcher in (mock.patch('dirdelta.mounts.MOUNTS_FILE', os.path.join(self.tmpdir, 'mounts.json')),
-                        mock.patch('dirdelta.mounts.BY_UUID_DIR', self.by_uuid),
+        for patcher in (mock.patch('dirdelta.known.mounts.MOUNTS_FILE', os.path.join(self.tmpdir, 'mounts.json')),
+                        mock.patch('dirdelta.known.mounts.BY_UUID_DIR', self.by_uuid),
                         mock.patch('os.path.ismount', side_effect=lambda path: path in self.mounted),
                         mock.patch('subprocess.run', side_effect=self.fake_run),
-                        mock.patch('dirdelta.messages.print_line')):
+                        mock.patch('dirdelta.ui.messages.print_line')):
             patcher.start()
             self.addCleanup(patcher.stop)
-        show = mock.patch('dirdelta.messages.show')
+        show = mock.patch('dirdelta.ui.messages.show')
         self.show = show.start()
         self.addCleanup(show.stop)
 
@@ -106,7 +106,7 @@ class MountsTest(unittest.TestCase):
     def test_a_mounted_one_isnt_asked_about(self):
         self.keep(WIN)
         self.mounted = {'/mnt/win'}
-        with mock.patch('dirdelta.picker.pick_option', side_effect=AssertionError('asked')):
+        with mock.patch('dirdelta.ui.picker.pick_option', side_effect=AssertionError('asked')):
             self.assertTrue(mounts.ensure_mounted('/mnt/win/x'))
             self.assertTrue(mounts.ensure_mounted('/elsewhere'))
 
@@ -140,7 +140,7 @@ class MountsTest(unittest.TestCase):
                 # Connected before the second try
                 self.connect(DISK)
             return mounts.TRY_AGAIN if mounts.TRY_AGAIN in options else options[0]
-        with mock.patch('dirdelta.picker.pick_option', side_effect=pick_option):
+        with mock.patch('dirdelta.ui.picker.pick_option', side_effect=pick_option):
             self.assertTrue(mounts.ensure_mounted('/media/disk'))
         self.assertIn("isn't connected", headers[0])
         self.assertIn("isn't connected", headers[1])
@@ -153,14 +153,14 @@ class MountsTest(unittest.TestCase):
         self.answers['mount'] = lambda command: self.mounted.add(mount.target) or (0, '')
         now = mount._replace(vfs_options=vfs_options)
         with helpers.answering_option_picker([mounts.MOUNT]), \
-                mock.patch('dirdelta.mounts.current_mount', return_value=now), \
-                mock.patch('dirdelta.mounts._fstab_options', return_value=fstab), \
-                mock.patch('dirdelta.messages.show') as show:
+                mock.patch('dirdelta.known.mounts.current_mount', return_value=now), \
+                mock.patch('dirdelta.known.mounts._fstab_options', return_value=fstab), \
+                mock.patch('dirdelta.ui.messages.show') as show:
             self.assertTrue(mounts.ensure_mounted(mount.target))
         return show
 
     def test_one_that_comes_up_read_only_says_so_and_why(self):
-        with mock.patch('dirdelta.mounts._is_windows_hibernated', return_value=True):
+        with mock.patch('dirdelta.known.mounts._is_windows_hibernated', return_value=True):
             show = self.mount_coming_up('ro,relatime')
         title, lines = show.call_args.args[:2]
         self.assertEqual(title, 'Mounted read-only: /mnt/win')
@@ -189,11 +189,11 @@ class MountsTest(unittest.TestCase):
 
     def test_the_reason_of_a_dir_already_read_only(self):
         hibernated = self.hibernation_file(b'HIBR')._replace(vfs_options='ro,relatime')
-        with mock.patch('dirdelta.mounts.current_mount', return_value=hibernated):
+        with mock.patch('dirdelta.known.mounts.current_mount', return_value=hibernated):
             self.assertTrue(any('powercfg' in line for line in mounts.read_only_lines_of(hibernated.target + '/x')))
             self.assertEqual(mounts.read_only_lines_of('cloud/x'), [])
         # Read-write: it's only its permissions, if it's read-only
-        with mock.patch('dirdelta.mounts.current_mount', return_value=hibernated._replace(vfs_options='rw')):
+        with mock.patch('dirdelta.known.mounts.current_mount', return_value=hibernated._replace(vfs_options='rw')):
             self.assertEqual(mounts.read_only_lines_of(hibernated.target), [])
 
     def test_one_that_comes_up_read_write_says_nothing_more(self):

@@ -3,7 +3,7 @@ import tempfile
 import unittest
 import zipfile
 
-from dirdelta import archives
+from dirdelta.util import archives
 
 
 class MembersTest(unittest.TestCase):

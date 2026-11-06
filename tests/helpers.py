@@ -1,17 +1,17 @@
-"""Fakes shared by the dirdelta tests, for code that would otherwise run treepicker (dirdelta.picker)."""
+"""Fakes shared by the dirdelta tests, for code that would otherwise run treepicker (dirdelta.ui.picker)."""
 import atexit
 import os
 import shutil
 import tempfile
 from unittest import mock
 
-from dirdelta import downloads
-from dirdelta import drivecache
-from dirdelta import hashcache
-from dirdelta import mounts
-from dirdelta import picker
-from dirdelta import replicas
-from dirdelta import settings
+from dirdelta.util import downloads
+from dirdelta.drive import drivecache
+from dirdelta.hashes import hashcache
+from dirdelta.known import mounts
+from dirdelta.ui import picker
+from dirdelta.known import replicas
+from dirdelta.known import settings
 
 # The tests never keep hashes in the real hash cache (~/.cache/dirdelta/hashes.sqlite): every test
 # module that hashes files imports this one, and unittest imports them all before running any
@@ -79,13 +79,13 @@ def shown_of(options):
 def scripted_option_picker(answers):
     """Patch picker.pick_option so each call returns the option of the next of the given labels."""
     answers = list(answers)
-    return mock.patch('dirdelta.picker.pick_option',
+    return mock.patch('dirdelta.ui.picker.pick_option',
                       side_effect=lambda options, *_, **__: answer_of(options, answers.pop(0)))
 
 
 def scripted_tree_picker(choose):
     """Patch picker.pick_from_tree so it returns choose(tree), called with the tree it was given."""
-    return mock.patch('dirdelta.picker.pick_from_tree',
+    return mock.patch('dirdelta.ui.picker.pick_from_tree',
                       side_effect=lambda tree, *_, **__: choose(tree))
 
 
@@ -95,7 +95,7 @@ def scripted_files_picker(choose):
     def pick_files(rootpath, relpaths, *_, **__):
         chosen = choose(relpaths)
         return picker.Picked('', '', chosen) if isinstance(chosen, list) else chosen
-    return mock.patch('dirdelta.picker.pick_files', side_effect=pick_files)
+    return mock.patch('dirdelta.ui.picker.pick_files', side_effect=pick_files)
 
 
 def answering_option_picker(answers):
@@ -107,12 +107,12 @@ def answering_option_picker(answers):
     def pick_option(options, *_, **__):
         answer = answers.pop(0)
         return None if answer is None else answer_of(options, answer)
-    return mock.patch('dirdelta.picker.pick_option', side_effect=pick_option)
+    return mock.patch('dirdelta.ui.picker.pick_option', side_effect=pick_option)
 
 
 def scripted_dir_picker(picked_path):
     """Patch picker.pick_under_dir so it returns picked_path."""
-    return mock.patch('dirdelta.picker.pick_under_dir', return_value=picked_path)
+    return mock.patch('dirdelta.ui.picker.pick_under_dir', return_value=picked_path)
 
 
 def all_files(tree):
@@ -135,7 +135,7 @@ def fake_trash(test):
 
     def trash(path):
         shutil.move(path, os.path.join(trash_dir, os.path.basename(path)))
-    patcher = mock.patch('dirdelta.localdiskdirtree._trash', side_effect=trash)
+    patcher = mock.patch('dirdelta.trees.localdiskdirtree._trash', side_effect=trash)
     patcher.start()
     test.addCleanup(patcher.stop)
     return trash_dir

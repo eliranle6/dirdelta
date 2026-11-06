@@ -3,18 +3,18 @@ import time
 import unittest
 from unittest import mock
 
-from dirdelta import clouddirtree
-from dirdelta import differing
-from dirdelta import dirsync_main
-from dirdelta import picker
-from dirdelta import dirtree
-from dirdelta import elsewhere
-from dirdelta import hashing
-from dirdelta import interactive_dir_sync
-from dirdelta import localdiskdirtree
-from dirdelta import picker
-from dirdelta import replicanames
-from dirdelta import replicas
+from dirdelta.drive import clouddirtree
+from dirdelta.matching import differing
+from dirdelta.sync import dirsync_main
+from dirdelta.ui import picker
+from dirdelta.trees import dirtree
+from dirdelta.matching import elsewhere
+from dirdelta.hashes import hashing
+from dirdelta.sync import interactive_dir_sync
+from dirdelta.trees import localdiskdirtree
+from dirdelta.ui import picker
+from dirdelta.known import replicanames
+from dirdelta.known import replicas
 
 
 class ScanErrorsWarningTest(unittest.TestCase):
@@ -44,10 +44,10 @@ class MainMenuTest(unittest.TestCase):
     def setUp(self):
         # The local dirs are writable unless a test says otherwise, and no message waits for Enter
         self.writable = {'/a', '/b'}
-        for patcher in (mock.patch('dirdelta.replicanames.mounts.current_mount', return_value=None),
-                        mock.patch('dirdelta.interactive_dir_sync.os.access',
+        for patcher in (mock.patch('dirdelta.known.replicanames.mounts.current_mount', return_value=None),
+                        mock.patch('dirdelta.sync.interactive_dir_sync.os.access',
                                    side_effect=lambda path, mode: path in self.writable),
-                        mock.patch('dirdelta.messages.show')):
+                        mock.patch('dirdelta.ui.messages.show')):
             self.addCleanup(patcher.stop)
             self.show = patcher.start()
         replicanames.forget()
@@ -57,12 +57,12 @@ class MainMenuTest(unittest.TestCase):
         def find_missing(src, dst):
             self.find_missing_calls.append(src.fullpath())
             return interactive_dir_sync.Missing(self.missing[src.fullpath()], [])
-        patcher = mock.patch('dirdelta.interactive_dir_sync.find_missing', side_effect=find_missing)
+        patcher = mock.patch('dirdelta.sync.interactive_dir_sync.find_missing', side_effect=find_missing)
         patcher.start()
         self.addCleanup(patcher.stop)
         # The files both have that differ, /a's way (none unless a test says so)
         self.differ = {}
-        patcher = mock.patch('dirdelta.differing.find', side_effect=lambda src, dst: dict(self.differ))
+        patcher = mock.patch('dirdelta.matching.differing.find', side_effect=lambda src, dst: dict(self.differ))
         patcher.start()
         self.addCleanup(patcher.stop)
 
@@ -74,12 +74,12 @@ class MainMenuTest(unittest.TestCase):
             self.shown_options = [shown_as().get(option, option) for option in options[2:]]
             self.state_line = shown_as()[dirsync_main.STATE]
             return dirsync_main.BACK
-        with mock.patch('dirdelta.picker.pick_option', side_effect=pick_option):
+        with mock.patch('dirdelta.ui.picker.pick_option', side_effect=pick_option):
             dirsync_main._sync(replica_a, replica_b, '/a', '/b')
         return self.shown_options
 
     def options(self, replica_a, replica_b):
-        with mock.patch('dirdelta.picker.pick_option', return_value=dirsync_main.BACK) as pick_option:
+        with mock.patch('dirdelta.ui.picker.pick_option', return_value=dirsync_main.BACK) as pick_option:
             dirsync_main._sync(replica_a, replica_b, '/a', '/b')
         options, = pick_option.call_args.args
         self.assertEqual(options[:2], [picker.Option(dirsync_main.STATE, dirsync_main.STATE, picker.Skipped(dirsync_main.STATE)),
@@ -97,7 +97,7 @@ class MainMenuTest(unittest.TestCase):
         a = localdiskdirtree.LocalDiskDirTree('/a', silent=True)
         b = localdiskdirtree.LocalDiskDirTree('/b', silent=True)
         for answer in (dirsync_main.BACK, None):
-            with mock.patch('dirdelta.picker.pick_option', return_value=answer):
+            with mock.patch('dirdelta.ui.picker.pick_option', return_value=answer):
                 self.assertIsNone(dirsync_main._sync(a, b, '/a', '/b'))
 
     def test_a_hashed_replicas_hashes_are_an_option_and_on_the_bottom_line(self):
@@ -110,9 +110,9 @@ class MainMenuTest(unittest.TestCase):
         def pick_option(options, shown_as, **_):
             shown.append(shown_as())
             return answers.pop(0)
-        with mock.patch('dirdelta.hashing._jobs', {'/a': job}), \
-                mock.patch('dirdelta.picker.pick_option', side_effect=pick_option), \
-                mock.patch('dirdelta.hashes_screen.dashboard') as dashboard:
+        with mock.patch('dirdelta.hashes.hashing._jobs', {'/a': job}), \
+                mock.patch('dirdelta.ui.picker.pick_option', side_effect=pick_option), \
+                mock.patch('dirdelta.screens.hashes_screen.dashboard') as dashboard:
             dirsync_main._sync(a, b, '/a', '/b')
         dashboard.assert_called_once_with([a, b], None)
         self.assertEqual(shown[0]['Replicas dashboard'],
@@ -128,7 +128,7 @@ class MainMenuTest(unittest.TestCase):
         a = localdiskdirtree.LocalDiskDirTree('/a', silent=True)
         b = clouddirtree.CloudDirTree('cloud/b')
         answers = ['Refresh /b file list from Google Drive', dirsync_main.BACK]
-        with mock.patch('dirdelta.picker.pick_option', side_effect=lambda *_, **__: answers.pop(0)), \
+        with mock.patch('dirdelta.ui.picker.pick_option', side_effect=lambda *_, **__: answers.pop(0)), \
                 mock.patch.object(b, 'refresh_from_drive') as refresh, \
                 mock.patch.object(elsewhere.Index, 'invalidate', autospec=True) as invalidate:
             dirsync_main._sync(a, b, '/a', '/b')
@@ -140,7 +140,7 @@ class MainMenuTest(unittest.TestCase):
         a = localdiskdirtree.LocalDiskDirTree('/a', silent=True)
         b = clouddirtree.CloudDirTree('cloud/b')
         answers = ['Refresh /b file list from Google Drive', dirsync_main.BACK]
-        with mock.patch('dirdelta.picker.pick_option', side_effect=lambda *_, **__: answers.pop(0)), \
+        with mock.patch('dirdelta.ui.picker.pick_option', side_effect=lambda *_, **__: answers.pop(0)), \
                 mock.patch.object(b, 'refresh_from_drive', side_effect=OSError('no network')):
             dirsync_main._sync(a, b, '/a', '/b')
         title, lines, _, _ = self.show.call_args.args
@@ -158,8 +158,8 @@ class MainMenuTest(unittest.TestCase):
         def browse(sync):
             syncs.append(sync)
             sync.has_changed = has_changed
-        with mock.patch('dirdelta.picker.pick_option', side_effect=lambda *_, **__: answers.pop(0)), \
-                mock.patch('dirdelta.interactive_dir_sync.InteractiveDirSync.browse', autospec=True,
+        with mock.patch('dirdelta.ui.picker.pick_option', side_effect=lambda *_, **__: answers.pop(0)), \
+                mock.patch('dirdelta.sync.interactive_dir_sync.InteractiveDirSync.browse', autospec=True,
                            side_effect=browse):
             dirsync_main._sync(a, b, '/a', '/b')
         self.assertEqual(answers, [])
@@ -238,8 +238,8 @@ class MainMenuTest(unittest.TestCase):
         b = localdiskdirtree.LocalDiskDirTree('/b', silent=True)
         self.differ = {'d1': differing.Change(1, 2, None, None, differing.BY_SIZE)}
         answers = [dirsync_main.DIFFER, dirsync_main.BACK]
-        with mock.patch('dirdelta.picker.pick_option', side_effect=lambda *_, **__: answers.pop(0)), \
-                mock.patch('dirdelta.picker.pick_files', return_value=None) as pick_files:
+        with mock.patch('dirdelta.ui.picker.pick_option', side_effect=lambda *_, **__: answers.pop(0)), \
+                mock.patch('dirdelta.ui.picker.pick_files', return_value=None) as pick_files:
             dirsync_main._sync(a, b, '/a', '/b')
         self.assertEqual([call.args[1] for call in pick_files.call_args_list], [['d1']])
         self.assertIn('other versions', pick_files.call_args.kwargs['header'])
@@ -259,9 +259,9 @@ class MainMenuTest(unittest.TestCase):
         a = localdiskdirtree.LocalDiskDirTree('/a', silent=True)
         b = localdiskdirtree.LocalDiskDirTree('/b', silent=True)
         answers = ['Rescan /b', dirsync_main.BACK]
-        with mock.patch('dirdelta.picker.pick_option', side_effect=lambda *_, **__: answers.pop(0)), \
+        with mock.patch('dirdelta.ui.picker.pick_option', side_effect=lambda *_, **__: answers.pop(0)), \
                 mock.patch.object(localdiskdirtree.LocalDiskDirTree, 'rescan') as rescan, \
-                mock.patch('dirdelta.elsewhere.Index.invalidate', autospec=True) as invalidate:
+                mock.patch('dirdelta.matching.elsewhere.Index.invalidate', autospec=True) as invalidate:
             calls_before = len(self.find_missing_calls)
             dirsync_main._sync(a, b, '/a', '/b')
         rescan.assert_called_once_with()
@@ -281,7 +281,7 @@ class MainMenuTest(unittest.TestCase):
                 sync.checked['x'] = {'y': True}
             else:
                 sync.has_changed = sync.was_read_anew = True
-        with mock.patch('dirdelta.picker.pick_option', side_effect=lambda *_, **__: answers.pop(0)), \
+        with mock.patch('dirdelta.ui.picker.pick_option', side_effect=lambda *_, **__: answers.pop(0)), \
                 mock.patch.object(dirsync_main.interactive_dir_sync.InteractiveDirSync, 'browse', autospec=True, side_effect=browse):
             dirsync_main._sync(a, b, '/a', '/b')
         self.assertEqual(checked[0], {})
@@ -296,7 +296,7 @@ class MainMenuTest(unittest.TestCase):
             checked.append(sync.checked)
             sync.checked['x'] = {'y': True}
             sync.has_changed = True
-        with mock.patch('dirdelta.picker.pick_option', side_effect=lambda *_, **__: answers.pop(0)), \
+        with mock.patch('dirdelta.ui.picker.pick_option', side_effect=lambda *_, **__: answers.pop(0)), \
                 mock.patch.object(dirsync_main.interactive_dir_sync.InteractiveDirSync, 'browse', autospec=True, side_effect=browse):
             dirsync_main._sync(a, b, '/a', '/b')
         self.assertEqual(checked[0], {'x': {'y': True}})
@@ -305,9 +305,9 @@ class MainMenuTest(unittest.TestCase):
         a = localdiskdirtree.LocalDiskDirTree('/a', silent=True)
         b = localdiskdirtree.LocalDiskDirTree('/b', silent=True)
         answers = ['Rescan /b', dirsync_main.BACK]
-        with mock.patch('dirdelta.picker.pick_option', side_effect=lambda *_, **__: answers.pop(0)), \
+        with mock.patch('dirdelta.ui.picker.pick_option', side_effect=lambda *_, **__: answers.pop(0)), \
                 mock.patch.object(localdiskdirtree.LocalDiskDirTree, 'rescan', side_effect=OSError('/b is gone')), \
-                mock.patch('dirdelta.elsewhere.Index.invalidate', autospec=True) as invalidate:
+                mock.patch('dirdelta.matching.elsewhere.Index.invalidate', autospec=True) as invalidate:
             dirsync_main._sync(a, b, '/a', '/b')
         invalidate.assert_not_called()
         self.assertEqual(self.show.call_args.args[0], "Couldn't rescan it")
@@ -321,7 +321,7 @@ class MainMenuTest(unittest.TestCase):
             while any('loading' in str(shown) for shown in shown_as().values()):
                 time.sleep(0.01)
             return None
-        with mock.patch('dirdelta.picker.pick_option', side_effect=pick_option), mock.patch('dirdelta.replicas.save'):
+        with mock.patch('dirdelta.ui.picker.pick_option', side_effect=pick_option), mock.patch('dirdelta.known.replicas.save'):
             dirsync_main._sync(a, b, '/a', '/b', known)
         self.assertEqual(known.comparison('/b', '/a')['only'], [1, 3])
 
@@ -353,8 +353,8 @@ class MainMenuTest(unittest.TestCase):
         a = localdiskdirtree.LocalDiskDirTree('/a', silent=True)
         b = localdiskdirtree.LocalDiskDirTree('/b', silent=True)
         answers = ['Files only in /a', 'Files only in /a', dirsync_main.BACK]
-        with mock.patch('dirdelta.picker.pick_option', side_effect=lambda *_, **__: answers.pop(0)), \
-                mock.patch('dirdelta.picker.pick_files', return_value=None) as pick_files:
+        with mock.patch('dirdelta.ui.picker.pick_option', side_effect=lambda *_, **__: answers.pop(0)), \
+                mock.patch('dirdelta.ui.picker.pick_files', return_value=None) as pick_files:
             dirsync_main._sync(a, b, '/a', '/b')
         self.assertEqual(sorted(self.find_missing_calls), ['/a', '/b'])
         self.assertEqual([call.args[1] for call in pick_files.call_args_list], [['x', 'y', 'z']] * 2)
@@ -368,8 +368,8 @@ class MainMenuTest(unittest.TestCase):
         def pick_option(options, **_):
             menus.append(options[-3:-2] + options[-1:])
             return answers.pop(0)
-        with mock.patch('dirdelta.picker.pick_option', side_effect=pick_option), \
-                mock.patch('dirdelta.replicas.save',
+        with mock.patch('dirdelta.ui.picker.pick_option', side_effect=pick_option), \
+                mock.patch('dirdelta.known.replicas.save',
                            side_effect=lambda known: saved.append(list(known.favorites))):
             dirsync_main._sync(a, b, '/a', '/b', known)
         # (What the ways found is saved too, when they found it: only the favorites' changes here)
@@ -382,10 +382,10 @@ class MainMenuTest(unittest.TestCase):
     def test_run_records_the_pair(self):
         known = replicas.Replicas()
         args = mock.Mock(dir_a_path='/a', dir_b_path='/b', max_depth=None)
-        with mock.patch('dirdelta.replicafactory.validate_dir'), \
-                mock.patch('dirdelta.replicas.load', return_value=known), \
-                mock.patch('dirdelta.replicas.save') as save, \
-                mock.patch('dirdelta.dirsync_main._sync') as sync:
+        with mock.patch('dirdelta.trees.replicafactory.validate_dir'), \
+                mock.patch('dirdelta.known.replicas.load', return_value=known), \
+                mock.patch('dirdelta.known.replicas.save') as save, \
+                mock.patch('dirdelta.sync.dirsync_main._sync') as sync:
             dirsync_main.run(args)
         self.assertEqual(known.history, [('/a', '/b')])
         save.assert_called_once_with(known)

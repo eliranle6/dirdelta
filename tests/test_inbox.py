@@ -9,12 +9,12 @@ import zipfile
 from unittest import mock
 
 import helpers
-from dirdelta import ai
-from dirdelta import clouddirtree
-from dirdelta import inbox
-from dirdelta import picker
-from dirdelta import replicalog
-from dirdelta import replicas
+from dirdelta.claude import ai
+from dirdelta.drive import clouddirtree
+from dirdelta.inbox import inbox
+from dirdelta.ui import picker
+from dirdelta.known import replicalog
+from dirdelta.known import replicas
 
 Sort = inbox.InboxSort
 NOTHING = Sort.NOTHING
@@ -33,10 +33,10 @@ class InboxSortTest(unittest.TestCase):
         self.root = os.path.join(self.tmpdir, 'sorted')
         helpers.make_files(self.inbox, ['a.txt', 'b.jpg', 'trip/c.jpg'])
         helpers.make_files(self.root, ['docs/old.txt', 'photos/old.jpg'])
-        for patcher in (mock.patch('dirdelta.messages.print_line'),
-                        mock.patch('dirdelta.messages.print_progress'),
-                        mock.patch('dirdelta.messages.show'),
-                        mock.patch('dirdelta.ai.CACHE_FILE', os.path.join(self.tmpdir, 'ai.json'))):
+        for patcher in (mock.patch('dirdelta.ui.messages.print_line'),
+                        mock.patch('dirdelta.ui.messages.print_progress'),
+                        mock.patch('dirdelta.ui.messages.show'),
+                        mock.patch('dirdelta.claude.ai.CACHE_FILE', os.path.join(self.tmpdir, 'ai.json'))):
             patcher.start()
             self.addCleanup(patcher.stop)
         self.show = inbox.messages.show
@@ -56,10 +56,10 @@ class InboxSortTest(unittest.TestCase):
         picks, dirs = list(picks), list(dirs)
         with helpers.scripted_files_picker(lambda relpaths: picks.pop(0)) as self.pick_files, \
                 helpers.answering_option_picker(answers) as self.pick_option, \
-                mock.patch('dirdelta.picker.pick_under_dir',
+                mock.patch('dirdelta.ui.picker.pick_under_dir',
                            side_effect=lambda *_, **__: self.picked_dir(dirs.pop(0))) as self.pick_under_dir, \
-                mock.patch('dirdelta.picker.view_files', return_value=view) as self.view_files, \
-                mock.patch('dirdelta.dryrun.DRYRUN', is_dry_run), self.synchronously():
+                mock.patch('dirdelta.ui.picker.view_files', return_value=view) as self.view_files, \
+                mock.patch('dirdelta.util.dryrun.DRYRUN', is_dry_run), self.synchronously():
             self.sorter = Sort(self.inbox, self.root, known)
             self.sorter.run()
 
@@ -76,14 +76,14 @@ class InboxSortTest(unittest.TestCase):
         def stopped(*_, **__):
             raise KeyboardInterrupt()
         with mock.patch.object(Sort, '_transfer', side_effect=stopped), \
-                mock.patch('dirdelta.localdiskdirtree.LocalReplica.move_files', side_effect=stopped):
+                mock.patch('dirdelta.trees.localdiskdirtree.LocalReplica.move_files', side_effect=stopped):
             self.sort([['a.txt'], None], ['Move it to a dir you pick', YES], dirs=[os.path.join(self.root, 'docs')],
                       is_dry_run=False)
         self.assertTrue(self.exists('inbox', 'a.txt'))
         self.assertEqual(self.show.call_args.args[0], 'Not all were moved')
 
     def test_o_makes_a_new_dir_beside_the_selected_one(self):
-        with mock.patch('dirdelta.messages.ask', return_value='letters'):
+        with mock.patch('dirdelta.ui.messages.ask', return_value='letters'):
             self.sort([['a.txt'], None], ['Move it to a dir you pick', YES],
                       dirs=[('o', os.path.join(self.root, 'docs'))], is_dry_run=False)
         # In docs/'s dir, the root, not in docs/
@@ -93,7 +93,7 @@ class InboxSortTest(unittest.TestCase):
         self.assertIn('O', keys)
 
     def test_files_are_moved_to_another_dir_of_the_inbox(self):
-        with mock.patch('dirdelta.messages.ask', return_value='lists'):
+        with mock.patch('dirdelta.ui.messages.ask', return_value='lists'):
             self.sort([['a.txt'], None], ['Move it to another dir in the inbox', YES],
                       dirs=[('n', self.inbox)], is_dry_run=False)
         self.assertTrue(self.exists('inbox', 'lists', 'a.txt'))
@@ -113,7 +113,7 @@ class InboxSortTest(unittest.TestCase):
         self.assertEqual(self.pick_files.call_args.args[1], ['b.jpg', 'trip/c.jpg'])
 
     def test_a_move_waits_for_enter_and_says_if_some_werent_moved(self):
-        with mock.patch('dirdelta.messages.progress_screen', wraps=inbox.messages.progress_screen) as screen:
+        with mock.patch('dirdelta.ui.messages.progress_screen', wraps=inbox.messages.progress_screen) as screen:
             self.sort([['a.txt'], None], ['Move it to a dir you pick', YES], dirs=[os.path.join(self.root, 'docs')])
         # "Press Enter to continue" once it's done
         self.assertNotIn('wait', screen.call_args.kwargs)
@@ -210,7 +210,7 @@ class InboxSortTest(unittest.TestCase):
         self.assertIn('Remove it: it looks like junk (to the trash)', menu)
 
     def test_live_changes_are_noted_for_the_logs(self):
-        with mock.patch('dirdelta.messages.ask', return_value='x'):
+        with mock.patch('dirdelta.ui.messages.ask', return_value='x'):
             self.sort([['a.txt'], ['b.jpg'], ['trip/c.jpg'], None],
                       ['Move it to a dir you pick', YES, 'Copy it to a dir you pick', YES, 'Remove it from', YES, SURE],
                       dirs=[os.path.join(self.root, 'docs')] * 2)
@@ -230,10 +230,10 @@ class InboxSortTest(unittest.TestCase):
         picks = [['a.txt'], None]
         with helpers.scripted_files_picker(lambda relpaths: picks.pop(0)), \
                 helpers.answering_option_picker(['Move it to a dir you pick', YES, 'Add it to its', replicalog.NO_ENTRY]) as pick, \
-                mock.patch('dirdelta.picker.pick_under_dir', return_value=('', os.path.join(self.root, 'docs'))), \
-                mock.patch('dirdelta.picker.view_files', return_value=True), \
-                mock.patch('dirdelta.replicas.save'), mock.patch('dirdelta.dryrun.DRYRUN', False), \
-                mock.patch('dirdelta.replicalog.identity', side_effect=lambda path: 'id:' + path), \
+                mock.patch('dirdelta.ui.picker.pick_under_dir', return_value=('', os.path.join(self.root, 'docs'))), \
+                mock.patch('dirdelta.ui.picker.view_files', return_value=True), \
+                mock.patch('dirdelta.known.replicas.save'), mock.patch('dirdelta.util.dryrun.DRYRUN', False), \
+                mock.patch('dirdelta.known.replicalog.identity', side_effect=lambda path: 'id:' + path), \
                 mock.patch.object(Sort, 'prepare_hashing'), self.synchronously():
             inbox.run(self.inbox, self.root, known)
         # Seen at the start, and its log's last entry is the one added since
@@ -258,7 +258,7 @@ class InboxSortTest(unittest.TestCase):
         self.assertTrue(self.exists('inbox', 'b.jpg'))
 
     def test_a_removal_waits_for_enter_and_says_if_some_werent_removed(self):
-        with mock.patch('dirdelta.messages.progress_screen', wraps=inbox.messages.progress_screen) as screen:
+        with mock.patch('dirdelta.ui.messages.progress_screen', wraps=inbox.messages.progress_screen) as screen:
             self.sort([['a.txt'], None], ['Remove it from', YES, SURE])
         # "Press Enter to continue" once it's done
         self.assertNotIn('wait', screen.call_args.kwargs)
@@ -269,7 +269,7 @@ class InboxSortTest(unittest.TestCase):
             if path.endswith('b.jpg'):
                 raise PermissionError('read-only')
             real_unlink(path)
-        with mock.patch('dirdelta.localdiskdirtree.os.unlink', side_effect=unlink):
+        with mock.patch('dirdelta.trees.localdiskdirtree.os.unlink', side_effect=unlink):
             self.sort([['b.jpg', 'trip/c.jpg'], None], ['Remove the 2 files from', YES, SURE])
         title, lines = self.show.call_args.args[:2]
         self.assertEqual(title, 'Not all were removed')
@@ -290,12 +290,12 @@ class InboxSortTest(unittest.TestCase):
                 return picker.Picked('', '', list(items))
             chosen = picks.pop(0)
             return picker.Picked('', '', chosen) if isinstance(chosen, list) else chosen
-        with mock.patch('dirdelta.ai._run_query', return_value={'summary': 'ok', 'steps': steps}), \
-                mock.patch('dirdelta.messages.ask', return_value='sort them'), \
-                mock.patch('dirdelta.picker.pick_files', side_effect=pick_files), \
-                helpers.answering_option_picker(answers), mock.patch('dirdelta.dryrun.DRYRUN', False), \
-                mock.patch('dirdelta.localdiskdirtree.LocalReplica.trashing', return_value=contextlib.nullcontext()), \
-                mock.patch('dirdelta.picker.view_files') as self.view_files:
+        with mock.patch('dirdelta.claude.ai._run_query', return_value={'summary': 'ok', 'steps': steps}), \
+                mock.patch('dirdelta.ui.messages.ask', return_value='sort them'), \
+                mock.patch('dirdelta.ui.picker.pick_files', side_effect=pick_files), \
+                helpers.answering_option_picker(answers), mock.patch('dirdelta.util.dryrun.DRYRUN', False), \
+                mock.patch('dirdelta.trees.localdiskdirtree.LocalReplica.trashing', return_value=contextlib.nullcontext()), \
+                mock.patch('dirdelta.ui.picker.view_files') as self.view_files:
             self.sorter = Sort(self.inbox, self.root)
             self.sorter.run()
 
@@ -359,7 +359,7 @@ class InboxSortTest(unittest.TestCase):
         self.assertFalse(self.exists('sorted', 'meta', 'a.txt'))
 
     def test_a_new_dir_in_dirdeltas_own_is_refused_too(self):
-        with mock.patch('dirdelta.messages.ask', return_value='meta/new'):
+        with mock.patch('dirdelta.ui.messages.ask', return_value='meta/new'):
             self.sort([['a.txt'], None], ['Move it to a dir you pick'], dirs=[('o', os.path.join(self.root, 'docs'))],
                       is_dry_run=False)
         self.assertEqual(self.show.call_args.args[0], "That's dirdelta's")
@@ -379,9 +379,9 @@ class InboxSortTest(unittest.TestCase):
     def refreshed(self, pick):
         """How many times the side tree's listed in a sort with pick, then quitting, and the picks after pick"""
         sorter = Sort(self.inbox, self.root)
-        with mock.patch('dirdelta.sidetree._listed', wraps=inbox.sidetree._listed) as listed, \
-                mock.patch('dirdelta.picker.pick_files', side_effect=[pick, None]) as pick_files, \
-                mock.patch('dirdelta.interactive_dir_sync.refresh_replica') as self.refresh_replica:
+        with mock.patch('dirdelta.ui.sidetree._listed', wraps=inbox.sidetree._listed) as listed, \
+                mock.patch('dirdelta.ui.picker.pick_files', side_effect=[pick, None]) as pick_files, \
+                mock.patch('dirdelta.sync.interactive_dir_sync.refresh_replica') as self.refresh_replica:
             sorter.run()
         return listed.call_count, pick_files.call_args_list[-1].kwargs['picked']
 
@@ -399,7 +399,7 @@ class InboxSortTest(unittest.TestCase):
         sorter = Sort(self.inbox, self.root)
         picks = [picker.Picked(picker.SIDE_KEY, 'a.txt', ['a.txt'], 'docs', Sort.REFRESH_KEY),
                  picker.Picked(picker.SIDE_KEY, 'a.txt', ['a.txt'], 'docs'), None]
-        with mock.patch('dirdelta.picker.pick_files', side_effect=picks) as pick_files, \
+        with mock.patch('dirdelta.ui.picker.pick_files', side_effect=picks) as pick_files, \
                 mock.patch.object(Sort, '_move_to_side', return_value=None):
             sorter.run()
         self.assertEqual([call.kwargs['side'].start for call in pick_files.call_args_list], [None, 'docs', None])
@@ -412,7 +412,7 @@ class InboxSortTest(unittest.TestCase):
             if answer is not None:
                 os.remove(os.path.join(self.inbox, 'a.txt'))
             return answer
-        with mock.patch('dirdelta.picker.pick_files', side_effect=pick) as pick_files:
+        with mock.patch('dirdelta.ui.picker.pick_files', side_effect=pick) as pick_files:
             Sort(self.inbox, self.root).run()
         self.assertEqual(pick_files.call_args.kwargs['selected'], 'b.jpg')
 
@@ -429,7 +429,7 @@ class InboxSortTest(unittest.TestCase):
     def test_a_file_gone_during_a_batch_is_left_out_and_not_called_failed(self):
         sorter = self.drive_inbox()
         with mock.patch.object(sorter, '_downloaded', return_value='/tmp/x'), \
-                mock.patch('dirdelta.ai.describe', return_value={'a.txt': 'a note'}):
+                mock.patch('dirdelta.claude.ai.describe', return_value={'a.txt': 'a note'}):
             sorter._describe(['a.txt', 'gone.txt'])
         self.assertEqual(sorter._descriptions, {'a.txt': 'a note'})
         self.assertEqual(sorter._failed, {})
@@ -449,7 +449,7 @@ class InboxSortTest(unittest.TestCase):
             self.assertEqual(pick.call_args.kwargs['excluded'], ['meta'])
 
     def read_only_inbox(self):
-        patcher = mock.patch('dirdelta.interactive_dir_sync.is_writable', side_effect=lambda tree: tree.fullpath() != os.path.realpath(self.inbox))
+        patcher = mock.patch('dirdelta.sync.interactive_dir_sync.is_writable', side_effect=lambda tree: tree.fullpath() != os.path.realpath(self.inbox))
         patcher.start()
         self.addCleanup(patcher.stop)
 
@@ -463,7 +463,7 @@ class InboxSortTest(unittest.TestCase):
         self.assertFalse(any(option.startswith(('Move', 'Remove')) for option in options))
 
     def read_only_root(self):
-        patcher = mock.patch('dirdelta.interactive_dir_sync.is_writable', side_effect=lambda tree: tree.fullpath() != os.path.realpath(self.root))
+        patcher = mock.patch('dirdelta.sync.interactive_dir_sync.is_writable', side_effect=lambda tree: tree.fullpath() != os.path.realpath(self.root))
         patcher.start()
         self.addCleanup(patcher.stop)
 
@@ -496,15 +496,15 @@ class InboxSortTest(unittest.TestCase):
         sorter = Sort(self.inbox, self.root)
         names = lambda: [action.name for action in sorter._ai_task(['a.txt']  , []).actions]
         self.assertEqual(len(names()), 4)
-        with mock.patch('dirdelta.interactive_dir_sync.is_writable', side_effect=lambda tree: tree.fullpath() != os.path.realpath(self.inbox)):
+        with mock.patch('dirdelta.sync.interactive_dir_sync.is_writable', side_effect=lambda tree: tree.fullpath() != os.path.realpath(self.inbox)):
             self.assertEqual(names(), [Sort.COPY_TO])
-        with mock.patch('dirdelta.interactive_dir_sync.is_writable', side_effect=lambda tree: tree.fullpath() != os.path.realpath(self.root)):
+        with mock.patch('dirdelta.sync.interactive_dir_sync.is_writable', side_effect=lambda tree: tree.fullpath() != os.path.realpath(self.root)):
             self.assertEqual(names(), [Sort.MOVE_IN_INBOX, Sort.REMOVE])
 
     def test_with_both_read_only_the_ai_isnt_asked(self):
         sorter = Sort(self.inbox, self.root)
-        with mock.patch('dirdelta.interactive_dir_sync.is_writable', return_value=False), \
-                mock.patch('dirdelta.aiplan_screen.ask') as ask:
+        with mock.patch('dirdelta.sync.interactive_dir_sync.is_writable', return_value=False), \
+                mock.patch('dirdelta.screens.aiplan_screen.ask') as ask:
             self.assertIsNone(sorter._ask_ai(['a.txt']))
         ask.assert_not_called()
 
@@ -567,7 +567,7 @@ class InboxSortTest(unittest.TestCase):
             relpaths = [line.split('. ', 1)[1].split(' (')[0] for line in lines]
             return {'files': [dict({field: answers[relpath][field] for field in fields}, number=number)
                               for number, relpath in enumerate(relpaths, 1)]}
-        return mock.patch('dirdelta.ai._run_query', side_effect=run_query)
+        return mock.patch('dirdelta.claude.ai._run_query', side_effect=run_query)
 
     def test_descriptions_are_shown_after_the_names(self):
         with self.ask_claude({'a.txt': {'description': 'a shopping list'}}):
@@ -578,7 +578,7 @@ class InboxSortTest(unittest.TestCase):
                                                           ('[claude: a shopping list]', inbox.CLAUDE_STYLE)]), '': ''})
         self.assertEqual(self.queries[0][:2], (['description'], ai.MODEL))
         # Kept: shown on the next run too, without asking
-        with mock.patch('dirdelta.ai._run_query', side_effect=AssertionError('asked again')):
+        with mock.patch('dirdelta.claude.ai._run_query', side_effect=AssertionError('asked again')):
             self.sort([None], [])
         self.assertEqual(self.pick_files.call_args.kwargs['shown_as'](), labels)
 
@@ -674,7 +674,7 @@ class InboxSortTest(unittest.TestCase):
         self.assertTrue(self.exists('sorted', 'photos', 'beach.jpg'))
 
     def test_a_typed_name_starts_as_claudes(self):
-        with self.claude_places(), mock.patch('dirdelta.messages.ask', return_value='sunset.jpg') as ask:
+        with self.claude_places(), mock.patch('dirdelta.ui.messages.ask', return_value='sunset.jpg') as ask:
             self.sort([['trip/c.jpg'], ['trip/c.jpg'], None],
                       ['Ask Claude', "Move it to Claude's dir, under a name you type", YES])
         self.assertEqual(ask.call_args.args[3], 'beach.jpg')
@@ -684,7 +684,7 @@ class InboxSortTest(unittest.TestCase):
 
     def test_cc_renames_the_selected_file_what_claude_said_going_with_it(self):
         self.sorter = None
-        with mock.patch('dirdelta.messages.ask', return_value='list.txt'), mock.patch('dirdelta.dryrun.DRYRUN', False):
+        with mock.patch('dirdelta.ui.messages.ask', return_value='list.txt'), mock.patch('dirdelta.util.dryrun.DRYRUN', False):
             sorter = Sort(self.inbox, self.root)
             sorter._descriptions['a.txt'] = 'a list'
             moved = sorter._rename_selected('a.txt')
@@ -693,28 +693,28 @@ class InboxSortTest(unittest.TestCase):
         self.assertEqual(sorter._descriptions, {'list.txt': 'a list'})
 
     def test_cc_in_the_picker_shows_it_again_on_the_renamed_one(self):
-        with mock.patch('dirdelta.messages.ask', return_value='beach'):
+        with mock.patch('dirdelta.ui.messages.ask', return_value='beach'):
             self.sort([picker.Picked(inbox.renaming.PRESSED, 'trip', []), None], [], is_dry_run=False)
         self.assertTrue(self.exists('inbox', 'beach', 'c.jpg'))
         self.assertEqual(self.pick_files.call_args.kwargs['selected'], 'beach')
         self.assertEqual(self.pick_files.call_args.kwargs['twice_keys'], 'c')
 
     def test_cc_in_the_dir_picker_renames_a_sorted_dir_then_picks_again(self):
-        with mock.patch('dirdelta.messages.ask', return_value='documents'):
+        with mock.patch('dirdelta.ui.messages.ask', return_value='documents'):
             self.sort([['a.txt'], None], ['Move it to a dir you pick', YES],
                       dirs=[(inbox.renaming.PRESSED, os.path.join(self.root, 'docs')), os.path.join(self.root, 'documents')])
         self.assertTrue(self.exists('sorted', 'documents', 'old.txt'))
         self.assertTrue(self.exists('sorted', 'documents', 'a.txt'))
 
     def test_a_typed_name_in_a_picked_dir(self):
-        with mock.patch('dirdelta.messages.ask', return_value='list.txt') as ask:
+        with mock.patch('dirdelta.ui.messages.ask', return_value='list.txt') as ask:
             self.sort([['a.txt'], None], ['Move it to a dir you pick, under a name you type', YES], dirs=[os.path.join(self.root, 'docs')])
         # Without Claude's, its own
         self.assertEqual(ask.call_args.args[3], 'a.txt')
         self.assertTrue(self.exists('sorted', 'docs', 'list.txt'))
 
     def test_a_typed_name_isnt_a_path_and_is_for_one_file(self):
-        with mock.patch('dirdelta.messages.ask', return_value='../x.txt'):
+        with mock.patch('dirdelta.ui.messages.ask', return_value='../x.txt'):
             self.sort([['a.txt'], None], ['Move it to a dir you pick, under a name you type'], dirs=[os.path.join(self.root, 'docs')])
         self.assertEqual(self.show.call_args.args[0], 'Not a name')
         self.assertTrue(self.exists('inbox', 'a.txt'))
@@ -723,7 +723,7 @@ class InboxSortTest(unittest.TestCase):
         self.assertFalse(any("a name you type" in option for option in helpers.labels_of(self.pick_option.call_args.args[0])))
 
     def test_ctrl_x_opens_the_selected_one_not_the_picked_ones(self):
-        with mock.patch('dirdelta.opening.Opener.open_in_background') as open_in_background:
+        with mock.patch('dirdelta.ui.opening.Opener.open_in_background') as open_in_background:
             self.sort([None], [])
             files = ['a.txt', 'b.jpg', 'trip/c.jpg']
             self.pick_files.call_args.kwargs['on_notify']('\x18', 'trip/c.jpg', ['a.txt', 'b.jpg'])
@@ -732,14 +732,14 @@ class InboxSortTest(unittest.TestCase):
         self.assertEqual(open_in_background.call_args_list, [mock.call(['trip/c.jpg'], files)] * 2)
 
     def test_open_in_the_menu_opens_the_picked_files(self):
-        with mock.patch('dirdelta.opening.Opener.open_in_background') as open_in_background:
+        with mock.patch('dirdelta.ui.opening.Opener.open_in_background') as open_in_background:
             self.sort([['a.txt', 'b.jpg'], None], ['Open the 2 files with their programs'])
         open_in_background.assert_called_once_with(['a.txt', 'b.jpg'], ['a.txt', 'b.jpg'])
         # Picked as they were
         self.assertEqual(self.pick_files.call_args.kwargs['picked'], ['a.txt', 'b.jpg'])
 
     def test_too_many_to_open_arent_offered_to(self):
-        with mock.patch('dirdelta.opening.MAX_OPENED', 2):
+        with mock.patch('dirdelta.ui.opening.MAX_OPENED', 2):
             self.sort([['a.txt', 'b.jpg', 'trip/c.jpg'], None], [NOTHING])
         self.assertFalse(any(option.startswith('Open') for option in helpers.labels_of(self.pick_option.call_args.args[0])))
 
@@ -754,10 +754,10 @@ class InboxSortTest(unittest.TestCase):
             f.write(json.dumps({'id': 'c', 'name': 'c.jpg', 'parents': ['trip'], 'size': '3',
                                 'mimeType': 'image/jpeg'}) + '\n')
         picks = [picker.Picked('', 'trip/c.jpg', ['trip/c.jpg']), None]
-        with mock.patch('dirdelta.drivecache.LINES_FILE', cache), \
+        with mock.patch('dirdelta.drive.drivecache.LINES_FILE', cache), \
                 helpers.scripted_files_picker(lambda relpaths: picks.pop(0)) as pick_files, \
                 helpers.answering_option_picker(['Read cloud/me/in/trip/ anew from Google Drive']) as pick_option, \
-                mock.patch('dirdelta.interactive_dir_sync.refresh_replica') as refresh:
+                mock.patch('dirdelta.sync.interactive_dir_sync.refresh_replica') as refresh:
             sorter = Sort('cloud/me/in', 'cloud/me/sorted')
             sorter.run()
         # As r does: its folder is the one read (see CloudDirTree.refresh_from_drive())
@@ -790,7 +790,7 @@ class InboxSortTest(unittest.TestCase):
                 sorter._descriptions['a.txt'] = 'a list'
             elif len(sends) == 3:
                 raise picker.PickerClosed()
-        with mock.patch('dirdelta.inbox.PREVIEWS_INTERVAL', 0), self.assertRaises(picker.PickerClosed):
+        with mock.patch('dirdelta.inbox.inbox.PREVIEWS_INTERVAL', 0), self.assertRaises(picker.PickerClosed):
             sorter._send_previews(['a.txt', 'b.jpg'], send)
         self.assertEqual(sorted(sends[0]), ['a.txt', 'b.jpg'])
         # Only the one that changed
@@ -880,7 +880,7 @@ class InboxSortTest(unittest.TestCase):
         self.assertTrue(self.exists('inbox', 'a.txt'))
 
     def test_claudes_errors_are_said(self):
-        with mock.patch('dirdelta.ai._run_query', side_effect=ai.AIError('not logged in')):
+        with mock.patch('dirdelta.claude.ai._run_query', side_effect=ai.AIError('not logged in')):
             self.sort([['a.txt'], None], ['Describe it'])
             self.assertEqual(self.sorter._failed, {'a.txt': 'not logged in'})
             self.assertEqual(self.sorter._shown_as(['a.txt'])[''], "Claude: couldn't do 1 file")
@@ -907,7 +907,7 @@ class InboxSortTest(unittest.TestCase):
             Sort(os.path.join(self.tmpdir, 'nope'), self.root)
 
     def test_a_new_dir_is_made_in_the_selected_one(self):
-        with mock.patch('dirdelta.messages.ask', return_value='2026/taxes/') as ask:
+        with mock.patch('dirdelta.ui.messages.ask', return_value='2026/taxes/') as ask:
             self.sort([['a.txt'], None], ['Move it to a dir you pick', YES],
                       dirs=[('n', os.path.join(self.root, 'docs'))])
         self.assertIn('n', self.pick_under_dir.call_args.kwargs['keys'])
@@ -915,14 +915,14 @@ class InboxSortTest(unittest.TestCase):
         self.assertTrue(self.exists('sorted', 'docs', '2026', 'taxes', 'a.txt'))
 
     def test_a_new_dirs_name_isnt_a_path_out(self):
-        with mock.patch('dirdelta.messages.ask', return_value='../x'):
+        with mock.patch('dirdelta.ui.messages.ask', return_value='../x'):
             self.sort([['a.txt'], None], ['Move it to a dir you pick'], dirs=[('n', self.root)])
         self.assertEqual(self.show.call_args.args[0], "Not a dir's name")
         self.assertTrue(self.exists('inbox', 'a.txt'))
 
     def test_the_dirs_moved_to_are_offered_first_next_time(self):
         known = replicas.Replicas()
-        with mock.patch('dirdelta.replicas.save') as save:
+        with mock.patch('dirdelta.known.replicas.save') as save:
             # The first time, there are none: straight to the dir picker
             self.sort([['a.txt'], None], ['Move it to a dir you pick', YES], dirs=[os.path.join(self.root, 'docs')],
                       known=known)
@@ -935,7 +935,7 @@ class InboxSortTest(unittest.TestCase):
             self.assertIn(self.root, menu.kwargs['header'])
             self.assertTrue(self.exists('sorted', 'docs', 'b.jpg'))
             # A new one, or one picked, goes to the top; one not moved to (No) doesn't
-            with mock.patch('dirdelta.messages.ask', return_value='new'):
+            with mock.patch('dirdelta.ui.messages.ask', return_value='new'):
                 self.sort([['trip/c.jpg'], None], ['Move it to a dir you pick', 'Pick a dir', YES],
                           dirs=[('n', os.path.join(self.root, 'photos'))], known=known)
                 self.sort([['b.jpg'], None], ['Move it to a dir you pick', 'Pick a dir', NO],
@@ -945,7 +945,7 @@ class InboxSortTest(unittest.TestCase):
     def test_a_dir_in_the_inbox_cant_be_the_destination(self):
         root_with_inbox = self.tmpdir
         sorter = Sort(self.inbox, root_with_inbox)
-        with mock.patch('dirdelta.picker.pick_under_dir', return_value=('', os.path.join(self.inbox, 'trip'))):
+        with mock.patch('dirdelta.ui.picker.pick_under_dir', return_value=('', os.path.join(self.inbox, 'trip'))):
             self.assertIsNone(sorter._pick_dir('move', '1 file'))
         self.assertEqual(self.show.call_args.args[0], "That's the inbox")
 
@@ -958,7 +958,7 @@ class InboxSortTest(unittest.TestCase):
 
     def test_a_move_between_two_trees_is_a_copy_then_a_removal(self):
         sorter = self.two_trees()
-        with mock.patch('dirdelta.dryrun.DRYRUN', False):
+        with mock.patch('dirdelta.util.dryrun.DRYRUN', False):
             done = sorter._transfer([('trip/c.jpg', 'photos/trip/c.jpg'), ('a.txt', 'docs/a.txt')], True)
         self.assertEqual(sorted(done), [('a.txt', 'docs/a.txt'), ('trip/c.jpg', 'photos/trip/c.jpg')])
         with open(os.path.join(self.root, 'photos', 'trip', 'c.jpg')) as f:
@@ -974,8 +974,8 @@ class InboxSortTest(unittest.TestCase):
             if src.endswith('a.txt'):
                 raise OSError('disk full')
             real_copy(src, dst)
-        with mock.patch('dirdelta.dryrun.DRYRUN', False), \
-                mock.patch('dirdelta.localdiskdirtree.shutil.copy2', side_effect=copy):
+        with mock.patch('dirdelta.util.dryrun.DRYRUN', False), \
+                mock.patch('dirdelta.trees.localdiskdirtree.shutil.copy2', side_effect=copy):
             done = sorter._transfer([('a.txt', 'docs/a.txt'), ('b.jpg', 'photos/b.jpg')], True)
         self.assertEqual(done, [('b.jpg', 'photos/b.jpg')])
         self.assertTrue(self.exists('inbox', 'a.txt'))
@@ -983,7 +983,7 @@ class InboxSortTest(unittest.TestCase):
 
     def test_a_copy_between_two_trees_keeps_the_inbox_files(self):
         sorter = self.two_trees()
-        with mock.patch('dirdelta.dryrun.DRYRUN', False):
+        with mock.patch('dirdelta.util.dryrun.DRYRUN', False):
             sorter._transfer([('a.txt', 'docs/a.txt')], False)
         self.assertTrue(self.exists('inbox', 'a.txt'))
         self.assertTrue(self.exists('sorted', 'docs', 'a.txt'))
@@ -994,7 +994,7 @@ class InboxSortTest(unittest.TestCase):
             f.write(json.dumps({'myDriveRootId': 'ROOT'}) + '\n')
             f.write(json.dumps({'id': 'me', 'name': 'me', 'parents': ['ROOT'],
                                 'mimeType': 'application/vnd.google-apps.folder'}) + '\n')
-        with mock.patch('dirdelta.drivecache.LINES_FILE', cache):
+        with mock.patch('dirdelta.drive.drivecache.LINES_FILE', cache):
             sorter = Sort(self.inbox, 'cloud/me')
             with self.assertRaises(inbox.drivecache.DriveCacheError):
                 Sort(self.inbox, 'cloud/nope')
@@ -1005,7 +1005,7 @@ class InboxSortTest(unittest.TestCase):
 
     def test_run_records_the_sort(self):
         known = replicas.Replicas()
-        with mock.patch('dirdelta.replicas.save') as save, \
+        with mock.patch('dirdelta.known.replicas.save') as save, \
                 mock.patch.object(Sort, 'run'), mock.patch.object(Sort, 'prepare_hashing'):
             inbox.run(self.inbox, self.root, known)
         self.assertEqual(known.sorts, [(self.inbox, self.root)])
@@ -1013,14 +1013,14 @@ class InboxSortTest(unittest.TestCase):
 
     def test_run_offers_to_hash_the_local_ones_first(self):
         order = []
-        with mock.patch('dirdelta.hashes_screen.offer', side_effect=lambda jobs: order.append(
+        with mock.patch('dirdelta.screens.hashes_screen.offer', side_effect=lambda jobs: order.append(
                     sorted(job.root for job in jobs)) or True), \
                 mock.patch.object(Sort, 'run', side_effect=lambda: order.append('run')):
             inbox.run(self.inbox, self.root)
         self.assertEqual(order, [sorted([os.path.realpath(self.inbox), os.path.realpath(self.root)]), 'run'])
 
     def test_nothing_at_the_hashing_question_goes_back_without_sorting(self):
-        with mock.patch('dirdelta.hashes_screen.offer', return_value=False), \
+        with mock.patch('dirdelta.screens.hashes_screen.offer', return_value=False), \
                 mock.patch.object(Sort, 'run') as run:
             inbox.run(self.inbox, self.root)
         run.assert_not_called()
@@ -1036,7 +1036,7 @@ class InboxSortTest(unittest.TestCase):
                 return dir_answer
             return {'files': [{'number': number, 'description': description}
                               for number in range(1, prompt.count('size ') + 1)]}
-        return mock.patch('dirdelta.ai._run_query', side_effect=query)
+        return mock.patch('dirdelta.claude.ai._run_query', side_effect=query)
 
     def cache_dir_recommendation(self, dirpath, recommendation):
         """Put what Claude said of the inbox's dir in its cache, as asked before"""

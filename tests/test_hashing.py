@@ -8,10 +8,10 @@ import unittest
 from unittest import mock
 
 import helpers
-from dirdelta import text
-from dirdelta import hashcache
-from dirdelta import hashing
-from dirdelta import localscan
+from dirdelta.util import text
+from dirdelta.hashes import hashcache
+from dirdelta.hashes import hashing
+from dirdelta.trees import localscan
 
 # How long a test waits for the workers, at most, in seconds
 TIMEOUT = 10
@@ -44,7 +44,7 @@ class JobTest(unittest.TestCase):
             started.set()
             self.assertTrue(go_on.wait(TIMEOUT))
             return {'old': (1, 1)}
-        with mock.patch('dirdelta.hashing._list_files', side_effect=slow_list):
+        with mock.patch('dirdelta.hashes.hashing._list_files', side_effect=slow_list):
             first = threading.Thread(target=self.job.scan)
             first.start()
             self.assertTrue(started.wait(TIMEOUT))
@@ -62,7 +62,7 @@ class JobTest(unittest.TestCase):
         self.assertEqual(self.job.files(), ['next'])
 
     def test_a_scan_that_fails_lets_the_next_one_run(self):
-        with mock.patch('dirdelta.hashing._list_files', side_effect=ValueError('bad')):
+        with mock.patch('dirdelta.hashes.hashing._list_files', side_effect=ValueError('bad')):
             with self.assertRaises(ValueError):
                 self.job.scan()
         self.job.scan({'a': (1, 1)})
@@ -193,7 +193,7 @@ class StatusTest(unittest.TestCase):
             job = hashing.Job(root)
             job.progress = lambda progress=progress: progress
             made.append(job)
-        with mock.patch('dirdelta.hashing.jobs', return_value=made):
+        with mock.patch('dirdelta.hashes.hashing.jobs', return_value=made):
             self.assertEqual([job.root for job in hashing.active_jobs()], ['/hashing', '/paused'])
 
     def test_its_text_by_its_state(self):

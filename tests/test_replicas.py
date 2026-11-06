@@ -6,8 +6,8 @@ import tempfile
 import unittest
 from unittest import mock
 
-from dirdelta import replicalog
-from dirdelta import replicas
+from dirdelta.known import replicalog
+from dirdelta.known import replicas
 
 
 class ReplicasTest(unittest.TestCase):
@@ -59,7 +59,7 @@ class ReplicasTest(unittest.TestCase):
 
 class ReplicasFileLabelsTest(unittest.TestCase):
     def test_labels_are_kept(self):
-        with tempfile.TemporaryDirectory() as tmpdir, mock.patch('dirdelta.replicas.REPLICAS_FILE',
+        with tempfile.TemporaryDirectory() as tmpdir, mock.patch('dirdelta.known.replicas.REPLICAS_FILE',
                                                                  os.path.join(tmpdir, 'replicas.json')):
             known = replicas.Replicas()
             known.set_label('uuid:1', 'laptop')
@@ -76,7 +76,7 @@ class ReplicasFileTest(unittest.TestCase):
         # Registered first, so it runs after the other cleanups
         self.addCleanup(shutil.rmtree, self.tmpdir)
         self.path = os.path.join(self.tmpdir, 'config', 'dirdelta', 'replicas.json')
-        patcher = mock.patch('dirdelta.replicas.REPLICAS_FILE', self.path)
+        patcher = mock.patch('dirdelta.known.replicas.REPLICAS_FILE', self.path)
         patcher.start()
         self.addCleanup(patcher.stop)
 

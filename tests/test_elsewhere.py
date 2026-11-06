@@ -8,13 +8,13 @@ import time
 import unittest
 from unittest import mock
 
-from dirdelta import text
-from dirdelta import dirtree
-from dirdelta import elsewhere
-from dirdelta import entries
-from dirdelta import hashing
-from dirdelta import localdiskdirtree
-from dirdelta import picker
+from dirdelta.util import text
+from dirdelta.trees import dirtree
+from dirdelta.matching import elsewhere
+from dirdelta.trees import entries
+from dirdelta.hashes import hashing
+from dirdelta.trees import localdiskdirtree
+from dirdelta.ui import picker
 import helpers
 
 
@@ -307,7 +307,7 @@ class IndexTest(unittest.TestCase):
     def test_a_local_dir_it_cant_list_is_said(self):
         src = _SizedTree('/src', {'x': 1})
         dst = localdiskdirtree.LocalDiskDirTree('/src', True)
-        with mock.patch('dirdelta.localscan.subprocess.Popen', side_effect=OSError("no find")):
+        with mock.patch('dirdelta.trees.localscan.subprocess.Popen', side_effect=OSError("no find")):
             sent = _previews(['x'], src, dst)
         self.assertEqual(sent.defaults[-1][-1], "no find")
 
@@ -466,10 +466,10 @@ class KeptUpToDateTest(unittest.TestCase):
         self.replica = localdiskdirtree.LocalReplica(self.root)
         self.index = elsewhere.Index(self.replica)
         self.index.build()
-        patcher = mock.patch('dirdelta.dryrun.DRYRUN', False)
+        patcher = mock.patch('dirdelta.util.dryrun.DRYRUN', False)
         patcher.start()
         self.addCleanup(patcher.stop)
-        patcher = mock.patch('dirdelta.messages.print_line')
+        patcher = mock.patch('dirdelta.ui.messages.print_line')
         patcher.start()
         self.addCleanup(patcher.stop)
 
@@ -745,14 +745,14 @@ class HashedReplicasTest(unittest.TestCase):
         self.hash('dst')
         sent = _Sent()
         # Then it'd go on sending them as files are hashed, until the picker is gone
-        with mock.patch('dirdelta.elsewhere.time.sleep', side_effect=picker.PickerClosed), \
+        with mock.patch('dirdelta.matching.elsewhere.time.sleep', side_effect=picker.PickerClosed), \
                 self.assertRaises(picker.PickerClosed):
             elsewhere.find_previews(['small.txt'], self.src, self.dst_index, sent,
                                     src_index=elsewhere.Index(self.src))
         self.assertIn("  contents not hashed yet (src: 0% hashed (0/2, not hashing))", sent.previews['small.txt'])
         self.hash('src')
         sent = _Sent()
-        with mock.patch('dirdelta.elsewhere.time.sleep', side_effect=picker.PickerClosed):
+        with mock.patch('dirdelta.matching.elsewhere.time.sleep', side_effect=picker.PickerClosed):
             with self.assertRaises(picker.PickerClosed):
                 elsewhere.find_previews(['other.txt'], self.src, self.dst_index, sent, src_index=self.src_index)
         lines = sent.previews['other.txt']
@@ -771,7 +771,7 @@ class HashedReplicasTest(unittest.TestCase):
                 raise picker.PickerClosed()
             hashed.append(True)
             self.hash('src', 'dst')
-        with mock.patch('dirdelta.elsewhere.time.sleep', side_effect=sleep), \
+        with mock.patch('dirdelta.matching.elsewhere.time.sleep', side_effect=sleep), \
                 self.assertRaises(picker.PickerClosed):
             elsewhere.find_previews(['small.txt', 'other.txt'], self.src, self.dst_index,
                                     lambda found=None, default=None: sends.append(dict(found or {})),

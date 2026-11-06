@@ -4,11 +4,11 @@ import tempfile
 import unittest
 
 import helpers
-from dirdelta import differing
-from dirdelta import dirtree
-from dirdelta import hashcache
-from dirdelta import localdiskdirtree
-from dirdelta import picker
+from dirdelta.matching import differing
+from dirdelta.trees import dirtree
+from dirdelta.hashes import hashcache
+from dirdelta.trees import localdiskdirtree
+from dirdelta.ui import picker
 
 Change = differing.Change
 

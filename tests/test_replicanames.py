@@ -3,9 +3,9 @@ import tempfile
 import unittest
 from unittest import mock
 
-from dirdelta import mounts
-from dirdelta import replicanames
-from dirdelta import replicas
+from dirdelta.known import mounts
+from dirdelta.known import replicanames
+from dirdelta.known import replicas
 
 MOUNT = mounts.Mount('/mnt/disk', '/dev/sdb1', 'ext4', 'rw', '', 'AAAA-1234', None)
 
@@ -14,10 +14,10 @@ class NamesTest(unittest.TestCase):
     def setUp(self):
         self.tmpdir = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmpdir.cleanup)
-        for name, patcher in (('file', mock.patch('dirdelta.replicas.REPLICAS_FILE', os.path.join(self.tmpdir.name, 'r.json'))),
-                              ('mount', mock.patch('dirdelta.mounts.current_mount', return_value=MOUNT)),
-                              ('user', mock.patch('dirdelta.drivecache.user', return_value='me')),
-                              ('root', mock.patch('dirdelta.drivecache.root_id', return_value='ROOT'))):
+        for name, patcher in (('file', mock.patch('dirdelta.known.replicas.REPLICAS_FILE', os.path.join(self.tmpdir.name, 'r.json'))),
+                              ('mount', mock.patch('dirdelta.known.mounts.current_mount', return_value=MOUNT)),
+                              ('user', mock.patch('dirdelta.drive.drivecache.user', return_value='me')),
+                              ('root', mock.patch('dirdelta.drive.drivecache.root_id', return_value='ROOT'))):
             setattr(self, name, patcher.start())
             self.addCleanup(patcher.stop)
         replicanames.forget()

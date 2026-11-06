@@ -1,10 +1,10 @@
 import unittest
 
-from dirdelta import archive_screen
-from dirdelta import contextmenu
-from dirdelta import filescreen
-from dirdelta import hashes_screen
-from dirdelta import picker
+from dirdelta.screens import archive_screen
+from dirdelta.ui import contextmenu
+from dirdelta.ui import filescreen
+from dirdelta.screens import hashes_screen
+from dirdelta.ui import picker
 import helpers
 
 

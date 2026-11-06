@@ -6,7 +6,7 @@ import unittest
 from unittest import mock
 
 import helpers
-from dirdelta import hashcache
+from dirdelta.hashes import hashcache
 
 
 class _CacheTestCase(unittest.TestCase):
@@ -15,11 +15,11 @@ class _CacheTestCase(unittest.TestCase):
         self.addCleanup(shutil.rmtree, self.tmpdir)
         self.cache = os.path.join(self.tmpdir, 'cache', 'hashes.sqlite')
         # A database of its own (opened again, as CACHE_FILE changed), and back to the tests' one
-        patcher = mock.patch('dirdelta.hashcache.CACHE_FILE', self.cache)
+        patcher = mock.patch('dirdelta.hashes.hashcache.CACHE_FILE', self.cache)
         patcher.start()
         self.addCleanup(patcher.stop)
         # No replica's own database, but the ones a test makes
-        patcher = mock.patch.dict('dirdelta.hashcache._replicas', clear=True)
+        patcher = mock.patch.dict('dirdelta.hashes.hashcache._replicas', clear=True)
         patcher.start()
         self.addCleanup(patcher.stop)
         self.path = self.make('x', 'x')
@@ -90,7 +90,7 @@ class ReplicaDatabaseTest(_CacheTestCase):
         hashcache.put(self.path, {'sha1': 'H'})
 
     def use(self):
-        with mock.patch('dirdelta.dryrun.DRYRUN', False):
+        with mock.patch('dirdelta.util.dryrun.DRYRUN', False):
             return hashcache.use_replica(self.root)
 
     def test_its_made_in_the_replica_with_the_hashes_kept_of_its_files(self):
@@ -112,7 +112,7 @@ class ReplicaDatabaseTest(_CacheTestCase):
         self.assertEqual(sorted(hashcache.known_under(self.root)), ['a/f', 'g'])
 
     def test_not_made_in_a_dry_run(self):
-        with mock.patch('dirdelta.dryrun.DRYRUN', True):
+        with mock.patch('dirdelta.util.dryrun.DRYRUN', True):
             self.assertIsNone(hashcache.use_replica(self.root))
         self.assertFalse(os.path.exists(os.path.join(self.root, 'meta')))
         self.assertEqual(hashcache.get(self.file, 'sha1'), 'F')
@@ -124,7 +124,7 @@ class ReplicaDatabaseTest(_CacheTestCase):
         hashcache.put(self.file, {'sha1': 'OLD'})
         # Counted from the replica's own, before it's used
         self.assertEqual(hashcache.count_under(self.root), 1)
-        with mock.patch('dirdelta.dryrun.DRYRUN', True):
+        with mock.patch('dirdelta.util.dryrun.DRYRUN', True):
             self.assertIsNotNone(hashcache.use_replica(self.root))
         # The replica's own is kept, rather than what CACHE_FILE had since
         self.assertEqual(hashcache.get(self.file, 'sha1'), 'F')

@@ -1,18 +1,18 @@
 import unittest
 from unittest import mock
 
-from dirdelta import label_screen
-from dirdelta import mounts
-from dirdelta import replicanames
-from dirdelta import replicas
+from dirdelta.screens import label_screen
+from dirdelta.known import mounts
+from dirdelta.known import replicanames
+from dirdelta.known import replicas
 
 MOUNT = mounts.Mount('/mnt/disk', '/dev/sdb1', 'ext4', 'rw', '', 'AAAA-1234', None)
 
 
 class RunTest(unittest.TestCase):
     def setUp(self):
-        for name, patcher in (('mount', mock.patch('dirdelta.mounts.current_mount', return_value=MOUNT)),
-                              ('save', mock.patch('dirdelta.replicas.save'))):
+        for name, patcher in (('mount', mock.patch('dirdelta.known.mounts.current_mount', return_value=MOUNT)),
+                              ('save', mock.patch('dirdelta.known.replicas.save'))):
             setattr(self, name, patcher.start())
             self.addCleanup(patcher.stop)
         replicanames.forget()
@@ -23,8 +23,8 @@ class RunTest(unittest.TestCase):
         """run(), each menu choosing the option starting with the next of chosen, and then going back"""
         chosen = list(chosen)
         self.menus = []
-        with mock.patch('dirdelta.picker.pick_option', side_effect=lambda options, **_: self._answer(options, chosen)), \
-                mock.patch('dirdelta.messages.ask', return_value=typed) as self.ask:
+        with mock.patch('dirdelta.ui.picker.pick_option', side_effect=lambda options, **_: self._answer(options, chosen)), \
+                mock.patch('dirdelta.ui.messages.ask', return_value=typed) as self.ask:
             label_screen.run(self.known, list(paths))
 
     def _answer(self, options, chosen):

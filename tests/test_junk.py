@@ -1,6 +1,6 @@
 import unittest
 
-from dirdelta import junk
+from dirdelta.matching import junk
 
 
 class JunkTest(unittest.TestCase):

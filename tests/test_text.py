@@ -1,6 +1,6 @@
 import unittest
 
-from dirdelta import text
+from dirdelta.util import text
 
 
 class CountedTest(unittest.TestCase):

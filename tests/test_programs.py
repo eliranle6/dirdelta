@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from unittest import mock
 
-from dirdelta import programs
+from dirdelta.util import programs
 
 
 class FindTest(unittest.TestCase):

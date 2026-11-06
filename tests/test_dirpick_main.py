@@ -6,8 +6,8 @@ import unittest
 from unittest import mock
 
 from dirdelta import dirpick_main
-from dirdelta import dirtree
-from dirdelta import replicafactory
+from dirdelta.trees import dirtree
+from dirdelta.trees import replicafactory
 import helpers
 
 
@@ -16,7 +16,7 @@ class DirpickMainTest(unittest.TestCase):
         self.root = tempfile.mkdtemp(prefix='dirstuff-dirpick-')
         helpers.make_files(self.root, ['song.mp3'])
         self.args = argparse.Namespace(dir_a_path=self.root, max_depth=None, execute=None)
-        patcher = mock.patch('dirdelta.messages.print_line')
+        patcher = mock.patch('dirdelta.ui.messages.print_line')
         patcher.start()
         self.addCleanup(patcher.stop)
 
@@ -42,7 +42,7 @@ class DirpickMainTest(unittest.TestCase):
         tree = dirtree.DirTree('cloud/mein')
         tree.add_file_by_relpath('music/song.mp3')
         self.args.dir_a_path = 'cloud/mein'
-        with mock.patch('dirdelta.replicafactory.create_dirtree_from_arg', return_value=tree), \
+        with mock.patch('dirdelta.trees.replicafactory.create_dirtree_from_arg', return_value=tree), \
                 helpers.scripted_tree_picker(helpers.all_files):
             self.assertEqual(dirpick_main.run(self.args), 'cloud/mein/music/song.mp3')
 

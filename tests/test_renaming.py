@@ -5,8 +5,8 @@ import unittest
 from unittest import mock
 
 import helpers
-from dirdelta import localdiskdirtree
-from dirdelta import renaming
+from dirdelta.trees import localdiskdirtree
+from dirdelta.ui import renaming
 
 
 class RenameTest(unittest.TestCase):
@@ -16,20 +16,20 @@ class RenameTest(unittest.TestCase):
         helpers.make_files(self.root, ['a.txt', 'trip/b.jpg', 'trip/deep/c.jpg'])
         os.makedirs(os.path.join(self.root, 'empty'))
         self.tree = localdiskdirtree.LocalDiskDirTree(self.root, True)
-        for patcher in (mock.patch('dirdelta.messages.print_line'), mock.patch('dirdelta.messages.show'),
-                        mock.patch('dirdelta.messages.progress_screen'), mock.patch('dirdelta.dryrun.DRYRUN', False)):
+        for patcher in (mock.patch('dirdelta.ui.messages.print_line'), mock.patch('dirdelta.ui.messages.show'),
+                        mock.patch('dirdelta.ui.messages.progress_screen'), mock.patch('dirdelta.util.dryrun.DRYRUN', False)):
             self.addCleanup(patcher.stop)
             patcher.start()
 
     def rename(self, relpath, answer):
-        with mock.patch('dirdelta.messages.ask', return_value=answer) as ask:
+        with mock.patch('dirdelta.ui.messages.ask', return_value=answer) as ask:
             renamed = renaming.rename(self.tree, relpath)
         self.ask = ask
         return renamed
 
     def test_on_a_read_only_dir_its_said_before_asking_for_a_name(self):
-        with mock.patch('dirdelta.localdiskdirtree.os.access', return_value=False), \
-                mock.patch('dirdelta.messages.show') as show:
+        with mock.patch('dirdelta.trees.localdiskdirtree.os.access', return_value=False), \
+                mock.patch('dirdelta.ui.messages.show') as show:
             self.assertIsNone(self.rename('a.txt', 'b.txt'))
         self.ask.assert_not_called()
         self.assertEqual(show.call_args.args[0], "Can't rename it")
@@ -63,7 +63,7 @@ class RenameTest(unittest.TestCase):
         self.ask.assert_not_called()
 
     def test_a_dry_run_changes_nothing(self):
-        with mock.patch('dirdelta.dryrun.DRYRUN', True):
+        with mock.patch('dirdelta.util.dryrun.DRYRUN', True):
             self.assertEqual(self.rename('trip', 'x'), ('x', [('trip/b.jpg', 'x/b.jpg'), ('trip/deep/c.jpg', 'x/deep/c.jpg')]))
         self.assertTrue(self.exists('trip/b.jpg'))
         self.assertFalse(self.exists('x'))

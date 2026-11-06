@@ -6,12 +6,12 @@ import unittest
 from unittest import mock
 
 import helpers
-from dirdelta import dirtree
-from dirdelta import hashes_screen
-from dirdelta import hashing
-from dirdelta import localdiskdirtree
-from dirdelta import picker
-from dirdelta import replicas
+from dirdelta.trees import dirtree
+from dirdelta.screens import hashes_screen
+from dirdelta.hashes import hashing
+from dirdelta.trees import localdiskdirtree
+from dirdelta.ui import picker
+from dirdelta.known import replicas
 
 
 class _Job(hashing.Job):
@@ -43,7 +43,7 @@ def _progress(**fields):
 class OfferTest(unittest.TestCase):
     def test_all_hashed_ones_are_started_without_asking(self):
         job = _Job('/a', _progress(state=hashing.DONE))
-        with mock.patch('dirdelta.picker.pick_option') as pick:
+        with mock.patch('dirdelta.ui.picker.pick_option') as pick:
             hashes_screen.offer([job])
         pick.assert_not_called()
         self.assertEqual(job.started, 1)
@@ -70,7 +70,7 @@ class OfferTest(unittest.TestCase):
     def test_in_the_background_its_started(self):
         job = _Job('/photos', _progress())
         with helpers.answering_option_picker([hashes_screen.HASH_IN_BACKGROUND]), \
-                mock.patch('dirdelta.hashes_screen.wait') as wait:
+                mock.patch('dirdelta.screens.hashes_screen.wait') as wait:
             hashes_screen.offer([job])
         self.assertEqual(job.started, 1)
         wait.assert_not_called()
@@ -78,7 +78,7 @@ class OfferTest(unittest.TestCase):
     def test_now_its_started_and_waited_for(self):
         job = _Job('/photos', _progress())
         with helpers.answering_option_picker([hashes_screen.HASH_AND_WAIT]), \
-                mock.patch('dirdelta.hashes_screen.wait') as wait:
+                mock.patch('dirdelta.screens.hashes_screen.wait') as wait:
             hashes_screen.offer([job])
         self.assertEqual(job.started, 1)
         wait.assert_called_once_with([job])
@@ -86,7 +86,7 @@ class OfferTest(unittest.TestCase):
     def test_ones_being_hashed_arent_asked_of(self):
         job = _Job('/photos', _progress(state=hashing.HASHING, is_started=True))
         job._is_started = True
-        with mock.patch('dirdelta.picker.pick_option') as pick:
+        with mock.patch('dirdelta.ui.picker.pick_option') as pick:
             hashes_screen.offer([job])
         pick.assert_not_called()
 
@@ -99,7 +99,7 @@ class PrepareTest(unittest.TestCase):
         helpers.make_files(root, ['x'])
         local = localdiskdirtree.LocalDiskDirTree(root, True)
         other = dirtree.DirTree('/cloud-like')
-        with mock.patch('dirdelta.messages.print_line'):
+        with mock.patch('dirdelta.ui.messages.print_line'):
             jobs = hashes_screen.prepare([local, other, local])
         self.assertEqual([job.root for job in jobs], [root])
         self.assertEqual(jobs[0].progress().nr_files, 1)
@@ -110,10 +110,10 @@ class PrepareTest(unittest.TestCase):
         self.addCleanup(shutil.rmtree, root)
         self.addCleanup(hashing._jobs.pop, root, None)
         helpers.make_files(root, ['d/x'])
-        with mock.patch('dirdelta.messages.print_line'):
+        with mock.patch('dirdelta.ui.messages.print_line'):
             local = localdiskdirtree.factory(root)
-        with mock.patch('dirdelta.hashing._list_files') as list_files, \
-                mock.patch('dirdelta.messages.print_line') as print_line:
+        with mock.patch('dirdelta.hashes.hashing._list_files') as list_files, \
+                mock.patch('dirdelta.ui.messages.print_line') as print_line:
             job, = hashes_screen.prepare([local])
         list_files.assert_not_called()
         print_line.assert_not_called()
@@ -128,9 +128,9 @@ class WaitTest(unittest.TestCase):
 
         def sleep(seconds):
             job._progress = _progress(state=hashing.DONE, nr_done=10, size_done=2048)
-        with mock.patch('dirdelta.messages.print_progress', side_effect=lines.append), \
-                mock.patch('dirdelta.messages.print_line', side_effect=lambda line, color=None: lines.append(line)), \
-                mock.patch('dirdelta.hashes_screen.time.sleep', side_effect=sleep):
+        with mock.patch('dirdelta.ui.messages.print_progress', side_effect=lines.append), \
+                mock.patch('dirdelta.ui.messages.print_line', side_effect=lambda line, color=None: lines.append(line)), \
+                mock.patch('dirdelta.screens.hashes_screen.time.sleep', side_effect=sleep):
             hashes_screen.wait([job])
         self.assertTrue(any("50%  4 of 10 files, 1.0 KB of 2.0 KB, 512 B/s, ~2 s left" in line for line in lines))
         self.assertTrue(lines[-1].startswith("All hashed: "))
@@ -138,9 +138,9 @@ class WaitTest(unittest.TestCase):
     def test_ctrl_c_goes_on(self):
         job = _Job('/photos', _progress(state=hashing.HASHING, is_started=True))
         lines = []
-        with mock.patch('dirdelta.messages.print_progress'), \
-                mock.patch('dirdelta.messages.print_line', side_effect=lambda line, color=None: lines.append(line)), \
-                mock.patch('dirdelta.hashes_screen.time.sleep', side_effect=KeyboardInterrupt):
+        with mock.patch('dirdelta.ui.messages.print_progress'), \
+                mock.patch('dirdelta.ui.messages.print_line', side_effect=lambda line, color=None: lines.append(line)), \
+                mock.patch('dirdelta.screens.hashes_screen.time.sleep', side_effect=KeyboardInterrupt):
             hashes_screen.wait([job])
         self.assertEqual(lines[-1], "Going on: hashing goes on in the background.")
         self.assertEqual(job.paused, 0)
@@ -154,7 +154,7 @@ class DashboardTest(unittest.TestCase):
     def dashboard(self, job, answers, trees=None, **kwargs):
         """The dashboard of trees (default: /photos's, whose job is job), answering answers; returns
         the pick_option mock"""
-        with mock.patch('dirdelta.hashing._jobs', {'/photos': job} if job is not None else {}), \
+        with mock.patch('dirdelta.hashes.hashing._jobs', {'/photos': job} if job is not None else {}), \
                 helpers.answering_option_picker(answers) as pick:
             hashes_screen.dashboard(trees if trees is not None else [self.tree], self.known, **kwargs)
             # What it showed last, while the jobs are still there
@@ -164,9 +164,9 @@ class DashboardTest(unittest.TestCase):
     def test_a_replica_can_be_labeled_and_the_dashboard_says_so_after(self):
         job = _Job('/photos', _progress())
         label = (hashes_screen._LABEL, '/photos')
-        with mock.patch('dirdelta.hashes_screen.os.path.isdir', return_value=True), \
-                mock.patch('dirdelta.replicanames.label_key', return_value='uuid:U'), \
-                mock.patch('dirdelta.label_screen.run', side_effect=lambda known, _: known.set_label('uuid:U', 'mine')) as run:
+        with mock.patch('dirdelta.screens.hashes_screen.os.path.isdir', return_value=True), \
+                mock.patch('dirdelta.known.replicanames.label_key', return_value='uuid:U'), \
+                mock.patch('dirdelta.screens.label_screen.run', side_effect=lambda known, _: known.set_label('uuid:U', 'mine')) as run:
             pick = self.dashboard(job, [label, hashes_screen.BACK])
         run.assert_called_once_with(self.known, ['/photos'])
         self.assertEqual(self.known.labels, {'uuid:U': 'mine'})
@@ -190,7 +190,7 @@ class DashboardTest(unittest.TestCase):
 
     def test_quitting_is_asked_only_while_hashing(self):
         job = _Job('/photos', _progress())
-        with mock.patch('dirdelta.hashing._jobs', {'/photos': job}), \
+        with mock.patch('dirdelta.hashes.hashing._jobs', {'/photos': job}), \
                 helpers.answering_option_picker([hashes_screen.KEEP_HASHING, hashes_screen.QUIT_ANYWAY]) as pick:
             self.assertTrue(hashes_screen.is_ok_to_quit())
             pick.assert_not_called()
@@ -208,10 +208,10 @@ class DashboardTest(unittest.TestCase):
         # What its path is on now isn't its disk
         self.assertIsInstance(hashes_screen._label_option('/no/such/dir', self.known), picker.Disabled)
         mount = hashes_screen.mounts.Mount('/mnt/x', '/dev/x', 'ext4', '', '', 'U', None)
-        with mock.patch('dirdelta.mounts.unmounted', return_value=mount), \
-                mock.patch('dirdelta.hashes_screen.os.path.isdir', return_value=True):
+        with mock.patch('dirdelta.known.mounts.unmounted', return_value=mount), \
+                mock.patch('dirdelta.screens.hashes_screen.os.path.isdir', return_value=True):
             self.assertIsInstance(hashes_screen._label_option('/mnt/x', self.known), picker.Disabled)
-        with mock.patch('dirdelta.replicanames.identity', return_value='drive:R:/c'):
+        with mock.patch('dirdelta.known.replicanames.identity', return_value='drive:R:/c'):
             self.assertNotIsInstance(hashes_screen._label_option('cloud/c', self.known), picker.Disabled)
 
     def test_it_pauses_and_resumes_a_job(self):
@@ -246,13 +246,13 @@ class DashboardTest(unittest.TestCase):
 
     def test_a_done_one_cant_be_paused(self):
         job = _Job('/photos', _progress(state=hashing.DONE))
-        with mock.patch('dirdelta.hashing._jobs', {'/photos': job}):
+        with mock.patch('dirdelta.hashes.hashing._jobs', {'/photos': job}):
             shown = hashes_screen._jobs_shown([('/photos', self.tree)], {'/photos': 'photos'})
         self.assertIsInstance(shown[(hashes_screen._TOGGLE, '/photos')], picker.Disabled)
 
     def test_its_files_and_scanning_again(self):
         job = _Job('/photos', _progress())
-        with mock.patch('dirdelta.hashes_screen.view_files') as view_files, \
+        with mock.patch('dirdelta.screens.hashes_screen.view_files') as view_files, \
                 mock.patch.object(job, 'scan_in_background') as scan:
             self.dashboard(job, [(hashes_screen._FILES, '/photos'), (hashes_screen._RESCAN, '/photos'),
                                  hashes_screen.BACK])
@@ -260,7 +260,7 @@ class DashboardTest(unittest.TestCase):
         scan.assert_called_once_with()
 
     def test_a_known_replica_without_a_job_says_how_many_hashes_are_kept(self):
-        with mock.patch('dirdelta.hashcache.count_under', return_value=7):
+        with mock.patch('dirdelta.hashes.hashcache.count_under', return_value=7):
             self.dashboard(None, [hashes_screen.BACK], trees=[], other_paths=['/old', 'cloud/c'])
         shown = self.shown
         self.assertIn("Hashes kept of 7 files", shown[(hashes_screen._INFO, '/old')].text)
@@ -350,7 +350,7 @@ class ViewFilesTest(unittest.TestCase):
             with self.assertRaises(picker.PickerClosed):
                 on_selection(Selection(), lambda found=None, default=None: sent.update(found))
             return True
-        with mock.patch('dirdelta.picker.view_files', side_effect=view_files):
+        with mock.patch('dirdelta.ui.picker.view_files', side_effect=view_files):
             hashes_screen.view_files(job)
         self.assertEqual(sent['x'], ["This one: 2.0 KB", "SHA-1:", "  abc"])
         self.assertEqual(sent['y'], ["This one: 1 B", "Not hashed yet (hashing is paused)"])

@@ -4,8 +4,8 @@ import unittest
 import zipfile
 from unittest import mock
 
-from dirdelta import ai
-from dirdelta import aiplan
+from dirdelta.claude import ai
+from dirdelta.claude import aiplan
 
 COPY = aiplan.Action('copy', 'Copy', 'copy it.')
 MOVE = aiplan.Action('move', 'Move', 'move it.', True, False,
@@ -16,7 +16,7 @@ TASK = aiplan.Task('Some files.', [aiplan.File('a.txt', 3, 'a note'), aiplan.Fil
 
 
 def plan(*steps, task=TASK):
-    with mock.patch('dirdelta.ai._run_query', return_value={'summary': ' done ', 'steps': list(steps)}):
+    with mock.patch('dirdelta.claude.ai._run_query', return_value={'summary': ' done ', 'steps': list(steps)}):
         return aiplan.make(task, 'do it')
 
 
@@ -57,7 +57,7 @@ class MakeTest(unittest.TestCase):
         self.assert_left_out({'action': 'move', 'number': 1, 'path': 'x.txt'}, {'action': 'move', 'number': 2, 'path': 'x.txt'})
 
     def test_the_prompt_says_what_its_told(self):
-        with mock.patch('dirdelta.ai._run_query', return_value={'summary': '', 'steps': []}) as query:
+        with mock.patch('dirdelta.claude.ai._run_query', return_value={'summary': '', 'steps': []}) as query:
             aiplan.make(TASK, 'do it')
         prompt = query.call_args.args[0]
         for said in ('do it', 'Some files.', '1. a.txt (3 bytes): a note', '2. d/b.txt (size unknown)', '3. other.txt',
@@ -66,7 +66,7 @@ class MakeTest(unittest.TestCase):
         self.assertEqual(query.call_args.kwargs['model'], ai.PLAN_MODEL)
 
     def test_the_answer_to_a_question(self):
-        with mock.patch('dirdelta.ai._run_query', return_value={'summary': '', 'answer': ' A photo. ', 'steps': []}):
+        with mock.patch('dirdelta.claude.ai._run_query', return_value={'summary': '', 'answer': ' A photo. ', 'steps': []}):
             made = aiplan.make(TASK, 'what is it?')
         self.assertEqual((made.answer, made.steps), ('A photo.', []))
 
@@ -79,7 +79,7 @@ class MakeTest(unittest.TestCase):
                                         aiplan.File('drive.txt', 3)],
                                  focus=['a.txt', 'z.zip', 'big.txt', 'drive.txt'],
                                  fetch=lambda relpath: None if relpath == 'drive.txt' else os.path.join(tmpdir, relpath))
-            with mock.patch('dirdelta.ai._run_query', return_value={'summary': '', 'steps': []}) as query:
+            with mock.patch('dirdelta.claude.ai._run_query', return_value={'summary': '', 'steps': []}) as query:
                 aiplan.make(task, 'what is it?')
         prompt, readable_dirs = query.call_args.args[:2]
         self.assertEqual(readable_dirs, [tmpdir])

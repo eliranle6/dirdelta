@@ -2,9 +2,9 @@ import argparse
 import unittest
 from unittest import mock
 
-from dirdelta import choose_replicas
+from dirdelta.screens import choose_replicas
 from dirdelta import main
-from dirdelta import replicas
+from dirdelta.known import replicas
 
 
 def _args(**kwargs):
@@ -21,14 +21,14 @@ class StartMenuTest(unittest.TestCase):
         def ensure_mounted(path):
             self.asked.append(path)
             return mounted.pop(0)
-        with mock.patch('dirdelta.replicas.load', return_value=replicas.Replicas()), \
-                mock.patch('dirdelta.choose_replicas.run', side_effect=list(chosen) + [None]), \
-                mock.patch('dirdelta.mounts.ensure_mounted', side_effect=ensure_mounted), \
-                mock.patch('dirdelta.mounts.remember'), \
-                mock.patch('dirdelta.replicanames.forget'), \
-                mock.patch('dirdelta.choose_replicas.are_there', return_value=are_there) as self.are_there, \
-                mock.patch('dirdelta.dirsync_main.run') as self.sync, \
-                mock.patch('dirdelta.inbox.run') as self.sort:
+        with mock.patch('dirdelta.known.replicas.load', return_value=replicas.Replicas()), \
+                mock.patch('dirdelta.screens.choose_replicas.run', side_effect=list(chosen) + [None]), \
+                mock.patch('dirdelta.known.mounts.ensure_mounted', side_effect=ensure_mounted), \
+                mock.patch('dirdelta.known.mounts.remember'), \
+                mock.patch('dirdelta.known.replicanames.forget'), \
+                mock.patch('dirdelta.screens.choose_replicas.are_there', return_value=are_there) as self.are_there, \
+                mock.patch('dirdelta.sync.dirsync_main.run') as self.sync, \
+                mock.patch('dirdelta.inbox.inbox.run') as self.sort:
             return main._run(_args())
 
     def test_a_pairs_volumes_are_checked_once_then_its_dirs(self):

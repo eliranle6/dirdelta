@@ -3,7 +3,7 @@ import shutil
 import tempfile
 import unittest
 
-from dirdelta import localscan
+from dirdelta.trees import localscan
 import helpers
 
 

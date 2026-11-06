@@ -1,6 +1,6 @@
 import unittest
 
-from dirdelta import paths
+from dirdelta.trees import paths
 
 
 class PathsTest(unittest.TestCase):

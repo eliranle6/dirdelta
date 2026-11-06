@@ -9,7 +9,7 @@ from unittest import mock
 
 from google.oauth2.credentials import Credentials
 
-from dirdelta import driveapi
+from dirdelta.drive import driveapi
 
 
 class RefreshTest(unittest.TestCase):
@@ -61,14 +61,14 @@ class ServiceTest(unittest.TestCase):
         with open(self.token_path, 'w') as f:
             f.write('{"saved": true}')
         patchers = {
-            'credentials': mock.patch('dirdelta.driveapi.Credentials'),
-            'flow': mock.patch('dirdelta.driveapi.InstalledAppFlow'),
-            'build': mock.patch('dirdelta.driveapi.build'),
+            'credentials': mock.patch('dirdelta.drive.driveapi.Credentials'),
+            'flow': mock.patch('dirdelta.drive.driveapi.InstalledAppFlow'),
+            'build': mock.patch('dirdelta.drive.driveapi.build'),
         }
-        for patcher in [mock.patch('dirdelta.driveapi.TOKEN_PATH', self.token_path),
-                        mock.patch('dirdelta.driveapi._local', threading.local()),
-                        mock.patch('dirdelta.driveapi._shared_credentials', None),
-                        mock.patch('dirdelta.messages.print_line')]:
+        for patcher in [mock.patch('dirdelta.drive.driveapi.TOKEN_PATH', self.token_path),
+                        mock.patch('dirdelta.drive.driveapi._local', threading.local()),
+                        mock.patch('dirdelta.drive.driveapi._shared_credentials', None),
+                        mock.patch('dirdelta.ui.messages.print_line')]:
             patcher.start()
             self.addCleanup(patcher.stop)
         for name, patcher in patchers.items():

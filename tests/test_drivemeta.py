@@ -8,9 +8,9 @@ import time
 import unittest
 from unittest import mock
 
-from dirdelta import clouddirtree
-from dirdelta import drivecache
-from dirdelta import drivemeta
+from dirdelta.drive import clouddirtree
+from dirdelta.drive import drivecache
+from dirdelta.drive import drivemeta
 
 FOLDER = 'application/vnd.google-apps.folder'
 
@@ -88,8 +88,8 @@ class DriveMetaTest(unittest.TestCase):
             f.write(json.dumps({drivecache.ROOT_ID_KEY: 'ROOT'}) + '\n')
             for item in ITEMS:
                 f.write(json.dumps(item) + '\n')
-        for patcher in (mock.patch('dirdelta.drivecache.LINES_FILE', self.cache),
-                        mock.patch('dirdelta.driveapi.service', return_value=self.drive)):
+        for patcher in (mock.patch('dirdelta.drive.drivecache.LINES_FILE', self.cache),
+                        mock.patch('dirdelta.drive.driveapi.service', return_value=self.drive)):
             patcher.start()
             self.addCleanup(patcher.stop)
 
@@ -117,7 +117,7 @@ class DriveMetaTest(unittest.TestCase):
     def test_uploaded_again_only_once_the_cache_changed(self):
         uploader = drivemeta.Uploader('/mein')
         drivecache.note_updated('/mein')
-        with mock.patch('dirdelta.dryrun.DRYRUN', False):
+        with mock.patch('dirdelta.util.dryrun.DRYRUN', False):
             self.assertTrue(uploader.upload_if_changed())
             self.assertFalse(uploader.upload_if_changed())
             tree = clouddirtree.factory('cloud/mein')
@@ -131,7 +131,7 @@ class DriveMetaTest(unittest.TestCase):
 
     def test_nothing_is_uploaded_in_a_dry_run(self):
         drivecache.note_updated('/mein')
-        with mock.patch('dirdelta.dryrun.DRYRUN', True):
+        with mock.patch('dirdelta.util.dryrun.DRYRUN', True):
             self.assertFalse(drivemeta.Uploader('/mein').upload_if_changed())
         self.assertEqual(self.drive.files_by_id, {})
 

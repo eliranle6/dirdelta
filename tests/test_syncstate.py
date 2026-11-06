@@ -1,9 +1,9 @@
 import datetime
 import unittest
 
-from dirdelta import replicalog
-from dirdelta import replicas
-from dirdelta import syncstate
+from dirdelta.known import replicalog
+from dirdelta.known import replicas
+from dirdelta.matching import syncstate
 
 
 class SyncStateTest(unittest.TestCase):

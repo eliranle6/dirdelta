@@ -3,10 +3,10 @@ import threading
 import unittest
 from unittest import mock
 
-from dirdelta import ai
-from dirdelta import aiplan
-from dirdelta import aiplan_screen
-from dirdelta import picker
+from dirdelta.claude import ai
+from dirdelta.claude import aiplan
+from dirdelta.screens import aiplan_screen
+from dirdelta.ui import picker
 
 TASK = aiplan.Task('Some files.', [aiplan.File('a.txt'), aiplan.File('b.txt')],
                    [aiplan.Action('copy', 'Copy', 'copy it.'), aiplan.Action('move', 'Move', 'move it.', True)])
@@ -16,12 +16,12 @@ PLAN = aiplan.Plan('Copy one, move one', [aiplan.Step('copy', 'a.txt', None, 'wa
 
 class AskTest(unittest.TestCase):
     def setUp(self):
-        for name, patcher in (('show', mock.patch('dirdelta.messages.show')),
-                              ('typed', mock.patch('dirdelta.messages.ask', return_value='do it')),
-                              ('make', mock.patch('dirdelta.aiplan.make', return_value=PLAN)),
-                              ('pick', mock.patch('dirdelta.picker.pick_files')),
-                              ('line', mock.patch('dirdelta.messages.print_line')),
-                              ('progress', mock.patch('dirdelta.messages.print_progress'))):
+        for name, patcher in (('show', mock.patch('dirdelta.ui.messages.show')),
+                              ('typed', mock.patch('dirdelta.ui.messages.ask', return_value='do it')),
+                              ('make', mock.patch('dirdelta.claude.aiplan.make', return_value=PLAN)),
+                              ('pick', mock.patch('dirdelta.ui.picker.pick_files')),
+                              ('line', mock.patch('dirdelta.ui.messages.print_line')),
+                              ('progress', mock.patch('dirdelta.ui.messages.print_progress'))):
             setattr(self, name, patcher.start())
             self.addCleanup(patcher.stop)
         self.pick.side_effect = lambda root, items, **_: picker.Picked('', '', list(items))

@@ -2,11 +2,11 @@ import datetime
 import unittest
 from unittest import mock
 
-from dirdelta import choose_replicas
-from dirdelta import dirtree
-from dirdelta import drivecache
-from dirdelta import replicalog
-from dirdelta import replicas
+from dirdelta.screens import choose_replicas
+from dirdelta.trees import dirtree
+from dirdelta.drive import drivecache
+from dirdelta.known import replicalog
+from dirdelta.known import replicas
 import helpers
 
 NONE = choose_replicas.NOT_CHOSEN
@@ -17,7 +17,7 @@ SORT_SECTION = choose_replicas.SORT_SECTION
 
 class ChooseReplicasTest(unittest.TestCase):
     def setUp(self):
-        patcher = mock.patch('dirdelta.messages.show')
+        patcher = mock.patch('dirdelta.ui.messages.show')
         self.show = patcher.start()
         self.addCleanup(patcher.stop)
         self.known = replicas.Replicas()
@@ -34,10 +34,10 @@ class ChooseReplicasTest(unittest.TestCase):
             self.menus.append(helpers.labels_of(options))
             self.kwargs = kwargs
             return helpers.answer_of(options, answers.pop(0))
-        with mock.patch('dirdelta.picker.pick_option', side_effect=pick_option), \
-                mock.patch('dirdelta.picker.pick_under_dir',
+        with mock.patch('dirdelta.ui.picker.pick_option', side_effect=pick_option), \
+                mock.patch('dirdelta.ui.picker.pick_under_dir',
                            side_effect=lambda *_, **__: dir_picks.pop(0)) as self.pick_under_dir, \
-                mock.patch('dirdelta.picker.pick_from_tree',
+                mock.patch('dirdelta.ui.picker.pick_from_tree',
                            side_effect=lambda *_, **__: tree_picks.pop(0)) as self.pick_from_tree:
             return choose_replicas.run(self.known)
 
@@ -73,7 +73,7 @@ class ChooseReplicasTest(unittest.TestCase):
         tree = dirtree.DirTree('/')
         tree.add_file_by_relpath('me/music/song.mp3')
         music = tree.get_node('me/music').data
-        with mock.patch('dirdelta.replicafactory.create_dirtree_from_arg', return_value=tree) as create:
+        with mock.patch('dirdelta.trees.replicafactory.create_dirtree_from_arg', return_value=tree) as create:
             chosen = self.run_menu(['  Replica B: ' + NONE, 'Google Drive',
                                     '  Replica A: ' + NONE, 'Local disk'],
                                    dir_picks=['/mnt/win'], tree_picks=[[music]])
@@ -82,21 +82,21 @@ class ChooseReplicasTest(unittest.TestCase):
         self.assertTrue(self.pick_from_tree.call_args.kwargs['dirs_only'])
 
     def test_nothing_at_the_refresh_question_is_back_to_the_menu(self):
-        with mock.patch('dirdelta.replicafactory.create_dirtree_from_arg', return_value=None):
+        with mock.patch('dirdelta.trees.replicafactory.create_dirtree_from_arg', return_value=None):
             self.assertIsNone(self.run_menu(['  Replica A: ' + NONE, choose_replicas.CLOUD, 'Quit']))
         self.pick_from_tree.assert_not_called()
         self.assertEqual(len(self.menus), 3)
 
     def test_drives_top_is_cloud(self):
         tree = dirtree.DirTree('/')
-        with mock.patch('dirdelta.replicafactory.create_dirtree_from_arg', return_value=tree):
+        with mock.patch('dirdelta.trees.replicafactory.create_dirtree_from_arg', return_value=tree):
             chosen = self.run_menu(['  Replica A: ' + NONE, 'Google Drive',
                                     '  Replica B: ' + NONE, 'Local disk'],
                                    dir_picks=['/a'], tree_picks=[[tree.get_node('').data]])
         self.assertEqual(chosen, ('cloud', '/a'))
 
     def test_a_drive_cache_error_is_shown(self):
-        with mock.patch('dirdelta.replicafactory.create_dirtree_from_arg',
+        with mock.patch('dirdelta.trees.replicafactory.create_dirtree_from_arg',
                         side_effect=drivecache.DriveCacheError('two folders named x')):
             self.assertIsNone(self.run_menu(['  Replica A: ' + NONE, 'Google Drive', 'Quit']))
         self.assertEqual(self.show.call_args.args[1], ['two folders named x'])
@@ -189,7 +189,7 @@ class ChooseReplicasTest(unittest.TestCase):
 
         def dashboard(known=None, other_paths=()):
             shown['paths'] = other_paths
-        with mock.patch('dirdelta.hashes_screen.dashboard', side_effect=dashboard):
+        with mock.patch('dirdelta.screens.hashes_screen.dashboard', side_effect=dashboard):
             self.assertIsNone(self.run_menu([choose_replicas.KNOWN_LIST, 'Quit']))
         # The latest updated first
         self.assertEqual(shown['paths'], ['/mnt/win/eliran', 'cloud/eliran'])

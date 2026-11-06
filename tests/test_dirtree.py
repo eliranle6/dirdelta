@@ -1,6 +1,6 @@
 import unittest
 
-from dirdelta import dirtree
+from dirdelta.trees import dirtree
 
 
 class DirTreeTest(unittest.TestCase):

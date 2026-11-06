@@ -4,7 +4,7 @@ import struct
 import tempfile
 import unittest
 
-from dirdelta import exif
+from dirdelta.util import exif
 
 
 def _tiff(date=b'2024:07:01 14:03:22\0', order='<', tag=0x9003):

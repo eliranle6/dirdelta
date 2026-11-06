@@ -2,17 +2,17 @@ import argparse
 import os
 import sys
 
-from dirdelta import localscan
-from dirdelta import choose_replicas
-from dirdelta import dirsync_main
+from dirdelta.trees import localscan
+from dirdelta.screens import choose_replicas
+from dirdelta.sync import dirsync_main
 from dirdelta import dirpick_main
-from dirdelta import drivecache
-from dirdelta import inbox
-from dirdelta import mounts
-from dirdelta import programs
-from dirdelta import replicanames
-from dirdelta import replicas
-from dirdelta import replicafactory
+from dirdelta.drive import drivecache
+from dirdelta.inbox import inbox
+from dirdelta.known import mounts
+from dirdelta.util import programs
+from dirdelta.known import replicanames
+from dirdelta.known import replicas
+from dirdelta.trees import replicafactory
 
 
 def parse_args():

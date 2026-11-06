@@ -1,8 +1,8 @@
 import unittest
 from unittest import mock
 
-from dirdelta import contextmenu
-from dirdelta import picker
+from dirdelta.ui import contextmenu
+from dirdelta.ui import picker
 import helpers
 
 ENTRIES = [contextmenu.Entry('a', 'Ask', 'asked'), contextmenu.Entry(None, 'Do', 'done')]
@@ -13,7 +13,7 @@ class ChooseTest(unittest.TestCase):
         def pick_option(options, **picked):
             self.options, self.shown = helpers.labels_of(options), helpers.shown_of(options)
             return None if answer is None else helpers.answer_of(options, answer)
-        with mock.patch('dirdelta.picker.pick_option', side_effect=pick_option):
+        with mock.patch('dirdelta.ui.picker.pick_option', side_effect=pick_option):
             return contextmenu.choose(ENTRIES, 'What?', **kwargs)
 
     def test_the_results(self):

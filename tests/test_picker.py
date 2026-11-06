@@ -9,9 +9,9 @@ import time
 import unittest
 from unittest import mock
 
-from dirdelta import dirtree
-from dirdelta import picker
-from dirdelta import programs
+from dirdelta.trees import dirtree
+from dirdelta.ui import picker
+from dirdelta.util import programs
 
 # Stands in for treepicker: records its arguments and stdin into $FAKE_PICKER_LOG, and with
 # --updates (--preview), what it read from that fd until it read $FAKE_PICKER_WAIT_FOR
@@ -63,9 +63,9 @@ class PickerTest(unittest.TestCase):
         self.log = os.path.join(self.tmpdir, 'log.json')
         self.env = mock.patch.dict(os.environ, {'FAKE_PICKER_LOG': self.log})
         self.env.start()
-        self.find = mock.patch('dirdelta.programs.find', return_value=self.program)
+        self.find = mock.patch('dirdelta.util.programs.find', return_value=self.program)
         self.find.start()
-        settings_file = mock.patch('dirdelta.settings.SETTINGS_FILE', os.path.join(self.tmpdir, 'settings.json'))
+        settings_file = mock.patch('dirdelta.known.settings.SETTINGS_FILE', os.path.join(self.tmpdir, 'settings.json'))
         settings_file.start()
         self.addCleanup(settings_file.stop)
 
@@ -120,7 +120,7 @@ class PickerTest(unittest.TestCase):
 
         def shown_as():
             raise TypeError("a bug")
-        with mock.patch('dirdelta.picker.ERRORS_LOG', log), mock.patch('sys.stderr') as stderr:
+        with mock.patch('dirdelta.ui.picker.ERRORS_LOG', log), mock.patch('sys.stderr') as stderr:
             self.assertEqual(picker.pick_option(['x'], shown_as=shown_as), 'x')
         stderr.write.assert_not_called()
         with open(log) as f:
@@ -159,7 +159,7 @@ class PickerTest(unittest.TestCase):
         read_fd, write_fd = os.pipe()
         is_done = mock.Mock()
         is_done.wait.return_value = True
-        with mock.patch('dirdelta.picker.ERRORS_LOG', log):
+        with mock.patch('dirdelta.ui.picker.ERRORS_LOG', log):
             picker._send_updates(write_fd, mock.Mock(side_effect=TypeError("a bug")), is_done)
         os.close(write_fd)
         with os.fdopen(read_fd, 'rb') as pipe:
@@ -167,11 +167,11 @@ class PickerTest(unittest.TestCase):
 
     def test_every_picker_shows_whether_its_a_dry_run(self):
         self.answer('x')
-        with mock.patch('dirdelta.dryrun.DRYRUN', True):
+        with mock.patch('dirdelta.util.dryrun.DRYRUN', True):
             picker.pick_option(['x'])
         args, _ = self.call(with_label=True)
         self.assertEqual(args[1:5], ['--label', 'DRY RUN', '--label-color', 'green'])
-        with mock.patch('dirdelta.dryrun.DRYRUN', False):
+        with mock.patch('dirdelta.util.dryrun.DRYRUN', False):
             picker.pick_under_dir('/some/dir')
         args, _ = self.call(with_label=True)
         self.assertEqual(args[1:5], ['--label', 'LIVE', '--label-color', 'red'])
@@ -253,7 +253,7 @@ class PickerTest(unittest.TestCase):
                 self.picked_file_contents = f.read()
             return real_popen(command, **kwargs)
         real_popen = picker.subprocess.Popen
-        with mock.patch('dirdelta.picker.subprocess.Popen', side_effect=popen):
+        with mock.patch('dirdelta.ui.picker.subprocess.Popen', side_effect=popen):
             picker.pick_files('/some/root', ['a/1.txt', 'b/2.txt'], picked=['b/2.txt'])
 
         self.assertEqual(self.picked_file_contents, b'b/2.txt\0')
@@ -512,7 +512,7 @@ class PickerTest(unittest.TestCase):
             return {'Copy': 'Copy (loading)' if len(calls) < 3 else 'Copy (3 files)'}
         os.environ['FAKE_PICKER_WAIT_FOR'] = '3 files'
         self.answer('Copy')
-        with mock.patch('dirdelta.picker.SHOWN_AS_INTERVAL', 0.01):
+        with mock.patch('dirdelta.ui.picker.SHOWN_AS_INTERVAL', 0.01):
             self.assertEqual(picker.pick_option(options, shown_as=shown_as), 'Copy')
         args, items = self.call()
         self.assertEqual(args[:-2], ['-0', '--list', '--root', 'dirdelta'])

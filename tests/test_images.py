@@ -6,8 +6,8 @@ from unittest import mock
 
 from PIL import Image
 
-from dirdelta import images
-from dirdelta import localdiskdirtree
+from dirdelta.ui import images
+from dirdelta.trees import localdiskdirtree
 
 
 def decoded(image):

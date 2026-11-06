@@ -3,7 +3,7 @@ import os
 import unittest
 from unittest import mock
 
-from dirdelta import messages
+from dirdelta.ui import messages
 
 
 class PrintLineTest(unittest.TestCase):

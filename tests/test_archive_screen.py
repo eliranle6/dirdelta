@@ -4,7 +4,7 @@ import unittest
 import zipfile
 from unittest import mock
 
-from dirdelta import archive_screen
+from dirdelta.screens import archive_screen
 
 
 class ExploreTest(unittest.TestCase):
@@ -14,9 +14,9 @@ class ExploreTest(unittest.TestCase):
         self.path = os.path.join(self.tmpdir.name, 'z.zip')
         with zipfile.ZipFile(self.path, 'w') as archive:
             archive.writestr('in/side.txt', 'hello')
-        for name, patcher in (('show', mock.patch('dirdelta.messages.show')),
-                              ('view', mock.patch('dirdelta.picker.view_files')),
-                              ('line', mock.patch('dirdelta.messages.print_line'))):
+        for name, patcher in (('show', mock.patch('dirdelta.ui.messages.show')),
+                              ('view', mock.patch('dirdelta.ui.picker.view_files')),
+                              ('line', mock.patch('dirdelta.ui.messages.print_line'))):
             setattr(self, name, patcher.start())
             self.addCleanup(patcher.stop)
 

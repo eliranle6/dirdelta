@@ -5,7 +5,7 @@ import time
 import unittest
 from unittest import mock
 
-from dirdelta import clouddirtreefactory
+from dirdelta.drive import clouddirtreefactory
 import helpers
 
 REFRESH = clouddirtreefactory.OPTION_REFRESH
@@ -16,11 +16,11 @@ class CloudDirTreeFactoryTest(unittest.TestCase):
     def setUp(self):
         self.cache_dir = tempfile.mkdtemp(prefix='dirstuff-cloud-factory-')
         self.cache = os.path.join(self.cache_dir, 'sub', 'files.txt')
-        for patcher in (mock.patch('dirdelta.drivecache.LINES_FILE', self.cache),
-                        mock.patch('dirdelta.clouddirtree.CloudDirTree')):
+        for patcher in (mock.patch('dirdelta.drive.drivecache.LINES_FILE', self.cache),
+                        mock.patch('dirdelta.drive.clouddirtree.CloudDirTree')):
             self.addCleanup(patcher.stop)
             patcher.start()
-        patcher = mock.patch('dirdelta.clouddirtree.refresh_cache')
+        patcher = mock.patch('dirdelta.drive.clouddirtree.refresh_cache')
         self.addCleanup(patcher.stop)
         self.refresh = patcher.start()
 
@@ -46,14 +46,14 @@ class CloudDirTreeFactoryTest(unittest.TestCase):
     def test_nothing_is_the_first_option_and_goes_back(self):
         self.make_cache()
         for answer in (clouddirtreefactory.OPTION_NOTHING, None):
-            with mock.patch('dirdelta.picker.pick_option', return_value=answer) as pick_option:
+            with mock.patch('dirdelta.ui.picker.pick_option', return_value=answer) as pick_option:
                 self.assertIsNone(clouddirtreefactory.factory_interactive('cloud/mein'))
             self.assertEqual(pick_option.call_args.args[0], [clouddirtreefactory.OPTION_NOTHING, NO_REFRESH, REFRESH])
         self.refresh.assert_not_called()
         clouddirtreefactory.clouddirtree.CloudDirTree.assert_not_called()
 
     def header(self):
-        with mock.patch('dirdelta.picker.pick_option', return_value=NO_REFRESH) as pick_option:
+        with mock.patch('dirdelta.ui.picker.pick_option', return_value=NO_REFRESH) as pick_option:
             clouddirtreefactory.factory_interactive('cloud/mein')
         return pick_option.call_args.kwargs['header']
 

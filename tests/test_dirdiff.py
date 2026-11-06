@@ -4,8 +4,8 @@ import tempfile
 import unittest
 
 import helpers
-from dirdelta import dirdiff
-from dirdelta import programs
+from dirdelta.trees import dirdiff
+from dirdelta.util import programs
 
 
 class FilesNotInTest(unittest.TestCase):

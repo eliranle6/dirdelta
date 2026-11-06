@@ -1,8 +1,8 @@
 import os
 
-from dirdelta import paths
-from dirdelta import picker
-from dirdelta import replicafactory
+from dirdelta.trees import paths
+from dirdelta.ui import picker
+from dirdelta.trees import replicafactory
 
 
 def run(args):

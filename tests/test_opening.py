@@ -6,10 +6,10 @@ import unittest
 from unittest import mock
 
 import helpers
-from dirdelta import clouddirtree
-from dirdelta import localdiskdirtree
-from dirdelta import opening
-from dirdelta import picker
+from dirdelta.drive import clouddirtree
+from dirdelta.trees import localdiskdirtree
+from dirdelta.ui import opening
+from dirdelta.ui import picker
 
 MB = 1024 * 1024
 
@@ -19,10 +19,10 @@ class OpenerTest(unittest.TestCase):
         self.root = os.path.realpath(tempfile.mkdtemp(prefix='dirdelta-opening-'))
         self.addCleanup(shutil.rmtree, self.root)
         helpers.make_files(self.root, ['inbox/a.txt', 'inbox/trip/c.jpg'])
-        patcher = mock.patch('dirdelta.opening.subprocess.Popen')
+        patcher = mock.patch('dirdelta.ui.opening.subprocess.Popen')
         self.popen = patcher.start()
         self.addCleanup(patcher.stop)
-        patcher = mock.patch('dirdelta.downloads.DOWNLOADS_DIR', os.path.join(self.root, 'downloads'))
+        patcher = mock.patch('dirdelta.util.downloads.DOWNLOADS_DIR', os.path.join(self.root, 'downloads'))
         patcher.start()
         self.addCleanup(patcher.stop)
 
@@ -83,12 +83,12 @@ class OpenerTest(unittest.TestCase):
         self.popen.side_effect = [FileNotFoundError('no xdg-open'), mock.DEFAULT]
         opener.open(['a.txt', 'trip/c.jpg'], ['a.txt', 'trip/c.jpg'])
         self.assertEqual(opener.status(), "Couldn't open a.txt: no xdg-open; opened c.jpg")
-        with mock.patch('dirdelta.opening.time.monotonic', return_value=1e12):
+        with mock.patch('dirdelta.ui.opening.time.monotonic', return_value=1e12):
             self.assertEqual(opener.status_parts(), [])
 
     def test_too_many_arent_opened(self):
         opener = self.local()
-        with mock.patch('dirdelta.opening.MAX_OPENED', 1):
+        with mock.patch('dirdelta.ui.opening.MAX_OPENED', 1):
             opener.press(['a.txt', 'trip/c.jpg'], ['a.txt', 'trip/c.jpg'])
         self.assertEqual(self.opened(), [])
         self.assertEqual(opener.status(), "Can't open 2 files at once (at most 1): pick fewer")
@@ -105,7 +105,7 @@ class OpenerTest(unittest.TestCase):
         self.assertEqual(opener.status(), 'Opened x.jpg')
         self.assertEqual(opener.tags(), {'x.jpg': opening.OPENED_TAG})
         # Then without its tag again
-        with mock.patch('dirdelta.opening.time.monotonic', return_value=1e12):
+        with mock.patch('dirdelta.ui.opening.time.monotonic', return_value=1e12):
             self.assertEqual(opener.tags(), {'x.jpg': ''})
         # Found downloaded the next time
         opener.open(['x.jpg'], ['x.jpg'])
@@ -123,7 +123,7 @@ class OpenerTest(unittest.TestCase):
             open_in_background.assert_called_once_with(['x.jpg'], ['x.jpg', 'y.jpg'])
             opener.press(['x.jpg', 'y.jpg'], ['x.jpg', 'y.jpg'])
             # Not soon after: asked again
-            with mock.patch('dirdelta.opening.time.monotonic', return_value=1e12):
+            with mock.patch('dirdelta.ui.opening.time.monotonic', return_value=1e12):
                 opener.press(['x.jpg', 'y.jpg'], ['x.jpg', 'y.jpg'])
             self.assertEqual(open_in_background.call_count, 1)
             opener.press(['x.jpg', 'y.jpg'], ['x.jpg', 'y.jpg'])
@@ -140,14 +140,14 @@ class OpenerTest(unittest.TestCase):
 
     def test_the_menus_open_asks_on_a_screen(self):
         opener = self.drive({'x.jpg': 2 * MB, 'y.jpg': 6 * MB})
-        with mock.patch('dirdelta.picker.pick_option', return_value=opening.CONFIRM_NO) as pick_option:
+        with mock.patch('dirdelta.ui.picker.pick_option', return_value=opening.CONFIRM_NO) as pick_option:
             self.assertFalse(opening.confirm(opener, ['x.jpg', 'y.jpg'], ['x.jpg', 'y.jpg']))
         lines = pick_option.call_args.kwargs['header'].split('\n')
         self.assertEqual(lines, ["Open 2 files? First, download 2 files (8.0 MB) into %s:" %
                                  (os.path.join(self.root, 'downloads'),),
                                  "  x.jpg (2.0 MB)", "  y.jpg (6.0 MB)"])
         self.assertEqual(pick_option.call_args.args[0], [opening.CONFIRM_NO, opening.CONFIRM_YES])
-        with mock.patch('dirdelta.picker.pick_option') as pick_option:
+        with mock.patch('dirdelta.ui.picker.pick_option') as pick_option:
             self.assertTrue(opening.confirm(opener, ['x.jpg'], ['x.jpg', 'y.jpg']))
         pick_option.assert_not_called()
 
