@@ -763,7 +763,7 @@ class InboxSortTest(unittest.TestCase):
             f.write(json.dumps({'id': 'c', 'name': 'c.jpg', 'parents': ['trip'], 'size': '3',
                                 'mimeType': 'image/jpeg'}) + '\n')
         picks = [picker.Picked('', 'trip/c.jpg', ['trip/c.jpg']), None]
-        with mock.patch('dirdelta.drive.drivecache.LINES_FILE', cache), \
+        with mock.patch('dirdelta.drive.drivecache.names.LINES_FILE', cache), \
                 helpers.scripted_files_picker(lambda relpaths: picks.pop(0)) as pick_files, \
                 helpers.answering_option_picker(['Read cloud/me/in/trip/ anew from Google Drive']) as pick_option, \
                 mock.patch('dirdelta.sync.replica_ops.refresh_replica') as refresh:
@@ -1003,7 +1003,7 @@ class InboxSortTest(unittest.TestCase):
             f.write(json.dumps({'myDriveRootId': 'ROOT'}) + '\n')
             f.write(json.dumps({'id': 'me', 'name': 'me', 'parents': ['ROOT'],
                                 'mimeType': 'application/vnd.google-apps.folder'}) + '\n')
-        with mock.patch('dirdelta.drive.drivecache.LINES_FILE', cache):
+        with mock.patch('dirdelta.drive.drivecache.names.LINES_FILE', cache):
             sorter = Sort(self.inbox, 'cloud/me')
             with self.assertRaises(drivecache.DriveCacheError):
                 Sort(self.inbox, 'cloud/nope')

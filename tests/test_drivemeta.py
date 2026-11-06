@@ -88,7 +88,7 @@ class DriveMetaTest(unittest.TestCase):
             f.write(json.dumps({drivecache.ROOT_ID_KEY: 'ROOT'}) + '\n')
             for item in ITEMS:
                 f.write(json.dumps(item) + '\n')
-        for patcher in (mock.patch('dirdelta.drive.drivecache.LINES_FILE', self.cache),
+        for patcher in (mock.patch('dirdelta.drive.drivecache.names.LINES_FILE', self.cache),
                         mock.patch('dirdelta.drive.driveapi.service', return_value=self.drive)):
             patcher.start()
             self.addCleanup(patcher.stop)

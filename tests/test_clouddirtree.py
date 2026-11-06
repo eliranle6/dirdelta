@@ -51,7 +51,7 @@ class CloudDirTreeTest(unittest.TestCase):
             f.write(json.dumps({'myDriveRootId': 'ROOT'}) + '\n')
             for item in ITEMS:
                 f.write(json.dumps(item) + '\n')
-        patcher = mock.patch('dirdelta.drive.drivecache.LINES_FILE', self.cache)
+        patcher = mock.patch('dirdelta.drive.drivecache.names.LINES_FILE', self.cache)
         patcher.start()
         self.addCleanup(patcher.stop)
         self.addCleanup(helpers.remove_drive_cache, self.cache)
@@ -194,7 +194,7 @@ class CloudDirTreeChangesTest(unittest.TestCase):
         files.list.side_effect = lambda q, **_: mock.Mock(
             execute=lambda **_: {'files': self.listed(q)})
         self.local_dir = tempfile.mkdtemp(prefix='dirstuff-cloud-local-')
-        for patcher in (mock.patch('dirdelta.drive.drivecache.LINES_FILE', self.cache),
+        for patcher in (mock.patch('dirdelta.drive.drivecache.names.LINES_FILE', self.cache),
                         mock.patch('dirdelta.drive.driveapi.service', return_value=self.service),
                         mock.patch('dirdelta.drive.clouddirtree.uploads.MediaFileUpload'),
                         mock.patch('dirdelta.ui.messages.print_line'),

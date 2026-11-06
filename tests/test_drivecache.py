@@ -18,7 +18,7 @@ class EntriesTest(unittest.TestCase):
             f.write(json.dumps({drivecache.ROOT_ID_KEY: 'ROOT'}) + '\n')
             for item in ITEMS:
                 f.write(json.dumps(item) + '\n')
-        patcher = mock.patch('dirdelta.drive.drivecache.LINES_FILE', self.cache)
+        patcher = mock.patch('dirdelta.drive.drivecache.names.LINES_FILE', self.cache)
         patcher.start()
         self.addCleanup(patcher.stop)
         self.addCleanup(helpers.remove_drive_cache, self.cache)
@@ -81,7 +81,7 @@ class EntriesTest(unittest.TestCase):
         drivecache.trash('album')
         self.assertEqual(drivecache.count_under('/mein'), 3)
         self.assertIsNone(drivecache.count_under('/nowhere'))
-        with mock.patch('dirdelta.drive.drivecache.LINES_FILE', self.cache + '-missing.txt'):
+        with mock.patch('dirdelta.drive.drivecache.names.LINES_FILE', self.cache + '-missing.txt'):
             self.assertIsNone(drivecache.count_under('/mein'))
 
     def test_with_no_cache_a_replace_makes_one_with_the_root(self):
@@ -113,7 +113,7 @@ class EntriesTest(unittest.TestCase):
                          sorted(item['id'] for item in ITEMS))
 
     def test_an_import_cut_off_is_done_again(self):
-        with mock.patch('dirdelta.drive.drivecache._put', side_effect=KeyboardInterrupt):
+        with mock.patch('dirdelta.drive.drivecache.database._put', side_effect=KeyboardInterrupt):
             with self.assertRaises(KeyboardInterrupt):
                 drivecache.root_id()
         self.assertTrue(os.path.exists(self.cache))
@@ -151,14 +151,14 @@ class ParseTest(unittest.TestCase):
         with open(self.cache, 'w') as f:
             f.write(json.dumps({drivecache.ROOT_ID_KEY: 'ROOT'}) + '\n')
             f.write(json.dumps({'id': 'a', 'name': 'a', 'parents': ['ROOT'], 'mimeType': drivecache.FOLDER_MIME_TYPE}) + '\n')
-        patcher = mock.patch('dirdelta.drive.drivecache.LINES_FILE', self.cache)
+        patcher = mock.patch('dirdelta.drive.drivecache.names.LINES_FILE', self.cache)
         patcher.start()
         self.addCleanup(patcher.stop)
 
 class StaleTest(unittest.TestCase):
     def setUp(self):
         self.cache = os.path.join(tempfile.mkdtemp(prefix='dirstuff-drive-cache-'), 'files.txt')
-        patcher = mock.patch('dirdelta.drive.drivecache.LINES_FILE', self.cache)
+        patcher = mock.patch('dirdelta.drive.drivecache.names.LINES_FILE', self.cache)
         patcher.start()
         self.addCleanup(patcher.stop)
         self.addCleanup(drivecache.mark_fresh)
@@ -226,7 +226,7 @@ class CacheContentsTest(unittest.TestCase):
     def setUp(self):
         fd, self.cache = tempfile.mkstemp(prefix='dirstuff-drive-cache-')
         os.close(fd)
-        patcher = mock.patch('dirdelta.drive.drivecache.LINES_FILE', self.cache)
+        patcher = mock.patch('dirdelta.drive.drivecache.names.LINES_FILE', self.cache)
         patcher.start()
         self.addCleanup(patcher.stop)
         self.addCleanup(helpers.remove_drive_cache, self.cache)
