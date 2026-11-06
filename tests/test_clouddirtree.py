@@ -15,6 +15,8 @@ from dirdelta.trees import dirtree
 from dirdelta.trees import entries
 from dirdelta.trees import localdiskdirtree
 import helpers
+from dirdelta.ui import messages
+from dirdelta.drive import drivecache
 
 FOLDER = 'application/vnd.google-apps.folder'
 
@@ -194,13 +196,13 @@ class CloudDirTreeChangesTest(unittest.TestCase):
         self.local_dir = tempfile.mkdtemp(prefix='dirstuff-cloud-local-')
         for patcher in (mock.patch('dirdelta.drive.drivecache.LINES_FILE', self.cache),
                         mock.patch('dirdelta.drive.driveapi.service', return_value=self.service),
-                        mock.patch('dirdelta.drive.clouddirtree.MediaFileUpload'),
+                        mock.patch('dirdelta.drive.clouddirtree.uploads.MediaFileUpload'),
                         mock.patch('dirdelta.ui.messages.print_line'),
                         mock.patch('dirdelta.util.dryrun.DRYRUN', False)):
             patcher.start()
             self.addCleanup(patcher.stop)
         self.addCleanup(helpers.remove_drive_cache, self.cache)
-        self.addCleanup(clouddirtree.drivecache.mark_fresh)
+        self.addCleanup(drivecache.mark_fresh)
         self.addCleanup(shutil.rmtree, self.local_dir, ignore_errors=True)
         self.tree = clouddirtree.factory('cloud/mein')
 
@@ -223,7 +225,7 @@ class CloudDirTreeChangesTest(unittest.TestCase):
             dirtree.DirTree.from_file_entries(files, self.local_dir))
 
     def lines(self):
-        return [call.args[0] for call in clouddirtree.messages.print_line.call_args_list]
+        return [call.args[0] for call in messages.print_line.call_args_list]
 
     def test_upload_into_an_existing_folder(self):
         self.upload(['album/new.mp3'])
@@ -235,7 +237,7 @@ class CloudDirTreeChangesTest(unittest.TestCase):
         helpers.make_files(self.local_dir, ['inbox/a.mp3'])
         self.tree.copy_in([entries.FileEntry('a.mp3', 'album/a.mp3', os.path.join(self.local_dir, 'inbox/a.mp3'))])
         self.assertEqual(self.creates(), [{'name': 'a.mp3', 'parents': ['album']}])
-        clouddirtree.MediaFileUpload.assert_called_once_with(os.path.join(self.local_dir, 'inbox/a.mp3'),
+        clouddirtree.uploads.MediaFileUpload.assert_called_once_with(os.path.join(self.local_dir, 'inbox/a.mp3'),
                                                              resumable=False)
 
     def test_an_upload_keeps_its_time(self):
@@ -246,10 +248,10 @@ class CloudDirTreeChangesTest(unittest.TestCase):
         self.assertEqual(self.creates(with_times=True)[0]['modifiedTime'], '2024-07-01T14:03:22.000000Z')
 
     def test_a_small_file_is_uploaded_in_one_request_and_a_big_one_resumably(self):
-        with mock.patch('dirdelta.drive.clouddirtree.RESUMABLE_MIN_SIZE', 5):
+        with mock.patch('dirdelta.drive.clouddirtree.uploads.RESUMABLE_MIN_SIZE', 5):
             self.upload(['small.mp3'], content='1234')
             self.upload(['big.mp3'], content='12345')
-        clouddirtree.MediaFileUpload.assert_has_calls([
+        clouddirtree.uploads.MediaFileUpload.assert_has_calls([
             mock.call(os.path.join(self.local_dir, 'small.mp3'), resumable=False),
             mock.call(os.path.join(self.local_dir, 'big.mp3'), resumable=True)])
 
@@ -260,7 +262,7 @@ class CloudDirTreeChangesTest(unittest.TestCase):
             both_under_way.wait()
             return {'id': body['name']}
         self.create_result = create_result
-        with mock.patch('dirdelta.drive.clouddirtree.UPLOAD_THREADS', 2):
+        with mock.patch('dirdelta.drive.clouddirtree.uploads.UPLOAD_THREADS', 2):
             self.upload(['1.mp3', '2.mp3'])
         self.assertIn('Copy complete: copied 2 of 2 files to cloud/mein', self.lines())
 
@@ -268,8 +270,8 @@ class CloudDirTreeChangesTest(unittest.TestCase):
         def print_line(line, color=None):
             if line.startswith('Copying 3.mp3'):
                 raise KeyboardInterrupt
-        clouddirtree.messages.print_line.side_effect = print_line
-        with mock.patch('dirdelta.drive.clouddirtree.UPLOAD_THREADS', 2), \
+        messages.print_line.side_effect = print_line
+        with mock.patch('dirdelta.drive.clouddirtree.uploads.UPLOAD_THREADS', 2), \
                 mock.patch('dirdelta.ui.messages.note_stopped'):
             self.upload(['1.mp3', '2.mp3', '3.mp3', '4.mp3'])
         self.assertEqual(sorted(body['name'] for body in self.creates()), ['1.mp3', '2.mp3'])
@@ -278,7 +280,7 @@ class CloudDirTreeChangesTest(unittest.TestCase):
         # Both are in the cache
         relpaths = [entry.relpath for entry in clouddirtree.factory('cloud/mein').iter_files()]
         self.assertIn('1.mp3', relpaths)
-        self.assertFalse(clouddirtree.drivecache.stale_paths())
+        self.assertFalse(drivecache.stale_paths())
 
     def test_a_copy_replacing_a_file_makes_a_new_version_of_it(self):
         files = self.service.files.return_value
@@ -305,13 +307,13 @@ class CloudDirTreeChangesTest(unittest.TestCase):
             'id': kwargs['fileId'], 'name': 'song.mp3', 'size': '7', 'sha1Checksum': 'abc'})
         self.tree.write_file('song.mp3', os.path.join(self.local_dir, 'new'))
         self.assertEqual(files.update.call_args.kwargs['fileId'], 'song')
-        clouddirtree.MediaFileUpload.assert_called_with(os.path.join(self.local_dir, 'new'))
+        clouddirtree.uploads.MediaFileUpload.assert_called_with(os.path.join(self.local_dir, 'new'))
         self.assertEqual(self.creates(), [])
         self.assertEqual(self.tree.file_size('song.mp3'), 7)
         # In the cache, in its folder still
         tree = clouddirtree.factory('cloud/mein')
         self.assertEqual(tree.file_size('song.mp3'), 7)
-        self.assertFalse(clouddirtree.drivecache.stale_paths())
+        self.assertFalse(drivecache.stale_paths())
 
     def test_writing_a_file_that_isnt_there_makes_it(self):
         helpers.make_files(self.local_dir, ['last_update.txt'])
@@ -327,48 +329,48 @@ class CloudDirTreeChangesTest(unittest.TestCase):
         self.assertIn('a/b/new.mp3', relpaths)
         self.assertNotIn('song.mp3', relpaths)
         self.assertIsNotNone(clouddirtree.factory('cloud/mein').get_node('a/b'))
-        self.assertFalse(clouddirtree.drivecache.stale_paths())
+        self.assertFalse(drivecache.stale_paths())
 
     def test_what_drive_says_of_a_new_file_is_kept(self):
         self.create_result = lambda body: {'id': 'x', 'mimeType': 'audio/mpeg', 'size': '3'}
         self.upload(['new.mp3'])
-        last = clouddirtree.drivecache.rows()[-1]
+        last = drivecache.rows()[-1]
         # With the modification time it was made with
         self.assertTrue(last.pop('modifiedTime'))
         self.assertEqual(last, {'id': 'x', 'name': 'new.mp3', 'parents': ['mein'],
                                 'mimeType': 'audio/mpeg', 'size': '3'})
         create = self.service.files.return_value.create
-        self.assertEqual(create.call_args.kwargs['fields'], clouddirtree.drivecache.FILE_FIELDS)
+        self.assertEqual(create.call_args.kwargs['fields'], drivecache.FILE_FIELDS)
 
     def test_a_change_cut_off_leaves_the_cache_stale(self):
         # E.g. Ctrl-C again while waiting for the uploads under way: Drive may have them or not
         def print_line(line, color=None):
             if line.startswith('Waiting for') or line.startswith('Copying 2.mp3'):
                 raise KeyboardInterrupt
-        clouddirtree.messages.print_line.side_effect = print_line
+        messages.print_line.side_effect = print_line
         never = threading.Event()
         self.addCleanup(never.set)
         self.create_result = lambda body: never.wait(5) and {'id': 'late'}
-        with mock.patch('dirdelta.drive.clouddirtree.UPLOAD_THREADS', 2), \
+        with mock.patch('dirdelta.drive.clouddirtree.uploads.UPLOAD_THREADS', 2), \
                 mock.patch('dirdelta.ui.messages.note_stopped'):
             self.upload(['1.mp3', '2.mp3'])
         self.assertNotIn('1.mp3', self.tree)
-        self.assertTrue(clouddirtree.drivecache.stale_paths())
+        self.assertTrue(drivecache.stale_paths())
         # And the next change, done, doesn't make it look fresh
         never.set()
-        clouddirtree.messages.print_line.side_effect = None
+        messages.print_line.side_effect = None
         self.create_result = lambda body: {'id': 'ok'}
         self.upload(['other.mp3'])
         self.tree.remove_files([self.tree.get_node('song.mp3').data])
-        self.assertTrue(clouddirtree.drivecache.stale_paths())
+        self.assertTrue(drivecache.stale_paths())
 
     def test_a_failed_change_leaves_the_cache_as_it_was(self):
         self.service.files.return_value.update.return_value.execute.side_effect = _http_error()
-        before = clouddirtree.drivecache.rows()
+        before = drivecache.rows()
         self.tree.remove_files([self.tree.get_node('song.mp3').data])
-        self.assertEqual(clouddirtree.drivecache.rows(), before)
+        self.assertEqual(drivecache.rows(), before)
         # Nothing changed in Drive: not stale (asking for a refresh) either
-        self.assertFalse(clouddirtree.drivecache.stale_paths())
+        self.assertFalse(drivecache.stale_paths())
 
     def test_upload_makes_the_folders_its_in_first_once(self):
         self.upload(['a/b/1.mp3', 'a/b/2.mp3', 'a/3.mp3'])
@@ -387,7 +389,7 @@ class CloudDirTreeChangesTest(unittest.TestCase):
         self.assertIsNotNone(clouddirtree.factory('cloud/mein').get_node('a/b'))
 
     def test_big_levels_are_split_into_batches(self):
-        with mock.patch('dirdelta.drive.clouddirtree.MAX_BATCH_SIZE', 2):
+        with mock.patch('dirdelta.drive.clouddirtree.folders.MAX_BATCH_SIZE', 2):
             self.upload(['a/1.mp3', 'b/2.mp3', 'c/3.mp3'])
         self.assertEqual(self.service.new_batch_http_request.call_count, 2)
         self.assertEqual(len([body for body in self.creates() if 'id' in body]), 3)
@@ -468,7 +470,7 @@ class CloudDirTreeChangesTest(unittest.TestCase):
                       self.lines())
         # The cache has it trashed, and what's in it
         self.assertIsNone(clouddirtree.factory('cloud/mein').get_node('album'))
-        self.assertFalse(clouddirtree.drivecache.stale_paths())
+        self.assertFalse(drivecache.stale_paths())
 
     def test_only_the_topmost_whole_folders_are_trashed(self):
         for relpath, cloud_id in (('a/1.mp3', 'one'), ('a/b/2.mp3', 'two'), ('a/b/c/3.mp3', 'three'),
@@ -534,14 +536,14 @@ class CloudDirTreeChangesTest(unittest.TestCase):
         self.assertEqual(self.move('song.mp3', 'album/moved.mp3'), [('song.mp3', 'album/moved.mp3')])
         update = self.service.files.return_value.update
         update.assert_called_once_with(fileId='song', body={'name': 'moved.mp3'}, addParents='album',
-                                       removeParents='mein', fields=clouddirtree.drivecache.FILE_FIELDS)
+                                       removeParents='mein', fields=drivecache.FILE_FIELDS)
         self.assertNotIn('song.mp3', self.tree)
         self.assertEqual(self.tree._cloud_ids['album/moved.mp3'], 'song')
         # The cache has it at its new path, by the same id
-        found = {entry.relpath: entry.cloud_id for entry in clouddirtree.drivecache.entries('/mein')}
+        found = {entry.relpath: entry.cloud_id for entry in drivecache.entries('/mein')}
         self.assertEqual(found['album/moved.mp3'], 'song')
         self.assertNotIn('song.mp3', found)
-        self.assertFalse(clouddirtree.drivecache.stale_paths())
+        self.assertFalse(drivecache.stale_paths())
         self.assertIn('Move complete: moved 1 of 1 files in cloud/mein', self.lines())
 
     def test_listed_says_sizes_and_drives_hashes(self):
@@ -568,10 +570,10 @@ class CloudDirTreeChangesTest(unittest.TestCase):
         self.assertEqual(other._cloud_ids['new/moved.mp3'], 'song')
         self.assertFalse(self.tree.has_file('song.mp3'))
         self.assertEqual(self.tree.known_hash('song.mp3', 'sha1'), None)
-        self.assertFalse(clouddirtree.drivecache.stale_paths())
+        self.assertFalse(drivecache.stale_paths())
         # The cache agrees
-        self.assertIn('new/moved.mp3', [entry.relpath for entry in clouddirtree.drivecache.entries('/other')])
-        self.assertNotIn('song.mp3', [entry.relpath for entry in clouddirtree.drivecache.entries('/mein')])
+        self.assertIn('new/moved.mp3', [entry.relpath for entry in drivecache.entries('/other')])
+        self.assertNotIn('song.mp3', [entry.relpath for entry in drivecache.entries('/mein')])
 
     def test_a_whole_folder_moved_to_another_tree_is_one_request(self):
         other = clouddirtree.factory('cloud/other')
@@ -611,14 +613,14 @@ class CloudDirTreeChangesTest(unittest.TestCase):
     def test_a_whole_folder_is_moved_as_one(self):
         update = self.service.files.return_value.update
         update.return_value.execute.return_value = {'id': 'album', 'name': 'records',
-                                                    'mimeType': clouddirtree.drivecache.FOLDER_MIME_TYPE}
+                                                    'mimeType': drivecache.FOLDER_MIME_TYPE}
         self.assertEqual(self.tree.move_files([('album/track.mp3', 'records/track.mp3')]),
                          [('album/track.mp3', 'records/track.mp3')])
         update.assert_called_once_with(fileId='album', body={'name': 'records'}, addParents='mein',
-                                       removeParents='mein', fields=clouddirtree.drivecache.FILE_FIELDS)
+                                       removeParents='mein', fields=drivecache.FILE_FIELDS)
         self.assertNotIn('album', self.tree)
         self.assertEqual(self.tree._cloud_ids['records/track.mp3'], 'track')
-        found = {entry.relpath: entry.cloud_id for entry in clouddirtree.drivecache.entries('/mein')}
+        found = {entry.relpath: entry.cloud_id for entry in drivecache.entries('/mein')}
         self.assertEqual(found['records/track.mp3'], 'track')
         # Nothing left empty to trash
         self.assertEqual(self.trashed(), [])
@@ -629,10 +631,10 @@ class CloudDirTreeChangesTest(unittest.TestCase):
         self.assertEqual(self.tree.copy_files_within([('song.mp3', 'album/song.mp3')]),
                          [('song.mp3', 'album/song.mp3')])
         copy.assert_called_once_with(fileId='song', body={'name': 'song.mp3', 'parents': ['album']},
-                                     fields=clouddirtree.drivecache.FILE_FIELDS)
+                                     fields=drivecache.FILE_FIELDS)
         self.assertIn('song.mp3', self.tree)
         self.assertEqual(self.tree._cloud_ids['album/song.mp3'], 'copied')
-        found = {entry.relpath: entry.cloud_id for entry in clouddirtree.drivecache.entries('/mein')}
+        found = {entry.relpath: entry.cloud_id for entry in drivecache.entries('/mein')}
         self.assertEqual(found['album/song.mp3'], 'copied')
 
     def test_a_kept_folder_isnt_trashed_by_a_move_or_a_removal(self):
@@ -702,7 +704,7 @@ class CloudDirTreeChangesTest(unittest.TestCase):
         def downloader(local_file, request):
             local_file.write(b'track content')
             return mock.Mock(next_chunk=mock.Mock(return_value=(None, True)))
-        with mock.patch('dirdelta.drive.clouddirtree.MediaIoBaseDownload', side_effect=downloader):
+        with mock.patch('dirdelta.drive.clouddirtree.fetching.MediaIoBaseDownload', side_effect=downloader):
             local = self.download_to_local_dir(['album/track.mp3'])
         self.service.files.return_value.get_media.assert_called_once_with(fileId='track')
         with open(os.path.join(self.local_dir, 'album', 'track.mp3'), 'rb') as f:
@@ -718,17 +720,17 @@ class CloudDirTreeChangesTest(unittest.TestCase):
             return mock.Mock(next_chunk=mock.Mock(side_effect=[(mock.Mock(resumable_progress=5), False),
                                                                (mock.Mock(resumable_progress=13), True)]))
         got = []
-        with mock.patch('dirdelta.drive.clouddirtree.MediaIoBaseDownload', side_effect=downloader):
+        with mock.patch('dirdelta.drive.clouddirtree.fetching.MediaIoBaseDownload', side_effect=downloader):
             self.tree.fetch_file('album/track.mp3', os.path.join(self.local_dir, 'track.mp3'), progress=got.append)
         self.assertEqual(got, [5, 13])
-        self.assertEqual(made['chunksize'], clouddirtree.PROGRESS_CHUNK_SIZE)
+        self.assertEqual(made['chunksize'], clouddirtree.fetching.PROGRESS_CHUNK_SIZE)
 
     def test_a_download_gets_drives_modification_time(self):
         self.tree._infos['album/track.mp3'] = self.tree._info('album/track.mp3')._replace(modified=1719842602)
         def downloader(local_file, request):
             local_file.write(b'track content')
             return mock.Mock(next_chunk=mock.Mock(return_value=(None, True)))
-        with mock.patch('dirdelta.drive.clouddirtree.MediaIoBaseDownload', side_effect=downloader):
+        with mock.patch('dirdelta.drive.clouddirtree.fetching.MediaIoBaseDownload', side_effect=downloader):
             self.download_to_local_dir(['album/track.mp3'])
         self.assertEqual(os.path.getmtime(os.path.join(self.local_dir, 'album', 'track.mp3')), 1719842602)
 
@@ -739,7 +741,7 @@ class CloudDirTreeChangesTest(unittest.TestCase):
         def downloader(local_file, request):
             local_file.write(b'content')
             return mock.Mock(next_chunk=mock.Mock(return_value=(None, True)))
-        with mock.patch('dirdelta.drive.clouddirtree.MediaIoBaseDownload', side_effect=downloader):
+        with mock.patch('dirdelta.drive.clouddirtree.fetching.MediaIoBaseDownload', side_effect=downloader):
             local = self.download_to_local_dir(['Budget.gsheet', 'song.mp3'])
         self.assertEqual(os.listdir(self.local_dir), ['song.mp3'])
         self.assertNotIn('Budget.gsheet', local)
@@ -751,7 +753,7 @@ class CloudDirTreeChangesTest(unittest.TestCase):
         def downloader(local_file, request):
             local_file.write(b'part of it')
             return mock.Mock(next_chunk=mock.Mock(side_effect=_http_error()))
-        with mock.patch('dirdelta.drive.clouddirtree.MediaIoBaseDownload', side_effect=downloader):
+        with mock.patch('dirdelta.drive.clouddirtree.fetching.MediaIoBaseDownload', side_effect=downloader):
             local = self.download_to_local_dir(['song.mp3', 'album/track.mp3'])
         self.assertEqual(os.listdir(self.local_dir), ['album'])
         self.assertEqual(os.listdir(os.path.join(self.local_dir, 'album')), [])
@@ -794,7 +796,7 @@ class CloudDirTreeChangesTest(unittest.TestCase):
         # what's under the folder
         self.assertTrue(self.queries()[0].startswith("name = 'mein' and 'ROOT' in parents"))
         files = self.service.files.return_value
-        self.assertIn(clouddirtree.drivecache.FILE_FIELDS, files.list.call_args.kwargs['fields'])
+        self.assertIn(drivecache.FILE_FIELDS, files.list.call_args.kwargs['fields'])
         self.assertTrue(all("'other' in parents" not in query for query in self.queries()))
 
     def test_refresh_of_a_dir_in_the_tree(self):
@@ -816,32 +818,32 @@ class CloudDirTreeChangesTest(unittest.TestCase):
         self.drive_has([_item('mein', 'mein', 'ROOT', FOLDER)] +
                        [_item('f%d' % (i,), 'f%d' % (i,), 'mein', FOLDER) for i in range(5)] +
                        [_item('x%d' % (i,), 'x.mp3', 'f%d' % (i,)) for i in range(5)])
-        with mock.patch('dirdelta.drive.clouddirtree.MAX_FOLDERS_PER_QUERY', 2):
+        with mock.patch('dirdelta.drive.clouddirtree.refresh.MAX_FOLDERS_PER_QUERY', 2):
             self.tree.refresh_from_drive()
         # mein by name, what's in it, then f0-f4 two at a time
         self.assertEqual(len(self.queries()), 1 + 1 + 3)
         self.assertEqual(len(self.relpaths(self.tree)), 5)
 
     def test_a_failed_refresh_leaves_the_tree_and_the_cache_as_they_were(self):
-        cache_before = clouddirtree.drivecache.rows()
+        cache_before = drivecache.rows()
         def listed(query):
             raise _http_error()
         self.listed = listed
         with self.assertRaises(HttpError):
             self.tree.refresh_from_drive()
         self.assertIn('album/track.mp3', self.tree)
-        self.assertEqual(clouddirtree.drivecache.rows(), cache_before)
+        self.assertEqual(drivecache.rows(), cache_before)
 
     def test_a_refresh_whose_names_cant_be_paths_leaves_the_tree_as_it_was(self):
         self.drive_has([_item('mein', 'mein', 'ROOT', FOLDER), _item('a1', 'a', 'mein', FOLDER),
                         _item('a2', 'a', 'mein', FOLDER)])
-        with self.assertRaises(clouddirtree.drivecache.DriveCacheError):
+        with self.assertRaises(drivecache.DriveCacheError):
             self.tree.refresh_from_drive()
         self.assertIn('album/track.mp3', self.tree)
 
     def test_a_folder_drive_no_longer_has_is_an_error(self):
         self.drive_has([_item('other', 'other', 'ROOT', FOLDER)])
-        with self.assertRaisesRegex(clouddirtree.drivecache.DriveCacheError, 'no folder /mein'):
+        with self.assertRaisesRegex(drivecache.DriveCacheError, 'no folder /mein'):
             self.tree.refresh_from_drive()
 
     def test_quotes_in_a_name_are_escaped(self):
@@ -853,22 +855,22 @@ class CloudDirTreeChangesTest(unittest.TestCase):
     def test_a_refresh_marks_only_the_folder_fresh(self):
         self.drive_has(self.DRIVE_NOW)
         for path in ('/mein', '/mein/album', '/other'):
-            clouddirtree.drivecache.mark_stale(path)
+            drivecache.mark_stale(path)
         self.tree.refresh_from_drive()
-        self.assertEqual(clouddirtree.drivecache.stale_paths(), ['/other'])
+        self.assertEqual(drivecache.stale_paths(), ['/other'])
 
     def test_a_failed_refresh_leaves_the_folder_stale(self):
-        clouddirtree.drivecache.mark_stale('/mein')
+        drivecache.mark_stale('/mein')
         self.drive_has([])
-        with self.assertRaises(clouddirtree.drivecache.DriveCacheError):
+        with self.assertRaises(drivecache.DriveCacheError):
             self.tree.refresh_from_drive()
-        self.assertEqual(clouddirtree.drivecache.stale_paths(), ['/mein'])
+        self.assertEqual(drivecache.stale_paths(), ['/mein'])
 
     def test_with_no_cache_a_refresh_makes_one(self):
         helpers.remove_drive_cache(self.cache)
         self.drive_has(self.DRIVE_NOW)
         clouddirtree.refresh_cache('/mein')
-        self.assertEqual(clouddirtree.drivecache.root_id(), 'ROOT')
+        self.assertEqual(drivecache.root_id(), 'ROOT')
         self.assertEqual(self.relpaths(clouddirtree.factory('cloud/mein')), ['new/1.mp3', 'song.mp3'])
 
     def test_refresh_of_all_of_drive(self):

@@ -18,6 +18,8 @@ import os
 import re
 import tempfile
 
+from googleapiclient.errors import HttpError
+
 from dirdelta.drive import clouddirtree
 from dirdelta.util import downloads
 from dirdelta.util import dryrun
@@ -114,7 +116,7 @@ def read(tree):
             local_path = os.path.join(tree.fullpath(), LOG_NAME)
         with open(local_path, encoding='utf-8', errors='replace') as log:
             return log.read()
-    except (OSError, clouddirtree.HttpError):
+    except (OSError, HttpError):
         return None
 
 
@@ -221,7 +223,7 @@ def _add_entry(tree, path, line, entry, known_replicas):
     """Add line (an entry) to the log of the replica at path (tree), made if it has none"""
     try:
         write(tree, with_entry(read(tree) or '', line))
-    except (OSError, clouddirtree.HttpError) as error:
+    except (OSError, HttpError) as error:
         messages.show("Cannot add the entry to %s's %s" % (path, LOG_NAME), [str(error)], dryrun.label(), 'red')
         return
     known_replicas.note_entry(identity(path), entry)
