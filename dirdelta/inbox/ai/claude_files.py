@@ -19,7 +19,7 @@ class ClaudeFiles(object):
             if worker is not None:
                 worker.join()
                 continue
-            with self._state_lock:
+            with self._claude.lock:
                 threads, self._dir_threads = self._dir_threads, []
             if not threads:
                 return
@@ -29,25 +29,25 @@ class ClaudeFiles(object):
     def _finish_describing(self):
         """Wait for what Claude is asked of files, if anything, on a progress screen (Ctrl-C stops
         waiting: what it said so far is kept)"""
-        if not self._queued and not self._dir_asking:
+        if not self._queued and not self._claude.dir_asking:
             return
         title = ("Waiting for Claude to finish with %s (what it said so far is kept)" %
                  (', '.join(([files_text(len(self._queued))] if self._queued else []) +
-                            ([dirs_text(len(self._dir_asking))] if self._dir_asking else [])),))
-        failed_before = len(self._failed)
+                            ([dirs_text(len(self._claude.dir_asking))] if self._claude.dir_asking else [])),))
+        failed_before = len(self._claude.failed)
         with messages.progress_screen(title, dryrun.label(), wait=False):
             try:
-                while self._queued or self._dir_asking:
+                while self._queued or self._claude.dir_asking:
                     messages.print_progress("%s left (%d being described, %d placed), %d failed%s" % (
-                        files_text(len(self._queued)), len(self._describing),
-                        len(self._queued) - len(self._describing), len(self._failed) - failed_before,
-                        "; %s being asked about" % (dirs_text(len(self._dir_asking)),) if self._dir_asking else ""))
+                        files_text(len(self._queued)), len(self._claude.describing),
+                        len(self._queued) - len(self._claude.describing), len(self._claude.failed) - failed_before,
+                        "; %s being asked about" % (dirs_text(len(self._claude.dir_asking)),) if self._claude.dir_asking else ""))
                     time.sleep(DESCRIBED_WAIT_INTERVAL)
             except KeyboardInterrupt:
                 messages.note_stopped()
-        if len(self._failed) > failed_before:
-            messages.show("Claude couldn't finish with %s" % (files_text(len(self._failed) - failed_before),),
-                          [list(self._failed.values())[-1]], dryrun.label(), 'red')
+        if len(self._claude.failed) > failed_before:
+            messages.show("Claude couldn't finish with %s" % (files_text(len(self._claude.failed) - failed_before),),
+                          [list(self._claude.failed.values())[-1]], dryrun.label(), 'red')
 
     def _ai_files(self, relpaths):
         """ai.File of each of the inbox's files at relpaths: a Drive one downloaded first (one at a

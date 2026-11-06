@@ -42,7 +42,7 @@ class Approval(object):
                 lines += ["", "In a new dir."]
             if os.path.basename(target) != os.path.basename(relpath):
                 lines += ["", "Renamed, from:"] + wrapped(os.path.basename(relpath), "  ")
-            recommendation = self._recommendations.get(relpath)
+            recommendation = self._claude.recommendation(relpath)
             if recommendation and self._target(relpath) == target:
                 lines += ["", "Why (Claude):"] + wrapped(recommendation.get('reason', ''), "  ")
             previews[target] = lines

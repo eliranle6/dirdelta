@@ -147,11 +147,11 @@ class MovesTest(InboxSortTest):
         self.sorter = None
         with mock.patch('dirdelta.ui.messages.ask', return_value='list.txt'), mock.patch('dirdelta.util.dryrun.DRYRUN', False):
             sorter = Sort(self.inbox, self.root)
-            sorter._descriptions['a.txt'] = 'a list'
+            sorter._claude.descriptions['a.txt'] = 'a list'
             moved = sorter._rename_selected('a.txt')
         self.assertEqual(moved, {'a.txt': 'list.txt'})
         self.assertTrue(self.exists('inbox', 'list.txt'))
-        self.assertEqual(sorter._descriptions, {'list.txt': 'a list'})
+        self.assertEqual(sorter._claude.descriptions, {'list.txt': 'a list'})
 
     def test_cc_in_the_picker_shows_it_again_on_the_renamed_one(self):
         with mock.patch('dirdelta.ui.messages.ask', return_value='beach'):

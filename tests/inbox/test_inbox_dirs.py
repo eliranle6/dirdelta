@@ -22,13 +22,13 @@ class DirsTest(InboxSortTest):
         with self.claude_on_dirs(answer) as query:
             sorter._on_key(constants.DESCRIBE_KEY, 'trip', [], files)
             sorter.wait_for_claude()
-        self.assertEqual(sorter._dir_recommendation('trip'),
+        self.assertEqual(sorter._claude.dir_recommendation('trip'),
                          {'action': 'move', 'path': 'photos/2024/rome trip', 'summary': 'Rome trip photos',
                           'reason': 'one trip'})
         # Its files described first (all three: no more than DIR_FILES_DESCRIBED), not asked where each goes
-        self.assertEqual(sorter._descriptions, {relpath: 'a beach at sunset' for relpath in
+        self.assertEqual(sorter._claude.descriptions, {relpath: 'a beach at sunset' for relpath in
                                                 ['trip/c.jpg', 'trip/d.jpg', 'trip/day2/e.jpg']})
-        self.assertEqual(sorter._recommendations, {})
+        self.assertEqual(sorter._claude.recommendations, {})
         prompt = query.call_args.args[0]
         self.assertIn("Its name: trip", prompt)
         self.assertIn("3 files", prompt)
@@ -46,7 +46,7 @@ class DirsTest(InboxSortTest):
         # Kept: a sort of the same inbox has it
         again = Sort(self.inbox, self.root)
         again._load_cached(again._inbox_files())
-        self.assertEqual(again._dir_recommendation('trip')['path'], 'photos/2024/rome trip')
+        self.assertEqual(again._claude.dir_recommendation('trip')['path'], 'photos/2024/rome trip')
         # Picked files, or the root: each file, as before
         with mock.patch.object(Sort, 'ask_in_background') as ask:
             sorter._on_key(constants.DESCRIBE_KEY, 'trip', ['trip/c.jpg'], files)
@@ -57,12 +57,12 @@ class DirsTest(InboxSortTest):
         self.cache_dir_recommendation('trip', {'action': 'split', 'path': '', 'summary': 'mixed', 'reason': 'r'})
         sorter = Sort(self.inbox, self.root)
         sorter._load_cached(sorter._inbox_files())
-        self.assertEqual(sorter._dir_recommendation('trip')['action'], 'split')
+        self.assertEqual(sorter._claude.dir_recommendation('trip')['action'], 'split')
         preview = '\n'.join(picker.unstyled(line) for line in sorter._previews(sorter._inbox_files())['trip'])
         self.assertIn("Its files don't go together", preview)
         helpers.make_files(self.inbox, ['trip/new.jpg'])
         sorter._load_cached(sorter._inbox_files())
-        self.assertIsNone(sorter._dir_recommendation('trip'))
+        self.assertIsNone(sorter._claude.dir_recommendation('trip'))
         preview = '\n'.join(picker.unstyled(line) for line in sorter._previews(sorter._inbox_files())['trip'])
         self.assertIn("Ctrl-I asks Claude about the dir", preview)
 
@@ -72,7 +72,7 @@ class DirsTest(InboxSortTest):
         with self.claude_on_dirs({'action': 'move', 'path': '..', 'summary': 's', 'reason': 'r'}):
             sorter._on_key(constants.DESCRIBE_KEY, 'trip', [], files)
             sorter.wait_for_claude()
-        self.assertIsNone(sorter._dir_recommendation('trip'))
+        self.assertIsNone(sorter._claude.dir_recommendation('trip'))
         preview = '\n'.join(picker.unstyled(line) for line in sorter._previews(files)['trip'])
         self.assertIn("failed", preview)
 

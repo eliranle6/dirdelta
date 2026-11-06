@@ -259,4 +259,6 @@ Notes for whoever changes things next:
 - Files are kept short (a rule of thumb of ~100 lines, more where splitting would break up one
   thing), and a directory to about ten modules. A module that grows past that becomes a package
   (its `__init__` re-exporting what callers use), and a big class keeps its state in one object
-  with its methods in mixins, a module each.
+  with its methods in mixins, a module each; state with an owner of its own is a collaborator
+  object instead (InboxSort's `self._claude`, a ClaudeKnowledge). A name another module uses is
+  public (no leading underscore).

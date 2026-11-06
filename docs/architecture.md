@@ -32,10 +32,16 @@ lines. A module that grew big became a package of its own (e.g. `inbox/`, `ui/pi
 `drive/clouddirtree/`): its `__init__.py` re-exports the names the rest of dirdelta uses, so
 callers still write `picker.pick_option()` or `clouddirtree.factory()`. A big class (InboxSort,
 InteractiveDirSync, DirTree, LocalReplica, CloudDirTree, Index, Job, Opener) is one object whose
-methods are in mixins, each in a module of its own (named by what it does); a long function is
+methods are in mixins, each in a module of its own (named by what it does): they're one object's
+operations on its state, often overriding its base's hooks. State with an owner of its own is a
+collaborator instead: InboxSort's Claude knowledge (`inbox/ai/knowledge.py`, `self._claude`: what
+Claude said and is asked, under its lock), which the rest of the sort asks through its methods
+(`description()`, `recommendation()`, `is_describing()`...), and only the Claude worker changes; a long function is
 steps of their own (InboxSort's menu: _menu_facts() and its options by kind; the sync's picker:
 _browse() and its steps; the sync menu: sync_menu.SyncMenu; treepicker's run: picker.command._Command). The sections below
 still name the modules by their own names (`inbox.py` is now `inbox/`, and so on).
+
+A name used by another module is public (no leading underscore), even inside a package.
 
 Tests patch a name where it's looked up: in the module that uses it (e.g.
 `dirdelta.claude.ai.query.run_query`, `dirdelta.drive.drivecache.names.LINES_FILE`,
@@ -75,7 +81,7 @@ The map (each module's docstring's first line; generated from the code):
     - `tree.py`: A tree of a Drive folder (CloudDirTree), read from the Drive cache; its changes are mixins, each in a module o...
     - `uploads.py`: Copying files into a Drive tree: uploading them, a few at once
     - `whole_folders.py`: The folders all of whose files are removed, trashed as one
-  - `drivecache/`: The cache of Google Drive's file list, an SQLite file (see _database_path(), next to LINES_FILE): a row per fi...
+  - `drivecache/`: The cache of Google Drive's file list, an SQLite file (see database_path(), next to LINES_FILE): a row per fil...
     - `changes.py`: What dirdelta changes in Drive, put in the cache
     - `database.py`: The cache's SQLite database: one connection, from any thread; and importing the old file
     - `metadata.py`: What a file's metadata (as Drive gives it) says of it
@@ -127,6 +133,7 @@ The map (each module's docstring's first line; generated from the code):
     - `claude.py`: Asking Claude about the inbox's files in the background: describing them, and where they go
     - `claude_dirs.py`: Asking Claude about an inbox's dir as a whole
     - `claude_files.py`: Waiting for Claude, and the files it's given (downloaded from Drive, if they must be)
+    - `knowledge.py`: What Claude said of an inbox's files and dirs, and what it's being asked now (ClaudeKnowledge): the sort's one...
 - `known/`: What's known of the replicas: recent pairs and favorites, their logs, names, labels and mounts
   - `log_entries.py`: What a sync or a sort changed in each replica, and the entries offered for their logs once it's done
   - `replica_history.py`: What's known of the replicas (Replicas): the pairs synced, the favorites, the sorts, each sorted tree's recent...

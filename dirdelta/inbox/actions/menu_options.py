@@ -28,7 +28,7 @@ class MenuOptions(object):
                                      lambda: self.ask_in_background(f.askable, anew=True))),
             (self.ASK_DIR, Action("Ask Claude about %s as a whole: what it is, and where it goes, while you go on%s" %
                                    (f.the_dir, " (anew)" if f.dir_recommendation else ""),
-                                   None if f.whole_dir and f.whole_dir not in self._dir_asking else
+                                   None if f.whole_dir and not self._claude.is_asking_dir(f.whole_dir) else
                                    "being asked" if f.whole_dir else "not a dir", ASK, [],
                                    lambda: self.ask_dir_in_background(f.whole_dir, f.relpaths),
                                    said=(ASK, " Claude, about %s, while you go on" % (f.the_dir,)))),

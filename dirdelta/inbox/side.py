@@ -70,7 +70,7 @@ class Side(object):
         """Where in the sorted tree the inbox's file at relpath is related to (for the tree beside
         the picker to show, while it's selected): Claude's dir for it, or else where a copy of it
         is, or else a file of its name; None for none (or a dir)"""
-        recommendation = self._recommendations.get(relpath)
+        recommendation = self._claude.recommendation(relpath)
         target = self._target(relpath) if recommendation else None
         if target is not None:
             return posixpath.dirname(target)

@@ -78,10 +78,9 @@ class Keys(object):
     def _carry(self, moved):
         """After the inbox's files moved within it (moved: {relpath: new relpath}), what's known of
         each goes with it: what Claude said (in its cache too), the contents compared, its hash"""
-        with self._state_lock:
+        with self._claude.lock:
             for relpath, new in moved.items():
-                for known in (self._descriptions, self._recommendations, self._failed, self._checked,
-                              self._junk_by_name):
+                for known in self._claude.kept_of() + (self._checked, self._junk_by_name):
                     if relpath in known:
                         known[new] = known.pop(relpath)
         # What Claude said of each, in its cache, under its new path (the same size)

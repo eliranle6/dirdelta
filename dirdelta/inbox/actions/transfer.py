@@ -71,7 +71,7 @@ class Transfer(object):
 
     def _target(self, relpath):
         """Where Claude recommends the inbox's file at relpath go, in the sorted tree"""
-        return ai.recommended_path(self._recommendations[relpath])
+        return ai.recommended_path(self._claude.recommendation(relpath))
 
     def _transfer(self, moves, is_move):
         """Copy the inbox's files to the sorted tree, of another kind, each of moves (relpath in the

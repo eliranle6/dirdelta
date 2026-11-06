@@ -19,12 +19,12 @@ class ClaudeDirs(object):
         to do with it as a whole (ai.recommend_dir()), anew: a few of its files are described first,
         and all of them compared with the sorted tree's, so it knows how many are copies. On a thread
         of its own, while the user goes on; once the dir is asked about, Ctrl-I again does nothing."""
-        with self._state_lock:
-            if dirpath in self._dir_asking or not relpaths:
+        with self._claude.lock:
+            if dirpath in self._claude.dir_asking or not relpaths:
                 return
-            self._dir_asking.add(dirpath)
-            self._dir_failed.pop(dirpath, None)
-            self._dir_recommendations.pop(dirpath, None)
+            self._claude.dir_asking.add(dirpath)
+            self._claude.dir_failed.pop(dirpath, None)
+            self._claude.dir_recommendations.pop(dirpath, None)
             thread = threading.Thread(target=self._ask_about_dir, args=(dirpath, list(relpaths)), daemon=True)
             self._dir_threads.append(thread)
         thread.start()
@@ -33,9 +33,9 @@ class ClaudeDirs(object):
         """ask_dir_in_background()'s thread"""
         try:
             described = spread(relpaths, DIR_FILES_DESCRIBED)
-            undescribed = [relpath for relpath in described if relpath not in self._descriptions]
-            with self._state_lock:
-                self._describing.update(undescribed)
+            undescribed = [relpath for relpath in described if relpath not in self._claude.descriptions]
+            with self._claude.lock:
+                self._claude.describing.update(undescribed)
             self._describe(undescribed)
             self._compare(relpaths)
             sizes = [self._listed(relpath)[0] or 0 for relpath in relpaths]
@@ -45,18 +45,18 @@ class ClaudeDirs(object):
             dir_ = ai.Dir(dirpath, len(relpaths), sum(sizes), dict(types),
                           [within(relpath) for relpath in spread(relpaths, ai.DIR_NAMES_GIVEN)],
                           self._dates(spread(relpaths, DIR_FILES_DATED)),
-                          {within(relpath): self._descriptions[relpath] for relpath in described
-                           if relpath in self._descriptions}, copies)
+                          {within(relpath): self._claude.descriptions[relpath] for relpath in described
+                           if relpath in self._claude.descriptions}, copies)
             key = self._dir_key(dirpath, len(relpaths), sum(sizes))
             recommendation = ai.recommend_dir(dir_, key, self._root_dirs(), self.root_path, anew=True)
-            with self._state_lock:
-                self._dir_recommendations[dirpath] = (key, recommendation)
-                self._dir_copies[dirpath] = copies
+            with self._claude.lock:
+                self._claude.dir_recommendations[dirpath] = (key, recommendation)
+                self._claude.dir_copies[dirpath] = copies
         except Exception as error:
-            self._dir_failed[dirpath] = str(error)
+            self._claude.dir_failed[dirpath] = str(error)
         finally:
-            with self._state_lock:
-                self._dir_asking.discard(dirpath)
+            with self._claude.lock:
+                self._claude.dir_asking.discard(dirpath)
 
     def _dates(self, relpaths):
         """(the first, the last) of the dates ('YYYY-MM-DD') the inbox's files at relpaths were taken

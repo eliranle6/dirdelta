@@ -27,9 +27,9 @@ class Previews(object):
         for relpath in relpaths:
             # Each (text, style): Claude's in its color, junk in a guess's yellow
             tags = []
-            if relpath in self._descriptions:
-                tags.append((DESCRIBED % (self._descriptions[relpath],), CLAUDE_STYLE))
-            elif relpath in self._describing:
+            if self._claude.description(relpath) is not None:
+                tags.append((DESCRIBED % (self._claude.description(relpath),), CLAUDE_STYLE))
+            elif self._claude.is_describing(relpath):
                 tags.append((LOOKING, 'grey'))
             junk_reason = self._junk(relpath)
             if junk_reason is not None:
@@ -42,21 +42,20 @@ class Previews(object):
                 shown[relpath] = picker.styled([(os.path.basename(relpath), None)] +
                                                [part for tag in tags for part in (("  ", None), tag)])
         # The dirs Claude said what they are of, as wholes (treepicker skips the ones that aren't there)
-        with self._state_lock:
-            dirpaths = set(self._dir_recommendations) | set(self._dir_asking)
+        dirpaths = self._claude.known_dirs()
         for dirpath in dirpaths:
-            recommendation = self._dir_recommendation(dirpath)
+            recommendation = self._claude.dir_recommendation(dirpath)
             tag = ((DESCRIBED % (recommendation['summary'],), CLAUDE_STYLE) if recommendation and recommendation.get('summary') else
-                   (LOOKING_AT_DIR, 'grey') if dirpath in self._dir_asking else None)
+                   (LOOKING_AT_DIR, 'grey') if self._claude.is_asking_dir(dirpath) else None)
             if tag is not None:
                 # treepicker puts the dir's '/' after its name
                 shown[dirpath] = picker.styled([(posixpath.basename(dirpath), None), ("  ", None), tag])
-        describing, placing = len(self._describing), len(self._placing)
-        failed = len([relpath for relpath in relpaths if relpath in self._failed])
+        describing, placing, asking_dirs = self._claude.busy()
+        failed = len([relpath for relpath in relpaths if self._claude.failure(relpath) is not None])
         busy = ["%s %s" % (what, files_text(count))
                 for what, count in (("describing", describing), ("placing", placing)) if count]
-        if self._dir_asking:
-            busy.append("asking about %s" % (dirs_text(len(self._dir_asking)),))
+        if asking_dirs:
+            busy.append("asking about %s" % (dirs_text(asking_dirs),))
         status = ("Claude: " + ', '.join(busy) if busy else
                   "Claude: couldn't do %s" % (files_text(failed),) if failed else '')
         # Downloading files to open them: how far it got (on the status bar, first), and each
@@ -87,14 +86,14 @@ class Previews(object):
         for relpath in relpaths:
             size = self._size(relpath)
             lines = [picker.styled([("Size: ", 'bold'), (text.format_size(size), None)])] if size is not None else []
-            if relpath in self._descriptions:
-                lines += ["", preview_title(DESCRIPTION_TITLE, CLAUDE_STYLE)] + wrapped(self._descriptions[relpath], "  ")
-            elif relpath in self._describing:
+            if self._claude.description(relpath) is not None:
+                lines += ["", preview_title(DESCRIPTION_TITLE, CLAUDE_STYLE)] + wrapped(self._claude.description(relpath), "  ")
+            elif self._claude.is_describing(relpath):
                 lines += ["", preview_title(DESCRIPTION_TITLE, CLAUDE_STYLE), grey_line("  Claude is looking at it...")]
-            elif relpath in self._failed and relpath not in self._descriptions:
-                lines += ["", preview_title(DESCRIPTION_TITLE + " failed", 'red')] + wrapped(self._failed[relpath], "  ")
+            elif self._claude.failure(relpath) is not None and self._claude.description(relpath) is None:
+                lines += ["", preview_title(DESCRIPTION_TITLE + " failed", 'red')] + wrapped(self._claude.failure(relpath), "  ")
             lines += self._copies_lines(relpath)
-            recommendation = self._recommendations.get(relpath)
+            recommendation = self._claude.recommendation(relpath)
             if relpath in self._junk_by_name:
                 lines += ["", MAYBE_JUNK, preview_title("Junk? By its name or size:", 'yellow')] + \
                     wrapped(self._junk_by_name[relpath], "  ")
@@ -113,10 +112,10 @@ class Previews(object):
                     lines.append(grey_line("  (renamed)"))
                 # Why, apart from where
                 lines += [""] + wrapped(recommendation.get('reason', ''), "  ")
-            elif relpath in self._placing:
+            elif self._claude.is_placing(relpath):
                 lines += ["", preview_title(DESTINATION_TITLE, CLAUDE_STYLE), grey_line("  Claude is working it out...")]
-            elif relpath in self._failed and relpath in self._descriptions:
-                lines += ["", preview_title(DESTINATION_TITLE + " failed", 'red')] + wrapped(self._failed[relpath], "  ")
+            elif self._claude.failure(relpath) is not None and self._claude.description(relpath) is not None:
+                lines += ["", preview_title(DESTINATION_TITLE + " failed", 'red')] + wrapped(self._claude.failure(relpath), "  ")
             else:
                 lines += ["", picker.styled([("Dest. path:", 'bold')]), grey_line("  Ctrl-I asks Claude")]
             previews[relpath] = lines
@@ -128,11 +127,11 @@ class Previews(object):
         """The lines beside the picker of the inbox's dir at dirpath (of count files, of size): what
         Claude said of it as a whole, if it was asked (Ctrl-I)"""
         lines = [picker.styled([("Dir: ", 'bold'), ("%s, %s" % (files_text(count), text.format_size(size)), None)])]
-        recommendation = self._dir_recommendation(dirpath)
-        if dirpath in self._dir_asking:
+        recommendation = self._claude.dir_recommendation(dirpath)
+        if self._claude.is_asking_dir(dirpath):
             return lines + ["", preview_title(DIR_TITLE, CLAUDE_STYLE), grey_line("  Claude is looking at it...")]
-        if recommendation is None and dirpath in self._dir_failed:
-            return lines + ["", preview_title(DIR_TITLE + " failed", 'red')] + wrapped(self._dir_failed[dirpath], "  ")
+        if recommendation is None and self._claude.dir_failure(dirpath) is not None:
+            return lines + ["", preview_title(DIR_TITLE + " failed", 'red')] + wrapped(self._claude.dir_failure(dirpath), "  ")
         if recommendation is None:
             return lines + ["", picker.styled([("Dir recommendation:", 'bold')]),
                             grey_line("  Ctrl-I asks Claude about the dir"), grey_line("  as a whole")]
@@ -148,7 +147,7 @@ class Previews(object):
                       grey_line("  pick them (Space), then Ctrl-I"), grey_line("  asks about each")]
         if recommendation.get('reason'):
             lines += [""] + wrapped(recommendation['reason'], "  ")
-        copies = self._dir_copies.get(dirpath)
+        copies = self._claude.dir_copies_of(dirpath)
         if copies:
             lines += ["", "%s of it in the sorted tree already" % (files_text(copies),)]
         if recommendation['action'] != 'split':

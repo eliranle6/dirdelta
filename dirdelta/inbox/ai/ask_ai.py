@@ -34,7 +34,7 @@ class AskAI(object):
         actions = [action for action in actions if action.name not in cant]
         files = []
         for relpath in relpaths:
-            notes = ([self._descriptions[relpath]] if relpath in self._descriptions else [])
+            notes = ([self._claude.descriptions[relpath]] if relpath in self._claude.descriptions else [])
             copies = self._copies(relpath)
             if copies:
                 notes.append("the sorted tree has the same contents at %s" % (', '.join(copies[:3]),))

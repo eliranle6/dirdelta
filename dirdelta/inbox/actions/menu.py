@@ -61,13 +61,13 @@ class Menu(MenuOptions, MenuMoves):
         folder = selected if node is None or isinstance(node.data, entries.DirEntry) else posixpath.dirname(selected)
         count = files_text(len(relpaths))
         undescribed = [relpath for relpath in relpaths
-                       if relpath not in self._descriptions and relpath not in self._describing]
+                       if self._claude.description(relpath) is None and not self._claude.is_describing(relpath)]
         # The ones Claude may be asked where they go: all but the ones it's being asked of now (the
         # ones it placed, or couldn't, asked anew)
-        askable = [relpath for relpath in relpaths if relpath not in self._placing]
-        asked_before = [relpath for relpath in askable if relpath in self._recommendations or relpath in self._failed]
+        askable = [relpath for relpath in relpaths if not self._claude.is_placing(relpath)]
+        asked_before = [relpath for relpath in askable if self._claude.recommendation(relpath) is not None or self._claude.failure(relpath) is not None]
         recommended = [relpath for relpath in relpaths
-                       if relpath in self._recommendations and self._target(relpath) is not None]
+                       if self._claude.recommendation(relpath) is not None and self._target(relpath) is not None]
         # Copies of the sorted tree's files, by their contents (whatever Claude says of them), and the
         # files with candidates there not compared yet
         removable = [relpath for relpath in relpaths if self._copies(relpath)]
@@ -82,7 +82,7 @@ class Menu(MenuOptions, MenuMoves):
         name = os.path.basename(relpaths[0]) if is_one else None
         # All the files of the selected dir: what Claude said of it as a whole, and what's done with it whole
         whole_dir = self._whole_dir(relpaths, selected)
-        dir_recommendation = self._dir_recommendation(whole_dir) if whole_dir else None
+        dir_recommendation = self._claude.dir_recommendation(whole_dir) if whole_dir else None
         dir_action = dir_recommendation['action'] if dir_recommendation else None
         the_dir = ("the dir %s/ (%s)" % (posixpath.basename(whole_dir), count)) if whole_dir else None
         claudes_dir_path = ((dir_recommendation['path'] + '/', CLAUDES_DIR) if dir_action == 'move' else None)

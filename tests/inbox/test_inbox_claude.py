@@ -18,8 +18,8 @@ class ClaudeTest(InboxSortTest):
         with mock.patch.object(sorter, '_downloaded', return_value='/tmp/x'), \
                 mock.patch('dirdelta.claude.ai.describe', return_value={'a.txt': 'a note'}):
             sorter._describe(['a.txt', 'gone.txt'])
-        self.assertEqual(sorter._descriptions, {'a.txt': 'a note'})
-        self.assertEqual(sorter._failed, {})
+        self.assertEqual(sorter._claude.descriptions, {'a.txt': 'a note'})
+        self.assertEqual(sorter._claude.failed, {})
 
     def test_claudes_dir_under_the_files_own_name_isnt_offered_when_its_claudes_name(self):
         with self.claude_places():
@@ -51,10 +51,10 @@ class ClaudeTest(InboxSortTest):
             self.assertTrue(kwargs['enter_picks_selection'])
             kwargs['on_notify']('\t', 'trip', [])
             self.sorter.wait_for_claude()
-            self.assertEqual(self.sorter._descriptions, {'trip/c.jpg': 'a beach'})
+            self.assertEqual(self.sorter._claude.descriptions, {'trip/c.jpg': 'a beach'})
             kwargs['on_notify']('\t', 'trip/c.jpg', ['a.txt'])
             self.sorter.wait_for_claude()
-        self.assertEqual(sorted(self.sorter._descriptions), ['a.txt', 'trip/c.jpg'])
+        self.assertEqual(sorted(self.sorter._claude.descriptions), ['a.txt', 'trip/c.jpg'])
 
     def test_ctrl_i_asks_anew_about_files_claude_described_and_placed_before(self):
         answers = {'a.txt': {'description': 'a list', 'action': 'move', 'path': 'docs/a.txt', 'reason': 'a doc'}}
@@ -70,9 +70,9 @@ class ClaudeTest(InboxSortTest):
             on_notify('\t', 'a.txt', [])
             self.sorter.wait_for_claude()
         self.assertEqual(len(self.queries), 4)
-        self.assertEqual(self.sorter._descriptions['a.txt'], 'a shopping list')
+        self.assertEqual(self.sorter._claude.descriptions['a.txt'], 'a shopping list')
         self.assertEqual(self.sorter._target('a.txt'), 'lists/a.txt')
-        self.assertEqual(self.sorter._anew, set())
+        self.assertEqual(self.sorter._claude.anew, set())
         # And kept so next time
         self.assertEqual(ai.describe([ai.File('a.txt', None, self.sorter._size('a.txt'))], self.sorter._cache_key),
                          {'a.txt': 'a shopping list'})
@@ -141,7 +141,7 @@ class ClaudeTest(InboxSortTest):
         def send(found=None, default=None):
             sends.append(dict(found))
             if len(sends) == 1:
-                sorter._descriptions['a.txt'] = 'a list'
+                sorter._claude.descriptions['a.txt'] = 'a list'
             elif len(sends) == 3:
                 raise picker.PickerClosed()
         with mock.patch('dirdelta.inbox.previews.PREVIEWS_INTERVAL', 0), self.assertRaises(picker.PickerClosed):
@@ -155,7 +155,7 @@ class ClaudeTest(InboxSortTest):
     def test_claudes_errors_are_said(self):
         with mock.patch('dirdelta.claude.ai.query.run_query', side_effect=ai.AIError('not logged in')):
             self.sort([['a.txt'], None], ['Describe it'])
-            self.assertEqual(self.sorter._failed, {'a.txt': 'not logged in'})
+            self.assertEqual(self.sorter._claude.failed, {'a.txt': 'not logged in'})
             self.assertEqual(self.sorter._shown_as(['a.txt'])[''], "Claude: couldn't do 1 file")
             self.assertIn("  not logged in", self.sorter._previews(['a.txt'])['a.txt'])
 

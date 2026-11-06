@@ -46,18 +46,10 @@ class Listing(object):
         files = [ai.File(relpath, None, self._listed(relpath)[0]) for relpath in relpaths]
         descriptions, recommendations = ai.cached(files, lambda file: self._keys(file, self._listed(file.relpath)[1]),
                                                   self.root_path)
-        self._descriptions.update(descriptions)
-        self._recommendations.update(recommendations)
-        # The dirs': the ones that changed since are dropped (asked about again, they're asked anew)
+        # The dirs' by their keys now: the ones that changed since are dropped
         keys = {dirpath: self._dir_key(dirpath, count, size)
                 for dirpath, (count, size) in self._dir_stats(relpaths).items()}
-        cached = ai.cached_dirs(keys, self.root_path)
-        with self._state_lock:
-            for dirpath in list(self._dir_recommendations):
-                if keys.get(dirpath) != self._dir_recommendations[dirpath][0]:
-                    del self._dir_recommendations[dirpath]
-            for dirpath, recommendation in cached.items():
-                self._dir_recommendations.setdefault(dirpath, (keys[dirpath], recommendation))
+        self._claude.load(descriptions, recommendations, keys, ai.cached_dirs(keys, self.root_path))
 
     # The inbox's dirs
 
@@ -75,11 +67,6 @@ class Listing(object):
 
     def _dir_key(self, dirpath, count, size):
         return ai.dir_key(posixpath.join(self.inbox_path, dirpath), count, size)
-
-    def _dir_recommendation(self, dirpath):
-        """What Claude said of the inbox's dir at dirpath as a whole (see ai.recommend_dir()), or None"""
-        found = self._dir_recommendations.get(dirpath)
-        return found[1] if found is not None else None
 
     def _whole_dir(self, relpaths, selected):
         """The dir at selected, if relpaths are all its files (as Enter on it picks them; not the

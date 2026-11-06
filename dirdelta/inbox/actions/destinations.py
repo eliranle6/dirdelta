@@ -96,13 +96,13 @@ class Destinations(object):
         """plan (one file: [(relpath, its path in the sorted tree)]) with the name the user types for
         it there, starting as Claude's (or its own); None if they typed none, or one that can't be"""
         (relpath, target), = plan
-        recommendation = self._recommendations.get(relpath)
+        recommendation = self._claude.recommendation(relpath)
         default = os.path.basename(self._target(relpath) if recommendation and self._target(relpath)
                                    else relpath)
         lines = ["Moving %s" % (posixpath.join(self.inbox_path, relpath),),
                  "to %s/" % (join_path(self.root_path, os.path.dirname(target)),)]
-        if relpath in self._descriptions:
-            lines.append(DESCRIBED % (self._descriptions[relpath],))
+        if self._claude.description(relpath) is not None:
+            lines.append(DESCRIBED % (self._claude.description(relpath),))
         lines += ["", "Its name there (Enter to keep it as it is; an empty one, or Ctrl-C, to go back):"]
         name = messages.ask("The file's name in %s" % (self.root_path,), lines, "> ", default, dryrun.label())
         if name is None:

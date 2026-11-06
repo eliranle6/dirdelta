@@ -15,7 +15,7 @@ class Copies(object):
         Claude says (a recommendation to remove it that isn't for a copy); None if it doesn't"""
         if relpath in self._junk_by_name:
             return self._junk_by_name[relpath]
-        recommendation = self._recommendations.get(relpath)
+        recommendation = self._claude.recommendation(relpath)
         if recommendation and recommendation.get('action') == 'remove' and not recommendation.get('copies'):
             return recommendation.get('reason') or "Claude says so"
         return None
