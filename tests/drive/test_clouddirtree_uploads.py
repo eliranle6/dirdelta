@@ -10,7 +10,7 @@ from dirdelta.drive import drivecache
 from dirdelta.trees import dirtree
 from dirdelta.trees import entries
 from dirdelta.ui import messages
-from clouddirtree_support import CloudDirTreeChangesTest, FOLDER, _http_error
+from clouddirtree_support import CloudDirTreeChangesTest, FOLDER, http_error
 
 
 class UploadsTest(CloudDirTreeChangesTest):
@@ -163,7 +163,7 @@ class UploadsTest(CloudDirTreeChangesTest):
         self.assertTrue(drivecache.stale_paths())
 
     def test_a_failed_change_leaves_the_cache_as_it_was(self):
-        self.service.files.return_value.update.return_value.execute.side_effect = _http_error()
+        self.service.files.return_value.update.return_value.execute.side_effect = http_error()
         before = drivecache.rows()
         self.tree.remove_files([self.tree.get_node('song.mp3').data])
         self.assertEqual(drivecache.rows(), before)
@@ -197,7 +197,7 @@ class UploadsTest(CloudDirTreeChangesTest):
         def create_result(body):
             if body.get('name') == 'a' and is_first[0]:
                 is_first[0] = False
-                raise _http_error()
+                raise http_error()
             return {'id': body.get('id', 'made-' + body['name'])}
         self.create_result = create_result
         self.upload(['a/b/1.mp3'])
@@ -219,7 +219,7 @@ class UploadsTest(CloudDirTreeChangesTest):
     def test_a_failed_upload_is_said_and_the_rest_go_on(self):
         def create_result(body):
             if body['name'] == 'bad.mp3':
-                raise _http_error()
+                raise http_error()
             return {'id': 'ok'}
         self.create_result = create_result
         self.upload(['bad.mp3', 'good.mp3'])

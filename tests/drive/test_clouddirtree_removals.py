@@ -4,7 +4,7 @@ from unittest import mock
 
 from dirdelta.drive import clouddirtree
 from dirdelta.drive import drivecache
-from clouddirtree_support import CloudDirTreeChangesTest, _http_error
+from clouddirtree_support import CloudDirTreeChangesTest, http_error
 
 
 class RemovalsTest(CloudDirTreeChangesTest):
@@ -64,7 +64,7 @@ class RemovalsTest(CloudDirTreeChangesTest):
 
     def test_if_drive_cant_be_asked_the_files_are_trashed_one_by_one(self):
         def listed(query):
-            raise _http_error()
+            raise http_error()
         self.listed = listed
         self.remove(['album/track.mp3'])
         self.assertEqual(self.trashed(), ['track'])
@@ -78,7 +78,7 @@ class RemovalsTest(CloudDirTreeChangesTest):
         self.assertIn('album', self.tree)
 
     def test_a_failed_remove_keeps_the_file(self):
-        self.service.files.return_value.update.return_value.execute.side_effect = _http_error()
+        self.service.files.return_value.update.return_value.execute.side_effect = http_error()
         self.tree.remove_files([self.tree.get_node('song.mp3').data])
         self.assertIn('song.mp3', self.tree)
 

@@ -7,7 +7,7 @@ from unittest import mock
 
 import helpers
 from dirdelta.drive import clouddirtree
-from clouddirtree_support import ITEMS, _item
+from clouddirtree_support import ITEMS, drive_item
 
 
 class CloudDirTreeTest(unittest.TestCase):
@@ -39,7 +39,7 @@ class CloudDirTreeTest(unittest.TestCase):
 
     def google_tree(self):
         with open(self.cache, 'a') as f:
-            f.write(json.dumps(_item('sheet', 'Budget', 'mein', 'application/vnd.google-apps.spreadsheet')) + '\n')
+            f.write(json.dumps(drive_item('sheet', 'Budget', 'mein', 'application/vnd.google-apps.spreadsheet')) + '\n')
         return clouddirtree.factory('cloud/mein')
 
     def test_google_files_are_in_but_cant_be_copied_out(self):
@@ -65,7 +65,7 @@ class CloudDirTreeTest(unittest.TestCase):
 
     def test_file_sizes_are_the_caches(self):
         with open(self.cache, 'a') as f:
-            f.write(json.dumps(dict(_item('sized', 'sized.mp3', 'mein'), size='1234')) + '\n')
+            f.write(json.dumps(dict(drive_item('sized', 'sized.mp3', 'mein'), size='1234')) + '\n')
         tree = self.google_tree()
         self.assertEqual(tree.file_size('sized.mp3'), 1234)
         self.assertIsNone(tree.file_size('song.mp3'))
@@ -73,14 +73,14 @@ class CloudDirTreeTest(unittest.TestCase):
 
     def test_modification_times_are_the_caches(self):
         with open(self.cache, 'a') as f:
-            f.write(json.dumps(dict(_item('t', 't.mp3', 'mein'), modifiedTime='2024-07-01T14:03:22.000Z')) + '\n')
+            f.write(json.dumps(dict(drive_item('t', 't.mp3', 'mein'), modifiedTime='2024-07-01T14:03:22.000Z')) + '\n')
         tree = clouddirtree.factory('cloud/mein')
         self.assertEqual(tree.modified_time('t.mp3'), 1719842602)
         self.assertIsNone(tree.modified_time('song.mp3'))
 
     def test_dates_taken_are_the_caches(self):
         with open(self.cache, 'a') as f:
-            f.write(json.dumps(dict(_item('photo', 'x.jpg', 'mein', 'image/jpeg'),
+            f.write(json.dumps(dict(drive_item('photo', 'x.jpg', 'mein', 'image/jpeg'),
                                     imageMediaMetadata={'time': '2024:07:01 14:03:22'})) + '\n')
         tree = clouddirtree.factory('cloud/mein')
         self.assertEqual(tree.date_taken('x.jpg'), '2024-07-01 14:03:22')
@@ -88,8 +88,8 @@ class CloudDirTreeTest(unittest.TestCase):
 
     def test_hashes_are_the_caches(self):
         with open(self.cache, 'a') as f:
-            f.write(json.dumps(dict(_item('h', 'h.mp3', 'mein'), sha1Checksum='S1', sha256Checksum='S256')) + '\n')
-            f.write(json.dumps(dict(_item('old', 'old.mp3', 'mein'), sha256Checksum='O256')) + '\n')
+            f.write(json.dumps(dict(drive_item('h', 'h.mp3', 'mein'), sha1Checksum='S1', sha256Checksum='S256')) + '\n')
+            f.write(json.dumps(dict(drive_item('old', 'old.mp3', 'mein'), sha256Checksum='O256')) + '\n')
         tree = clouddirtree.factory('cloud/mein')
         self.assertEqual(tree.known_hashes('h.mp3'), ('sha1', 'sha256'))
         self.assertEqual(tree.content_hash('h.mp3', 'sha1'), 'S1')

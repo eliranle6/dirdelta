@@ -15,13 +15,13 @@ from dirdelta.drive import drivemeta
 FOLDER = 'application/vnd.google-apps.folder'
 
 
-def _item(id, name, parent, mime='audio/mpeg'):
+def drive_item(id, name, parent, mime='audio/mpeg'):
     return {'id': id, 'name': name, 'parents': [parent], 'mimeType': mime}
 
 
-ITEMS = [_item('mein', 'mein', 'ROOT', FOLDER), _item('song', 'song.mp3', 'mein'),
-         _item('album', 'album', 'mein', FOLDER), _item('track', 'track.mp3', 'album'),
-         _item('other', 'other', 'ROOT', FOLDER)]
+ITEMS = [drive_item('mein', 'mein', 'ROOT', FOLDER), drive_item('song', 'song.mp3', 'mein'),
+         drive_item('album', 'album', 'mein', FOLDER), drive_item('track', 'track.mp3', 'album'),
+         drive_item('other', 'other', 'ROOT', FOLDER)]
 
 
 class _Request(object):
@@ -122,11 +122,11 @@ class DriveMetaTest(unittest.TestCase):
             self.assertFalse(uploader.upload_if_changed())
             tree = clouddirtree.factory('cloud/mein')
             # A change in the tree (the cache's line of it) is
-            tree._cache_add(_item('new', 'new.mp3', 'mein'))
+            tree._cache_add(drive_item('new', 'new.mp3', 'mein'))
             self.assertTrue(uploader.is_changed())
             # Not one in its meta dir
             uploader.upload_if_changed()
-            tree._cache_add(_item('x', 'x', 'mein'), 'meta/x')
+            tree._cache_add(drive_item('x', 'x', 'mein'), 'meta/x')
             self.assertFalse(uploader.is_changed())
 
     def test_nothing_is_uploaded_in_a_dry_run(self):
@@ -140,7 +140,7 @@ class DriveMetaTest(unittest.TestCase):
         cache's)"""
         drivemeta.upload('/mein')
         file_id = self.meta_file()['id']
-        lines = self.drive.lines(file_id) + [_item('theirs', 'theirs.mp3', 'mein')]
+        lines = self.drive.lines(file_id) + [drive_item('theirs', 'theirs.mp3', 'mein')]
         self.drive.contents[file_id] = ''.join(json.dumps(line) + '\n' for line in lines).encode()
         self.drive.files_by_id[file_id]['modifiedTime'] = self.drive._modified()
 

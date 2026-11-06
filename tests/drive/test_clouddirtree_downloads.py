@@ -4,7 +4,7 @@ import unittest
 from unittest import mock
 
 from dirdelta.drive import clouddirtree
-from clouddirtree_support import CloudDirTreeChangesTest, _http_error
+from clouddirtree_support import CloudDirTreeChangesTest, http_error
 
 
 class DownloadsTest(CloudDirTreeChangesTest):
@@ -23,7 +23,7 @@ class DownloadsTest(CloudDirTreeChangesTest):
         with mock.patch('dirdelta.drive.driveapi.get_url') as get_url:
             self.assertIsNone(self.tree.thumbnail('album/track.mp3', 300))
             self.assertIsNone(self.tree.thumbnail('not/there.jpg', 300))
-            self.service.files.return_value.get.return_value.execute.side_effect = _http_error()
+            self.service.files.return_value.get.return_value.execute.side_effect = http_error()
             self.assertIsNone(self.tree.thumbnail('album/track.mp3', 300))
         get_url.assert_not_called()
 
@@ -79,7 +79,7 @@ class DownloadsTest(CloudDirTreeChangesTest):
     def test_a_failed_download_leaves_no_file_and_the_rest_go_on(self):
         def downloader(local_file, request):
             local_file.write(b'part of it')
-            return mock.Mock(next_chunk=mock.Mock(side_effect=_http_error()))
+            return mock.Mock(next_chunk=mock.Mock(side_effect=http_error()))
         with mock.patch('dirdelta.drive.clouddirtree.fetching.MediaIoBaseDownload', side_effect=downloader):
             local = self.download_to_local_dir(['song.mp3', 'album/track.mp3'])
         self.assertEqual(os.listdir(self.local_dir), ['album'])

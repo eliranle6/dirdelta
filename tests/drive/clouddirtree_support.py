@@ -21,7 +21,7 @@ from dirdelta.ui import messages
 FOLDER = 'application/vnd.google-apps.folder'
 
 
-def _item(id, name, parent, mime='audio/mpeg'):
+def drive_item(id, name, parent, mime='audio/mpeg'):
     return {'id': id, 'name': name, 'parents': [parent], 'mimeType': mime}
 
 
@@ -33,18 +33,18 @@ def _item(id, name, parent, mime='audio/mpeg'):
 # |   `-- dup.mp3
 # `-- other/elsewhere.mp3
 ITEMS = [
-    _item('mein', 'mein', 'ROOT', FOLDER),
-    _item('song', 'song.mp3', 'mein'),
-    _item('album', 'album', 'mein', FOLDER),
-    _item('track', 'track.mp3', 'album'),
-    _item('dup1', 'dup.mp3', 'mein'),
-    _item('dup2', 'dup.mp3', 'mein'),
-    _item('other', 'other', 'ROOT', FOLDER),
-    _item('elsewhere', 'elsewhere.mp3', 'other'),
+    drive_item('mein', 'mein', 'ROOT', FOLDER),
+    drive_item('song', 'song.mp3', 'mein'),
+    drive_item('album', 'album', 'mein', FOLDER),
+    drive_item('track', 'track.mp3', 'album'),
+    drive_item('dup1', 'dup.mp3', 'mein'),
+    drive_item('dup2', 'dup.mp3', 'mein'),
+    drive_item('other', 'other', 'ROOT', FOLDER),
+    drive_item('elsewhere', 'elsewhere.mp3', 'other'),
 ]
 
 
-def _http_error():
+def http_error():
     return HttpError(mock.Mock(status=403, reason='Forbidden'), b'{}')
 
 
@@ -174,10 +174,10 @@ class CloudDirTreeChangesTest(unittest.TestCase):
         self.listed = listed
 
     # Drive now: album was trashed, and a folder with a file was added
-    DRIVE_NOW = [_item('mein', 'mein', 'ROOT', FOLDER), _item('song', 'song.mp3', 'mein'),
-                 _item('new', 'new', 'mein', FOLDER), _item('n1', '1.mp3', 'new'),
-                 _item('other', 'other', 'ROOT', FOLDER),
-                 _item('elsewhere', 'elsewhere.mp3', 'other'), _item('new2', 'new2.mp3', 'other')]
+    DRIVE_NOW = [drive_item('mein', 'mein', 'ROOT', FOLDER), drive_item('song', 'song.mp3', 'mein'),
+                 drive_item('new', 'new', 'mein', FOLDER), drive_item('n1', '1.mp3', 'new'),
+                 drive_item('other', 'other', 'ROOT', FOLDER),
+                 drive_item('elsewhere', 'elsewhere.mp3', 'other'), drive_item('new2', 'new2.mp3', 'other')]
 
     def queries(self):
         return [call.kwargs['q'] for call in self.service.files.return_value.list.call_args_list]

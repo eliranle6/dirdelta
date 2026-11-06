@@ -5,7 +5,7 @@ from unittest import mock
 
 from dirdelta.drive import clouddirtree
 from dirdelta.drive import drivecache
-from clouddirtree_support import CloudDirTreeChangesTest, _http_error, _item
+from clouddirtree_support import CloudDirTreeChangesTest, http_error, drive_item
 
 
 class MovesTest(CloudDirTreeChangesTest):
@@ -123,7 +123,7 @@ class MovesTest(CloudDirTreeChangesTest):
 
     def test_google_files_and_same_named_ones_arent_moved(self):
         with open(self.cache, 'a') as f:
-            f.write(json.dumps(_item('sheet', 'Budget', 'mein', 'application/vnd.google-apps.spreadsheet')) + '\n')
+            f.write(json.dumps(drive_item('sheet', 'Budget', 'mein', 'application/vnd.google-apps.spreadsheet')) + '\n')
         self.tree = clouddirtree.factory('cloud/mein')
         self.assertIsNotNone(self.tree.cant_move('Budget.gsheet'))
         dup = next(relpath for relpath in self.tree._cloud_ids if clouddirtree.DUP_SUFFIX in relpath)
@@ -133,7 +133,7 @@ class MovesTest(CloudDirTreeChangesTest):
         self.service.files.return_value.update.assert_not_called()
 
     def test_a_failed_move_keeps_the_file(self):
-        self.service.files.return_value.update.return_value.execute.side_effect = _http_error()
+        self.service.files.return_value.update.return_value.execute.side_effect = http_error()
         self.assertEqual(self.tree.move_files([('song.mp3', 'moved.mp3')]), [])
         self.assertIn('song.mp3', self.tree)
 
