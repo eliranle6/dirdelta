@@ -262,9 +262,6 @@ unneeded, and none has been measured or tried: each is left for the reason it gi
   read `file_stamps` rather than `lstat` per call. Left out because the stamps go stale as files
   change, and a wrong size is worse than a syscall: it's only no change of behavior if they're kept
   up to date.
-- **`hashing.py` without its screens' parts** (#18). Its tags, bar and status texts could move out of
-  the thread pool's module, to `hashes_screen.py`. Left there (2026-11-01) since they say its jobs'
-  states, and every picker uses them.
 - **One loop for both file screens** (#9). `filescreen.FilesScreen` has what `InteractiveDirSync.browse()`
   and `InboxSort.run()` share, the keys, the confirmations and where the selection goes, but each has
   its own loop: what comes after an action differs (a sync's files are what the other replica lacks,

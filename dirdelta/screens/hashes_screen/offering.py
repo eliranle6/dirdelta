@@ -1,5 +1,6 @@
 """Whether to hash a replica's files when it's opened"""
 from dirdelta.hashes import hashing
+from dirdelta.screens.hashes_screen import status as hash_status
 from dirdelta.known import replicanames
 from dirdelta.screens.hashes_screen.names import (HASH_AND_WAIT, HASH_IN_BACKGROUND, NOTHING, NOT_NOW,
                                                   files_text, is_local)
@@ -77,4 +78,4 @@ def scan_with_listing(job, listing):
 
 def hashing_status():
     """What a menu's status bar says of all the jobs (for pick_option's shown_as)"""
-    return {'': picker.segments(hashing.status_parts(hashing.jobs()))}
+    return {'': picker.segments(hash_status.status_parts(hashing.jobs()))}

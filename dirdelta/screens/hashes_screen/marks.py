@@ -2,19 +2,19 @@
 import os
 import threading
 
-from dirdelta.hashes import hashing
+from dirdelta.screens.hashes_screen import status as hash_status
 from dirdelta.screens.hashes_screen.offering import jobs_of
 from dirdelta.ui import picker
 
 
 # Every menu says how far hashing got, as it goes on behind them
-picker.set_ambient_status(lambda: hashing.status_parts(hashing.active_jobs()))
+picker.set_ambient_status(lambda: hash_status.status_parts(hash_status.active_jobs()))
 
 
 class Marks(object):
     """A picker's shown_as (see picker.pick_files()) of a job's files (relpaths, of its replica's):
-    each file's name with its tag (hashed, being hashed, not yet; see hashing.tag()), as it
-    changes; and the status, a label of each of status_jobs (see hashing.status_parts()), and then
+    each file's name with its tag (hashed, being hashed, not yet; see hash_status.tag()), as it
+    changes; and the status, a label of each of status_jobs (see hash_status.status_parts()), and then
     extra() (more parts, [(text, color)]), if given. close() it once the picker is gone."""
 
     def __init__(self, job, relpaths, status_jobs, extra=None):
@@ -47,8 +47,8 @@ class Marks(object):
         name = os.path.basename(relpath)
         if self._job is None or relpath not in self._wanted:
             return name
-        tag = hashing.tag(self._job, relpath)
-        return picker.styled([(name, None), ("  ", None), (tag, hashing.TAG_STYLES[tag])])
+        tag = hash_status.tag(self._job, relpath)
+        return picker.styled([(name, None), ("  ", None), (tag, hash_status.TAG_STYLES[tag])])
 
     def __call__(self):
         shown = {}
@@ -60,10 +60,10 @@ class Marks(object):
             self._current = current
             for relpath in changed:
                 shown[relpath] = self.text(relpath)
-        shown[''] = picker.segments(hashing.status_parts(self._status_jobs) + (self._extra() if self._extra else []))
+        shown[''] = picker.segments(hash_status.status_parts(self._status_jobs) + (self._extra() if self._extra else []))
         return shown
 
 
 def picker_status(replicas, extra=()):
     """The status of a picker of replicas (trees) that has no Marks: a label of each local one's job"""
-    return picker.segments(hashing.status_parts(jobs_of(replicas)) + list(extra))
+    return picker.segments(hash_status.status_parts(jobs_of(replicas)) + list(extra))

@@ -3,6 +3,7 @@ import os
 import time
 
 from dirdelta.hashes import hashing
+from dirdelta.screens.hashes_screen import status as hash_status
 from dirdelta.matching.elsewhere.candidates import is_same_time
 from dirdelta.matching.elsewhere.constants import MAX_MATCHES, SURELY_MOVED, SURELY_RENAMED
 from dirdelta.matching.elsewhere.sure import sure_match
@@ -53,7 +54,7 @@ def _contents_lines(relpath, dst_name, matcher, matches):
     if not own:
         if src_job is None:
             return []
-        return [picker.styled([("  contents not hashed yet (%s)" % (hashing.status_text(src_job),), 'grey')])]
+        return [picker.styled([("  contents not hashed yet (%s)" % (hash_status.status_text(src_job),), 'grey')])]
     algorithm = sorted(own)[0] if hashing.ALGORITHM not in own else hashing.ALGORITHM
     lines = [picker.styled([("  %s %s" % (algorithm.upper().replace('SHA', 'SHA-'), own[algorithm][:16]), 'grey')])]
     index = matcher._index

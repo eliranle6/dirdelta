@@ -1,5 +1,5 @@
 """The hashing screens' key, and the dashboard's options (what each is, by replica) and headings"""
-from dirdelta.hashes import hashing
+from dirdelta.screens.hashes_screen import status as hash_status
 from dirdelta.trees import localdiskdirtree
 from dirdelta.util import text
 
@@ -10,10 +10,10 @@ KEY = '#'
 KEY_HINT = (KEY, "replicas dashboard")
 # What ? says in the file pickers of the tags hashing adds after the files' names
 HELP_LINES = ["Tags after a file's name (/ searches them too):",
-              "  %-24s its contents' hash is known (any name, any size: it's found by it)" % (hashing.HASHED_TAG,),
-              "  %-24s being read now" % (hashing.HASHING_TAG,),
-              "  %-24s matched by its name and size only, for now" % (hashing.NOT_HASHED_TAG,),
-              "  %-24s unreadable, or it changed while it was read" % (hashing.FAILED_TAG,)]
+              "  %-24s its contents' hash is known (any name, any size: it's found by it)" % (hash_status.HASHED_TAG,),
+              "  %-24s being read now" % (hash_status.HASHING_TAG,),
+              "  %-24s matched by its name and size only, for now" % (hash_status.NOT_HASHED_TAG,),
+              "  %-24s unreadable, or it changed while it was read" % (hash_status.FAILED_TAG,)]
 
 
 NOTHING = "Nothing: go back"

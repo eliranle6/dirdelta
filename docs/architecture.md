@@ -109,7 +109,6 @@ The map (each module's docstring's first line; generated from the code):
     - `reading.py`: Reading a file to hash it: at the lowest priority, without filling the page cache
     - `registry.py`: The jobs, one by replica
     - `states.py`: The hash a job makes, how it reads, and the states it goes through (Progress)
-    - `status.py`: What's shown of the jobs: each file's tag, and how far each job got
 - `inbox/`: Sorting an inbox: a dir of files not yet sorted (e.g. cloud/unsorted), whose files the user moves into a sorte...
   - `constants.py`: The inbox sort's keys, timings, labels and colors
   - `copies.py`: The inbox's files that are copies of the sorted tree's, or junk
@@ -180,6 +179,7 @@ The map (each module's docstring's first line; generated from the code):
     - `marks.py`: What the file pickers show of hashing: their key, each file's tag, and the status line
     - `names.py`: The hashing screens' key, and the dashboard's options (what each is, by replica) and headings
     - `offering.py`: Whether to hash a replica's files when it's opened
+    - `status.py`: What's shown of the hashing jobs (hashing.py): each file's tag, and how far each job got
     - `waiting.py`: Waiting for the hashing, and whether it's all right to quit meanwhile
 - `sync/`: Sync mode: the menu of a pair of replicas, its two ways, and what it does to the replicas
   - `dirsync_main.py`: Sync mode: the menu of a pair of replicas, until it goes back to the start menu
@@ -518,7 +518,8 @@ own CPU (nice 19) and I/O (idle, `ioprio_set`) priority, reads a file in
 drops it from the page cache, and puts its SHA-1 in the hash cache; then tells
 the job's subscribers (`subscribe()`: `elsewhere.Index`, `hashes_screen.Marks`).
 `progress()` (a `Progress`: files, bytes, current files, rate over
-`RATE_WINDOW`, failures), `percent()` (of bytes), `color()` (red < 34%,
+`RATE_WINDOW`, failures). What's shown of it is `hashes_screen/status.py`'s
+(imported as `hash_status`): `percent()` (of bytes), `color()` (red < 34%,
 orange < 67%, yellow, green when done), `status_text()`, `tag()` (`[● hashed]`, `[◐ hashing now]`, `[○ not hashed yet]`,
 `[✕ couldn't be hashed]`, after a file's name in the pickers).
 Jobs are kept by root (`job()`, `job_for()`), for the whole run.

@@ -3,6 +3,7 @@ import shutil
 import time
 
 from dirdelta.hashes import hashing
+from dirdelta.screens.hashes_screen import status as hash_status
 from dirdelta.known import replicanames
 from dirdelta.screens.hashes_screen.names import KEEP_HASHING, KEY, QUIT_ANYWAY, WAIT_INTERVAL, files_text
 from dirdelta.ui import messages
@@ -39,11 +40,11 @@ def total(jobs):
 def progress_line(progress):
     """A line of how far hashing got: its bar, %, files, size, speed and time left"""
     line = "%s %d%%  %s of %s, %s of %s" % (
-        hashing.bar(progress), hashing.percent(progress), "{:,}".format(progress.nr_done),
+        hash_status.bar(progress), hash_status.percent(progress), "{:,}".format(progress.nr_done),
         files_text(progress.nr_files), text.format_size(progress.size_done), text.format_size(progress.size))
     if progress.rate and progress.is_started and progress.state != hashing.DONE:
         line += ", %s/s" % (text.format_size(progress.rate),)
-        left = hashing.time_left(progress)
+        left = hash_status.time_left(progress)
         if left is not None and progress.state != hashing.DONE:
             line += ", ~%s left" % (text.format_duration(left),)
     return line

@@ -6,6 +6,7 @@ from unittest import mock
 import helpers
 from dirdelta.hashes import hashcache
 from dirdelta.hashes import hashing
+from dirdelta.screens.hashes_screen import status as hash_status
 from dirdelta.inbox import constants
 from dirdelta.ui import messages
 from dirdelta.ui import picker
@@ -129,7 +130,7 @@ class RemovalsTest(InboxSortTest):
         self.assertEqual(sorter._checked, {})
         # Marked as hashed in the picker, with how far each got on the bottom line
         shown = sorter._shown_as(['a.txt'])
-        self.assertEqual(picker.unstyled(shown['a.txt']), 'a.txt  ' + hashing.HASHED_TAG)
+        self.assertEqual(picker.unstyled(shown['a.txt']), 'a.txt  ' + hash_status.HASHED_TAG)
         self.assertIn('inbox: 100% hashed', shown[''])
 
     def test_claude_is_told_of_copies_and_its_removals_are_offered(self):

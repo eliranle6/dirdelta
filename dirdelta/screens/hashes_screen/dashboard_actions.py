@@ -3,6 +3,7 @@ import os
 
 from dirdelta.hashes import hashcache
 from dirdelta.hashes import hashing
+from dirdelta.screens.hashes_screen import status as hash_status
 from dirdelta.known import mounts
 from dirdelta.known import replicainfo
 from dirdelta.known import replicanames
@@ -50,7 +51,7 @@ def finish_dashboard(items, options, shown, names, jobs, known, selected=None):
 
     def shown_now():
         now = {**shown, **jobs_shown(items, names)}
-        now[''] = picker.segments(hashing.status_parts(jobs))
+        now[''] = picker.segments(hash_status.status_parts(jobs))
         return now
     first = shown_now()
     # The first that can be picked

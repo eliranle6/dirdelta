@@ -3,6 +3,7 @@ import unittest
 from unittest import mock
 
 from dirdelta.hashes import hashing
+from dirdelta.screens.hashes_screen import status as hash_status
 from dirdelta.screens import hashes_screen
 from dirdelta.ui import picker
 
@@ -17,15 +18,15 @@ class MarksTest(unittest.TestCase):
         marks = hashes_screen.Marks(self.job, ['a/x', 'z'], [self.job])
         first = marks()
         self.assertEqual({relpath: picker.unstyled(shown) for relpath, shown in first.items() if relpath},
-                         {'a/x': 'x  ' + hashing.NOT_HASHED_TAG, 'z': 'z  ' + hashing.NOT_HASHED_TAG})
+                         {'a/x': 'x  ' + hash_status.NOT_HASHED_TAG, 'z': 'z  ' + hash_status.NOT_HASHED_TAG})
         # Its tag in its style
-        self.assertEqual(first['z'], picker.styled([('z', None), ('  ', None), (hashing.NOT_HASHED_TAG, 'grey')]))
+        self.assertEqual(first['z'], picker.styled([('z', None), ('  ', None), (hash_status.NOT_HASHED_TAG, 'grey')]))
         self.assertEqual(first[''], picker.segments([("photos: 0% hashed (0/3, not hashing)", 'red')]))
         # z is hashed: only it changes
         self.job._hashes['z'] = 'H'
         marks._on_hashed('z', {'sha1': 'H'})
         self.assertEqual({relpath: picker.unstyled(shown) for relpath, shown in marks().items() if relpath},
-                         {'z': 'z  ' + hashing.HASHED_TAG})
+                         {'z': 'z  ' + hash_status.HASHED_TAG})
         marks.close()
         self.assertEqual(self.job._subscribers, [])
 
@@ -33,9 +34,9 @@ class MarksTest(unittest.TestCase):
         marks = hashes_screen.Marks(self.job, ['a/x', 'z'], [self.job])
         marks()
         self.job._current.add('a/x')
-        self.assertEqual(picker.unstyled(marks()['a/x']), 'x  ' + hashing.HASHING_TAG)
+        self.assertEqual(picker.unstyled(marks()['a/x']), 'x  ' + hash_status.HASHING_TAG)
         self.job._current.discard('a/x')
-        self.assertEqual(picker.unstyled(marks()['a/x']), 'x  ' + hashing.NOT_HASHED_TAG)
+        self.assertEqual(picker.unstyled(marks()['a/x']), 'x  ' + hash_status.NOT_HASHED_TAG)
 
     def test_more_status_after_the_jobs(self):
         marks = hashes_screen.Marks(None, ['a'], [self.job], lambda: [("Claude: describing 1 file", 'yellow')])
@@ -61,7 +62,7 @@ class ViewFilesTest(unittest.TestCase):
 
         def view_files(rootpath, relpaths, header='', shown_as=None, on_selection=None, **_):
             self.assertEqual((rootpath, relpaths), ('/photos', ['x', 'y']))
-            self.assertEqual(picker.unstyled(shown_as()['x']), 'x  ' + hashing.HASHED_TAG)
+            self.assertEqual(picker.unstyled(shown_as()['x']), 'x  ' + hash_status.HASHED_TAG)
             with self.assertRaises(picker.PickerClosed):
                 on_selection(Selection(), lambda found=None, default=None: sent.update(found))
             return True

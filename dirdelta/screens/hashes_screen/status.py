@@ -1,6 +1,5 @@
-"""What's shown of the jobs: each file's tag, and how far each job got"""
-from dirdelta.hashes.hashing.registry import jobs
-from dirdelta.hashes.hashing.states import DONE, NOT_SCANNED, SCANNING
+"""What's shown of the hashing jobs (hashing.py): each file's tag, and how far each job got"""
+from dirdelta.hashes.hashing import DONE, NOT_SCANNED, SCANNING, jobs
 from dirdelta.known import replicanames
 from dirdelta.util import text
 

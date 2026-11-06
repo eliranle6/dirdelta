@@ -20,6 +20,3 @@ from dirdelta.hashes.hashing.registry import job, job_for, jobs  # noqa: F401
 from dirdelta.hashes.hashing.pool import is_rotational, nr_workers, physical_cores  # noqa: F401
 from dirdelta.hashes.hashing.states import (ALGORITHM, DONE, HASHING, NOT_SCANNED, SCANNED,  # noqa: F401
                                             SCANNING, Progress)
-from dirdelta.hashes.hashing.status import (FAILED_TAG, HASHED_TAG, HASHING_TAG, NOT_HASHED_TAG,  # noqa: F401
-                                            TAG_STYLES, active_jobs, bar, color, percent, status_parts,
-                                            status_text, tag, time_left)

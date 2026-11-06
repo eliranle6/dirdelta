@@ -4,7 +4,7 @@ import concurrent.futures
 import datetime
 
 from dirdelta.drive import clouddirtree
-from dirdelta.hashes import hashing
+from dirdelta.screens.hashes_screen import status as hash_status
 from dirdelta.known import replicainfo
 from dirdelta.known import replicas
 from dirdelta.matching import elsewhere
@@ -152,7 +152,7 @@ class SyncMenu(object):
         # Only to read: moving goes past them
         shown[STATE] = state_line(self.ways, self.replica_a_path, self.replica_b_path)
         shown[self.DASHBOARD] = "%s: files, last updates, hashes%s" % (
-            self.DASHBOARD, " (%s)" % ("; ".join(text for text, _ in hashing.status_parts(self.jobs)),) if self.jobs else "")
+            self.DASHBOARD, " (%s)" % ("; ".join(text for text, _ in hash_status.status_parts(self.jobs)),) if self.jobs else "")
         if self.jobs:
             shown[''] = hashes_screen.picker_status([self.replica_a, self.replica_b])
         # When Drive's file list was read, in its freshness's color (today, this week, before)

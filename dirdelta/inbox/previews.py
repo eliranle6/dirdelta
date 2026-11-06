@@ -4,6 +4,7 @@ import posixpath
 import time
 
 from dirdelta.hashes import hashing
+from dirdelta.screens.hashes_screen import status as hash_status
 from dirdelta.inbox.constants import (CLAUDE_STYLE, DESCRIBED, DESCRIPTION_TITLE, DESTINATION_TITLE,
                                       DIR_TITLE, JUNK_BY_CLAUDE, JUNK_BY_NAME, LOOKING, LOOKING_AT_DIR,
                                       MAYBE_JUNK, PREVIEWS_INTERVAL)
@@ -36,8 +37,8 @@ class Previews(object):
                 tags.append(((JUNK_BY_NAME if relpath in self._junk_by_name else JUNK_BY_CLAUDE) % (junk_reason,),
                              'yellow'))
             if job is not None:
-                tag = hashing.tag(job, relpath)
-                tags.append((tag, hashing.TAG_STYLES[tag]))
+                tag = hash_status.tag(job, relpath)
+                tags.append((tag, hash_status.TAG_STYLES[tag]))
             if tags:
                 shown[relpath] = picker.styled([(os.path.basename(relpath), None)] +
                                                [part for tag in tags for part in (("  ", None), tag)])
