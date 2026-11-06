@@ -1,6 +1,7 @@
 """Making the folders that files go into, a level of them in a batch"""
 import collections
 import os
+
 from googleapiclient.errors import HttpError
 
 from dirdelta.drive import driveapi

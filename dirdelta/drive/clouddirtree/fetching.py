@@ -1,10 +1,10 @@
 """Copying a Drive tree's files out of it: downloading them"""
 import os
+
 from googleapiclient.errors import HttpError
 from googleapiclient.http import MediaIoBaseDownload
 
 from dirdelta.drive import driveapi
-from dirdelta.drive import drivecache
 from dirdelta.drive.clouddirtree.constants import PROGRESS_CHUNK_SIZE
 from dirdelta.drive.clouddirtree.refresh import _listed
 
@@ -49,14 +49,3 @@ class Fetching(object):
         modified = self.modified_time(relpath)
         if modified is not None:
             os.utime(local_path, (modified, modified))
-
-    def _copy_files(self, files, source, starting, copied):
-        """Upload files (of a local dir: their full paths are on the local disk) into the same
-        relative paths: first the folders they're in that Drive lacks (_make_folders()), then
-        UPLOAD_THREADS files at a time. What Drive says of each upload is added to the tree and the
-        cache here, on this thread, as it ends. Ctrl-C starts no more, and waits for the ones under
-        way, so the cache has them (and Ctrl-C again doesn't wait: they end on their own)."""
-        # Stale until the changes are in the cache, in case it's cut off in the middle
-        with drivecache.changing(self.fullpath()) as changes:
-            self._make_folders(os.path.dirname(file_entry.relpath) for file_entry in files)
-            self._upload_files(files, starting, copied, changes)

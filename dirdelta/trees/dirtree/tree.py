@@ -1,5 +1,6 @@
 """DirTree: a tree of a dir's files and dirs; what it does with them are mixins, each in a module here"""
 import os
+
 import treelib
 
 from dirdelta.trees import entries

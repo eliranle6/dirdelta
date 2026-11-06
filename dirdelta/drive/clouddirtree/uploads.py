@@ -1,6 +1,7 @@
 """Copying files into a Drive tree: uploading them, a few at once"""
 import concurrent.futures
 import os
+
 from googleapiclient.errors import HttpError
 from googleapiclient.http import MediaFileUpload
 
@@ -14,6 +15,17 @@ from dirdelta.ui import messages
 
 class Uploads(object):
     """Uploads (CloudDirTree's)"""
+
+    def _copy_files(self, files, source, starting, copied):
+        """Upload files (of a local dir: their full paths are on the local disk) into the same
+        relative paths: first the folders they're in that Drive lacks (_make_folders()), then
+        UPLOAD_THREADS files at a time. What Drive says of each upload is added to the tree and the
+        cache here, on this thread, as it ends. Ctrl-C starts no more, and waits for the ones under
+        way, so the cache has them (and Ctrl-C again doesn't wait: they end on their own)."""
+        # Stale until the changes are in the cache, in case it's cut off in the middle
+        with drivecache.changing(self.fullpath()) as changes:
+            self._make_folders(os.path.dirname(file_entry.relpath) for file_entry in files)
+            self._upload_files(files, starting, copied, changes)
 
     def _upload_files(self, files, starting, copied, changes):
         """_copy_files()'s uploads, into the folders made (changes: drivecache.changing()'s)"""

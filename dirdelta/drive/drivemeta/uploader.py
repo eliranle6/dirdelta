@@ -1,6 +1,7 @@
 """Uploading it again as it changes, while a sync goes on (Uploader, kept())"""
 import contextlib
 import threading
+
 from googleapiclient.errors import HttpError
 
 from dirdelta.drive import drivecache

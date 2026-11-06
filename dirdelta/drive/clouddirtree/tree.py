@@ -4,6 +4,7 @@ import collections
 import os
 import posixpath
 import re
+
 from googleapiclient.errors import HttpError
 
 from dirdelta.drive import driveapi

@@ -257,7 +257,8 @@ class CloudDirTreeChangesTest(unittest.TestCase):
 
     def test_files_are_uploaded_at_once(self):
         # Each upload waits until the other is under way too
-        both_under_way = threading.Barrier(2, timeout=5)
+        # (A timeout long enough for a loaded machine: it only matters if the uploads aren't at once)
+        both_under_way = threading.Barrier(2, timeout=30)
         def create_result(body):
             both_under_way.wait()
             return {'id': body['name']}
@@ -348,9 +349,15 @@ class CloudDirTreeChangesTest(unittest.TestCase):
             if line.startswith('Waiting for') or line.startswith('Copying 2.mp3'):
                 raise KeyboardInterrupt
         messages.print_line.side_effect = print_line
-        never = threading.Event()
+        never, ended = threading.Event(), threading.Event()
         self.addCleanup(never.set)
-        self.create_result = lambda body: never.wait(5) and {'id': 'late'}
+
+        def late(body):
+            # The upload under way, cut off: it ends after the test says so (never on its own)
+            never.wait(30)
+            ended.set()
+            return {'id': 'late'}
+        self.create_result = late
         with mock.patch('dirdelta.drive.clouddirtree.uploads.UPLOAD_THREADS', 2), \
                 mock.patch('dirdelta.ui.messages.note_stopped'):
             self.upload(['1.mp3', '2.mp3'])
@@ -358,6 +365,8 @@ class CloudDirTreeChangesTest(unittest.TestCase):
         self.assertTrue(drivecache.stale_paths())
         # And the next change, done, doesn't make it look fresh
         never.set()
+        # Its thread is done before the next change, so nothing of it overlaps that
+        self.assertTrue(ended.wait(30))
         messages.print_line.side_effect = None
         self.create_result = lambda body: {'id': 'ok'}
         self.upload(['other.mp3'])
