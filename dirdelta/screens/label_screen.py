@@ -1,7 +1,6 @@
 """Labeling replicas (see replicanames.py), e.g. 'laptop' or 'blue WD ext. disk'."""
 from dirdelta.util import dryrun
 from dirdelta.ui import messages
-from dirdelta.trees import paths
 from dirdelta.ui import picker
 from dirdelta.known import replicanames
 from dirdelta.known import replicas

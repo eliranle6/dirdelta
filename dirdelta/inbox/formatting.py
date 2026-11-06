@@ -120,3 +120,8 @@ def _spread(items, count):
     if count == 1:
         return [items[0]]
     return [items[round(i * (len(items) - 1) / (count - 1))] for i in range(count)]
+
+
+def _path_of(*parts):
+    """A destination's path, of its parts ([(text, origin)], see SORTED_TREE)"""
+    return ''.join(text for text, _ in parts)
