@@ -19,6 +19,7 @@ import unicodedata
 from dirdelta import entries
 from dirdelta import dryrun
 from dirdelta import programs
+from dirdelta import settings
 
 PROGRAM_NAME = 'treepicker'
 
@@ -223,7 +224,8 @@ def pick_files(rootpath, relpaths, header='', picked=None, label=None, keys='', 
     images, if given (with previews or on_selection, which make the column), is called on a thread
     of its own with the selected node's relpath, once the selection stays on it a moment, and the
     most pixels the column can show (max_width, max_height): its picture, as images.encoded() makes
-    it, shown below its lines; or None for none.
+    it, shown below its lines (or beside them, if it's portrait); or None for none. IMAGES_KEY
+    switches them off and on, for the next pickers too (settings.py).
 
     key_hints: [(key, what it does here)] for the keys row at the bottom (the caller's keys, or
     treepicker's, e.g. ('Enter', 'choose what to do')); help_lines: lines for its ? help (e.g. what
@@ -231,6 +233,8 @@ def pick_files(rootpath, relpaths, header='', picked=None, label=None, keys='', 
     picked.
 
     Only the files are sent: treepicker adds their dirs, so no tree is built here."""
+    if images is not None:
+        help_lines = list(help_lines) + key_help_lines([(IMAGES_KEY, "show or hide the files' pictures (and from now on)")])
     args = (['--typed', '--root', rootpath, '-m', '--print-selection'] + _header_args(header) +
             _help_args(key_hints, help_lines))
     if enter_picks_selection:
@@ -534,7 +538,17 @@ def _run(args, input_items, shown_as=None, label=None, previews=None, on_selecti
                                           lambda send: on_selection(selection, send)))
         if images is not None:
             selections.append(Selection())
-            jobs.append(functools.partial(_send_images, selections[-1], images, preview_sender))
+            pictures = _Images(selections[-1], images, preview_sender)
+            jobs.append(pictures.run)
+            # Its key, besides the caller's
+            keys, on_notify = notify if notify is not None else ('', None)
+
+            def notified(key, selected, picked, on_notify=on_notify):
+                if key == IMAGES_KEY:
+                    pictures.toggle(selected)
+                elif on_notify is not None:
+                    on_notify(key, selected, picked)
+            notify = (keys + IMAGES_KEY, notified)
     if selections:
         jobs.append(functools.partial(_read_selection, pipe('--selection', False), selections))
     if notify is not None:
@@ -709,36 +723,71 @@ def _follow(selection, follow, fd):
 # read each), in seconds; and how many pictures treepicker keeps (fewer than its own most, 64, so
 # those sent are still there)
 IMAGE_DELAY = 0.15
+# The key that switches the pictures off and on (see pick_files()'s images)
+IMAGES_KEY = 'i'
 MAX_IMAGES_SENT = 48
 
 
 def _send_images(selection, images, sender):
     """Send treepicker the picture of each node the selection stays on (see pick_files()'s images),
     once, until it's gone"""
-    sent = collections.OrderedDict()
-    max_width, max_height = _image_box()
-    try:
-        while True:
-            relpath = selection.wait_next()
+    _Images(selection, images, sender).run()
+
+
+class _Images(object):
+    """What sends treepicker the pictures of a pick_files() picker (see _send_images()), unless
+    they're switched off (settings.are_images_shown(); IMAGES_KEY switches them)"""
+
+    def __init__(self, selection, images, sender):
+        self._selection = selection
+        self._images = images
+        self._sender = sender
+        self._lock = threading.Lock()
+        # The relpaths whose pictures were made (and sent, if they have one), oldest first
+        self._sent = collections.OrderedDict()
+
+    def run(self):
+        max_width, max_height = _image_box()
+        try:
             while True:
-                later = selection.wait_next(IMAGE_DELAY)
-                if later is None:
-                    break
-                relpath = later
-            if relpath in sent:
-                continue
-            try:
-                image = images(relpath, max_width, max_height)
-            except Exception:
-                _log_error()
-                image = None
-            sent[relpath] = True
-            if len(sent) > MAX_IMAGES_SENT:
-                sent.popitem(last=False)
-            if image is not None:
-                sender.send_image(relpath, image)
-    except PickerClosed:
-        pass
+                relpath = self._selection.wait_next()
+                while True:
+                    later = self._selection.wait_next(IMAGE_DELAY)
+                    if later is None:
+                        break
+                    relpath = later
+                if relpath in self._sent or not settings.are_images_shown():
+                    continue
+                try:
+                    image = self._images(relpath, max_width, max_height)
+                except Exception:
+                    _log_error()
+                    image = None
+                with self._lock:
+                    # Switched off meanwhile: not shown
+                    if not settings.are_images_shown():
+                        continue
+                    self._sent[relpath] = True
+                    if len(self._sent) > MAX_IMAGES_SENT:
+                        self._sent.popitem(last=False)
+                    if image is not None:
+                        self._sender.send_image(relpath, image)
+        except PickerClosed:
+            pass
+
+    def toggle(self, selected):
+        """Switch the pictures off (the ones sent are dropped) or on (the selected node's, at
+        selected, is made), for this picker and the next ones"""
+        with self._lock:
+            is_shown = not settings.are_images_shown()
+            settings.set_images_shown(is_shown)
+            if not is_shown:
+                for relpath in self._sent:
+                    self._sender.send_image(relpath, '')
+                self._sent.clear()
+        if is_shown:
+            # As if the selection moved there, so its picture is made
+            self._selection._move(selected)
 
 
 def _image_box():

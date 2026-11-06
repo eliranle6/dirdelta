@@ -66,6 +66,9 @@ class PickerTest(unittest.TestCase):
         self.env.start()
         self.find = mock.patch('dirdelta.programs.find', return_value=self.program)
         self.find.start()
+        settings_file = mock.patch('dirdelta.settings.SETTINGS_FILE', os.path.join(self.tmpdir, 'settings.json'))
+        settings_file.start()
+        self.addCleanup(settings_file.stop)
 
     def tearDown(self):
         self.find.stop()
@@ -451,6 +454,55 @@ class PickerTest(unittest.TestCase):
         self.assertFalse(thread.is_alive())
         log_error.assert_called_once_with()
         self.assertEqual(sent, [('good.jpg', '1 1 000000')])
+
+    def test_the_images_key_switches_them_off_and_on_for_the_next_pickers_too(self):
+        selection = picker.Selection()
+        sent = []
+        sender = mock.Mock(send_image=lambda relpath, image: sent.append((relpath, image)))
+        made = []
+
+        def images(relpath, max_width, max_height):
+            made.append(relpath)
+            return '1 1 000000'
+        pictures = picker._Images(selection, images, sender)
+        thread = threading.Thread(target=pictures.run)
+        with mock.patch.object(picker, 'IMAGE_DELAY', 0.01):
+            thread.start()
+            selection._move('a.jpg')
+            self.wait_for(lambda: sent)
+            # Off: the one sent is dropped, and none is made
+            pictures.toggle('a.jpg')
+            self.assertFalse(picker.settings.are_images_shown())
+            self.assertEqual(sent[-1], ('a.jpg', ''))
+            selection._move('b.jpg')
+            time.sleep(0.1)
+            self.assertEqual(made, ['a.jpg'])
+            # On: the selected one's is made at once
+            pictures.toggle('b.jpg')
+            self.wait_for(lambda: made == ['a.jpg', 'b.jpg'])
+            selection._close()
+            thread.join(5)
+        self.assertTrue(picker.settings.are_images_shown())
+        self.assertEqual(sent[-1], ('b.jpg', '1 1 000000'))
+
+    def test_the_images_key_is_one_of_the_pickers_notify_keys(self):
+        os.environ['FAKE_PICKER_NOTIFY'] = 'i|a.jpg|;\t|a.jpg|'
+        self.answer('a.jpg')
+        notified = []
+        with mock.patch.object(picker._Images, 'toggle') as toggle:
+            picker.pick_files('/r', ['a.jpg'], previews=lambda send: None, images=lambda *_: None,
+                              notify_keys='\t', on_notify=lambda *args: notified.append(args))
+        args, _ = self.call()
+        self.assertEqual(args[args.index('--notify') + 1], '\ti')
+        toggle.assert_called_once_with('a.jpg')
+        self.assertEqual(notified, [('\t', 'a.jpg', [])])
+
+    def wait_for(self, condition):
+        for _ in range(500):
+            if condition():
+                return
+            time.sleep(0.01)
+        self.fail("it didn't happen")
 
     def test_notify_keys_tell_of_the_selection_and_the_picks(self):
         os.environ['FAKE_PICKER_NOTIFY'] = '\t|a|a/1.txt|a;\t|.'

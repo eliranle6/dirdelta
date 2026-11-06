@@ -97,6 +97,7 @@ change dirdelta made to Drive was cut off before it was added to the cache, and 
 `meta/files.jsonl`, see `drivemeta.py`),
 `~/.config/dirdelta/replicas.json` (the history, favorites and sorts, each sorted tree's recent dirs, what's known of each replica: its `last_update.txt`'s last entry, and the labels),
 `~/.config/dirdelta/mounts.json` (how the replicas' volumes were mounted),
+`~/.config/dirdelta/settings.json` (whether the file pickers show pictures),
 `~/.cache/dirdelta/ai.json` (what Claude said of files),
 `~/.cache/dirdelta/hashes.sqlite` (local files' hashes, those not kept in their replica's
 `meta/hashes.sqlite`, see `hashcache.py`),
@@ -155,7 +156,7 @@ module:
 PYTHONPATH=tests bin/python -m unittest test_interactive_dir_sync -v
 ```
 
-Modules are tested where it's worth it, not for the sake of a test file each (895 tests, all passing as of 2026-11-06) except
+Modules are tested where it's worth it, not for the sake of a test file each (897 tests, all passing as of 2026-11-06) except
 the thin wiring in `main.py`/`dirsync_main.py`, covered only by running the
 app. Shared fakes:
 - `tests/helpers.py`: `scripted_option_picker` / `scripted_tree_picker` /
@@ -183,6 +184,8 @@ app. Shared fakes:
 - Nothing is downloaded into the real `~/.cache/dirdelta/downloads`: `tests/helpers.py`
   points `downloads.DOWNLOADS_DIR` at a temp dir. `test_opening` patches `subprocess.Popen`
   for `Ctrl-X`'s `xdg-open` (`test_inbox` and `test_interactive_dir_sync` patch `Opener.open_in_background`); a manual run can put a fake `xdg-open` first on `PATH`.
+- The real `~/.config/dirdelta/settings.json` isn't read or written: `tests/helpers.py` (and
+  `test_picker`) point `settings.SETTINGS_FILE` at a temp file.
 - Nothing is mounted, and the real `~/.config/dirdelta/mounts.json` isn't read or
   written: `tests/helpers.py` points `mounts.MOUNTS_FILE` at a temp file, and
   `test_mounts` fakes `findmnt`, `lsblk`, `mount` (`subprocess.run`),

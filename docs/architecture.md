@@ -813,6 +813,9 @@ can show (`picker._image_box()`: 2/5 of the terminal's width, twice its rows), s
 Half blocks rather than a terminal graphics protocol (sixel, kitty's): they're characters curses
 draws like the rest, so the picture never covers the tree, the side tree or the bottom lines, and
 goes with them on a redraw or resize; and every 256-color terminal shows them. No Pillow: no pictures.
+A portrait one goes beside the text, on the column's right half; a landscape one below it. `i`
+switches them off and on (`picker._Images.toggle()`), kept in `~/.config/dirdelta/settings.json`
+(`settings.py`).
 
 ## What replicas are called: `replicanames.py`, `label_screen.py`
 

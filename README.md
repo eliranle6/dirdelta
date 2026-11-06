@@ -206,8 +206,11 @@ one version of a repository this way makes the other replica's version show up a
 ### Pictures of the files
 
 In the file pickers, the selected photo (an image, a PDF's first page, a Drive file's thumbnail) shows
-below the preview column's text, drawn in characters (two pixels each, in 256 colors), so a name like
-`IMG_2041.jpg` says what it is. It needs Pillow (in `requirements.txt`), and `pdftoppm` for PDFs.
+in the preview column, drawn in characters (two pixels each, in 256 colors), so a name like
+`IMG_2041.jpg` says what it is: a landscape one below the column's text, a portrait one on the
+column's right half, beside the text. `i` switches the pictures off and on, for the pickers after it
+too (kept in `~/.config/dirdelta/settings.json`). It needs Pillow (in `requirements.txt`), and
+`pdftoppm` for PDFs.
 
 ### The menu of the keys (`:`)
 
