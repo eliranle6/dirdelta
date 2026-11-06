@@ -11,7 +11,7 @@ from dirdelta.drive import clouddirtree
 from dirdelta.trees import dirtree
 from dirdelta.matching import elsewhere
 from dirdelta.hashes import hashing
-from dirdelta.sync import interactive_dir_sync
+from dirdelta.sync.way import interactive_dir_sync
 from dirdelta.trees import localdiskdirtree
 from dirdelta.ui import picker
 from dirdelta.known import replicalog
