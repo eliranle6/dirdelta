@@ -67,7 +67,7 @@ def _run(args):
     # The local replicas' files' hashes, which find a file by its contents: hashed in the
     # background, if the user wants, and kept in each (see hashcache.use_replica())
     for tree in (dirtree_a, dirtree_b):
-        if hashes_screen.is_local(tree):
+        if localdiskdirtree.is_local(tree):
             hashcache.use_replica(tree.fullpath())
     if not hashes_screen.offer(hashes_screen.prepare([dirtree_a, dirtree_b])):
         return
@@ -109,7 +109,7 @@ def _sync(replica_a, replica_b, replica_a_path, replica_b_path, known_replicas=N
                  if isinstance(replica, clouddirtree.CloudDirTree)}
     # A local one can be scanned anew, if its files changed meanwhile, outside dirdelta
     rescans = {"Rescan %s" % (path,): replica for replica, path in ((replica_a, replica_a_path), (replica_b, replica_b_path))
-               if hashes_screen.is_local(replica)}
+               if localdiskdirtree.is_local(replica)}
     _find_all(ways)
     jobs = hashes_screen.jobs_of([replica_a, replica_b])
     # What each way found last, noted in known_replicas (once each time they're found)
