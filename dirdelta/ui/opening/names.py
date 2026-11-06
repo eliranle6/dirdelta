@@ -34,13 +34,13 @@ def tag_style(tag):
 CONFIRM_NO = 'No'
 CONFIRM_YES = 'Yes, download and open them'
 
-_WAITING, _DOWNLOADING, _OPENED, _FAILED = 'waiting', 'downloading', 'opened', 'failed'
+WAITING, DOWNLOADING, OPENED, FAILED = 'waiting', 'downloading', 'opened', 'failed'
 
 
-_files = text.files
+files_text = text.files
 
 
-def _short_dir():
+def short_dir():
     """DOWNLOADS_DIR, with ~ for the home dir"""
     home = os.path.expanduser('~')
     path = downloads.DOWNLOADS_DIR

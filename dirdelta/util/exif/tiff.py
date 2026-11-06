@@ -1,7 +1,7 @@
 """The date in TIFF data's IFDs"""
 import struct
 
-from dirdelta.util.exif.formats import _DATE_TIME_ORIGINAL_TAG, _DATE_TIME_TAG, _EXIF_IFD_TAG
+from dirdelta.util.exif.formats import DATE_TIME_ORIGINAL_TAG, DATE_TIME_TAG, EXIF_IFD_TAG
 
 
 def normalized(date):
@@ -13,7 +13,7 @@ def normalized(date):
     return date[:4] + '-' + date[5:7] + '-' + date[8:19]
 
 
-def _tiff_date(tiff):
+def tiff_date(tiff):
     order = {b'II': '<', b'MM': '>'}[tiff[:2]]
 
     def entries(offset):
@@ -36,17 +36,17 @@ def _tiff_date(tiff):
         return data.decode('ascii', 'replace')
 
     ifd0 = entries(struct.unpack(order + 'I', tiff[4:8])[0])
-    if _EXIF_IFD_TAG in ifd0:
-        exif_ifd = entries(struct.unpack(order + 'I', ifd0[_EXIF_IFD_TAG][2])[0])
-        if _DATE_TIME_ORIGINAL_TAG in exif_ifd:
-            date = normalized(text(exif_ifd[_DATE_TIME_ORIGINAL_TAG]))
+    if EXIF_IFD_TAG in ifd0:
+        exif_ifd = entries(struct.unpack(order + 'I', ifd0[EXIF_IFD_TAG][2])[0])
+        if DATE_TIME_ORIGINAL_TAG in exif_ifd:
+            date = normalized(text(exif_ifd[DATE_TIME_ORIGINAL_TAG]))
             if date:
                 return date
     # A TIFF whose first IFD is the EXIF IFD itself (a CR3's CMT2)
-    if _DATE_TIME_ORIGINAL_TAG in ifd0:
-        date = normalized(text(ifd0[_DATE_TIME_ORIGINAL_TAG]))
+    if DATE_TIME_ORIGINAL_TAG in ifd0:
+        date = normalized(text(ifd0[DATE_TIME_ORIGINAL_TAG]))
         if date:
             return date
-    if _DATE_TIME_TAG in ifd0:
-        return normalized(text(ifd0[_DATE_TIME_TAG]))
+    if DATE_TIME_TAG in ifd0:
+        return normalized(text(ifd0[DATE_TIME_TAG]))
     return None

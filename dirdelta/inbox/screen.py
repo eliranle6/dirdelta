@@ -2,7 +2,7 @@
 import functools
 
 from dirdelta.inbox.constants import DESCRIBE_KEY, LABEL, OPEN_KEY
-from dirdelta.inbox.formatting import _is_at_or_under
+from dirdelta.inbox.formatting import is_at_or_under
 from dirdelta.known import mounts
 from dirdelta.known import replicanames
 from dirdelta.matching import elsewhere
@@ -135,7 +135,7 @@ class Screen(object):
             if chosen.key == picker.SIDE_KEY:
                 # Enter in the sorted tree beside it: the picked files (or the selected one's) go there
                 done = self._move_to_side([relpath for relpath in chosen.files] or
-                                          [relpath for relpath in files if _is_at_or_under(relpath, selected)],
+                                          [relpath for relpath in files if is_at_or_under(relpath, selected)],
                                           chosen.side_selected)
             elif chosen.key == aiplan_screen.KEY:
                 # About the picked ones, or with none picked, all of them: the AI picks (and it's told

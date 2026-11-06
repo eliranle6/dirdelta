@@ -299,7 +299,7 @@ class InboxSortTest(unittest.TestCase):
                 return picker.Picked('', '', list(items))
             chosen = picks.pop(0)
             return picker.Picked('', '', chosen) if isinstance(chosen, list) else chosen
-        with mock.patch('dirdelta.claude.ai.query._run_query', return_value={'summary': 'ok', 'steps': steps}), \
+        with mock.patch('dirdelta.claude.ai.query.run_query', return_value={'summary': 'ok', 'steps': steps}), \
                 mock.patch('dirdelta.ui.messages.ask', return_value='sort them'), \
                 mock.patch('dirdelta.ui.picker.pick_files', side_effect=pick_files), \
                 helpers.answering_option_picker(answers), mock.patch('dirdelta.util.dryrun.DRYRUN', False), \
@@ -559,13 +559,13 @@ class InboxSortTest(unittest.TestCase):
         self.assertFalse(any("under Claude's name" in option for option in options))
 
     def test_a_bracket(self):
-        self.assertEqual(formatting._bracket(("your pick", "yours"), 14), "[your pick   ]")
-        self.assertEqual(formatting._bracket(("your pick", "yours"), 8), "[yours ]")
-        self.assertEqual(formatting._bracket(("your pick", "yours"), 5), "[you]")
-        self.assertEqual(formatting._bracket(("x",), 1), " ")
+        self.assertEqual(formatting.bracket(("your pick", "yours"), 14), "[your pick   ]")
+        self.assertEqual(formatting.bracket(("your pick", "yours"), 8), "[yours ]")
+        self.assertEqual(formatting.bracket(("your pick", "yours"), 5), "[you]")
+        self.assertEqual(formatting.bracket(("x",), 1), " ")
 
     def ask_claude(self, answers):
-        """Patch ai.query._run_query to answer with answers ({relpath: {field: value}}) for the files in its
+        """Patch ai.query.run_query to answer with answers ({relpath: {field: value}}) for the files in its
         prompt, the fields its schema asks for; its calls are self.queries"""
         self.queries = []
 
@@ -576,7 +576,7 @@ class InboxSortTest(unittest.TestCase):
             relpaths = [line.split('. ', 1)[1].split(' (')[0] for line in lines]
             return {'files': [dict({field: answers[relpath][field] for field in fields}, number=number)
                               for number, relpath in enumerate(relpaths, 1)]}
-        return mock.patch('dirdelta.claude.ai.query._run_query', side_effect=run_query)
+        return mock.patch('dirdelta.claude.ai.query.run_query', side_effect=run_query)
 
     def test_descriptions_are_shown_after_the_names(self):
         with self.ask_claude({'a.txt': {'description': 'a shopping list'}}):
@@ -587,7 +587,7 @@ class InboxSortTest(unittest.TestCase):
                                                           ('[claude: a shopping list]', constants.CLAUDE_STYLE)]), '': ''})
         self.assertEqual(self.queries[0][:2], (['description'], ai.MODEL))
         # Kept: shown on the next run too, without asking
-        with mock.patch('dirdelta.claude.ai.query._run_query', side_effect=AssertionError('asked again')):
+        with mock.patch('dirdelta.claude.ai.query.run_query', side_effect=AssertionError('asked again')):
             self.sort([None], [])
         self.assertEqual(self.pick_files.call_args.kwargs['shown_as'](), labels)
 
@@ -889,7 +889,7 @@ class InboxSortTest(unittest.TestCase):
         self.assertTrue(self.exists('inbox', 'a.txt'))
 
     def test_claudes_errors_are_said(self):
-        with mock.patch('dirdelta.claude.ai.query._run_query', side_effect=ai.AIError('not logged in')):
+        with mock.patch('dirdelta.claude.ai.query.run_query', side_effect=ai.AIError('not logged in')):
             self.sort([['a.txt'], None], ['Describe it'])
             self.assertEqual(self.sorter._failed, {'a.txt': 'not logged in'})
             self.assertEqual(self.sorter._shown_as(['a.txt'])[''], "Claude: couldn't do 1 file")
@@ -1045,7 +1045,7 @@ class InboxSortTest(unittest.TestCase):
                 return dir_answer
             return {'files': [{'number': number, 'description': description}
                               for number in range(1, prompt.count('size ') + 1)]}
-        return mock.patch('dirdelta.claude.ai.query._run_query', side_effect=query)
+        return mock.patch('dirdelta.claude.ai.query.run_query', side_effect=query)
 
     def cache_dir_recommendation(self, dirpath, recommendation):
         """Put what Claude said of the inbox's dir in its cache, as asked before"""
@@ -1159,9 +1159,9 @@ class InboxSortTest(unittest.TestCase):
         self.assertEqual(os.listdir(self.trash), ['c.jpg'])
 
     def test_spread(self):
-        self.assertEqual(formatting._spread([1, 2, 3], 5), [1, 2, 3])
-        self.assertEqual(formatting._spread(list(range(10)), 4), [0, 3, 6, 9])
-        self.assertEqual(formatting._spread(list(range(10)), 1), [0])
+        self.assertEqual(formatting.spread([1, 2, 3], 5), [1, 2, 3])
+        self.assertEqual(formatting.spread(list(range(10)), 4), [0, 3, 6, 9])
+        self.assertEqual(formatting.spread(list(range(10)), 1), [0])
 
 
 if __name__ == '__main__':

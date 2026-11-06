@@ -5,8 +5,8 @@ import posixpath
 
 from dirdelta.claude import ai
 from dirdelta.inbox.constants import LABEL
-from dirdelta.inbox.formatting import _files, _join
-from dirdelta.inbox.listing import _tree
+from dirdelta.inbox.formatting import files_text, join_path
+from dirdelta.inbox.listing import tree_of
 from dirdelta.trees import entries
 from dirdelta.ui import filescreen
 from dirdelta.ui import messages
@@ -21,9 +21,9 @@ class Transfer(object):
         """Move the inbox's files at relpaths to its dir at destination (a relpath in it), under their
         own names, once the user confirms; what's known of them goes with them. Returns the ones
         moved (in a dry run, the ones it would move), or None if none were."""
-        plan = [(relpath, _join(destination, posixpath.basename(relpath))) for relpath in relpaths
+        plan = [(relpath, join_path(destination, posixpath.basename(relpath))) for relpath in relpaths
                 if posixpath.dirname(relpath) != destination]
-        where = _join(self.inbox_path, destination)
+        where = join_path(self.inbox_path, destination)
         if not plan:
             messages.show("Can't move them there", ["%s/ has them already." % (where,)], dryrun.label(), 'red')
             return None
@@ -40,7 +40,7 @@ class Transfer(object):
                           ["  " + target for target in there[:filescreen.MAX_FILES_LISTED]],
                           dryrun.label(), 'red')
             return None
-        lines = ["Move %s to %s/?" % (_files(len(plan)), where)]
+        lines = ["Move %s to %s/?" % (files_text(len(plan)), where)]
         lines += text.listed(["  " + relpath for relpath, _ in plan], filescreen.MAX_FILES_LISTED)
         if dryrun.DRYRUN:
             lines.append(dryrun.NOTE)
@@ -48,7 +48,7 @@ class Transfer(object):
             return None
         # Stopped (Ctrl-C) before move_files() says (it says how far it got, if it's stopped in it)
         done = []
-        with messages.progress_screen("Moving %s in %s%s" % (_files(len(plan)), self.inbox_path,
+        with messages.progress_screen("Moving %s in %s%s" % (files_text(len(plan)), self.inbox_path,
                                                              " (a dry run)" if dryrun.DRYRUN else ""),
                                       dryrun.label()), self._drive_lock:
             done = self._inbox_tree.move_files([(relpath, target) for relpath, target in plan])
@@ -65,7 +65,7 @@ class Transfer(object):
         """Show that the inbox's files at relpaths (of count) weren't moved, copied or removed (what)"""
         messages.show("Not all were %s" % (what,),
                       ["%d of the %s couldn't be %s (they're still in %s):" % (
-                          len(relpaths), _files(count), what, self.inbox_path)] +
+                          len(relpaths), files_text(count), what, self.inbox_path)] +
                       text.listed(["  " + relpath for relpath in relpaths], filescreen.MAX_FILES_LISTED),
                       dryrun.label(), 'red')
 
@@ -99,7 +99,7 @@ class Transfer(object):
     def log_trees(self):
         """[(tree, path)] of the sorted tree, a tree of its own (as it is now: a Drive one from the
         cache), to read and write its log (see replicalog.py); an inbox has none"""
-        return [(_tree(self.root_path), self.root_path)]
+        return [(tree_of(self.root_path), self.root_path)]
 
     def _entries(self, relpaths):
         """The entries of the inbox's files at relpaths (in its tree), to remove them"""
@@ -114,7 +114,7 @@ class Transfer(object):
         """Remove the inbox's files at relpaths, once the user confirms twice; listed: the lines that
         list them (else their relpaths). With to_trash, a local inbox's go to the desktop's trash
         (Drive's go to its trash anyway), rather than for good."""
-        lines = ["Remove %s from %s?" % (_files(len(relpaths)), self.inbox_path)]
+        lines = ["Remove %s from %s?" % (files_text(len(relpaths)), self.inbox_path)]
         listed = listed or ["  %s" % (relpath,) for relpath in relpaths]
         lines += text.listed(listed, filescreen.MAX_FILES_LISTED)
         if dryrun.DRYRUN:
@@ -125,7 +125,7 @@ class Transfer(object):
             return None
         file_entries = self._entries(relpath for relpath in relpaths)
         # Once it's done (or stopped), Enter goes back to the picker, so what was removed can be read
-        with messages.progress_screen("Removing %s from %s%s" % (_files(len(relpaths)), self.inbox_path,
+        with messages.progress_screen("Removing %s from %s%s" % (files_text(len(relpaths)), self.inbox_path,
                                                                 " (a dry run)" if dryrun.DRYRUN else ""),
                                       dryrun.label()), self._drive_lock, \
                 (self._inbox_tree.trashing() if to_trash and not self.inbox_is_cloud else contextlib.nullcontext()):

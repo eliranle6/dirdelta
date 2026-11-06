@@ -3,14 +3,14 @@ import posixpath
 
 from dirdelta.claude import ai
 from dirdelta.claude.aiplan.kinds import Plan, Step
-from dirdelta.claude.aiplan.prompt import _others
+from dirdelta.claude.aiplan.prompt import others_of
 from dirdelta.trees import paths
 
 
-def _plan_of(task, answer):
+def plan_of(task, answer):
     """The Plan of the AI's answer: what can't be done is left out, saying why"""
     actions = {action.name: action for action in task.actions}
-    others = _others(task)
+    others = others_of(task)
     steps, left_out = [], []
     # Per action's replica: of_others' are in another place than the files'
     done_files, targets = set(), set()

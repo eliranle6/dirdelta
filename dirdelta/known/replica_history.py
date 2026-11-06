@@ -49,7 +49,7 @@ class Replicas(object):
     def note_compared(self, path_a, path_b, only_a, only_b, when):
         """Note that a sync just found (when, a datetime) that a had only_a files b lacked, and b
         only_b that a lacked"""
-        pair = _pair(path_a, path_b)
+        pair = pair_of(path_a, path_b)
         self.compared = [{'pair': list(pair), 'only': [only_a, only_b], 'when': _time(when)}] + [
             old for old in self.compared if not _is_same_pair(old['pair'], pair)]
         del self.compared[MAX_HISTORY + len(self.favorites):]
@@ -57,7 +57,7 @@ class Replicas(object):
     def comparison(self, path_a, path_b):
         """What a sync last found of the pair, a's first: {'only': [a's files b lacked, b's a lacked],
         'when': 'YYYY-MM-DD HH:MM'}; or None if it was never compared"""
-        pair = _pair(path_a, path_b)
+        pair = pair_of(path_a, path_b)
         for item in self.compared:
             if _is_same_pair(item['pair'], pair):
                 only = item['only'] if tuple(item['pair']) == pair else list(reversed(item['only']))
@@ -106,23 +106,23 @@ class Replicas(object):
     def record_sort(self, inbox_path, root_path):
         """Note that the inbox was just sorted into root_path: it goes to the top of the sorts (once;
         the other way around is another sort)"""
-        sort = _pair(inbox_path, root_path)
+        sort = pair_of(inbox_path, root_path)
         self.sorts = [sort] + [old for old in self.sorts if old != sort]
         del self.sorts[MAX_SORTS:]
 
     def record(self, path_a, path_b):
         """Note that the pair was just synced: it goes to the top of the history (once)"""
-        pair = _pair(path_a, path_b)
+        pair = pair_of(path_a, path_b)
         self.history = [pair] + [old for old in self.history if not _is_same_pair(old, pair)]
         del self.history[MAX_HISTORY:]
 
     def is_favorite(self, path_a, path_b):
-        pair = _pair(path_a, path_b)
+        pair = pair_of(path_a, path_b)
         return any(_is_same_pair(favorite, pair) for favorite in self.favorites)
 
     def toggle_favorite(self, path_a, path_b):
         """Make the pair a favorite, or, if it is one, not"""
-        pair = _pair(path_a, path_b)
+        pair = pair_of(path_a, path_b)
         if self.is_favorite(*pair):
             self.favorites = [old for old in self.favorites if not _is_same_pair(old, pair)]
         else:
@@ -133,7 +133,7 @@ class Replicas(object):
         return [pair for pair in self.history if not self.is_favorite(*pair)]
 
 
-def _pair(path_a, path_b):
+def pair_of(path_a, path_b):
     return (normalized(path_a), normalized(path_b))
 
 

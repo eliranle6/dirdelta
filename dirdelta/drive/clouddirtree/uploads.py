@@ -8,7 +8,7 @@ from googleapiclient.http import MediaFileUpload
 from dirdelta.drive import driveapi
 from dirdelta.drive import drivecache
 from dirdelta.drive.clouddirtree.constants import NUM_RETRIES, RESUMABLE_MIN_SIZE, UPLOAD_THREADS
-from dirdelta.drive.clouddirtree.info import _info_of
+from dirdelta.drive.clouddirtree.info import info_of
 from dirdelta.trees import entries
 from dirdelta.ui import messages
 
@@ -109,7 +109,7 @@ class Uploads(object):
                 self.add_file_by_relpath(relpath)
             self._cache_add(md, relpath)
         self._cloud_ids[relpath] = md['id']
-        self._infos[relpath] = _info_of(md)
+        self._infos[relpath] = info_of(md)
 
     def _uploaded(self, file_entry, future):
         """Add file_entry, whose upload (future, of _upload()) ended, to the tree and the cache.
@@ -125,6 +125,6 @@ class Uploads(object):
             self._tell_removed(file_entry.relpath)
         self.add_file_by_relpath(file_entry.relpath)
         self._cloud_ids[file_entry.relpath] = md['id']
-        self._infos[file_entry.relpath] = _info_of(md)
+        self._infos[file_entry.relpath] = info_of(md)
         self._tell_added(file_entry.relpath)
         return True

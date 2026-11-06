@@ -1,14 +1,14 @@
 """A moved file's or dir's hashes, moved with it"""
-from dirdelta.hashes.hashcache.database import _dirty, _lock, _save_soon
-from dirdelta.hashes.hashcache.replica_dbs import _where
+from dirdelta.hashes.hashcache.database import dirty, lock, save_soon
+from dirdelta.hashes.hashcache.replica_dbs import where
 
 
 def move(path, new_path):
     """A file, or a dir with all in it, was moved from path to new_path (a rename keeps its contents,
     size and modification time): its hashes are kept under its new path"""
-    with _lock:
-        db, key = _where(path)
-        new_db, new_key = _where(new_path)
+    with lock:
+        db, key = where(path)
+        new_db, new_key = where(new_path)
         if db is None or new_db is None:
             return
         prefix, new_prefix = key.rstrip('/') + '/', new_key.rstrip('/') + '/'
@@ -25,6 +25,6 @@ def move(path, new_path):
                                 for old, *rest in rows])
             db.execute('DELETE FROM files WHERE path = ? OR (path >= ? AND path < ?)',
                        (key, prefix, prefix[:-1] + '0'))
-            _dirty.add(new_db)
-        _dirty.add(db)
-        _save_soon()
+            dirty.add(new_db)
+        dirty.add(db)
+        save_soon()

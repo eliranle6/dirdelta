@@ -4,7 +4,7 @@ import posixpath
 import shutil
 
 from dirdelta.inbox.constants import ASK, DESCRIBED, LABEL, OPEN, READ, REMOVE, VERB_COLORS
-from dirdelta.inbox.formatting import _bracket, _files, _fitting, _join
+from dirdelta.inbox.formatting import bracket, files_text, fitting, join_path
 from dirdelta.known import replicas
 from dirdelta.ui import messages
 from dirdelta.ui import opening
@@ -30,7 +30,7 @@ class Destinations(object):
     def _to_claudes_dir(self, recommended, is_typed=False):
         """Move the recommended files to the dirs Claude says, each under its own name, or (is_typed:
         one file) one the user types"""
-        plan = [(relpath, _join(os.path.dirname(self._target(relpath)), os.path.basename(relpath)))
+        plan = [(relpath, join_path(os.path.dirname(self._target(relpath)), os.path.basename(relpath)))
                 for relpath in recommended]
         if is_typed:
             plan = self._typed_name(plan)
@@ -39,10 +39,10 @@ class Destinations(object):
     def _dir_to_a_dir(self, dirpath, relpaths):
         """Move the inbox's dir at dirpath (its files: relpaths) into a dir the user chooses, under its
         own name, as a whole; offered first next time, if it went"""
-        destination = self._choose_dir('move', "%s of %s/" % (_files(len(relpaths)), dirpath))
+        destination = self._choose_dir('move', "%s of %s/" % (files_text(len(relpaths)), dirpath))
         if destination is None:
             return None
-        done = self._approve(self.MOVE_TO, [(relpath, _join(destination, posixpath.basename(dirpath),
+        done = self._approve(self.MOVE_TO, [(relpath, join_path(destination, posixpath.basename(dirpath),
                                                              relpath[len(dirpath) + 1:])) for relpath in relpaths])
         if done and self._known_replicas is not None:
             self._known_replicas.record_dir(self.root_path, destination)
@@ -58,7 +58,7 @@ class Destinations(object):
             return None
         names = {relpath: os.path.basename(self._target(relpath) if relpath in renamed and action == self.MOVE_TO_CLAUDES_NAMES
                                            else relpath) for relpath in relpaths}
-        plan = [(relpath, _join(destination, names[relpath])) for relpath in relpaths]
+        plan = [(relpath, join_path(destination, names[relpath])) for relpath in relpaths]
         if action == self.MOVE_TO_TYPED:
             plan = self._typed_name(plan)
             if plan is None:
@@ -76,7 +76,7 @@ class Destinations(object):
         color (see SORTED_TREE)"""
         verb_label = " %s " % (verb.upper(),)
         if not parts:
-            what = (os.path.basename(acted_on[0]) if len(acted_on) == 1 else _files(len(acted_on)))
+            what = (os.path.basename(acted_on[0]) if len(acted_on) == 1 else files_text(len(acted_on)))
             text = {ASK: " Claude, about %s, while you go on" % (what,),
                     REMOVE: " %s, from %s%s" % (what, self.inbox_path,
                                                 " (to the trash)" if verb == REMOVE and not self.inbox_is_cloud else ""),
@@ -84,12 +84,12 @@ class Destinations(object):
                                                       "" if len(acted_on) == 1 else "s"),
                     READ: " %s, in %s, anew from Google Drive" % (acted_on[0], self.inbox_path)}
             return [picker.segments([(verb_label, VERB_COLORS[verb]), (text.get(verb, ''), None)])]
-        parts = _fitting(parts, shutil.get_terminal_size().columns - 1 - picker.display_width(verb_label) - 1)
+        parts = fitting(parts, shutil.get_terminal_size().columns - 1 - picker.display_width(verb_label) - 1)
         path_line = picker.segments([(verb_label, VERB_COLORS[verb]), (" ", None)] +
                                     [(text, None) for text, _ in parts])
         brackets = [(" " * (picker.display_width(verb_label) + 1), None)]
         for text, (color, names) in parts:
-            brackets.append((_bracket(names, picker.display_width(text)), color))
+            brackets.append((bracket(names, picker.display_width(text)), color))
         return [path_line, picker.segments(brackets)]
 
     def _typed_name(self, plan):
@@ -100,7 +100,7 @@ class Destinations(object):
         default = os.path.basename(self._target(relpath) if recommendation and self._target(relpath)
                                    else relpath)
         lines = ["Moving %s" % (posixpath.join(self.inbox_path, relpath),),
-                 "to %s/" % (_join(self.root_path, os.path.dirname(target)),)]
+                 "to %s/" % (join_path(self.root_path, os.path.dirname(target)),)]
         if relpath in self._descriptions:
             lines.append(DESCRIBED % (self._descriptions[relpath],))
         lines += ["", "Its name there (Enter to keep it as it is; an empty one, or Ctrl-C, to go back):"]
@@ -111,4 +111,4 @@ class Destinations(object):
             messages.show("Not a name", ["%r can't be a file's name: it's a name, without '/'." % (name,)],
                           dryrun.label(), 'red')
             return None
-        return [(relpath, _join(os.path.dirname(target), name))]
+        return [(relpath, join_path(os.path.dirname(target), name))]

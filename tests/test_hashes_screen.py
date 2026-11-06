@@ -113,7 +113,7 @@ class PrepareTest(unittest.TestCase):
         helpers.make_files(root, ['d/x'])
         with mock.patch('dirdelta.ui.messages.print_line'):
             local = localdiskdirtree.factory(root)
-        with mock.patch('dirdelta.hashes.hashing.job_scanning._list_files') as list_files, \
+        with mock.patch('dirdelta.hashes.hashing.job_scanning.list_files') as list_files, \
                 mock.patch('dirdelta.ui.messages.print_line') as print_line:
             job, = hashes_screen.prepare([local])
         list_files.assert_not_called()
@@ -164,7 +164,7 @@ class DashboardTest(unittest.TestCase):
 
     def test_a_replica_can_be_labeled_and_the_dashboard_says_so_after(self):
         job = _Job('/photos', _progress())
-        label = (hashes_screen.names._LABEL, '/photos')
+        label = (hashes_screen.names.LABEL, '/photos')
         with mock.patch('dirdelta.screens.hashes_screen.dashboard_actions.os.path.isdir', return_value=True), \
                 mock.patch('dirdelta.known.replicanames.label_key', return_value='uuid:U'), \
                 mock.patch('dirdelta.screens.label_screen.run', side_effect=lambda known, _: known.set_label('uuid:U', 'mine')) as run:
@@ -178,7 +178,7 @@ class DashboardTest(unittest.TestCase):
     def test_a_replica_without_a_job_can_be_hashed_from_it(self):
         path = os.path.realpath(tempfile.mkdtemp(prefix='dirdelta-dashboard-'))
         self.addCleanup(shutil.rmtree, path)
-        hash_it = (hashes_screen.names._HASH, path)
+        hash_it = (hashes_screen.names.HASH, path)
         with mock.patch.object(hashing.Job, 'start') as start, mock.patch.object(hashing.Job, 'scan_in_background') as scan:
             pick = self.dashboard(None, [hash_it, hashes_screen.BACK], trees=[], other_paths=[path])
             options = [option.id for option in pick.call_args.args[0] if isinstance(option, picker.Option)]
@@ -186,7 +186,7 @@ class DashboardTest(unittest.TestCase):
         scan.assert_called_once_with()
         # Shown anew, as its job's: it can be paused there
         self.assertEqual(pick.call_count, 2)
-        self.assertEqual(pick.call_args.kwargs['selected'], (hashes_screen.names._TOGGLE, path))
+        self.assertEqual(pick.call_args.kwargs['selected'], (hashes_screen.names.TOGGLE, path))
         self.assertNotIn(hash_it, options)
 
     def test_quitting_is_asked_only_while_hashing(self):
@@ -203,22 +203,22 @@ class DashboardTest(unittest.TestCase):
     def test_a_replica_thats_not_there_cant_be_hashed(self):
         path = '/not/there/at/all'
         self.dashboard(None, [hashes_screen.BACK], trees=[], other_paths=[path])
-        self.assertIsInstance(self.shown[(hashes_screen.names._HASH, path)], picker.Disabled)
+        self.assertIsInstance(self.shown[(hashes_screen.names.HASH, path)], picker.Disabled)
 
     def test_one_that_isnt_mounted_or_isnt_there_cant_be_labeled(self):
         # What its path is on now isn't its disk
-        self.assertIsInstance(hashes_screen.dashboard_actions._label_option('/no/such/dir', self.known), picker.Disabled)
+        self.assertIsInstance(hashes_screen.dashboard_actions.label_option('/no/such/dir', self.known), picker.Disabled)
         mount = mounts.Mount('/mnt/x', '/dev/x', 'ext4', '', '', 'U', None)
         with mock.patch('dirdelta.known.mounts.unmounted', return_value=mount), \
                 mock.patch('dirdelta.screens.hashes_screen.dashboard_actions.os.path.isdir', return_value=True):
-            self.assertIsInstance(hashes_screen.dashboard_actions._label_option('/mnt/x', self.known), picker.Disabled)
+            self.assertIsInstance(hashes_screen.dashboard_actions.label_option('/mnt/x', self.known), picker.Disabled)
         with mock.patch('dirdelta.known.replicanames.identity', return_value='drive:R:/c'):
-            self.assertNotIsInstance(hashes_screen.dashboard_actions._label_option('cloud/c', self.known), picker.Disabled)
+            self.assertNotIsInstance(hashes_screen.dashboard_actions.label_option('cloud/c', self.known), picker.Disabled)
 
     def test_it_pauses_and_resumes_a_job(self):
         job = _Job('/photos', _progress(state=hashing.HASHING, is_started=True))
         job._is_started = True
-        toggle = (hashes_screen.names._TOGGLE, '/photos')
+        toggle = (hashes_screen.names.TOGGLE, '/photos')
         pick = self.dashboard(job, [toggle, toggle, hashes_screen.BACK])
         self.assertEqual((job.paused, job.started), (1, 1))
         # It's selected again after it's picked, q goes back, and it's titled
@@ -233,29 +233,29 @@ class DashboardTest(unittest.TestCase):
         self.known.note_seen('path:/photos', '/photos', None, datetime.datetime(2026, 10, 30, 9, 5))
         self.dashboard(job, [hashes_screen.BACK])
         shown = self.shown
-        self.assertEqual(shown[(hashes_screen.names._INFO, '/photos')].text, "  10 files, 2.0 KB")
+        self.assertEqual(shown[(hashes_screen.names.INFO, '/photos')].text, "  10 files, 2.0 KB")
         self.assertIn("  ● Synced 30.10.2026 09:05", [picker.unstyled(option.text) for option in shown.values()
                                                    if isinstance(option, (picker.Disabled, picker.Skipped))])
-        self.assertIn("Hashes: [", shown[(hashes_screen.names._BAR, '/photos')].text)
-        self.assertIn("50%  4 of 10 files", shown[(hashes_screen.names._BAR, '/photos')].text)
-        state = shown[(hashes_screen.names._STATE, '/photos')].text
+        self.assertIn("Hashes: [", shown[(hashes_screen.names.BAR, '/photos')].text)
+        self.assertIn("50%  4 of 10 files", shown[(hashes_screen.names.BAR, '/photos')].text)
+        state = shown[(hashes_screen.names.STATE, '/photos')].text
         self.assertIn("Hashing", state)
         self.assertIn("now a (and 1 more)", state)
         self.assertIn("2 files couldn't be hashed", state)
-        self.assertEqual(shown[(hashes_screen.names._TOGGLE, '/photos')], "  Pause hashing photos")
+        self.assertEqual(shown[(hashes_screen.names.TOGGLE, '/photos')], "  Pause hashing photos")
         self.assertEqual(shown[''], picker.segments([("photos: 50% hashed (4/10)", 'orange')]))
 
     def test_a_done_one_cant_be_paused(self):
         job = _Job('/photos', _progress(state=hashing.DONE))
         with mock.patch('dirdelta.hashes.hashing.registry._jobs', {'/photos': job}):
-            shown = hashes_screen.dashboard_lines._jobs_shown([('/photos', self.tree)], {'/photos': 'photos'})
-        self.assertIsInstance(shown[(hashes_screen.names._TOGGLE, '/photos')], picker.Disabled)
+            shown = hashes_screen.dashboard_lines.jobs_shown([('/photos', self.tree)], {'/photos': 'photos'})
+        self.assertIsInstance(shown[(hashes_screen.names.TOGGLE, '/photos')], picker.Disabled)
 
     def test_its_files_and_scanning_again(self):
         job = _Job('/photos', _progress())
         with mock.patch('dirdelta.screens.hashes_screen.dashboard_actions.view_files') as view_files, \
                 mock.patch.object(job, 'scan_in_background') as scan:
-            self.dashboard(job, [(hashes_screen.names._FILES, '/photos'), (hashes_screen.names._RESCAN, '/photos'),
+            self.dashboard(job, [(hashes_screen.names.FILES, '/photos'), (hashes_screen.names.RESCAN, '/photos'),
                                  hashes_screen.BACK])
         view_files.assert_called_once_with(job)
         scan.assert_called_once_with()
@@ -264,9 +264,9 @@ class DashboardTest(unittest.TestCase):
         with mock.patch('dirdelta.hashes.hashcache.count_under', return_value=7):
             self.dashboard(None, [hashes_screen.BACK], trees=[], other_paths=['/old', 'cloud/c'])
         shown = self.shown
-        self.assertIn("Hashes kept of 7 files", shown[(hashes_screen.names._INFO, '/old')].text)
-        self.assertIn("In Google Drive", shown[(hashes_screen.names._INFO, 'cloud/c')].text)
-        self.assertEqual(shown[(hashes_screen.names._KNOWN, 0, '/old')].text, "  Never synced before")
+        self.assertIn("Hashes kept of 7 files", shown[(hashes_screen.names.INFO, '/old')].text)
+        self.assertIn("In Google Drive", shown[(hashes_screen.names.INFO, 'cloud/c')].text)
+        self.assertEqual(shown[(hashes_screen.names.KNOWN, 0, '/old')].text, "  Never synced before")
 
     def test_the_pairs_known_come_first_with_their_sync_state(self):
         self.known.record('/photos', 'cloud/p')
@@ -287,7 +287,7 @@ class DashboardTest(unittest.TestCase):
         cloud.iter_files.return_value = [mock.Mock(relpath=relpath) for relpath in 'abc']
         cloud.file_size.return_value = 10
         cloud.known_hashes.side_effect = lambda relpath: {'a': ('sha1', 'sha256'), 'b': ('sha256',), 'c': ()}[relpath]
-        nr_files, size, first, note = hashes_screen.dashboard_lines._drive_lines(cloud)
+        nr_files, size, first, note = hashes_screen.dashboard_lines.drive_lines(cloud)
         self.assertEqual((nr_files, size), (3, 30))
         self.assertEqual(first, "  Drive's hashes, none read here: SHA-1 of 1 of 3 files, SHA-256 of 2")
         self.assertEqual(note, "  1 file has no hash: Google's own files (Docs, Sheets...)")

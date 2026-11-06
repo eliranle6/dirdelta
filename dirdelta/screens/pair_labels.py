@@ -39,8 +39,8 @@ def _updated(known, path):
 
 
 # What's known of a replica, as it's said (see replicainfo.py)
-_date = replicainfo._date
-_time = replicainfo._time
+_date = replicainfo.date_text
+_time = replicainfo.time_text
 FRESH, RECENT, OLD = replicainfo.FRESH, replicainfo.RECENT, replicainfo.OLD
 SYNCED_MARK, CACHE_MARK = replicainfo.SYNCED_MARK, replicainfo.CACHE_MARK
 freshness = replicainfo.freshness

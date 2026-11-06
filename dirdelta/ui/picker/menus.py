@@ -1,7 +1,7 @@
 """Menus of options (pick_option()), and what an option may be"""
 from dirdelta.ui.picker.kinds import Option, Skipped
 from dirdelta.ui.picker.places import trail
-from dirdelta.ui.picker.running import _header_args, _help_args, _run
+from dirdelta.ui.picker.running import header_args, help_args, run_treepicker
 from dirdelta.ui.picker.styles import unstyled
 
 
@@ -21,7 +21,7 @@ def pick_option(options, header='', shown_as=None, label=None, selected=None, ti
     menu, above its status bar, while the option is selected (e.g. what it would do), each line
     plain, or in colored parts (see segments()). shown_as's options may be Colored too."""
     lines, line_of, shown_first = _menu_lines(options)
-    args = ['--list', '--root', trail(title)] + _header_args(header) + _help_args(key_hints, help_lines)
+    args = ['--list', '--root', trail(title)] + header_args(header) + help_args(key_hints, help_lines)
     if selected in line_of:
         args += ['--select', line_of[selected]]
     previews = None
@@ -37,7 +37,7 @@ def pick_option(options, header='', shown_as=None, label=None, selected=None, ti
             if option == '' or option in line_of:
                 now[line_of.get(option, option)] = shown
         return now
-    picked = _run(args, lines, lines_shown if shown_as is not None or shown_first else None, label, previews=previews)
+    picked = run_treepicker(args, lines, lines_shown if shown_as is not None or shown_first else None, label, previews=previews)
     if picked is None:
         return None
     return {line: option for option, line in line_of.items()}.get(picked[0], picked[0])

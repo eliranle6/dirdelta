@@ -51,7 +51,7 @@ class Selection(object):
             self._condition.notify_all()
 
 
-def _follow(selection, follow, fd):
+def follow_side(selection, follow, fd):
     """Send treepicker the side tree's relpath to select (see Side) each time the selection moves,
     until it's gone"""
     try:
@@ -63,7 +63,7 @@ def _follow(selection, follow, fd):
         pass
 
 
-def _read_selection(fd, selections):
+def read_selection(fd, selections):
     """Move each of selections as treepicker says the selection moves (each path ending with '\0'),
     until it stops saying (it's gone)"""
     pending = b''
@@ -82,7 +82,7 @@ def _read_selection(fd, selections):
             selection._close()
 
 
-def _read_notifications(fd, on_notify):
+def read_notifications(fd, on_notify):
     """Call on_notify(key, selected relpath, picked relpaths) for each of treepicker's --notify
     records (the key, the selected node's path, the picked ones', each ending with '\\0', and an
     empty item to end it), until it's gone"""

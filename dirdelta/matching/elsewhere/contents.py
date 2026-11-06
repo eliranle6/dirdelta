@@ -2,9 +2,9 @@
 import hashlib
 
 from dirdelta.hashes import hashcache
-from dirdelta.matching.elsewhere.candidates import _Matcher, matches_of_size
-from dirdelta.matching.elsewhere.constants import _HASH_PREFERENCE
-from dirdelta.matching.elsewhere.preview_lines import _files, _preview
+from dirdelta.matching.elsewhere.candidates import Matcher, matches_of_size
+from dirdelta.matching.elsewhere.constants import HASH_PREFERENCE
+from dirdelta.matching.elsewhere.preview_lines import files_text, preview_of
 from dirdelta.matching.elsewhere.sure import to_check
 from dirdelta.trees import dirtree
 
@@ -35,23 +35,23 @@ def check_contents(relpaths, src, src_index, index, checked, selection, send, se
         relpath, pending = pending, None
         if relpath not in missing:
             continue
-        matcher = matcher or _Matcher(relpaths, src, index, checked, src_index)
+        matcher = matcher or Matcher(relpaths, src, index, checked, src_index)
         candidates = matches_of_size(relpath, src.file_size(relpath), index)
         if relpath in checked or not (candidates or index.hash_algorithms()):
-            send({relpath: _preview(relpath, src, dst_name, matcher)})
+            send({relpath: preview_of(relpath, src, dst_name, matcher)})
             continue
-        send({relpath: _preview(relpath, src, dst_name, matcher) +
+        send({relpath: preview_of(relpath, src, dst_name, matcher) +
               ["", "Comparing its contents with the", "%s of its size%s..." %
-               (_files(len(candidates)), " and %s's by hash" % (dst_name,) if index.hash_algorithms() else "")]})
+               (files_text(len(candidates)), " and %s's by hash" % (dst_name,) if index.hash_algorithms() else "")]})
         try:
             _check(relpath, candidates, src, src_index, index, checked,
                    lambda: not selection.is_at(relpath))
         except dirtree.HashStopped:
             # Moved on: its preview as it was, and on to where the selection is now
-            send({relpath: _preview(relpath, src, dst_name, matcher)})
+            send({relpath: preview_of(relpath, src, dst_name, matcher)})
             pending = selection.wait_next(0)
             continue
-        send({relpath: _preview(relpath, src, dst_name, matcher)})
+        send({relpath: preview_of(relpath, src, dst_name, matcher)})
 
 
 def check_all(relpaths, src, src_index, index, checked, progress=None):
@@ -104,7 +104,7 @@ def _same_contents(src, src_index, relpath, index, match_relpath, should_stop):
             return hashes[0] == hashes[1]
         return _same_bytes(path, match_path, should_stop)
     known = set(src.known_hashes(relpath)) | set(index.replica.known_hashes(match_relpath))
-    for algorithm in [algorithm for algorithm in _HASH_PREFERENCE if algorithm in known]:
+    for algorithm in [algorithm for algorithm in HASH_PREFERENCE if algorithm in known]:
         own = src_index.content_hash(relpath, algorithm, should_stop)
         other = index.content_hash(match_relpath, algorithm, should_stop)
         if own is not None and other is not None:

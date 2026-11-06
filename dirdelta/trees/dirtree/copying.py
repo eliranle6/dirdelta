@@ -1,7 +1,7 @@
 """Copying files into a tree, and within it"""
 import contextlib
 
-from dirdelta.trees.dirtree.common import _verb
+from dirdelta.trees.dirtree.common import batch_verb
 from dirdelta.ui import messages
 from dirdelta.util import dryrun
 
@@ -20,7 +20,7 @@ class Copying(object):
         relpaths, e.g. an inbox's files going to other dirs). A dry run changes neither."""
         files = list(files)
         # In a dry run nothing changes: no files or dirs, and not the tree
-        verb = _verb('copying')
+        verb = batch_verb('copying')
         nr_started = nr_copied = 0
 
         def starting(file_entry):
@@ -56,7 +56,7 @@ class Copying(object):
     def copy_files_within(self, copies, to=None):
         """Copy files within the tree, or to another of its kind (to): each of copies is (relpath,
         new_relpath). Returns the copies done. A dry run changes nothing (and returns none)."""
-        verb = _verb('copying')
+        verb = batch_verb('copying')
         done = []
         to = to or self
 

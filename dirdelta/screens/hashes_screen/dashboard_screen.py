@@ -1,9 +1,9 @@
 """The replicas dashboard: each replica's files, last update and hashing"""
 from dirdelta.known import replicanames
 from dirdelta.known import replicas
-from dirdelta.screens.hashes_screen.dashboard_actions import _finish_dashboard
-from dirdelta.screens.hashes_screen.dashboard_lines import _jobs_by_name
-from dirdelta.screens.hashes_screen.dashboard_rows import _add_pair, _add_replica, _pairs
+from dirdelta.screens.hashes_screen.dashboard_actions import finish_dashboard
+from dirdelta.screens.hashes_screen.dashboard_lines import jobs_by_name
+from dirdelta.screens.hashes_screen.dashboard_rows import add_pair, add_replica, known_pairs
 from dirdelta.screens.hashes_screen.names import INBOXES_HEADING, PAIRS_HEADING, REPLICAS_HEADING
 from dirdelta.ui import picker
 
@@ -40,7 +40,7 @@ def _show_dashboard(replica_trees, known, other_paths, selected):
     items = ([item for item in items if item[0] not in inboxes or item[0] in roots] +
              [item for item in items if item[0] in inboxes and item[0] not in roots])
     inbox_names = {name for name, _ in items if name in inboxes and name not in roots}
-    jobs = list(_jobs_by_name(items).values())
+    jobs = list(jobs_by_name(items).values())
     names = replicanames.short_names([name for name, _ in items])
     options, shown = [], {}
     sections = [(REPLICAS_HEADING, [item for item in items if item[0] not in inbox_names]),
@@ -48,14 +48,14 @@ def _show_dashboard(replica_trees, known, other_paths, selected):
     def add_blank():
         options.append(picker.BLANK)
     # What's synced to what first, under its heading, if any pair is known
-    pairs = _pairs(known)
+    pairs = known_pairs(known)
     if pairs:
         options.append(PAIRS_HEADING)
         shown[PAIRS_HEADING] = picker.Skipped(picker.styled([(PAIRS_HEADING, 'bold,green')]))
         for number, (path_a, path_b) in enumerate(pairs):
             if number:
                 add_blank()
-            _add_pair(path_a, path_b, options, shown, known)
+            add_pair(path_a, path_b, options, shown, known)
     # A heading for each only when there are both (or pairs before them)
     has_headings = all(section for _, section in sections) or bool(pairs)
     for heading, section in sections:
@@ -68,5 +68,5 @@ def _show_dashboard(replica_trees, known, other_paths, selected):
             if options and options[-1] != heading:
                 # Each replica apart
                 add_blank()
-            _add_replica(item, options, shown, known, names)
-    return _finish_dashboard(items, options, shown, names, jobs, known, selected)
+            add_replica(item, options, shown, known, names)
+    return finish_dashboard(items, options, shown, names, jobs, known, selected)

@@ -2,7 +2,7 @@
 import threading
 
 from dirdelta.inbox.constants import CLAUDE_STYLE, IN_SORTED_TREE_TITLE, SURELY_A_COPY
-from dirdelta.inbox.formatting import _files, _grey, _join, _wrapped_path
+from dirdelta.inbox.formatting import files_text, grey_line, join_path, wrapped_path
 from dirdelta.matching import elsewhere
 from dirdelta.ui import picker
 
@@ -35,16 +35,16 @@ class Copies(object):
         title = (IN_SORTED_TREE_TITLE + " ", 'bold,' + CLAUDE_STYLE)
         if copies:
             return (["", picker.styled([title, ("Yes", 'bold,green')])] +
-                    [line for copy in copies[:3] for line in _wrapped_path(_join(self.root_path, copy), "    ")] +
+                    [line for copy in copies[:3] for line in wrapped_path(join_path(self.root_path, copy), "    ")] +
                     [SURELY_A_COPY])
         if relpath in self._checked:
             return ["", picker.styled([title, ("No", 'bold,red'), (" (contents compared)", 'grey')])]
         if not self._root_index.is_built():
-            return ["", picker.styled([title]), _grey("  Looking through the sorted tree...")]
+            return ["", picker.styled([title]), grey_line("  Looking through the sorted tree...")]
         candidates = elsewhere.matches_of_size(relpath, self._size(relpath), self._root_index)
         if candidates:
-            return ["", picker.styled([title]), _grey("  %s of its size there:" % (_files(len(candidates)),)),
-                    _grey("  compared when it's selected")]
+            return ["", picker.styled([title]), grey_line("  %s of its size there:" % (files_text(len(candidates)),)),
+                    grey_line("  compared when it's selected")]
         # None of its size (nor of its hash) there
         return ["", picker.styled([title, ("No", 'bold,red')])]
 

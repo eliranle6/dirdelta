@@ -16,7 +16,7 @@ def known_replicas(replicas):
     return list(dict.fromkeys(found))
 
 
-def _choose_replica(name, known=()):
+def choose_replica(name, known=()):
     """Let the user choose a local dir or a Drive one, or one of known (paths) at once. Returns its
     path, or None if they quit."""
     options = {KNOWN + path: path for path in known}

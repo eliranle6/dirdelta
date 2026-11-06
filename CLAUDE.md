@@ -159,7 +159,7 @@ Patch targets must use the same module names the code imports
 (`'dirdelta.util.dryrun.DRYRUN'`): a bare `import dryrun` would load a second
 copy of the module that the app never sees. And a name is patched where it's looked up: a
 package's `__init__` re-exports names (`picker.pick_option`), but what its own modules call is
-patched in the module that defines it (`'dirdelta.claude.ai.query._run_query'`; see
+patched in the module that defines it (`'dirdelta.claude.ai.query.run_query'`; see
 docs/architecture.md, "Its layout"). To run one
 module:
 
@@ -186,8 +186,8 @@ another test, or another module's, already covers. Shared fakes:
   with `hashing.Job(...)` directly, or `hashing.job()` with a cleanup that pops
   it from `hashing.registry._jobs`; tests that hash without the pool's threads set
   `job._is_started` and call `job._take()`/`job._hash()` themselves.
-- Claude is never asked in the tests: `test_ai` patches `ai.query._run_query` or the
-  SDK's `query`, and `test_inbox` patches `ai.query._run_query`; `ai.config.CACHE_FILE` goes
+- Claude is never asked in the tests: `test_ai` patches `ai.query.run_query` or the
+  SDK's `query`, and `test_inbox` patches `ai.query.run_query`; `ai.config.CACHE_FILE` goes
   to a temp file. A manual run with a scratch `HOME` can't reach Claude Code's
   login (it's under the real `HOME`); `CLAUDE_CONFIG_DIR=~/.claude` gets it,
   but then Claude Code writes a `.claude.json` into `~/.claude` (2026-10-29).
@@ -207,7 +207,7 @@ another test, or another module's, already covers. Shared fakes:
 - The real Drive cache isn't read or imported: `tests/helpers.py` points
   `drivecache.names.LINES_FILE` at a temp path (the database is next to it).
 - Nothing goes to the desktop's trash: `helpers.fake_trash()` patches
-  `localdiskdirtree.fs._trash`.
+  `localdiskdirtree.fs.trash`.
 - Drive is never contacted: `test_clouddirtree` writes a JSON-lines cache to
   a temp file (imported, as the old format is; `helpers.remove_drive_cache()` removes it), `test_driveapi` mocks `Credentials`/`build`, and the rest patch
   `driveapi.service()` with a fake (e.g. `test_clouddirtree`'s uploads, downloads

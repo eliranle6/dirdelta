@@ -68,7 +68,7 @@ class Keys(object):
         if not files:
             messages.show("Nothing to remove", ["%s has no files." % (relpath,)], dryrun.label())
             return None
-        remove = "Remove %s (%s) from %s" % (relpath, replica_ops._files(len(files)), name)
+        remove = "Remove %s (%s) from %s" % (relpath, replica_ops.files_text(len(files)), name)
         shown = {} if replica_ops.is_writable(self._dst) else {remove: picker.Disabled("%s: can't, it's read-only" % (remove,))}
         if is_removed and shown:
             messages.show("Can't remove it", ["%s is read-only." % (name,)], dryrun.label())
@@ -78,7 +78,7 @@ class Keys(object):
             shown_as=lambda: shown, title="What to do")
         if answer != remove or not self._confirm(self.REMOVE, files, replica=self._dst):
             return None
-        title = "Removing %s from %s%s" % (replica_ops._files(len(files)), name, " (a dry run)" if dryrun.DRYRUN else "")
+        title = "Removing %s from %s%s" % (replica_ops.files_text(len(files)), name, " (a dry run)" if dryrun.DRYRUN else "")
         with messages.progress_screen(title, dryrun.label()):
             self._dst.remove_files([entries.FileEntry(os.path.basename(path), path,
                                                       os.path.join(self._dst.fullpath(), path)) for path in files])

@@ -9,7 +9,7 @@ def focus_of(task):
     return list(task.focus)[:MAX_FOCUS]
 
 
-def _of_focus(task):
+def of_focus(task):
     """({relpath: what's more to say of a file of its focus}, the local paths the AI may read): what's
     in a zip is said (it can't read one); another is to be read, if it's not too big"""
     extras, readable = {}, []
@@ -29,7 +29,7 @@ def _of_focus(task):
     return extras, readable
 
 
-def _schema(task):
+def answer_schema(task):
     return {"type": "object",
             "properties": {
                 "answer": {"type": "string"},
@@ -44,11 +44,11 @@ def _schema(task):
             "required": ["answer", "summary", "steps"]}
 
 
-def _others(task):
+def others_of(task):
     return list(task.others)[:MAX_OTHERS]
 
 
-def _prompt(task, instruction, extras=None):
+def prompt_of(task, instruction, extras=None):
     extras = extras or {}
     lines = ["What the person wants: %s" % (instruction,), ""]
     if task.focus:
@@ -63,7 +63,7 @@ def _prompt(task, instruction, extras=None):
         lines.append("%d. %s (%s)%s" % (number, file.relpath,
                                         "size unknown" if file.size is None else "%d bytes" % (file.size,),
                                         ": " + '; '.join(notes) if notes else ""))
-    others = _others(task)
+    others = others_of(task)
     if others:
         lines += ["", "The other files, for the actions said to be on them%s:" %
                   (" (only %d of the %d)" % (len(others), len(task.others)) if len(others) < len(task.others) else "",)]

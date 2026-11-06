@@ -10,7 +10,7 @@ from dirdelta.util import text
 
 
 @contextlib.contextmanager
-def _changing_both(folder_path, other_path):
+def changing_both(folder_path, other_path):
     """Around a change dirdelta makes in Drive under both folders (maybe the same one): see
     drivecache.changing()"""
     with drivecache.changing(folder_path):
@@ -36,7 +36,7 @@ def refresh_cache(folder_path):
     path = ''
     for name in paths.components(folder_path):
         path += '/' + name
-        found = list(_list("name = '%s' and '%s' in parents and mimeType = '%s' and trashed = false" %
+        found = list(drive_list("name = '%s' and '%s' in parents and mimeType = '%s' and trashed = false" %
                            (_quoted(name), folder_id, drivecache.FOLDER_MIME_TYPE),
                            drivecache.FILE_FIELDS))
         if not found:
@@ -57,7 +57,7 @@ def refresh_cache(folder_path):
             query = "(%s) and trashed = false" % (' or '.join(
                 "'%s' in parents" % (cloud_id,)
                 for cloud_id in folder_ids[start:start + MAX_FOLDERS_PER_QUERY]),)
-            for md in _list(query, drivecache.FILE_FIELDS):
+            for md in drive_list(query, drivecache.FILE_FIELDS):
                 items.append(md)
                 if md.get('mimeType') == drivecache.FOLDER_MIME_TYPE:
                     next_folder_ids.append(md['id'])
@@ -85,7 +85,7 @@ def _quoted(name):
     return name.replace('\\', '\\\\').replace("'", "\\'")
 
 
-def _list(query, fields='id, parents'):
+def drive_list(query, fields='id, parents'):
     """The files and folders (their fields) that Drive lists for query, page by page"""
     page_token = None
     while True:
@@ -98,10 +98,10 @@ def _list(query, fields='id, parents'):
             return
 
 
-def _is_under(relpath, folder):
+def is_under(relpath, folder):
     return relpath.startswith(folder + '/')
 
 
-def _listed(items):
+def listed_names(items):
     """Lines listing the first MAX_LISTED of items, indented, and how many more there are"""
     return text.listed(["  %s" % (item,) for item in items], MAX_LISTED)

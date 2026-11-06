@@ -6,7 +6,7 @@ from googleapiclient.http import MediaIoBaseDownload
 
 from dirdelta.drive import driveapi
 from dirdelta.drive.clouddirtree.constants import PROGRESS_CHUNK_SIZE
-from dirdelta.drive.clouddirtree.refresh import _listed
+from dirdelta.drive.clouddirtree.refresh import listed_names
 
 
 class Fetching(object):
@@ -22,7 +22,7 @@ class Fetching(object):
         if not google_files:
             return []
         return (["%s Google files (Docs, Sheets, ...), which are only in Drive, so they can't be "
-                 "copied to a dir: skipped" % (len(google_files),)] + _listed(google_files))
+                 "copied to a dir: skipped" % (len(google_files),)] + listed_names(google_files))
 
     def fetch_file(self, relpath, local_path, progress=None):
         """Download the file at relpath to local_path. Raises OSError if it can't. With progress,

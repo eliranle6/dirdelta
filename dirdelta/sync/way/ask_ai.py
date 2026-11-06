@@ -20,7 +20,7 @@ class AskAI(object):
 
         def can_rename(replica):
             def check(relpath, target):
-                return replica.cant_move(relpath) or ("there's a file there already" if replica_ops._exists(replica, target) else None)
+                return replica.cant_move(relpath) or ("there's a file there already" if replica_ops.exists(replica, target) else None)
             return check
         actions = []
         if replica_ops.can_copy(self._src, self._dst):

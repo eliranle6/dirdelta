@@ -2,10 +2,10 @@
 import os
 import struct
 
-from dirdelta.util.exif.formats import MAX_EXIF_SIZE, MAX_TIFF_HEADER, _CANON_UUID
+from dirdelta.util.exif.formats import MAX_EXIF_SIZE, MAX_TIFF_HEADER, CANON_UUID
 
 
-def _heif_exif(f):
+def heif_exif(f):
     """The TIFF data of a HEIF file's EXIF item, or None: the item whose type is 'Exif' (meta box's
     iinf), at where its extents are in the file (iloc), after its header (the offset of the TIFF
     header in it, often past an 'Exif\\0\\0')"""
@@ -33,7 +33,7 @@ def _heif_exif(f):
     return data[4 + header_offset:]
 
 
-def _cr3_tiffs(f):
+def cr3_tiffs(f):
     """A Canon CR3's TIFFs with dates, the EXIF IFD's (CMT2) first, then IFD0's (CMT1): boxes in
     the moov box's Canon uuid box, each a TIFF of one IFD"""
     end = os.fstat(f.fileno()).st_size
@@ -44,7 +44,7 @@ def _cr3_tiffs(f):
         if kind != b'uuid':
             continue
         f.seek(start)
-        if f.read(16) != _CANON_UUID:
+        if f.read(16) != CANON_UUID:
             continue
         found = {child: (child_start, child_end) for child, child_start, child_end in _boxes(f, start + 16, box_end)}
         tiffs = []

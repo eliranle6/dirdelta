@@ -3,7 +3,7 @@ import posixpath
 
 from dirdelta.claude import ai
 from dirdelta.inbox.constants import DESCRIBE_KEY, LABEL, OPEN_KEY
-from dirdelta.inbox.formatting import _is_at_or_under
+from dirdelta.inbox.formatting import is_at_or_under
 from dirdelta.screens import aiplan_screen
 from dirdelta.screens import archive_screen
 from dirdelta.screens import hashes_screen
@@ -102,9 +102,9 @@ class Keys(object):
             self._opener.press([selected], files)
         elif not picked and selected and selected not in set(files):
             # A dir: Claude says what it is and where it goes as a whole (Space picks its files, for each)
-            self.ask_dir_in_background(selected, [relpath for relpath in files if _is_at_or_under(relpath, selected)])
+            self.ask_dir_in_background(selected, [relpath for relpath in files if is_at_or_under(relpath, selected)])
         else:
-            self.ask_in_background(picked or [relpath for relpath in files if _is_at_or_under(relpath, selected)],
+            self.ask_in_background(picked or [relpath for relpath in files if is_at_or_under(relpath, selected)],
                                    anew=True)
 
     def open_in_background(self, relpaths, files):

@@ -6,7 +6,7 @@ import posixpath
 
 from dirdelta.drive.drivecache import database
 from dirdelta.drive.drivecache import names
-from dirdelta.drive.drivecache.database import _database_path, _generations, _opened, _root_of, exists
+from dirdelta.drive.drivecache.database import database_path, generations, opened, root_of, exists
 from dirdelta.drive.drivecache.metadata import (DriveCacheError, date_taken, hashes, is_google_file,
                                                 modified_time, path_name)
 from dirdelta.drive.drivecache.names import FOLDER_MIME_TYPE, MAX_PROBLEMS_SHOWN
@@ -30,7 +30,7 @@ def entries(inner_rootpath):
     path_name()); two entries can have the same one, since Drive allows same-named files. Raises
     DriveCacheError if there's no such folder, or if names under it can't be paths: same-named
     folders (or a folder and a file) in one folder, or a '/' in a name."""
-    id_child_map, id_md_map, root_cloud_id = _parsefile()
+    id_child_map, id_md_map, root_cloud_id = parsefile()
     inner_rootpath = '/' + '/'.join(component for component in inner_rootpath.split('/') if component)
     found = False
     problems = []
@@ -40,7 +40,7 @@ def entries(inner_rootpath):
         folder_cloud_id, folder_path = dfs_stack.pop()
         children = [id_md_map[child_id] for child_id in id_child_map.get(folder_cloud_id, [])]
 
-        if _is_at_or_under(folder_path, inner_rootpath):
+        if is_at_or_under(folder_path, inner_rootpath):
             if folder_path == inner_rootpath:
                 found = True
                 yield Entry('', folder_cloud_id, True, False, None, None, {}, None)
@@ -57,7 +57,7 @@ def entries(inner_rootpath):
             # A folder on the way to the inner root: go on only into the next one on the way
             on_the_way = [md for md in children
                           if md.get('mimeType') == FOLDER_MIME_TYPE and '/' not in md['name']
-                          and _is_at_or_under(inner_rootpath, posixpath.join(folder_path, md['name']))]
+                          and is_at_or_under(inner_rootpath, posixpath.join(folder_path, md['name']))]
             if len(on_the_way) > 1:
                 problems.append("%d folders named %s" % (len(on_the_way),
                                                         posixpath.join(folder_path, on_the_way[0]['name'])))
@@ -84,7 +84,7 @@ def count_under(folder_path):
 
 
 # One answer for all (see paths.is_at_or_under()): the root has all
-_is_at_or_under = paths.is_at_or_under
+is_at_or_under = paths.is_at_or_under
 
 
 def _name_problems(folder_path, children):
@@ -107,18 +107,18 @@ def root_id():
     if not exists():
         return None
     try:
-        with _opened(is_writing=False) as db:
-            return _root_of(db)
+        with opened(is_writing=False) as db:
+            return root_of(db)
     except (OSError, DriveCacheError):
         return None
 
 
-# The last parse of the cache, by its database's path: (what changes when it does, what _parsefile()
+# The last parse of the cache, by its database's path: (what changes when it does, what parsefile()
 # gave)
 _parsed = {}
 
 
-def _parsefile():
+def parsefile():
     """Read the cache into an id->children map, an id->metadata map and My Drive's root folder's id.
     What isn't in My Drive is left out (files shared with the user, which have no parents, or whose
     parent folder the user can't see). Read again only once it changed: what's given is shared, not to
@@ -127,12 +127,12 @@ def _parsefile():
         raise FileNotFoundError("There's no cloud files list cache")
     # Its old file imported first: that changes it
     if os.path.exists(names.LINES_FILE):
-        with _opened():
+        with opened():
             pass
-    with _opened(is_writing=False) as db:
-        path = _database_path()
+    with opened(is_writing=False) as db:
+        path = database_path()
         # data_version: what another process changed
-        stamp = (_generations[path], database._connection[2], db.execute('PRAGMA data_version').fetchone()[0])
+        stamp = (generations[path], database.kept_connection[2], db.execute('PRAGMA data_version').fetchone()[0])
         if path in _parsed and _parsed[path][0] == stamp:
             return _parsed[path][1]
         parsed = _parse(db)
@@ -147,7 +147,7 @@ def _parse(db):
         id_md_map[cloud_id] = json.loads(md)
         if parent is not None:
             id_child_map[parent].append(cloud_id)
-    root = _root_of(db)
+    root = root_of(db)
     if root is None:
         raise DriveCacheError("The cloud files list cache doesn't say which folder is My Drive: run "
                               "dirdelta again and refresh it.")

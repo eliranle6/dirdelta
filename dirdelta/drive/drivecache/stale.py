@@ -3,7 +3,7 @@ import contextlib
 import os
 
 from dirdelta.drive.drivecache import names
-from dirdelta.drive.drivecache.reading import _is_at_or_under
+from dirdelta.drive.drivecache.reading import is_at_or_under
 
 
 def _stale_marker_path():
@@ -59,7 +59,7 @@ def unmark_stale(folder_path):
 def mark_fresh(folder_path='/'):
     """Note that what's under folder_path (default: all of My Drive) was just read from Drive, so
     the cache has it as it is"""
-    _keep_stale_paths(lambda path: not _is_at_or_under(path, folder_path))
+    _keep_stale_paths(lambda path: not is_at_or_under(path, folder_path))
 
 
 def stale_paths():

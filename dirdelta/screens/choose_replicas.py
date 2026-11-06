@@ -8,7 +8,7 @@ from dirdelta.hashes import hashing
 from dirdelta.screens import hashes_screen
 from dirdelta.screens.pair_labels import (favorite_label, help_lines, known_paths, recent_label, slot_label,
                                           sort_label, styled_pair)
-from dirdelta.screens.replica_choices import _choose_replica, known_replicas
+from dirdelta.screens.replica_choices import choose_replica, known_replicas
 from dirdelta.trees import paths
 from dirdelta.ui import messages
 from dirdelta.ui import picker
@@ -53,7 +53,7 @@ def run(replicas):
         if option[0] in ('sort', 'pair'):
             return option[1]
         index = option[1]
-        path = _choose_replica('Replica %s' % ('AB'[index],))
+        path = choose_replica('Replica %s' % ('AB'[index],))
         if path is None:
             continue
         chosen[index] = path
@@ -73,10 +73,10 @@ def _pair_option(label, pair, known):
 def _choose_sort(replicas):
     """Let the user choose an inbox and the sorted tree to sort it into: one of the replicas they
     know (replicas', a Replicas), or any dir. Returns a Sort, or None."""
-    inbox = _choose_replica('the inbox (the dir of files to sort)')
+    inbox = choose_replica('the inbox (the dir of files to sort)')
     if inbox is None:
         return None
-    root = _choose_replica('the sorted tree (where its files go)',
+    root = choose_replica('the sorted tree (where its files go)',
                            [path for path in known_replicas(replicas) if path != inbox])
     if root is None:
         return None

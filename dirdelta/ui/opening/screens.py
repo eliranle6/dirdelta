@@ -1,7 +1,7 @@
 """Opening from a menu (confirmed on a screen of its own), and a picker's tags with opening's"""
 from dirdelta.ui import picker
 from dirdelta.ui.opening import names
-from dirdelta.ui.opening.names import CONFIRM_NO, CONFIRM_YES, _files, tag_style
+from dirdelta.ui.opening.names import CONFIRM_NO, CONFIRM_YES, files_text, tag_style
 from dirdelta.util import text
 
 
@@ -12,7 +12,7 @@ def confirm(opener, relpaths, files, label=None):
     if question is None:
         return True
     found = opener.to_download(relpaths, files)
-    lines = ["Open %s? First, %s:" % (_files(len(relpaths)), question.replace(", and open them", ""))]
+    lines = ["Open %s? First, %s:" % (files_text(len(relpaths)), question.replace(", and open them", ""))]
     lines += ["  %s (%s)" % (relpath, text.format_size(size or 0)) for relpath, size in found[:names.MAX_OPENED]]
     answer = picker.pick_option([CONFIRM_NO, CONFIRM_YES], header='\n'.join(lines), label=label, title="Sure?")
     return answer == CONFIRM_YES

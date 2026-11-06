@@ -7,8 +7,8 @@ from dirdelta.known.mounts import current
 from dirdelta.known.mounts import names
 from dirdelta.known.mounts.current import unmounted
 from dirdelta.known.mounts.names import BACK, MOUNT, TRY_AGAIN, UNCLEAN_NTFS_ERRORS
-from dirdelta.known.mounts.read_only import _read_only_lines
-from dirdelta.known.mounts.running import _described, _run
+from dirdelta.known.mounts.read_only import read_only_lines
+from dirdelta.known.mounts.running import described, run_command
 from dirdelta.ui import messages
 from dirdelta.ui import picker
 from dirdelta.util import dryrun
@@ -24,12 +24,12 @@ def ensure_mounted(path):
             return True
         if not is_connected(mount):
             header = "Connect its disk? (for %s)\n\n%s isn't mounted, and its disk (%s) isn't connected." % (
-                mount.target, mount.target, _described(mount))
+                mount.target, mount.target, described(mount))
             if picker.pick_option([TRY_AGAIN, BACK], header=header, title='Mount') != TRY_AGAIN:
                 return False
             continue
         command = mount_command(mount)
-        header = "Mount it? (%s)\n\nIt isn't mounted (last time: %s)." % (mount.target, _described(mount))
+        header = "Mount it? (%s)\n\nIt isn't mounted (last time: %s)." % (mount.target, described(mount))
         mount_option = "%s (runs: %s)" % (MOUNT, shlex.join(command))
         if picker.pick_option([mount_option, BACK], header=header, title='Mount') != mount_option:
             return False
@@ -81,11 +81,11 @@ def _mount(mount, command):
     it's mounted; if it isn't, the errors were shown (with what to do, if NTFS refused to mount
     read-write because Windows hibernated)."""
     messages.print_line("Running: %s" % (shlex.join(command),))
-    error = _run(command)
+    error = run_command(command)
     if error is None:
         messages.print_line("Mounted %s." % (mount.target,))
         if _came_up_read_only(mount):
-            messages.show("Mounted read-only: %s" % (mount.target,), _read_only_lines(mount), dryrun.label(), 'yellow')
+            messages.show("Mounted read-only: %s" % (mount.target,), read_only_lines(mount), dryrun.label(), 'yellow')
         return True
     lines = ["%s failed:" % (shlex.join(command),)] + error.splitlines()
     if any(unclean in error.lower() for unclean in UNCLEAN_NTFS_ERRORS):

@@ -1,6 +1,6 @@
 """Moving a whole dir as one, and what can't be changed"""
 from dirdelta.trees import entries
-from dirdelta.trees.dirtree.common import _is_at_or_under
+from dirdelta.trees.dirtree.common import is_at_or_under
 
 
 class DirMoves(object):
@@ -23,8 +23,8 @@ class DirMoves(object):
                 depth += 1
         found = []
         for dirpath, new_dirpath in sorted(pairs, key=lambda pair: (pair[0].count('/'), pair)):
-            if (any(_is_at_or_under(dirpath, other) for other, _, _ in found) or self._is_kept(dirpath) or
-                    (to is self and (_is_at_or_under(new_dirpath, dirpath) or _is_at_or_under(dirpath, new_dirpath)))):
+            if (any(is_at_or_under(dirpath, other) for other, _, _ in found) or self._is_kept(dirpath) or
+                    (to is self and (is_at_or_under(new_dirpath, dirpath) or is_at_or_under(dirpath, new_dirpath)))):
                 continue
             files = self.files_under(dirpath)
             if (files and not to.exists(new_dirpath) and

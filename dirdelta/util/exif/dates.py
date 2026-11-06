@@ -3,9 +3,9 @@ import struct
 
 from dirdelta.util.exif.formats import (CR3_EXTENSIONS, HEIF_EXTENSIONS, JPEG_EXTENSIONS, MAX_TIFF_HEADER,
                                         RAF_EXTENSIONS, TIFF_EXTENSIONS)
-from dirdelta.util.exif.isobmff import _cr3_tiffs, _heif_exif
-from dirdelta.util.exif.jpeg import _exif_segment, _raf_exif
-from dirdelta.util.exif.tiff import _tiff_date
+from dirdelta.util.exif.isobmff import cr3_tiffs, heif_exif
+from dirdelta.util.exif.jpeg import exif_segment, raf_exif
+from dirdelta.util.exif.tiff import tiff_date
 
 
 def date_taken(path):
@@ -18,13 +18,13 @@ def date_taken(path):
     try:
         with open(path, 'rb') as f:
             if lower.endswith(JPEG_EXTENSIONS):
-                tiffs = [_exif_segment(f)]
+                tiffs = [exif_segment(f)]
             elif lower.endswith(HEIF_EXTENSIONS):
-                tiffs = [_heif_exif(f)]
+                tiffs = [heif_exif(f)]
             elif lower.endswith(CR3_EXTENSIONS):
-                tiffs = _cr3_tiffs(f)
+                tiffs = cr3_tiffs(f)
             elif lower.endswith(RAF_EXTENSIONS):
-                tiffs = [_raf_exif(f)]
+                tiffs = [raf_exif(f)]
             else:
                 tiffs = [f.read(MAX_TIFF_HEADER)]
     except (OSError, struct.error, IndexError, ValueError):
@@ -33,7 +33,7 @@ def date_taken(path):
         if tiff is None:
             continue
         try:
-            date = _tiff_date(tiff)
+            date = tiff_date(tiff)
         except (struct.error, IndexError, KeyError, ValueError):
             date = None
         if date:

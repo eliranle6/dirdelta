@@ -41,7 +41,7 @@ class LocalRemoving(object):
     def _remove_file(self, file_entry):
         try:
             if self._is_trashing:
-                fs._trash(file_entry.full_filesystem_path())
+                fs.trash(file_entry.full_filesystem_path())
             else:
                 os.unlink(file_entry.full_filesystem_path())
         except OSError as error:

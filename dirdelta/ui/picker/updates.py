@@ -27,7 +27,7 @@ def set_ambient_status(parts):
     _ambient_status = parts
 
 
-def _with_ambient_status(shown_as):
+def with_ambient_status(shown_as):
     """shown_as (or None), with the ambient status as its '', unless it has one. Only if there's such
     a status now, or shown_as is sent anyway: a picker with neither needs no updates."""
     if _ambient_status is None or (shown_as is None and not _ambient_status()):
@@ -45,15 +45,15 @@ def _with_ambient_status(shown_as):
     return shown
 
 
-def _logging_errors(job):
+def logging_errors(job):
     """Run job (a picker's thread's), writing what it raises to ERRORS_LOG, not on the screen"""
     try:
         job()
     except Exception:
-        _log_error()
+        log_error()
 
 
-def _log_error():
+def log_error():
     """Write the exception being handled, with its traceback, to ERRORS_LOG"""
     try:
         os.makedirs(os.path.dirname(ERRORS_LOG), exist_ok=True)
@@ -63,11 +63,9 @@ def _log_error():
         pass
 
 
-# For other threads' errors too (e.g. drivemeta.Uploader's)
-log_error = _log_error
 
 
-def _send_updates(fd, shown_as, is_done):
+def send_updates(fd, shown_as, is_done):
     """Send treepicker what shown_as() says to show the items as, as it changes, until is_done (or
     treepicker is gone)"""
     sent = {}
@@ -79,13 +77,13 @@ def _send_updates(fd, shown_as, is_done):
             except Exception:
                 # Said on the bottom line, once written down (a bug: the rest stays as it was)
                 if not is_logged:
-                    _log_error()
+                    log_error()
                     is_logged = True
                 now = {'': segments([("Something went wrong: see %s" % (ERRORS_LOG,), 'red')])}
             changed = {item: shown for item, shown in now.items() if sent.get(item) != shown}
             if changed:
                 try:
-                    updates.write(_null_terminated(_update(item, shown)
+                    updates.write(null_terminated(_update(item, shown)
                                                    for item, shown in changed.items()))
                     updates.flush()
                 except BrokenPipeError:
@@ -107,6 +105,6 @@ def _update(item, shown):
     return '%s\t%s' % (item, shown)
 
 
-def _null_terminated(items):
+def null_terminated(items):
     # surrogateescape: file names needn't be valid UTF-8, and come back as they went
     return b''.join(item.encode('utf-8', 'surrogateescape') + b'\0' for item in items)

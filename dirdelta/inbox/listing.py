@@ -3,7 +3,7 @@ import posixpath
 
 from dirdelta.claude import ai
 from dirdelta.drive import clouddirtree
-from dirdelta.inbox.formatting import _is_at_or_under
+from dirdelta.inbox.formatting import is_at_or_under
 from dirdelta.trees import localdiskdirtree
 from dirdelta.trees import paths
 
@@ -25,7 +25,7 @@ class Listing(object):
 
     def _is_in_inbox(self, relpath):
         """Whether the sorted tree's relpath is at or under the inbox, if the inbox is in it"""
-        return self._inbox_in_root is not None and _is_at_or_under(relpath, self._inbox_in_root)
+        return self._inbox_in_root is not None and is_at_or_under(relpath, self._inbox_in_root)
 
     def _size(self, relpath):
         return self._inbox_tree.file_size(relpath)
@@ -86,11 +86,11 @@ class Listing(object):
         inbox's root), else None"""
         if not selected or selected in relpaths:
             return None
-        under = [relpath for relpath in self._listing if _is_at_or_under(relpath, selected)]
+        under = [relpath for relpath in self._listing if is_at_or_under(relpath, selected)]
         return selected if under and set(under) == set(relpaths) else None
 
 
-def _tree(path):
+def tree_of(path):
     """The tree of a replica path on its own: a Drive folder's (from the cache), or a local dir's
     (not scanned)"""
     if paths.is_cloud_path(path):
@@ -99,4 +99,4 @@ def _tree(path):
 
 
 # One way for all (see paths.normalized())
-_normalized = paths.normalized
+normalized = paths.normalized

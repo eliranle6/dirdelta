@@ -2,7 +2,7 @@
 import subprocess
 import time
 
-from dirdelta.ui.opening.names import COLOR, SHOWN_FOR, _FAILED, _OPENED, _WAITING, _files
+from dirdelta.ui.opening.names import COLOR, SHOWN_FOR, FAILED, OPENED, WAITING, files_text
 
 
 class Downloading(object):
@@ -19,7 +19,7 @@ class Downloading(object):
             for relpath in relpaths:
                 self._queue.append((relpath, relpath in files))
                 if relpath in to_download:
-                    self._states[relpath] = [_WAITING, 0]
+                    self._states[relpath] = [WAITING, 0]
                     self._tagged.add(relpath)
                     self._total += to_download[relpath] or 0
                     self._nr_total += 1
@@ -42,10 +42,10 @@ class Downloading(object):
                 # its screen
                 subprocess.Popen(['xdg-open', path], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
                                  stderr=subprocess.DEVNULL, start_new_session=True)
-                self._end(relpath, _OPENED)
+                self._end(relpath, OPENED)
                 self._opened.append(name)
             except OSError as error:
-                self._end(relpath, _FAILED)
+                self._end(relpath, FAILED)
                 self._failed.append((name, error))
 
     def _end(self, relpath, state):
@@ -59,10 +59,10 @@ class Downloading(object):
         """What the status bar says once they're all done"""
         opened, failed = self._opened, self._failed
         if not failed:
-            return "Opened %s" % (opened[0] if len(opened) == 1 else _files(len(opened)),)
+            return "Opened %s" % (opened[0] if len(opened) == 1 else files_text(len(opened)),)
         name, error = failed[-1]
         text = ("Couldn't open %s: %s" % (name, error) if len(failed) == 1 else
-                "Couldn't open %s (%s: %s)" % (_files(len(failed)), name, error))
+                "Couldn't open %s (%s: %s)" % (files_text(len(failed)), name, error))
         if opened:
-            text += "; opened %s" % (opened[0] if len(opened) == 1 else _files(len(opened)),)
+            text += "; opened %s" % (opened[0] if len(opened) == 1 else files_text(len(opened)),)
         return text

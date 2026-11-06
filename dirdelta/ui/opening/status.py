@@ -4,7 +4,7 @@ import posixpath
 import time
 
 from dirdelta.ui.opening.names import (COLOR, DOWNLOADING_TAG, FAILED_TAG, OPENED_TAG, PROGRESS_COLOR,
-                                       SHOWN_FOR, WAITING_TAG, _DOWNLOADING, _OPENED, _WAITING)
+                                       SHOWN_FOR, WAITING_TAG, DOWNLOADING, OPENED, WAITING)
 from dirdelta.util.text import format_size as _size
 
 
@@ -23,7 +23,7 @@ class Status(object):
         or Ctrl-X's question, for a while"""
         with self._lock:
             if self._is_running and self._nr_done < self._nr_total:
-                downloading = [relpath for relpath, (state, _) in self._states.items() if state == _DOWNLOADING]
+                downloading = [relpath for relpath, (state, _) in self._states.items() if state == DOWNLOADING]
                 done = self._done + sum(self._states[relpath][1] for relpath in downloading)
                 percent = done * 100 // self._total if self._total else 0
                 if self._nr_total == 1:
@@ -50,10 +50,10 @@ class Status(object):
             tags = {relpath: '' for relpath in self._tagged}
             if is_shown:
                 for relpath, (state, done) in self._states.items():
-                    tags[relpath] = (WAITING_TAG if state == _WAITING else
+                    tags[relpath] = (WAITING_TAG if state == WAITING else
                                      DOWNLOADING_TAG % (done * 100 // (self._size(relpath) or 1),)
-                                     if state == _DOWNLOADING else
-                                     OPENED_TAG if state == _OPENED else FAILED_TAG)
+                                     if state == DOWNLOADING else
+                                     OPENED_TAG if state == OPENED else FAILED_TAG)
             return tags
 
     def _say(self, text):

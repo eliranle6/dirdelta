@@ -15,7 +15,7 @@ from dirdelta.inbox.copies import Copies
 from dirdelta.inbox.actions.destinations import Destinations
 from dirdelta.inbox.actions.dirs import Dirs
 from dirdelta.inbox.keys import Keys
-from dirdelta.inbox.listing import Listing, _normalized, _tree
+from dirdelta.inbox.listing import Listing, normalized, tree_of
 from dirdelta.inbox.actions.menu import Menu
 from dirdelta.inbox.previews import Previews
 from dirdelta.inbox.screen import Screen
@@ -87,8 +87,8 @@ class InboxSort(Listing, Screen, Keys, Side, Previews, Copies, Menu, Destination
     def __init__(self, inbox_path, root_path, known_replicas=None):
         self.inbox_is_cloud = paths.is_cloud_path(inbox_path)
         self.root_is_cloud = paths.is_cloud_path(root_path)
-        self.inbox_path = _normalized(inbox_path)
-        self.root_path = _normalized(root_path)
+        self.inbox_path = normalized(inbox_path)
+        self.root_path = normalized(root_path)
         # Where the sorted tree's recent dirs are kept (a replicas.Replicas, saved), if anywhere
         self._known_replicas = known_replicas
         # What's changed live in the sorted tree, for its log's entry (see replicalog.py). An inbox
@@ -143,7 +143,7 @@ class InboxSort(Listing, Screen, Keys, Side, Previews, Copies, Menu, Destination
 
     def _make_trees(self):
         """The inbox's and the sorted tree's trees, neither removed when it's left empty, nor moved whole"""
-        self._inbox_tree, self._root_tree = _tree(self.inbox_path), _tree(self.root_path)
+        self._inbox_tree, self._root_tree = tree_of(self.inbox_path), tree_of(self.root_path)
         self._inbox_tree.keep_dirs([''])
         self._root_tree.keep_dirs(['' if self._inbox_in_root is None else self._inbox_in_root])
 

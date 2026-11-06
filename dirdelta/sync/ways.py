@@ -7,17 +7,17 @@ from dirdelta.sync import replica_ops
 from dirdelta.util import text
 
 
-_files = text.files
+files_text = text.files
 
 # The sync menu's option of the files both replicas have that differ
 DIFFER = "Files that differ"
 
 
-def _differ(count):
+def differ_word(count):
     return "differs" if count == 1 else "differ"
 
 
-def _find_all(ways):
+def find_all(ways):
     """Start finding (again) what each way lacks, and the files both have that differ: once, for
     both ways (the second's, flipped)"""
     for way in ways:
@@ -37,7 +37,7 @@ def _find_all(ways):
     threading.Thread(target=find, daemon=True).start()
 
 
-class _Way(object):
+class Way(object):
     """One way of the sync: src's files that dst lacks (a future of Missing), found in the
     background, the replicas' indexes (elsewhere.Index, by replica), and which of src's files
     have the same contents as their matches"""
@@ -49,7 +49,7 @@ class _Way(object):
         # elsewhere.check_contents()), kept so each is compared once
         self.checked = {}
         self.missing = None
-        # A future of the files both have that differ, src's way (differing.find(), see _find_all())
+        # A future of the files both have that differ, src's way (differing.find(), see find_all())
         self.differs = None
 
     def find_missing(self):

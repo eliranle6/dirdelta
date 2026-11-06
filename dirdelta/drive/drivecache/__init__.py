@@ -1,4 +1,4 @@
-"""The cache of Google Drive's file list, an SQLite file (see _database_path(), next to
+"""The cache of Google Drive's file list, an SQLite file (see database_path(), next to
 LINES_FILE): a row per file or folder, by its id, with its parent and its metadata as the Drive API
 gives it (a JSON object: id, name, parents, mimeType...), and My Drive's root folder's id. entries() reads
 it into the paths of what's under a folder.

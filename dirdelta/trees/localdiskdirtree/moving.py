@@ -3,7 +3,7 @@ import os
 
 from dirdelta.hashes import hashcache
 from dirdelta.trees import entries
-from dirdelta.trees.localdiskdirtree.fs import _rename
+from dirdelta.trees.localdiskdirtree.fs import rename
 from dirdelta.ui import messages
 
 
@@ -50,7 +50,7 @@ class LocalMoving(object):
             return False
         try:
             os.makedirs(os.path.dirname(new_path), exist_ok=True)
-            _rename(path, new_path)
+            rename(path, new_path)
         except OSError as error:
             messages.print_line("Move failed: %s" % (error,), "red")
             return False
@@ -73,7 +73,7 @@ class LocalMoving(object):
             return False
         try:
             os.makedirs(os.path.dirname(new_path), exist_ok=True)
-            _rename(path, new_path)
+            rename(path, new_path)
         except OSError as error:
             messages.print_line("Move failed: %s" % (error,), "red")
             return False

@@ -4,7 +4,7 @@ from googleapiclient.errors import HttpError
 from dirdelta.drive import driveapi
 from dirdelta.drive import drivecache
 from dirdelta.drive.clouddirtree.constants import MAX_LISTED, NUM_RETRIES
-from dirdelta.drive.clouddirtree.refresh import _is_under, _listed
+from dirdelta.drive.clouddirtree.refresh import is_under, listed_names
 from dirdelta.ui import messages
 from dirdelta.util import dryrun
 
@@ -18,12 +18,12 @@ class Removals(object):
         if folders:
             lines.append("Trashing %d folders whole, all of whose files are picked (checked with "
                          "Drive first, for files the cache doesn't have):" % (len(folders),))
-            lines += _listed(folder + '/' for folder in folders)
+            lines += listed_names(folder + '/' for folder in folders)
         google_files = [relpath for relpath in relpaths if self._info(relpath).is_google]
         if google_files:
             lines.append("Including %d Google files (Docs, Sheets, ...), which are only in Drive:" %
                          (len(google_files),))
-            lines += _listed(google_files)
+            lines += listed_names(google_files)
         return lines
 
     def _remove_files(self, file_entries, starting, removed):
@@ -47,7 +47,7 @@ class Removals(object):
                 folders = self._whole_folders(picked, holding_more | kept)
         in_trashed_folders = set()
         for folder in folders:
-            folder_files = [relpath for relpath in picked if _is_under(relpath, folder)]
+            folder_files = [relpath for relpath in picked if is_under(relpath, folder)]
             starting("folder %s/ and its %d files" % (folder, len(folder_files)), len(folder_files))
             if dryrun.DRYRUN or self._trash_folder(folder):
                 removed(len(folder_files))

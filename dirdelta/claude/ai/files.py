@@ -1,21 +1,21 @@
 """Asking Claude about files in batches: their descriptions, and where they go"""
-from dirdelta.claude.ai.cache import _cached_recommendation, _entry_of, _keys, _load_cache, _save_cache
-from dirdelta.claude.ai.config import AIError, BATCH_SIZE, _cache_lock
-from dirdelta.claude.ai.prompts import _ask_for_descriptions, _ask_for_recommendations
+from dirdelta.claude.ai.cache import cached_recommendation, entry_of, cache_keys, load_cache, save_cache
+from dirdelta.claude.ai.config import AIError, BATCH_SIZE, cache_lock
+from dirdelta.claude.ai.prompts import ask_for_descriptions, ask_for_recommendations
 
 
 def describe(files, cache_key, progress=None, anew=()):
     """{relpath: description} of files (File), a sentence of at most MAX_DESCRIPTION_WORDS words
     each, from the cache or Claude (which reads them), in batches of BATCH_SIZE,
     calling progress(done, count) after each. cache_key(file) is the file's key in the cache, or its
-    keys (see _keys()); the files at anew (relpaths) are asked about again, whatever it has. Raises AIError if Claude can't
+    keys (see cache_keys()); the files at anew (relpaths) are asked about again, whatever it has. Raises AIError if Claude can't
     be asked."""
     def is_cached(entry):
         return entry.get('description') and {'description': entry['description']}
 
     def keep(entry, answer):
         entry['description'] = answer['description']
-    found = _ask(files, cache_key, is_cached, keep, _ask_for_descriptions, progress, anew)
+    found = _ask(files, cache_key, is_cached, keep, ask_for_descriptions, progress, anew)
     return {relpath: answer['description'] for relpath, answer in found.items()}
 
 
@@ -31,7 +31,7 @@ def recommend(files, cache_key, dirs, root_name, descriptions, copies=None, prog
     e.g. describe()'s), so it reads nothing. The files at anew are asked about again, as describe()'s."""
     copies = copies or {}
     def is_cached(entry):
-        recommendation = _cached_recommendation(entry, root_name)
+        recommendation = cached_recommendation(entry, root_name)
         # One made before the file was found to be a copy isn't of what's known now
         if recommendation and recommendation.get('copies', []) != sorted(copies.get(entry.get('_relpath'), [])):
             return None
@@ -40,19 +40,19 @@ def recommend(files, cache_key, dirs, root_name, descriptions, copies=None, prog
     def keep(entry, answer):
         entry.setdefault('recommendations', {})[root_name] = answer
     return _ask(files, cache_key, is_cached, keep,
-                lambda batch: _ask_for_recommendations(batch, dirs, root_name, descriptions, copies), progress, anew)
+                lambda batch: ask_for_recommendations(batch, dirs, root_name, descriptions, copies), progress, anew)
 
 
 def _ask(files, cache_key, is_cached, keep, ask, progress, anew=()):
     """{relpath: answer} of files: is_cached(entry) of each one's cache entry (but the ones at anew,
     relpaths), or else ask(batch) of the others (BATCH_SIZE at a time) for {relpath: answer}, each
     kept by keep(entry, answer)"""
-    cache = _load_cache()
+    cache = load_cache()
     found = {}
     needed = []
     for file in files:
         answer = (None if file.relpath in anew else
-                  is_cached(dict(_entry_of(cache, _keys(cache_key, file)), _relpath=file.relpath)))
+                  is_cached(dict(entry_of(cache, cache_keys(cache_key, file)), _relpath=file.relpath)))
         if answer:
             found[file.relpath] = answer
         else:
@@ -63,17 +63,17 @@ def _ask(files, cache_key, is_cached, keep, ask, progress, anew=()):
         batch = needed[start:start + BATCH_SIZE]
         answers = _ask_each_if_failed(ask, batch)
         # Kept at once, so what was asked isn't asked again if it's stopped
-        with _cache_lock:
-            cache = _load_cache()
+        with cache_lock:
+            cache = load_cache()
             for file in batch:
                 answer = answers.get(file.relpath)
                 if answer is not None:
                     found[file.relpath] = answer
-                    keys = _keys(cache_key, file)
+                    keys = cache_keys(cache_key, file)
                     # Under its first key, with what's known of it by the others
-                    entry = cache.setdefault(keys[0], dict(_entry_of(cache, keys)))
+                    entry = cache.setdefault(keys[0], dict(entry_of(cache, keys)))
                     keep(entry, answer)
-            _save_cache(cache)
+            save_cache(cache)
     if progress is not None and needed:
         progress(len(needed), len(needed))
     return found

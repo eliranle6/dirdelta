@@ -1,5 +1,5 @@
 """Who a tree tells of its changes, and the dirs it keeps"""
-from dirdelta.trees.dirtree.common import _is_at_or_under
+from dirdelta.trees.dirtree.common import is_at_or_under
 
 
 class Listeners(object):
@@ -40,4 +40,4 @@ class Listeners(object):
 
     def _is_kept(self, dirpath):
         """Whether the dir at dirpath is kept, or has a kept dir in it"""
-        return any(_is_at_or_under(kept, dirpath) for kept in self._kept_dirs)
+        return any(is_at_or_under(kept, dirpath) for kept in self._kept_dirs)

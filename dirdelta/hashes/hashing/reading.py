@@ -9,11 +9,11 @@ from dirdelta.hashes.hashing.states import ALGORITHM, READ_SIZE
 from dirdelta.trees import localscan
 
 
-class _Paused(Exception):
+class Paused(Exception):
     pass
 
 
-def _hash_file(path, is_paused):
+def hash_file(path, is_paused):
     """(The file's hash, its [size, mtime_ns] when it was read), or (None, None) if it can't be read
     or changed while it was. Raises _Paused once is_paused() says so."""
     digest = hashlib.new(ALGORITHM)
@@ -22,7 +22,7 @@ def _hash_file(path, is_paused):
             before = os.fstat(f.fileno())
             for chunk in iter(lambda: f.read(READ_SIZE), b''):
                 if is_paused():
-                    raise _Paused()
+                    raise Paused()
                 digest.update(chunk)
             _drop_from_page_cache(f.fileno())
         after = os.stat(path)
@@ -49,7 +49,7 @@ _IOPRIO_CLASS_IDLE = 3
 _IOPRIO_CLASS_SHIFT = 13
 
 
-def _lower_priority():
+def lower_priority():
     """The calling thread's CPU priority the lowest (nice 19), and its I/O priority idle: hashing
     gives way to anything else (on Linux; elsewhere it's as it is)"""
     try:
@@ -67,7 +67,7 @@ def _lower_priority():
         pass
 
 
-def _list_files(root, max_depth=None):
+def list_files(root, max_depth=None):
     """{relpath: (size, mtime_ns)} of the files under root (down to max_depth levels). Raises OSError
     if they can't be listed."""
     return localscan.scan(root, max_depth).files()

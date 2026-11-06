@@ -3,14 +3,14 @@ import os
 import time
 
 from dirdelta.hashes import hashing
-from dirdelta.matching.elsewhere.candidates import _is_same_time
+from dirdelta.matching.elsewhere.candidates import is_same_time
 from dirdelta.matching.elsewhere.constants import MAX_MATCHES, SURELY_MOVED, SURELY_RENAMED
 from dirdelta.matching.elsewhere.sure import sure_match
 from dirdelta.ui import picker
 from dirdelta.util import text
 
 
-def _preview(relpath, src, dst_name, matcher):
+def preview_of(relpath, src, dst_name, matcher):
     """The lines about src's file at relpath: its size, date taken and modification time, and its
     candidates, the likeliest first, of its name, then of other names, each with its dir, size,
     date taken, modification time, siblings found and contents, and which is surely the file, if
@@ -106,12 +106,12 @@ def _time_note(match_modified, modified):
     """Whether a match's modification time is the same as the file's, or newer, or older"""
     if modified is None:
         return ""
-    if _is_same_time(match_modified, modified):
+    if is_same_time(match_modified, modified):
         return ", the same"
     return ", newer" if match_modified > modified else ", older"
 
 
-_files = text.files
+files_text = text.files
 
 
 def _size_note(match_size, size):

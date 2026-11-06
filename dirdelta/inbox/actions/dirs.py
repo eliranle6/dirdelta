@@ -3,7 +3,7 @@ import posixpath
 
 from dirdelta.drive import clouddirtree
 from dirdelta.inbox.constants import LABEL
-from dirdelta.inbox.formatting import _is_at_or_under, _join, _relpath
+from dirdelta.inbox.formatting import is_at_or_under, join_path, relpath_in
 from dirdelta.trees import paths
 from dirdelta.ui import messages
 from dirdelta.ui import picker
@@ -55,7 +55,7 @@ class Dirs(object):
             else:
                 picked = picker.pick_under_dir(base, dirs_only=True, lazy=True, header=header,
                                                keys=keys, key_hints=key_hints, twice_keys=renaming.KEY, excluded=excluded)
-                key, relpath = (picked[0], _relpath(picked[1], base)) if picked else ('', None)
+                key, relpath = (picked[0], relpath_in(picked[1], base)) if picked else ('', None)
             if relpath is None or key != renaming.PRESSED:
                 break
             if in_inbox:
@@ -72,8 +72,8 @@ class Dirs(object):
     def _rename_sorted_dir(self, relpath):
         """cc in the dir picker: rename the sorted tree's dir at relpath (see renaming.py), but the
         inbox's, or one it's in"""
-        if self._inbox_in_root is not None and _is_at_or_under(self._inbox_in_root, relpath):
-            messages.show("Can't rename it", ["The inbox is in %s/: rename another dir." % (_join(self.root_path, relpath),)],
+        if self._inbox_in_root is not None and is_at_or_under(self._inbox_in_root, relpath):
+            messages.show("Can't rename it", ["The inbox is in %s/: rename another dir." % (join_path(self.root_path, relpath),)],
                           dryrun.label())
             return
         with self._drive_lock:
@@ -90,8 +90,8 @@ class Dirs(object):
         name typed (a/b: one in a new one), to move or copy (verb) the files (count) to; it's made
         when they go there. None if no name, or one that can't be, was typed."""
         base = base or self.root_path
-        name = messages.ask("A new dir in %s/" % (_join(base, parent),),
-                            ["The new dir to %s the %s to, in %s/" % (verb, count, _join(base, parent)),
+        name = messages.ask("A new dir in %s/" % (join_path(base, parent),),
+                            ["The new dir to %s the %s to, in %s/" % (verb, count, join_path(base, parent)),
                              "(a/b makes b in a new a). An empty name, or Ctrl-C, goes back."],
                             "> ", label=dryrun.label())
         if name is None:
@@ -100,7 +100,7 @@ class Dirs(object):
         if any(part in ('', '.', '..') for part in parts):
             messages.show("Not a dir's name", ["%r can't be a new dir's name." % (name,)], dryrun.label(), 'red')
             return None
-        return _join(parent, *parts)
+        return join_path(parent, *parts)
 
     def _not_dirdeltas(self, relpath):
         """relpath (a dir in the inbox or the sorted tree), unless it's where dirdelta keeps its own

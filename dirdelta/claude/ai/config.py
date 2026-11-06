@@ -11,7 +11,7 @@ PLAN_MODEL = 'claude-opus-5-5'
 CACHE_FILE = os.path.expanduser('~/.cache/dirdelta/ai.json')
 # Around reading the cache, changing it and writing it, from the worker's thread and the main one, so
 # neither overwrites what the other added
-_cache_lock = threading.Lock()
+cache_lock = threading.Lock()
 # How many files one request is about
 BATCH_SIZE = 10
 # Bigger files aren't read (Claude says what it can from their names)
@@ -52,7 +52,7 @@ class AIError(Exception):
 File = collections.namedtuple('File', ['relpath', 'local_path', 'size'])
 
 
-def _schema(fields, enums=None):
+def answer_schema(fields, enums=None):
     """The answers' schema: a list of {number, the fields (strings; those in enums, {field: values},
     one of their values)}"""
     enums = enums or {}

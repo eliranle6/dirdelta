@@ -2,8 +2,8 @@
 import os
 
 from dirdelta.trees import entries
-from dirdelta.ui.picker.files import _key_and_selected, _keys_args
-from dirdelta.ui.picker.running import _header_args, _help_args, _run
+from dirdelta.ui.picker.files import key_and_selected, keys_args
+from dirdelta.ui.picker.running import header_args, help_args, run_treepicker
 
 
 def pick_from_tree(tree, header='', dirs_only=False, root_name=None, keys='', key_hints=(), twice_keys='', excluded=()):
@@ -13,14 +13,14 @@ def pick_from_tree(tree, header='', dirs_only=False, root_name=None, keys='', ke
     Enter; [the picked or selected node's data]), or None. twice_keys: keys that do so when pressed
     twice in a row (e.g. 'c' for vim's cc), returned doubled ('cc'). excluded: relpaths left out, with
     all in them."""
-    args = (['--typed', '--root', root_name or tree.displayname()] + _header_args(header) +
-            _keys_args(keys, twice_keys) + _help_args(key_hints, ()))
+    args = (['--typed', '--root', root_name or tree.displayname()] + header_args(header) +
+            keys_args(keys, twice_keys) + help_args(key_hints, ()))
     if dirs_only:
         args.append('--dirs-only')
-    picked_paths = _run(args + ['-'], list(_tree_paths(tree, excluded)))
+    picked_paths = run_treepicker(args + ['-'], list(_tree_paths(tree, excluded)))
     if picked_paths is None:
         return None
-    key, picked_paths = _key_and_selected(keys, picked_paths, twice_keys)
+    key, picked_paths = key_and_selected(keys, picked_paths, twice_keys)
     # The root is printed as '.'; its id is ''
     picked = [tree.get_node('' if path == '.' else path).data for path in picked_paths]
     return (key, picked) if keys or twice_keys else picked
@@ -40,11 +40,11 @@ def pick_under_dir(dirpath, max_depth=None, dirs_only=False, lazy=False, header=
         args.append('--dirs-only')
     if lazy:
         args.append('--lazy')
-    picked = _run(args + _header_args(header) + _keys_args(keys, twice_keys) + _help_args(key_hints, ()) +
+    picked = run_treepicker(args + header_args(header) + keys_args(keys, twice_keys) + help_args(key_hints, ()) +
                   [dirpath], None)
     if picked is None:
         return None
-    key, picked = _key_and_selected(keys, picked, twice_keys)
+    key, picked = key_and_selected(keys, picked, twice_keys)
     path = dirpath if picked[0] == '.' else os.path.join(dirpath, picked[0])
     return (key, path) if keys or twice_keys else path
 

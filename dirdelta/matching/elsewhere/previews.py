@@ -2,9 +2,9 @@
 import collections
 import time
 
-from dirdelta.matching.elsewhere.candidates import _Matcher
+from dirdelta.matching.elsewhere.candidates import Matcher
 from dirdelta.matching.elsewhere.constants import SEND_INTERVAL
-from dirdelta.matching.elsewhere.preview_lines import _preview
+from dirdelta.matching.elsewhere.preview_lines import preview_of
 
 
 # How often find_previews() looks for files hashed meanwhile, whose previews change, in seconds
@@ -14,7 +14,7 @@ HASHED_INTERVAL = 1
 def find_previews(relpaths, src, index, send, checked=None, src_index=None):
     """Find, for each of src's files at relpaths (which the other replica, index's, lacks at those
     paths), where the other replica may have it, and send() them (picker.pick_files()'s previews)
-    as they're found (see _preview()). Until a file's are sent, the picker shows how far it's got:
+    as they're found (see preview_of()). Until a file's are sent, the picker shows how far it's got:
     building the index (if it isn't), then matching. Then, while either replica is being hashed
     (hashing.py), send again the previews of the files that it changes: the ones hashed, and the
     ones of the hash of a file of index's hashed. Lets picker.PickerClosed go up, once the picker is
@@ -25,14 +25,14 @@ def find_previews(relpaths, src, index, send, checked=None, src_index=None):
     send(default=title + ["Listing its files"])
     try:
         index.build(lambda count: is_due() and send(default=title + ["Listed %d of its files" % (count,)]))
-        matcher = _Matcher(relpaths, src, index, checked, src_index)
+        matcher = Matcher(relpaths, src, index, checked, src_index)
         if src_index is not None:
             # What's hashed from now on changes the previews (what was is in them)
             src_index.take_new()
         index.take_new()
         found = {}
         for i, relpath in enumerate(relpaths):
-            found[relpath] = _preview(relpath, src, dst_name, matcher)
+            found[relpath] = preview_of(relpath, src, dst_name, matcher)
             if is_due():
                 send(found, default=title + ["Matched %d of %d files" % (i + 1, len(relpaths))])
                 found = {}
@@ -59,7 +59,7 @@ def find_previews(relpaths, src, index, send, checked=None, src_index=None):
             for key in index.known(match_relpath).items():
                 changed |= by_hash.get(key, set())
         # Sent even with nothing to send: it raises PickerClosed once the picker is gone
-        send({relpath: _preview(relpath, src, dst_name, matcher) for relpath in changed})
+        send({relpath: preview_of(relpath, src, dst_name, matcher) for relpath in changed})
 
 
 class _Throttle(object):

@@ -8,15 +8,15 @@ from dirdelta.known import replicainfo
 from dirdelta.known import replicanames
 from dirdelta.matching import syncstate
 from dirdelta.screens import label_screen
-from dirdelta.screens.hashes_screen.dashboard_lines import _jobs_by_name, _jobs_shown
+from dirdelta.screens.hashes_screen.dashboard_lines import jobs_by_name, jobs_shown
 from dirdelta.screens.hashes_screen.files import view_files
-from dirdelta.screens.hashes_screen.names import BACK, TITLE, _FILES, _HASH, _LABEL, _RESCAN, _TOGGLE
+from dirdelta.screens.hashes_screen.names import BACK, TITLE, FILES, HASH, LABEL, RESCAN, TOGGLE
 from dirdelta.trees import localscan
 from dirdelta.trees import paths
 from dirdelta.ui import picker
 
 
-def _is_there(name):
+def is_there(name):
     """Whether the local replica named name can be reached: its volume's mounted and it's a dir"""
     return mounts.unmounted(name) is None and os.path.isdir(name)
 
@@ -31,16 +31,16 @@ def _start_hashing(name):
     job.start()
 
 
-def _label_option(name, known):
+def label_option(name, known):
     """How the option that labels the replica named name is shown. Not of one that isn't there: what
     its path is on now isn't its disk, so it wouldn't be its identity, which its label is kept by"""
-    if not paths.is_cloud_path(name) and not _is_there(name):
+    if not paths.is_cloud_path(name) and not is_there(name):
         return picker.Disabled("  Label the replica: its disk isn't mounted")
     current = known.labels.get(replicanames.label_key(name))
     return "  Label the replica%s" % (": now '%s'" % (current,) if current else "",)
 
 
-def _finish_dashboard(items, options, shown, names, jobs, known, selected=None):
+def finish_dashboard(items, options, shown, names, jobs, known, selected=None):
     """Show the dashboard of options, as _show_dashboard() says"""
     options.append(BACK)
     header = ("Replicas: when synced, and their files' hashes\n\n"
@@ -49,13 +49,13 @@ def _finish_dashboard(items, options, shown, names, jobs, known, selected=None):
                   os.path.join(paths.META_DIR, hashcache.META_NAME), hashcache.database.CACHE_FILE))
 
     def shown_now():
-        now = {**shown, **_jobs_shown(items, names)}
+        now = {**shown, **jobs_shown(items, names)}
         now[''] = picker.segments(hashing.status_parts(jobs))
         return now
     first = shown_now()
     # The first that can be picked
     selected = selected or next((option for option in options if isinstance(option, tuple) and
-                                 option[0] in (_TOGGLE, _FILES, _HASH, _LABEL) and
+                                 option[0] in (TOGGLE, FILES, HASH, LABEL) and
                                  not isinstance(first.get(option), picker.Disabled)), BACK)
     # Those that are their ids; what they show, shown_as says
     choices = [picker.Option(option, '') if isinstance(option, tuple) else option for option in options]
@@ -67,20 +67,20 @@ def _finish_dashboard(items, options, shown, names, jobs, known, selected=None):
         if option in (None, BACK):
             return None
         selected = option
-        if option[0] == _LABEL:
+        if option[0] == LABEL:
             label_screen.run(known, [option[1]])
             return option
-        if option[0] == _HASH:
+        if option[0] == HASH:
             _start_hashing(option[1])
             # Shown anew, as its job's: it can be paused now
-            return (_TOGGLE, option[1])
-        for name, job in _jobs_by_name(items).items():
-            if option == (_TOGGLE, name):
+            return (TOGGLE, option[1])
+        for name, job in jobs_by_name(items).items():
+            if option == (TOGGLE, name):
                 if job.is_started():
                     job.pause()
                 else:
                     job.start()
-            elif option == (_FILES, name):
+            elif option == (FILES, name):
                 view_files(job)
-            elif option == (_RESCAN, name):
+            elif option == (RESCAN, name):
                 job.scan_in_background()

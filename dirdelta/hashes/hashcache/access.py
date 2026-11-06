@@ -2,8 +2,8 @@
 import json
 import os
 
-from dirdelta.hashes.hashcache.database import _dirty, _lock, _open, _replicas, _save_soon
-from dirdelta.hashes.hashcache.replica_dbs import _where, replica_file
+from dirdelta.hashes.hashcache.database import dirty, lock, open_database, replicas, save_soon
+from dirdelta.hashes.hashcache.replica_dbs import where, replica_file
 
 
 def get(path, algorithm):
@@ -17,8 +17,8 @@ def get_all(path):
     stamp = _stamp(path)
     if stamp is None:
         return {}
-    with _lock:
-        db, key = _where(path)
+    with lock:
+        db, key = where(path)
         if db is None:
             return {}
         row = db.execute('SELECT size, mtime_ns, hashes FROM files WHERE path = ?', (key,)).fetchone()
@@ -33,8 +33,8 @@ def put(path, hashes, stamp=None):
     stamp = stamp or _stamp(path)
     if stamp is None:
         return
-    with _lock:
-        db, key = _where(path)
+    with lock:
+        db, key = where(path)
         if db is None:
             return
         row = db.execute('SELECT size, mtime_ns, hashes FROM files WHERE path = ?', (key,)).fetchone()
@@ -42,14 +42,14 @@ def put(path, hashes, stamp=None):
         kept.update(hashes)
         db.execute('INSERT OR REPLACE INTO files (path, size, mtime_ns, hashes) VALUES (?, ?, ?, ?)',
                    (key, stamp[0], stamp[1], json.dumps(kept, sort_keys=True)))
-        _dirty.add(db)
-        _save_soon()
+        dirty.add(db)
+        save_soon()
 
 
 def _rows_under(dirpath):
     """[(relpath under dirpath, size, mtime_ns, hashes' JSON)] of the files under dirpath kept (with
     the lock held)"""
-    db, key = _where(dirpath.rstrip('/') + '/')
+    db, key = where(dirpath.rstrip('/') + '/')
     if db is None:
         return []
     prefix = key
@@ -66,7 +66,7 @@ def known_under(dirpath):
     """{relpath: (size, mtime_ns, {algorithm: hash})} of the files under dirpath (an absolute path)
     whose hashes are kept, as they were when they were hashed (whether they still are is the
     caller's to tell, e.g. by a find of their sizes and times: one query, rather than one per file)"""
-    with _lock:
+    with lock:
         rows = _rows_under(dirpath)
     return {relpath: (size, mtime_ns, json.loads(hashes)) for relpath, size, mtime_ns, hashes in rows}
 
@@ -74,10 +74,10 @@ def known_under(dirpath):
 def count_under(dirpath):
     """How many files under dirpath (an absolute path) have hashes kept (as they were when hashed);
     a replica's own database is counted, if it has one, whether or not use_replica() was called"""
-    with _lock:
+    with lock:
         root = os.path.realpath(dirpath)
-        if root not in _replicas and os.path.exists(replica_file(root)):
-            db = _open(replica_file(root))
+        if root not in replicas and os.path.exists(replica_file(root)):
+            db = open_database(replica_file(root))
             return db.execute('SELECT count(*) FROM files').fetchone()[0] if db is not None else 0
         return len(_rows_under(dirpath))
 

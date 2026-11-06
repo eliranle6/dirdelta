@@ -33,20 +33,20 @@ class Copying(object):
         the user confirms. Returns the ones done (in a dry run, the ones it would have done), or None
         if the user didn't confirm."""
         src_name, dst_name = self._src.displayname(), self._dst.displayname()
-        lines = (["Copy %s's versions of %s to %s, replacing its?" % (dst_name, replica_ops._files(len(relpaths)), src_name)] +
+        lines = (["Copy %s's versions of %s to %s, replacing its?" % (dst_name, replica_ops.files_text(len(relpaths)), src_name)] +
                  text.listed(["  %s" % (relpath,) for relpath in relpaths], self.MAX_FILES_LISTED) +
                  self._dst.copy_notes(relpaths) + [self._replaced_note(self._src, len(relpaths))])
         newer_here = [relpath for relpath in relpaths if differing.newer(self.differs[relpath]) > 0]
         if newer_here:
             lines.append("Careful: %s newer here than in %s, so this replaces %s with an older version." %
-                         (replica_ops._files(len(newer_here)) + (" is" if len(newer_here) == 1 else " are"), dst_name,
+                         (replica_ops.files_text(len(newer_here)) + (" is" if len(newer_here) == 1 else " are"), dst_name,
                           "it" if len(newer_here) == 1 else "them"))
         if dryrun.DRYRUN:
             lines.append(dryrun.NOTE)
         if not self._said_yes(lines, self.LABELS[self.COPY_BACK]):
             return None
         self._last_action = self.COPY_BACK
-        title = "Copying %s from %s to %s" % (replica_ops._files(len(relpaths)), dst_name, src_name)
+        title = "Copying %s from %s to %s" % (replica_ops.files_text(len(relpaths)), dst_name, src_name)
         if dryrun.DRYRUN:
             title += " (a dry run)"
         files = [entries.FileEntry(os.path.basename(relpath), relpath, os.path.join(self._dst.fullpath(), relpath))
@@ -70,7 +70,7 @@ class Copying(object):
             where = "to the trash"
         else:
             where = "kept by Drive as an older version"
-        return "%s's versions of %s are replaced (%s)." % (replica.displayname(), "it" if count == 1 else "the " + replica_ops._files(count), where)
+        return "%s's versions of %s are replaced (%s)." % (replica.displayname(), "it" if count == 1 else "the " + replica_ops.files_text(count), where)
 
     def _copy_or_remove(self, action, relpaths, to_trash=False):
         """Copy the files at relpaths to dst, or remove them from src (action), once the user confirms.
@@ -81,7 +81,7 @@ class Copying(object):
             return None
         self._last_action = action
         src_name, dst_name = self._src.displayname(), self._dst.displayname()
-        count = replica_ops._files(len(relpaths))
+        count = replica_ops.files_text(len(relpaths))
         files = [self._file_entry(relpath) for relpath in relpaths]
         if action == self.COPY:
             title = "Copying %s from %s to %s" % (count, src_name, dst_name)
@@ -120,10 +120,10 @@ class Copying(object):
         they're in, if it isn't); a removal, twice"""
         replica = replica or self._src
         if action == self.COPY:
-            question = "Copy %s from %s to %s?" % (replica_ops._files(len(relpaths)), self._src.displayname(),
+            question = "Copy %s from %s to %s?" % (replica_ops.files_text(len(relpaths)), self._src.displayname(),
                                                    self._dst.displayname())
         else:
-            question = "Remove %s from %s?" % (replica_ops._files(len(relpaths)), replica.displayname())
+            question = "Remove %s from %s?" % (replica_ops.files_text(len(relpaths)), replica.displayname())
         changed = [relpath for relpath in relpaths if relpath in self.differs]
         lines = [question] + text.listed(["  %s%s" % (relpath, "  (replaces %s's)" % (self._dst.displayname(),)
                                                        if action == self.COPY and relpath in self.differs else "")
@@ -135,7 +135,7 @@ class Copying(object):
             older = [relpath for relpath in changed if differing.newer(self.differs[relpath]) < 0]
             if older:
                 lines.append("Careful: %s older here than in %s, so Copy replaces %s." %
-                             (replica_ops._files(len(older)) + (" is" if len(older) == 1 else " are"), self._dst.displayname(),
+                             (replica_ops.files_text(len(older)) + (" is" if len(older) == 1 else " are"), self._dst.displayname(),
                               "a newer version" if len(older) == 1 else "newer versions"))
         elif changed and replica is self._src:
             lines.append("%s has other versions of %s of them, which stay." % (self._dst.displayname(), len(changed)))

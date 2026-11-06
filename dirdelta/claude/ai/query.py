@@ -11,11 +11,11 @@ from dirdelta.claude.ai.config import AIError, MAX_MESSAGE_SIZE, PLAN_MODEL, STD
 def ask(prompt, schema, system_prompt, readable_paths=()):
     """What Claude answers to prompt, by schema (a dict), going by what it's told, and what it reads of
     the local files at readable_paths (none: it reads nothing). Raises AIError if it can't be asked."""
-    return _run_query(prompt, sorted({os.path.dirname(path) for path in readable_paths}), schema,
+    return run_query(prompt, sorted({os.path.dirname(path) for path in readable_paths}), schema,
                       max_turns=2 * len(readable_paths) + 5, model=PLAN_MODEL, system_prompt=system_prompt)
 
 
-def _run_query(prompt, readable_dirs, schema, max_turns, model, system_prompt=SYSTEM_PROMPT):
+def run_query(prompt, readable_dirs, schema, max_turns, model, system_prompt=SYSTEM_PROMPT):
     """Ask Claude (model) prompt, letting it read only (with the Read tool) what's in
     readable_dirs (with none, it gets no tools), and return its answer by schema (a dict). Raises
     AIError if it can't."""

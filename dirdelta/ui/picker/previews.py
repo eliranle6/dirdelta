@@ -3,10 +3,10 @@ import os
 import threading
 
 from dirdelta.ui.picker.selection import PickerClosed
-from dirdelta.ui.picker.updates import _null_terminated
+from dirdelta.ui.picker.updates import null_terminated
 
 
-class _PreviewSender(object):
+class PreviewSender(object):
     """Writes what's sent to treepicker's --preview pipe (see pick_files()), from any thread"""
 
     def __init__(self, fd, is_done):
@@ -21,7 +21,7 @@ class _PreviewSender(object):
         if default is not None:
             # An empty path: the lines of the ones without any
             items.append(_preview('', default))
-        self._write(_null_terminated(items))
+        self._write(null_terminated(items))
 
     def _write(self, data):
         if self._is_done.is_set():
@@ -36,7 +36,7 @@ class _PreviewSender(object):
 
     def send_image(self, relpath, image):
         """Show image (see pick_files()'s images) below relpath's lines"""
-        self._write(_null_terminated(['\x03' + (relpath or '.') + '\t' + _one_line(image)]))
+        self._write(null_terminated(['\x03' + (relpath or '.') + '\t' + _one_line(image)]))
 
     def run(self, previews):
         """Call previews(send), until it returns, or treepicker is gone"""

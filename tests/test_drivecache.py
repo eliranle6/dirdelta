@@ -113,7 +113,7 @@ class EntriesTest(unittest.TestCase):
                          sorted(item['id'] for item in ITEMS))
 
     def test_an_import_cut_off_is_done_again(self):
-        with mock.patch('dirdelta.drive.drivecache.database._put', side_effect=KeyboardInterrupt):
+        with mock.patch('dirdelta.drive.drivecache.database.put_row', side_effect=KeyboardInterrupt):
             with self.assertRaises(KeyboardInterrupt):
                 drivecache.root_id()
         self.assertTrue(os.path.exists(self.cache))

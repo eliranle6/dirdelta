@@ -12,8 +12,8 @@ from dirdelta.matching import syncstate
 from dirdelta.screens import hashes_screen
 from dirdelta.screens import label_screen
 from dirdelta.sync import replica_ops
-from dirdelta.sync.options import STATE, _Action, _state_line
-from dirdelta.sync.ways import DIFFER, _Way, _find_all
+from dirdelta.sync.options import STATE, Action, state_line
+from dirdelta.sync.ways import DIFFER, Way, find_all
 from dirdelta.trees import localdiskdirtree
 from dirdelta.ui import messages
 from dirdelta.ui import picker
@@ -46,14 +46,14 @@ class SyncMenu(object):
         # many there are once they are. Each replica's files by name (for finding where the other has a
         # file of a name) are kept, so they're listed once.
         self.indexes = {replica: elsewhere.Index(replica) for replica in (self.replica_a, self.replica_b)}
-        self.ways = [_Way(self.replica_a, self.replica_b, self.indexes), _Way(self.replica_b, self.replica_a, self.indexes)]
+        self.ways = [Way(self.replica_a, self.replica_b, self.indexes), Way(self.replica_b, self.replica_a, self.indexes)]
         self.actions = {}
         for way, src_path, dst_path in ((self.ways[0], self.replica_a_path, self.replica_b_path),
                                         (self.ways[1], self.replica_b_path, self.replica_a_path)):
             label = "Files only in %s" % (src_path,)
-            self.actions[label] = _Action(src_path, dst_path, way, self.changes)
+            self.actions[label] = Action(src_path, dst_path, way, self.changes)
         # The files both have that differ (differing.py), alone, a's way (Copy replaces b's, Copy back a's)
-        self.actions[DIFFER] = _Action(self.replica_a_path, self.replica_b_path, self.ways[0], self.changes, only_differing=True)
+        self.actions[DIFFER] = Action(self.replica_a_path, self.replica_b_path, self.ways[0], self.changes, only_differing=True)
         # A cloud replica's folder can be read anew from Drive, if Drive changed since the cache was made
         self.refreshes = {"Refresh %s file list from Google Drive" % (path,): replica
                           for replica, path in ((self.replica_a, self.replica_a_path), (self.replica_b, self.replica_b_path))
@@ -62,7 +62,7 @@ class SyncMenu(object):
         self.rescans = {"Rescan %s" % (path,): replica
                              for replica, path in ((self.replica_a, self.replica_a_path), (self.replica_b, self.replica_b_path))
                         if localdiskdirtree.is_local(replica)}
-        _find_all(self.ways)
+        find_all(self.ways)
         self.jobs = hashes_screen.jobs_of([self.replica_a, self.replica_b])
         # What each way found last, noted in known_replicas (once each time they're found)
         self.noted = []
@@ -109,7 +109,7 @@ class SyncMenu(object):
                 for way in self.ways:
                     # Its files may have other contents now
                     way.checked.clear()
-                _find_all(self.ways)
+                find_all(self.ways)
                 for job in hashes_screen.jobs_of([self.rescans[option]]):
                     job.scan_in_background()
             return
@@ -119,7 +119,7 @@ class SyncMenu(object):
                 for way in self.ways:
                     # Its files may have other contents now
                     way.checked.clear()
-                _find_all(self.ways)
+                find_all(self.ways)
             return
         # Copying, removing and renaming change the files (unless it's a dry run), and so what each
         # lacks, and so does reading a replica anew from Drive (in the file picker)
@@ -128,7 +128,7 @@ class SyncMenu(object):
                 # The way shown cleared its own; its files may have other contents for this one too
                 if self.actions[option].was_read_anew:
                     way.checked.clear()
-            _find_all(self.ways)
+            find_all(self.ways)
             # Files copied into a local replica (or moved in it) are hashed too
             for job in self.jobs:
                 job.scan_in_background()
@@ -150,7 +150,7 @@ class SyncMenu(object):
         dashboard's and the refreshes' notes"""
         shown = {label: action.shown_as() for label, action in self.actions.items()}
         # Only to read: moving goes past them
-        shown[STATE] = _state_line(self.ways, self.replica_a_path, self.replica_b_path)
+        shown[STATE] = state_line(self.ways, self.replica_a_path, self.replica_b_path)
         shown[self.DASHBOARD] = "%s: files, last updates, hashes%s" % (
             self.DASHBOARD, " (%s)" % ("; ".join(text for text, _ in hashing.status_parts(self.jobs)),) if self.jobs else "")
         if self.jobs:

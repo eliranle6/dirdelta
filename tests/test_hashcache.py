@@ -19,7 +19,7 @@ class _CacheTestCase(unittest.TestCase):
         patcher.start()
         self.addCleanup(patcher.stop)
         # No replica's own database, but the ones a test makes
-        patcher = mock.patch.dict('dirdelta.hashes.hashcache.database._replicas', clear=True)
+        patcher = mock.patch.dict('dirdelta.hashes.hashcache.database.replicas', clear=True)
         patcher.start()
         self.addCleanup(patcher.stop)
         self.path = self.make('x', 'x')
@@ -120,7 +120,7 @@ class ReplicaDatabaseTest(_CacheTestCase):
     def test_one_there_is_used_in_a_dry_run_and_counted_before(self):
         self.use()
         hashcache.save()
-        hashcache.database._replicas.clear()
+        hashcache.database.replicas.clear()
         hashcache.put(self.file, {'sha1': 'OLD'})
         # Counted from the replica's own, before it's used
         self.assertEqual(hashcache.count_under(self.root), 1)

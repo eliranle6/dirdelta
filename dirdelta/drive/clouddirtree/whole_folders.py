@@ -2,7 +2,7 @@
 from googleapiclient.errors import HttpError
 
 from dirdelta.drive.clouddirtree.constants import MAX_FOLDERS_PER_QUERY
-from dirdelta.drive.clouddirtree.refresh import _list
+from dirdelta.drive.clouddirtree.refresh import drive_list
 from dirdelta.trees import entries
 from dirdelta.ui import messages
 
@@ -68,7 +68,7 @@ class WholeFolders(object):
             for start in range(0, len(ids), MAX_FOLDERS_PER_QUERY):
                 query = "(%s) and trashed = false" % (' or '.join(
                     "'%s' in parents" % (cloud_id,) for cloud_id in ids[start:start + MAX_FOLDERS_PER_QUERY]))
-                for md in _list(query):
+                for md in drive_list(query):
                     if md['id'] not in known_ids:
                         holding_more.update(folder_ids[parent] for parent in md.get('parents', [])
                                             if parent in folder_ids)

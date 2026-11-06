@@ -55,7 +55,7 @@ class LocalCopying(object):
                     source.fetch_file(file_entry.relpath, part_path)
                 else:
                     self._copy_local_file_to_tree_with_path(file_entry.full_filesystem_path(), part_path)
-                fs._trash(dest_path)
+                fs.trash(dest_path)
                 os.rename(part_path, dest_path)
             except BaseException:
                 if os.path.lexists(part_path):

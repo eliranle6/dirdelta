@@ -1,7 +1,7 @@
 """An Index's files: looked up, and kept up to date as they're added, removed and moved"""
 import os
 
-from dirdelta.matching.elsewhere.constants import RENAMED_MIN_SIZE, _HASH_PREFERENCE
+from dirdelta.matching.elsewhere.constants import RENAMED_MIN_SIZE, HASH_PREFERENCE
 
 
 class IndexFiles(object):
@@ -28,7 +28,7 @@ class IndexFiles(object):
         self._take_hashes()
         with self._lock:
             known = {algorithm for algorithm, _ in self._by_hash}
-        return [algorithm for algorithm in _HASH_PREFERENCE if algorithm in known]
+        return [algorithm for algorithm in HASH_PREFERENCE if algorithm in known]
 
     def files_hashed(self, algorithm, value):
         """The relpaths of the files whose contents' hash by algorithm is value (of the ones known)"""

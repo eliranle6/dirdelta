@@ -3,7 +3,7 @@ import os
 import posixpath
 
 from dirdelta.hashes import hashcache
-from dirdelta.inbox.formatting import _join
+from dirdelta.inbox.formatting import join_path
 from dirdelta.known import replicas
 from dirdelta.screens import hashes_screen
 from dirdelta.trees import entries
@@ -99,7 +99,7 @@ class Side(object):
             return None
         # From a read-only inbox they can only be copied (its confirmation says which)
         done = self._approve(self.COPY_TO if self.MOVE_TO in cant else self.MOVE_TO,
-                             [(relpath, _join(destination, posixpath.basename(relpath))) for relpath in relpaths])
+                             [(relpath, join_path(destination, posixpath.basename(relpath))) for relpath in relpaths])
         if done and self._known_replicas is not None:
             self._known_replicas.record_dir(self.root_path, destination)
             replicas.save(self._known_replicas)

@@ -7,7 +7,7 @@ from dirdelta.hashes import hashing
 from dirdelta.inbox.constants import (CLAUDE_STYLE, DESCRIBED, DESCRIPTION_TITLE, DESTINATION_TITLE,
                                       DIR_TITLE, JUNK_BY_CLAUDE, JUNK_BY_NAME, LOOKING, LOOKING_AT_DIR,
                                       MAYBE_JUNK, PREVIEWS_INTERVAL)
-from dirdelta.inbox.formatting import _dirs, _files, _grey, _title, _wrapped, _wrapped_path
+from dirdelta.inbox.formatting import dirs_text, files_text, grey_line, preview_title, wrapped, wrapped_path
 from dirdelta.screens import hashes_screen
 from dirdelta.ui import opening
 from dirdelta.ui import picker
@@ -53,12 +53,12 @@ class Previews(object):
                 shown[dirpath] = picker.styled([(posixpath.basename(dirpath), None), ("  ", None), tag])
         describing, placing = len(self._describing), len(self._placing)
         failed = len([relpath for relpath in relpaths if relpath in self._failed])
-        busy = ["%s %s" % (what, _files(count))
+        busy = ["%s %s" % (what, files_text(count))
                 for what, count in (("describing", describing), ("placing", placing)) if count]
         if self._dir_asking:
-            busy.append("asking about %s" % (_dirs(len(self._dir_asking)),))
+            busy.append("asking about %s" % (dirs_text(len(self._dir_asking)),))
         status = ("Claude: " + ', '.join(busy) if busy else
-                  "Claude: couldn't do %s" % (_files(failed),) if failed else '')
+                  "Claude: couldn't do %s" % (files_text(failed),) if failed else '')
         # Downloading files to open them: how far it got (on the status bar, first), and each
         # file's tag
         opening.with_tags(shown, self._opener, os.path.basename)
@@ -88,37 +88,37 @@ class Previews(object):
             size = self._size(relpath)
             lines = [picker.styled([("Size: ", 'bold'), (text.format_size(size), None)])] if size is not None else []
             if relpath in self._descriptions:
-                lines += ["", _title(DESCRIPTION_TITLE, CLAUDE_STYLE)] + _wrapped(self._descriptions[relpath], "  ")
+                lines += ["", preview_title(DESCRIPTION_TITLE, CLAUDE_STYLE)] + wrapped(self._descriptions[relpath], "  ")
             elif relpath in self._describing:
-                lines += ["", _title(DESCRIPTION_TITLE, CLAUDE_STYLE), _grey("  Claude is looking at it...")]
+                lines += ["", preview_title(DESCRIPTION_TITLE, CLAUDE_STYLE), grey_line("  Claude is looking at it...")]
             elif relpath in self._failed and relpath not in self._descriptions:
-                lines += ["", _title(DESCRIPTION_TITLE + " failed", 'red')] + _wrapped(self._failed[relpath], "  ")
+                lines += ["", preview_title(DESCRIPTION_TITLE + " failed", 'red')] + wrapped(self._failed[relpath], "  ")
             lines += self._copies_lines(relpath)
             recommendation = self._recommendations.get(relpath)
             if relpath in self._junk_by_name:
-                lines += ["", MAYBE_JUNK, _title("Junk? By its name or size:", 'yellow')] + \
-                    _wrapped(self._junk_by_name[relpath], "  ")
+                lines += ["", MAYBE_JUNK, preview_title("Junk? By its name or size:", 'yellow')] + \
+                    wrapped(self._junk_by_name[relpath], "  ")
             if recommendation and recommendation.get('action') == 'remove':
                 if self._junk(relpath) is not None and relpath not in self._junk_by_name:
                     lines += ["", MAYBE_JUNK]
-                lines += ["", _title("Recommendation (ai): remove it", CLAUDE_STYLE)] + \
-                    _wrapped(recommendation.get('reason', ''), "  ")
+                lines += ["", preview_title("Recommendation (ai): remove it", CLAUDE_STYLE)] + \
+                    wrapped(recommendation.get('reason', ''), "  ")
             elif recommendation:
                 # Relative to the sorted tree, so a long root doesn't hide where in it
                 target = self._target(relpath)
                 is_renamed = os.path.basename(target) != os.path.basename(relpath)
-                lines += ["", _title(DESTINATION_TITLE, CLAUDE_STYLE)]
-                lines += _wrapped(target if is_renamed else "%s/" % (os.path.dirname(target) or '.',), "  ")
+                lines += ["", preview_title(DESTINATION_TITLE, CLAUDE_STYLE)]
+                lines += wrapped(target if is_renamed else "%s/" % (os.path.dirname(target) or '.',), "  ")
                 if is_renamed:
-                    lines.append(_grey("  (renamed)"))
+                    lines.append(grey_line("  (renamed)"))
                 # Why, apart from where
-                lines += [""] + _wrapped(recommendation.get('reason', ''), "  ")
+                lines += [""] + wrapped(recommendation.get('reason', ''), "  ")
             elif relpath in self._placing:
-                lines += ["", _title(DESTINATION_TITLE, CLAUDE_STYLE), _grey("  Claude is working it out...")]
+                lines += ["", preview_title(DESTINATION_TITLE, CLAUDE_STYLE), grey_line("  Claude is working it out...")]
             elif relpath in self._failed and relpath in self._descriptions:
-                lines += ["", _title(DESTINATION_TITLE + " failed", 'red')] + _wrapped(self._failed[relpath], "  ")
+                lines += ["", preview_title(DESTINATION_TITLE + " failed", 'red')] + wrapped(self._failed[relpath], "  ")
             else:
-                lines += ["", picker.styled([("Dest. path:", 'bold')]), _grey("  Ctrl-I asks Claude")]
+                lines += ["", picker.styled([("Dest. path:", 'bold')]), grey_line("  Ctrl-I asks Claude")]
             previews[relpath] = lines
         for dirpath, (count, size) in self._dir_stats(relpaths).items():
             previews[dirpath] = self._dir_preview(dirpath, count, size)
@@ -127,30 +127,30 @@ class Previews(object):
     def _dir_preview(self, dirpath, count, size):
         """The lines beside the picker of the inbox's dir at dirpath (of count files, of size): what
         Claude said of it as a whole, if it was asked (Ctrl-I)"""
-        lines = [picker.styled([("Dir: ", 'bold'), ("%s, %s" % (_files(count), text.format_size(size)), None)])]
+        lines = [picker.styled([("Dir: ", 'bold'), ("%s, %s" % (files_text(count), text.format_size(size)), None)])]
         recommendation = self._dir_recommendation(dirpath)
         if dirpath in self._dir_asking:
-            return lines + ["", _title(DIR_TITLE, CLAUDE_STYLE), _grey("  Claude is looking at it...")]
+            return lines + ["", preview_title(DIR_TITLE, CLAUDE_STYLE), grey_line("  Claude is looking at it...")]
         if recommendation is None and dirpath in self._dir_failed:
-            return lines + ["", _title(DIR_TITLE + " failed", 'red')] + _wrapped(self._dir_failed[dirpath], "  ")
+            return lines + ["", preview_title(DIR_TITLE + " failed", 'red')] + wrapped(self._dir_failed[dirpath], "  ")
         if recommendation is None:
             return lines + ["", picker.styled([("Dir recommendation:", 'bold')]),
-                            _grey("  Ctrl-I asks Claude about the dir"), _grey("  as a whole")]
-        lines += ["", _title(DIR_TITLE, CLAUDE_STYLE)] + _wrapped(recommendation.get('summary', ''), "  ") + [""]
+                            grey_line("  Ctrl-I asks Claude about the dir"), grey_line("  as a whole")]
+        lines += ["", preview_title(DIR_TITLE, CLAUDE_STYLE)] + wrapped(recommendation.get('summary', ''), "  ") + [""]
         if recommendation['action'] == 'move':
             is_merged = self._root_tree.exists(recommendation['path'])
             lines += [picker.styled([("Move it %s:" % ("into the dir there" if is_merged else "to"), 'bold')])]
-            lines += _wrapped_path(recommendation['path'] + '/', "  ")
+            lines += wrapped_path(recommendation['path'] + '/', "  ")
         elif recommendation['action'] == 'remove':
             lines += [picker.styled([("Remove it", 'bold')])]
         else:
             lines += [picker.styled([("Its files don't go together:", 'bold')]),
-                      _grey("  pick them (Space), then Ctrl-I"), _grey("  asks about each")]
+                      grey_line("  pick them (Space), then Ctrl-I"), grey_line("  asks about each")]
         if recommendation.get('reason'):
-            lines += [""] + _wrapped(recommendation['reason'], "  ")
+            lines += [""] + wrapped(recommendation['reason'], "  ")
         copies = self._dir_copies.get(dirpath)
         if copies:
-            lines += ["", "%s of it in the sorted tree already" % (_files(copies),)]
+            lines += ["", "%s of it in the sorted tree already" % (files_text(copies),)]
         if recommendation['action'] != 'split':
-            lines += ["", _grey("  Enter: the menu, to do it")]
+            lines += ["", grey_line("  Enter: the menu, to do it")]
         return lines

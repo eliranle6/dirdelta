@@ -3,8 +3,8 @@ import collections
 import threading
 
 from dirdelta.hashes import hashcache
-from dirdelta.hashes.hashing.pool import _pool
-from dirdelta.hashes.hashing.reading import _list_files
+from dirdelta.hashes.hashing.pool import pool
+from dirdelta.hashes.hashing.reading import list_files
 from dirdelta.hashes.hashing.states import ALGORITHM
 from dirdelta.trees import paths
 
@@ -41,7 +41,7 @@ class JobScanning(object):
     def _scan_once(self, listed):
         try:
             if listed is None:
-                listed = _list_files(self.root, self.max_depth)
+                listed = list_files(self.root, self.max_depth)
         except OSError as error:
             with self._lock:
                 self.error = str(error)
@@ -72,7 +72,7 @@ class JobScanning(object):
             for relpath, value in new.items():
                 subscriber(relpath, {ALGORITHM: value})
         if self._is_started:
-            _pool().wake()
+            pool().wake()
 
     def scan_in_background(self, listed=None):
         threading.Thread(target=self.scan, args=(listed,), daemon=True).start()

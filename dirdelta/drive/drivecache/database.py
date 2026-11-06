@@ -12,21 +12,21 @@ from dirdelta.drive.drivecache.metadata import DriveCacheError
 from dirdelta.drive.drivecache.names import ROOT_ID_KEY, TRASHED_ID_KEY
 
 
-def _database_path():
+def database_path():
     # Next to the cache's old file (wherever it is, e.g. in tests)
     return os.path.splitext(names.LINES_FILE)[0] + '.sqlite'
 
 
 def exists():
     """Whether there's a cache at all (its old file, not imported yet, is one)"""
-    return os.path.exists(_database_path()) or os.path.exists(names.LINES_FILE)
+    return os.path.exists(database_path()) or os.path.exists(names.LINES_FILE)
 
 
 def changed_at():
     """When the cache was last changed (seconds since the epoch), or None if there's none"""
     found = []
     # (In WAL mode, what changed last may be in its WAL file)
-    for path in (_database_path(), _database_path() + '-wal', names.LINES_FILE):
+    for path in (database_path(), database_path() + '-wal', names.LINES_FILE):
         try:
             found.append(os.path.getmtime(path))
         except OSError:
@@ -36,30 +36,30 @@ def changed_at():
 
 def rows():
     """The metadata of all the files and folders the cache has, whatever's under what"""
-    with _opened(is_writing=False) as db:
+    with opened(is_writing=False) as db:
         return [json.loads(row[0]) for row in db.execute('SELECT md FROM files ORDER BY rowid')]
 
 
 # Around the database, from any thread; how many times it was changed by this process, for what's
-# parsed of it (_parsefile()); and the one connection kept open: (its database's path, its inode, how
+# parsed of it (parsefile()); and the one connection kept open: (its database's path, its inode, how
 # many were opened so far, the connection). In WAL mode, kept open, a change takes ~0.2ms rather than
 # ~20ms, and it's there even if dirdelta is cut off, though a power cut may lose the last ones.
 _lock = threading.RLock()
-_generations = collections.Counter()
-_connection = None
+generations = collections.Counter()
+kept_connection = None
 _nr_connected = 0
 
 
 def _connected():
     """The connection to the database, as it is now (opened anew if it's another file now)"""
-    global _connection, _nr_connected
-    path = _database_path()
+    global kept_connection, _nr_connected
+    path = database_path()
     try:
         inode = os.stat(path).st_ino
     except OSError:
         inode = None
-    if _connection is not None and _connection[:2] == (path, inode):
-        return _connection[3]
+    if kept_connection is not None and kept_connection[:2] == (path, inode):
+        return kept_connection[3]
     close()
     os.makedirs(os.path.dirname(path) or '.', exist_ok=True)
     db = sqlite3.connect(path, check_same_thread=False)
@@ -74,16 +74,16 @@ def _connected():
         db.close()
         raise
     _nr_connected += 1
-    _connection = (path, os.stat(path).st_ino, _nr_connected, db)
+    kept_connection = (path, os.stat(path).st_ino, _nr_connected, db)
     return db
 
 
 def close():
     """Close the connection, if there's one (its WAL file goes into the database then)"""
-    global _connection
+    global kept_connection
     with _lock:
-        if _connection is not None:
-            connection, _connection = _connection, None
+        if kept_connection is not None:
+            connection, kept_connection = kept_connection, None
             connection[3].close()
 
 
@@ -91,7 +91,7 @@ atexit.register(close)
 
 
 @contextlib.contextmanager
-def _opened(is_writing=True):
+def opened(is_writing=True):
     """The database (a connection, committing as it ends, all or nothing), its old file imported into
     it first, if it's there. Raises DriveCacheError if it can't be read."""
     with _lock:
@@ -103,26 +103,26 @@ def _opened(is_writing=True):
             # Only once it's in (cut off before, it's imported next time)
             if is_imported:
                 os.replace(names.LINES_FILE, names.LINES_FILE + '.bak')
-                _generations[_database_path()] += 1
+                generations[database_path()] += 1
         except sqlite3.DatabaseError as error:
             close()
             raise DriveCacheError("The cloud files list cache can't be read (%s): remove %s, then run dirdelta "
-                                  "again and refresh it." % (error, _database_path()))
+                                  "again and refresh it." % (error, database_path()))
         if is_writing:
-            _generations[_database_path()] += 1
+            generations[database_path()] += 1
 
 
-def _put(db, md):
+def put_row(db, md):
     parents = md.get('parents')
     db.execute('INSERT OR REPLACE INTO files (id, parent, md) VALUES (?, ?, ?)',
                (md['id'], parents[0] if parents else None, json.dumps(md)))
 
 
-def _set_root(db, root_id_):
+def set_root(db, root_id_):
     db.execute('INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)', (ROOT_ID_KEY, root_id_))
 
 
-def _root_of(db):
+def root_of(db):
     row = db.execute('SELECT value FROM meta WHERE key = ?', (ROOT_ID_KEY,)).fetchone()
     return row[0] if row else None
 
@@ -139,9 +139,9 @@ def _import_old_file(db):
                 continue
             md = json.loads(line)
             if ROOT_ID_KEY in md:
-                _set_root(db, md[ROOT_ID_KEY])
+                set_root(db, md[ROOT_ID_KEY])
             elif TRASHED_ID_KEY in md:
                 db.execute('DELETE FROM files WHERE id = ?', (md[TRASHED_ID_KEY],))
             else:
-                _put(db, md)
+                put_row(db, md)
     return True

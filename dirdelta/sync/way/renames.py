@@ -29,7 +29,7 @@ class Renames(object):
         if to_compare:
             is_stopped = False
             with messages.progress_screen("Comparing the contents of %s with their matches in %s" %
-                                          (replica_ops._files(len(to_compare)), self._dst.displayname()),
+                                          (replica_ops.files_text(len(to_compare)), self._dst.displayname()),
                                           dryrun.label()):
                 try:
                     elsewhere.check_all(to_compare, self._src, self.src_index, self.dst_index, self.checked,
@@ -40,7 +40,7 @@ class Renames(object):
                     is_stopped = True
                 else:
                     messages.print_line("")
-                    messages.print_line("Compared %s" % (replica_ops._files(len(to_compare)),))
+                    messages.print_line("Compared %s" % (replica_ops.files_text(len(to_compare)),))
             if is_stopped:
                 return None
         renames = elsewhere.sure_matches(relpaths, self._src, self.dst_index, self.checked, self.src_index)
@@ -52,7 +52,7 @@ class Renames(object):
         if not moves:
             messages.show("Nothing to rename",
                           ["None of the %s is surely in %s, moved or renamed%s." %
-                           (replica_ops._files(len(relpaths)), self._dst.displayname(),
+                           (replica_ops.files_text(len(relpaths)), self._dst.displayname(),
                             " (their contents were compared)" if to_compare else "")],
                           dryrun.label())
             return None
@@ -65,10 +65,10 @@ class Renames(object):
         replica = self._dst if action == self.RENAME_IN_DST else self._src
         # The picked file of each move
         picked_of = {move: move[1] if action == self.RENAME_IN_DST else move[0] for move in moves}
-        lines = ["Move %s in %s?" % (replica_ops._files(len(moves)), replica.displayname())]
+        lines = ["Move %s in %s?" % (replica_ops.files_text(len(moves)), replica.displayname())]
         # A whole dir's as one, then the rest one by one
         dir_moves, file_moves = replica.dir_moves(moves)
-        listed = (["  %s/ -> %s/ (a dir, with its %s, moved as one)" % (dirpath, new_dirpath, replica_ops._files(len(its_moves)))
+        listed = (["  %s/ -> %s/ (a dir, with its %s, moved as one)" % (dirpath, new_dirpath, replica_ops.files_text(len(its_moves)))
                    for dirpath, new_dirpath, its_moves in dir_moves] +
                   ["  %s -> %s" % move for move in file_moves])
         lines += text.listed(listed, self.MAX_FILES_LISTED)
@@ -78,7 +78,7 @@ class Renames(object):
                                     label=self.LABELS[action], title="Sure?")
         if answer != self.CONFIRM_YES:
             return None
-        title = "Moving %s in %s" % (replica_ops._files(len(moves)), replica.displayname())
+        title = "Moving %s in %s" % (replica_ops.files_text(len(moves)), replica.displayname())
         if dryrun.DRYRUN:
             title += " (a dry run)"
         # Stopped (Ctrl-C) before move_files() says (it says how far it got, if it's stopped in it)

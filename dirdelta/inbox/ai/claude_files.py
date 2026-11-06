@@ -4,7 +4,7 @@ import time
 
 from dirdelta.claude import ai
 from dirdelta.inbox.constants import DESCRIBED_WAIT_INTERVAL, LOCK_GAP
-from dirdelta.inbox.formatting import _dirs, _files
+from dirdelta.inbox.formatting import dirs_text, files_text
 from dirdelta.ui import messages
 from dirdelta.util import dryrun
 
@@ -32,21 +32,21 @@ class ClaudeFiles(object):
         if not self._queued and not self._dir_asking:
             return
         title = ("Waiting for Claude to finish with %s (what it said so far is kept)" %
-                 (', '.join(([_files(len(self._queued))] if self._queued else []) +
-                            ([_dirs(len(self._dir_asking))] if self._dir_asking else [])),))
+                 (', '.join(([files_text(len(self._queued))] if self._queued else []) +
+                            ([dirs_text(len(self._dir_asking))] if self._dir_asking else [])),))
         failed_before = len(self._failed)
         with messages.progress_screen(title, dryrun.label(), wait=False):
             try:
                 while self._queued or self._dir_asking:
                     messages.print_progress("%s left (%d being described, %d placed), %d failed%s" % (
-                        _files(len(self._queued)), len(self._describing),
+                        files_text(len(self._queued)), len(self._describing),
                         len(self._queued) - len(self._describing), len(self._failed) - failed_before,
-                        "; %s being asked about" % (_dirs(len(self._dir_asking)),) if self._dir_asking else ""))
+                        "; %s being asked about" % (dirs_text(len(self._dir_asking)),) if self._dir_asking else ""))
                     time.sleep(DESCRIBED_WAIT_INTERVAL)
             except KeyboardInterrupt:
                 messages.note_stopped()
         if len(self._failed) > failed_before:
-            messages.show("Claude couldn't finish with %s" % (_files(len(self._failed) - failed_before),),
+            messages.show("Claude couldn't finish with %s" % (files_text(len(self._failed) - failed_before),),
                           [list(self._failed.values())[-1]], dryrun.label(), 'red')
 
     def _ai_files(self, relpaths):

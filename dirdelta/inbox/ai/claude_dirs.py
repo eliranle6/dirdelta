@@ -6,7 +6,7 @@ import time
 
 from dirdelta.claude import ai
 from dirdelta.inbox.constants import DIR_FILES_DATED, DIR_FILES_DESCRIBED, NAMES_PER_DIR
-from dirdelta.inbox.formatting import _is_at_or_under, _spread
+from dirdelta.inbox.formatting import is_at_or_under, spread
 from dirdelta.trees import entries
 from dirdelta.trees import localscan
 
@@ -32,7 +32,7 @@ class ClaudeDirs(object):
     def _ask_about_dir(self, dirpath, relpaths):
         """ask_dir_in_background()'s thread"""
         try:
-            described = _spread(relpaths, DIR_FILES_DESCRIBED)
+            described = spread(relpaths, DIR_FILES_DESCRIBED)
             undescribed = [relpath for relpath in described if relpath not in self._descriptions]
             with self._state_lock:
                 self._describing.update(undescribed)
@@ -43,8 +43,8 @@ class ClaudeDirs(object):
             copies = len([relpath for relpath in relpaths if self._copies(relpath)])
             within = lambda relpath: relpath[len(dirpath) + 1:]
             dir_ = ai.Dir(dirpath, len(relpaths), sum(sizes), dict(types),
-                          [within(relpath) for relpath in _spread(relpaths, ai.DIR_NAMES_GIVEN)],
-                          self._dates(_spread(relpaths, DIR_FILES_DATED)),
+                          [within(relpath) for relpath in spread(relpaths, ai.DIR_NAMES_GIVEN)],
+                          self._dates(spread(relpaths, DIR_FILES_DATED)),
                           {within(relpath): self._descriptions[relpath] for relpath in described
                            if relpath in self._descriptions}, copies)
             key = self._dir_key(dirpath, len(relpaths), sum(sizes))
@@ -82,7 +82,7 @@ class ClaudeDirs(object):
         else:
             found = [(relpath, kind == localscan.DIR) for relpath, (kind, _, _) in localscan.scan(self.root_path).entries.items()]
         found = [(relpath, is_dir) for relpath, is_dir in found
-                 if self._inbox_in_root is None or not _is_at_or_under(relpath, self._inbox_in_root)]
+                 if self._inbox_in_root is None or not is_at_or_under(relpath, self._inbox_in_root)]
         for relpath, is_dir in sorted(found):
             if is_dir:
                 dirs.setdefault(relpath, [])

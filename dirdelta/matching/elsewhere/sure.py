@@ -1,5 +1,5 @@
 """The candidates that are surely the file"""
-from dirdelta.matching.elsewhere.candidates import _Matcher, matches_of_size
+from dirdelta.matching.elsewhere.candidates import Matcher, matches_of_size
 
 
 def sure_match(matches, size, date):
@@ -26,7 +26,7 @@ def sure_matches(relpaths, src, index, checked=None, src_index=None):
     """{relpath: the relpath of its sure match (see sure_match())} of src's missing files at relpaths
     that have one in index (built if it isn't); checked, src_index: as _Matcher's"""
     index.build()
-    matcher = _Matcher(relpaths, src, index, checked, src_index)
+    matcher = Matcher(relpaths, src, index, checked, src_index)
     found = {}
     for relpath in relpaths:
         matches = matcher.matches(relpath)

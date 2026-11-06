@@ -106,7 +106,7 @@ class Browsing(Picking):
         if any(replica is self._dst for replica, _ in to_refresh):
             self._side_listing.invalidate()
         for replica, relpath in to_refresh:
-            if replica_ops._read_anew(replica, relpath):
+            if replica_ops.read_anew(replica, relpath):
                 self.has_changed = self.was_read_anew = True
                 self._index_of(replica).invalidate()
                 # Its files may have other contents now

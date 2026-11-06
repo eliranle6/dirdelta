@@ -64,7 +64,7 @@ def rescan_replica(replica):
     return is_done
 
 
-def _read_anew(replica, relpath):
+def read_anew(replica, relpath):
     """Read the replica anew (on Drive, its folder at relpath). Returns whether it was."""
     if isinstance(replica, clouddirtree.CloudDirTree):
         return refresh_replica(replica, relpath)
@@ -103,9 +103,9 @@ def can_copy(src, dst):
     return is_writable(dst) and (is_local(src) or is_local(dst))
 
 
-_files = text.files
+files_text = text.files
 
 
-def _exists(replica, relpath):
+def exists(replica, relpath):
     """Whether the replica has a file or dir at relpath"""
     return os.path.lexists(os.path.join(replica.fullpath(), relpath)) if is_local(replica) else replica.exists(relpath)

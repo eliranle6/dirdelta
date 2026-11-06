@@ -38,8 +38,8 @@ _browse() and its steps; the sync menu: sync_menu.SyncMenu; treepicker's run: pi
 still name the modules by their own names (`inbox.py` is now `inbox/`, and so on).
 
 Tests patch a name where it's looked up: in the module that uses it (e.g.
-`dirdelta.claude.ai.query._run_query`, `dirdelta.drive.drivecache.names.LINES_FILE`,
-`dirdelta.trees.localdiskdirtree.fs._trash`), not in the package that re-exports it. A module
+`dirdelta.claude.ai.query.run_query`, `dirdelta.drive.drivecache.names.LINES_FILE`,
+`dirdelta.trees.localdiskdirtree.fs.trash`), not in the package that re-exports it. A module
 global that tests change (those three, `ai.config.CACHE_FILE`, `hashcache.database.CACHE_FILE`,
 `mounts.names.MOUNTS_FILE`, `opening.names.MAX_OPENED`) is
 read through its module (`names.LINES_FILE`) by the others, so one patch reaches all of them.
@@ -536,7 +536,7 @@ Claude where they go by their names, sizes and descriptions
 (`_place()` gets the missing descriptions first), reading nothing (no tools); a batch that fails is asked again a file at a time. Both through the
 Claude Agent
 SDK, both of `MODEL` (Haiku)
-(`_run_query()`: `query()` with tools and allowed tools only `Read`,
+(`run_query()`: `query()` with tools and allowed tools only `Read`,
 `permission_mode='dontAsk'`, no settings sources, the files' dirs as `cwd` and
 `add_dirs`, and `output_format` a JSON schema of the answers by file number).
 A Drive file is downloaded first (one at a time), into `downloads.py`'s cache

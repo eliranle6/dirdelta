@@ -37,7 +37,7 @@ def known_same(relpath, src_index, index, candidates=()):
     return found
 
 
-class _Matcher(object):
+class Matcher(object):
     """Finds the candidates of src's missing files at relpaths in the other replica's index"""
 
     def __init__(self, relpaths, src, index, checked=None, src_index=None):
@@ -117,7 +117,7 @@ class _Matcher(object):
         return sorted(found, key=lambda match: _unlikeliness(match, size, date, modified))
 
 
-def _is_same_time(time_a, time_b):
+def is_same_time(time_a, time_b):
     return time_a is not None and time_b is not None and abs(time_a - time_b) <= SAME_TIME
 
 
@@ -128,6 +128,6 @@ def _unlikeliness(match, size, date, modified):
             not (is_size_known and match.size == size),
             not (date is not None and match.date_taken == date),
             -(match.siblings_found / match.siblings_tried if match.siblings_tried else 0),
-            not _is_same_time(match.modified, modified),
+            not is_same_time(match.modified, modified),
             not is_size_known, abs(match.size - size) if is_size_known else 0,
             match.relpath.split('/'))

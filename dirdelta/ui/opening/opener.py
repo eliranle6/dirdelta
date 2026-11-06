@@ -6,7 +6,7 @@ import time
 from dirdelta.trees import localdiskdirtree
 from dirdelta.ui.opening import names
 from dirdelta.ui.opening.downloading import Downloading
-from dirdelta.ui.opening.names import COLOR, CONFIRM_FOR, _DOWNLOADING, _files, _short_dir
+from dirdelta.ui.opening.names import COLOR, CONFIRM_FOR, DOWNLOADING, files_text, short_dir
 from dirdelta.ui.opening.status import Status
 from dirdelta.util import downloads
 from dirdelta.util import text
@@ -62,7 +62,7 @@ class Opener(Downloading, Status):
         if len(found) <= 1:
             return None
         return "download %s (%s) into %s, and open them" % (
-            _files(len(found)), text.format_size(sum(size or 0 for _, size in found)), _short_dir())
+            files_text(len(found)), text.format_size(sum(size or 0 for _, size in found)), short_dir())
 
     def press(self, relpaths, files):
         """Ctrl-X on relpaths (of files): open them, unless there's more than one file to download
@@ -70,7 +70,7 @@ class Opener(Downloading, Status):
         asks to press it again"""
         relpaths = list(relpaths)
         if len(relpaths) > names.MAX_OPENED:
-            self._say("Can't open %s at once (at most %d): pick fewer" % (_files(len(relpaths)), names.MAX_OPENED))
+            self._say("Can't open %s at once (at most %d): pick fewer" % (files_text(len(relpaths)), names.MAX_OPENED))
             return
         asked, self._asked = self._asked, None
         question = self.question(relpaths, files)
@@ -128,7 +128,7 @@ class Opener(Downloading, Status):
 
         def fetch(local_path):
             if state is not None:
-                state[0] = _DOWNLOADING
+                state[0] = DOWNLOADING
             self._tree.fetch_file(relpath, local_path, progress=progress)
         with self._drive_lock:
             return downloads.get(self._path(relpath), self._tree.file_size(relpath), fetch)

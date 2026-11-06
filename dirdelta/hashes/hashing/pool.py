@@ -3,7 +3,7 @@ import glob
 import os
 import threading
 
-from dirdelta.hashes.hashing.reading import _lower_priority
+from dirdelta.hashes.hashing.reading import lower_priority
 
 
 class _Pool(object):
@@ -44,7 +44,7 @@ class _Pool(object):
             return None
 
     def _work(self):
-        _lower_priority()
+        lower_priority()
         while True:
             task = self._take()
             if task is None:
@@ -64,7 +64,7 @@ _the_pool = None
 _pool_lock = threading.Lock()
 
 
-def _pool():
+def pool():
     global _the_pool
     with _pool_lock:
         if _the_pool is None:

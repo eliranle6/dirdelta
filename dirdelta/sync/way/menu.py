@@ -36,7 +36,7 @@ class Menu(object):
                                                       self.src_index)
         nr_renamed_in_src = sum(1 for relpath in may_be_there if self._src.cant_move(relpath) is None)
         src_name, dst_name = self._src.displayname(), self._dst.displayname()
-        count = replica_ops._files(len(relpaths))
+        count = replica_ops.files_text(len(relpaths))
         options = {
             self.COPY: (self._copy_label(relpaths, changed, self._src, self._dst),
                         self._cant_copy(self._src, self._dst)),
@@ -48,7 +48,7 @@ class Menu(object):
                                  (len(may_be_there), dst_name),
                                  self._cant_rename(self._dst, len(may_be_there))),
             self.RENAME_IN_SRC: ("Rename %s of these to their matches' paths, in %s" %
-                                 (replica_ops._files(nr_renamed_in_src), src_name),
+                                 (replica_ops.files_text(nr_renamed_in_src), src_name),
                                  self._cant_rename(self._src, nr_renamed_in_src)),
         }
         if changed:
@@ -114,7 +114,7 @@ class Menu(object):
     def _copy_label(self, relpaths, changed, src, dst):
         """The action menu's Copy (src to dst): of the files at relpaths, changed are the ones dst has
         other versions of, which it replaces"""
-        count = replica_ops._files(len(relpaths))
+        count = replica_ops.files_text(len(relpaths))
         if not changed:
             return "Copy the %s to %s" % (count, dst.displayname())
         if len(changed) == len(relpaths):

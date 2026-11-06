@@ -5,7 +5,7 @@ import threading
 
 from dirdelta.known import settings
 from dirdelta.ui.picker.selection import PickerClosed
-from dirdelta.ui.picker.updates import _log_error
+from dirdelta.ui.picker.updates import log_error
 
 
 # How long the selection stays on a node before its picture is made (so moving through files doesn't
@@ -20,10 +20,10 @@ MAX_IMAGES_SENT = 48
 def _send_images(selection, images, sender):
     """Send treepicker the picture of each node the selection stays on (see pick_files()'s images),
     once, until it's gone"""
-    _Images(selection, images, sender).run()
+    Images(selection, images, sender).run()
 
 
-class _Images(object):
+class Images(object):
     """What sends treepicker the pictures of a pick_files() picker (see _send_images()), unless
     they're switched off (settings.are_images_shown(); IMAGES_KEY switches them)"""
 
@@ -50,7 +50,7 @@ class _Images(object):
                 try:
                     image = self._images(relpath, max_width, max_height)
                 except Exception:
-                    _log_error()
+                    log_error()
                     image = None
                 with self._lock:
                     # Switched off meanwhile: not shown

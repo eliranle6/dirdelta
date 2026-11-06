@@ -3,14 +3,14 @@ import os
 
 from dirdelta.claude.ai import query
 from dirdelta.claude.ai.config import (MAX_DESCRIPTION_WORDS, MAX_DIRS_GIVEN, MAX_READ_SIZE, MODEL,
-                                       RECOMMEND_SYSTEM_PROMPT, _schema)
+                                       RECOMMEND_SYSTEM_PROMPT, answer_schema)
 
 
 def _size_text(file):
     return "size %d bytes" % (file.size,) if file.size is not None else "size unknown"
 
 
-def _ask_for_descriptions(files):
+def ask_for_descriptions(files):
     """{relpath: {'description'}} of what Claude says of files, reading the ones it may"""
     lines = []
     for number, file in enumerate(files, 1):
@@ -22,13 +22,13 @@ def _ask_for_descriptions(files):
               "(e.g. 'a cat asleep on a red sofa', 'a 2023 tax form for Eliran').\n\nThe files:\n%s" %
               (MAX_DESCRIPTION_WORDS, '\n'.join(lines)))
     readable = [os.path.dirname(file.local_path) for file in files if file.local_path is not None]
-    result = query._run_query(prompt, sorted(set(readable)), _schema(['description']),
+    result = query.run_query(prompt, sorted(set(readable)), answer_schema(['description']),
                         max_turns=2 * len(files) + 5, model=MODEL)
-    return {files[number - 1].relpath: {'description': _short(item.get('description', ''))}
+    return {files[number - 1].relpath: {'description': shortened(item.get('description', ''))}
             for number, item in _numbered(result, files)}
 
 
-def _ask_for_recommendations(files, dirs, root_name, descriptions, copies):
+def ask_for_recommendations(files, dirs, root_name, descriptions, copies):
     """{relpath: {'action', 'path', 'reason', 'copies'}} of what Claude says to do with files, by
     what's known of them"""
     lines = ["%d. %s (%s)%s%s" % (number, file.relpath, _size_text(file),
@@ -36,7 +36,7 @@ def _ask_for_recommendations(files, dirs, root_name, descriptions, copies):
                                   "; already in the sorted tree, with the same contents, at %s" %
                                   (', '.join(copies[file.relpath]),) if copies.get(file.relpath) else "")
              for number, file in enumerate(files, 1)]
-    listed = _listed_dirs(dirs)
+    listed = listed_dirs(dirs)
     prompt = ("Where each of these files belongs in the sorted tree %s, whose dirs are listed below "
               "(relative to its root, with a few of the names of the files in each): its new path, "
               "relative to the root, a dir and a file name. The dir: an existing one from the list "
@@ -53,7 +53,7 @@ def _ask_for_recommendations(files, dirs, root_name, descriptions, copies):
               "other file's action is 'move'.\n\n"
               "The files (name, size, and what each is):\n%s\n\nThe sorted tree's dirs:\n%s" %
               (root_name, '\n'.join(lines), '\n'.join(listed) or "(none yet)"))
-    result = query._run_query(prompt, [], _schema(['action', 'path', 'reason'], {'action': ['move', 'remove']}),
+    result = query.run_query(prompt, [], answer_schema(['action', 'path', 'reason'], {'action': ['move', 'remove']}),
                         max_turns=5, model=MODEL, system_prompt=RECOMMEND_SYSTEM_PROMPT)
     answers = {}
     for number, item in _numbered(result, files):
@@ -70,7 +70,7 @@ def _ask_for_recommendations(files, dirs, root_name, descriptions, copies):
     return answers
 
 
-def _listed_dirs(dirs):
+def listed_dirs(dirs):
     """The lines that list the sorted tree's dirs ({relpath: a few of its files' names}) for Claude,
     the shallowest first"""
     return ["%s%s" % (dirpath or '. (the root)', " (e.g. %s)" % (', '.join(dirs[dirpath]),) if dirs[dirpath] else "")
@@ -85,7 +85,7 @@ def _numbered(result, files):
             yield number, item
 
 
-def _short(description):
+def shortened(description):
     """description, as one line of at most MAX_DESCRIPTION_WORDS words"""
     words = description.split()
     return ' '.join(words[:MAX_DESCRIPTION_WORDS]).rstrip('.')

@@ -4,8 +4,8 @@ import os
 import time
 
 from dirdelta.drive.drivecache import names
-from dirdelta.drive.drivecache.changes import _clean
-from dirdelta.drive.drivecache.reading import _is_at_or_under
+from dirdelta.drive.drivecache.changes import clean_path
+from dirdelta.drive.drivecache.reading import is_at_or_under
 
 
 def _times_path():
@@ -54,7 +54,7 @@ def note_updated(folder_path, when=None):
     """Note that the cache has what's under folder_path (a path in Drive) as Drive had it at when
     (seconds since the epoch; default: now): read anew, or changed by dirdelta"""
     times = _times()
-    times['updated'][_clean(folder_path)] = time.time() if when is None else when
+    times['updated'][clean_path(folder_path)] = time.time() if when is None else when
     _save_times(times)
 
 
@@ -62,9 +62,9 @@ def updated(folder_path):
     """When the cache's list of folder_path was last updated (see note_updated()), by the latest of
     its own, a folder's above it (read with it) or under it (a change in it): seconds since the
     epoch, or None if it's not known"""
-    folder_path = _clean(folder_path)
+    folder_path = clean_path(folder_path)
     found = [when for path, when in _times()['updated'].items()
-             if _is_at_or_under(path, folder_path) or _is_at_or_under(folder_path, path)]
+             if is_at_or_under(path, folder_path) or is_at_or_under(folder_path, path)]
     return max(found) if found else None
 
 
@@ -73,11 +73,11 @@ def note_uploaded(folder_path, modified, as_of):
     modified, the one this cache made (or used), when the cache's list was updated as of as_of (see
     updated())"""
     times = _times()
-    times['uploaded'][_clean(folder_path)] = {'modified': modified, 'as_of': as_of}
+    times['uploaded'][clean_path(folder_path)] = {'modified': modified, 'as_of': as_of}
     _save_times(times)
 
 
 def uploaded(folder_path):
     """What note_uploaded() noted of folder_path: {'modified': ..., 'as_of': ...}, or None"""
-    found = _times()['uploaded'].get(_clean(folder_path))
+    found = _times()['uploaded'].get(clean_path(folder_path))
     return found if isinstance(found, dict) else None

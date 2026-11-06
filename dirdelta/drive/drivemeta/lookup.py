@@ -10,7 +10,7 @@ def _query(query, fields='files(%s)' % (drivecache.FILE_FIELDS,)):
         num_retries=NUM_RETRIES).get('files', [])
 
 
-def _folder_id(folder_path):
+def folder_id_of(folder_path):
     """The Drive id of the folder at folder_path (a path in Drive), as the cache has it, or None"""
     try:
         for entry in drivecache.entries(folder_path):
@@ -20,7 +20,7 @@ def _folder_id(folder_path):
     return None
 
 
-def _found(folder_id):
+def found_copy(folder_id):
     """(META_DIR's metadata, FILE_NAME's in it), each None if Drive has none, by two requests"""
     folders = _query("name = '%s' and '%s' in parents and mimeType = '%s' and trashed = false" %
                      (paths.META_DIR, folder_id, drivecache.FOLDER_MIME_TYPE))
@@ -30,7 +30,7 @@ def _found(folder_id):
     return folders[0], (files[0] if files else None)
 
 
-def _note_user():
+def note_user():
     """Note the account's user name, once, for the screens (see replicanames.py); only to say it:
     without it, they say less"""
     if drivecache.user() is None:

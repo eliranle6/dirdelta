@@ -6,7 +6,7 @@ from dirdelta.known import replicanames
 from dirdelta.matching import differing
 from dirdelta.matching import syncstate
 from dirdelta.sync.way import interactive_dir_sync
-from dirdelta.sync.ways import DIFFER, _differ, _files
+from dirdelta.sync.ways import DIFFER, differ_word, files_text
 from dirdelta.ui import picker
 
 
@@ -15,7 +15,7 @@ from dirdelta.ui import picker
 STATE = "Sync state"
 
 
-def _state_line(ways, path_a, path_b):
+def state_line(ways, path_a, path_b):
     """The sync menu's line of whether the two are in sync, by what each way found (a
     picker.Skipped), the replicas by their short names (the breadcrumbs')"""
     names = replicanames.short_names([path_a, path_b])
@@ -31,7 +31,7 @@ def _state_line(ways, path_a, path_b):
     differ = ways[0].differs
     nr_differ = len(differ.result()) if differ.done() and differ.exception() is None else 0
     return picker.Skipped(picker.styled([(mark + " ", color), (syncstate.describe(state, path_a, path_b), color),
-                                         ("; %s at the same paths %s" % (_files(nr_differ), _differ(nr_differ)) if nr_differ else "",
+                                         ("; %s at the same paths %s" % (files_text(nr_differ), differ_word(nr_differ)) if nr_differ else "",
                                           differing.STYLE)]))
 
 
@@ -39,7 +39,7 @@ def _state_line(ways, path_a, path_b):
 DOTS_INTERVAL = 0.4
 
 
-class _Action(object):
+class Action(object):
     """A main menu option: the files of a way (interactive_dir_sync), from the replica at src_path to
     the one at dst_path. Their names are worked out each time, as a replica may be labeled meanwhile."""
     def __init__(self, src_path, dst_path, way, changes=None, only_differing=False):
@@ -72,15 +72,15 @@ class _Action(object):
                 return "%s (couldn't compare them)" % (label,)
             if nr_differ == 0:
                 return picker.Disabled("%s: none" % (label,))
-            return "%s (%s)" % (label, _files(nr_differ))
+            return "%s (%s)" % (label, files_text(nr_differ))
         if missing.exception() is not None:
             return "%s (couldn't count the files)" % (label,)
         count = len(missing.result().relpaths)
         # The ones that differ are in its picker too
-        and_differ = ", and %d that %s" % (nr_differ, _differ(nr_differ)) if nr_differ else ""
+        and_differ = ", and %d that %s" % (nr_differ, differ_word(nr_differ)) if nr_differ else ""
         if count == 0 and not nr_differ:
             return picker.Disabled("%s: none, %s has them all" % (label, replicanames.full(self.dst_path)))
-        return "%s (%s%s)" % (label, _files(count), and_differ)
+        return "%s (%s%s)" % (label, files_text(count), and_differ)
 
     def run(self):
         """Returns whether the replicas' files changed meanwhile (see InteractiveDirSync)"""

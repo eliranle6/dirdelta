@@ -6,7 +6,7 @@ from dirdelta.known.mounts.names import HIBERNATED_MARK, HIBERNATION_FILE
 from dirdelta.trees import paths
 
 
-def _read_only_lines(mount):
+def read_only_lines(mount):
     """What to say of mount, which is read-only"""
     lines = ["It's mounted read-only: you can still copy its files to other replicas, but nothing "
              "can be copied into it, removed from it or moved in it."]

@@ -44,7 +44,7 @@ class JobTest(unittest.TestCase):
             started.set()
             self.assertTrue(go_on.wait(TIMEOUT))
             return {'old': (1, 1)}
-        with mock.patch('dirdelta.hashes.hashing.job_scanning._list_files', side_effect=slow_list):
+        with mock.patch('dirdelta.hashes.hashing.job_scanning.list_files', side_effect=slow_list):
             first = threading.Thread(target=self.job.scan)
             first.start()
             self.assertTrue(started.wait(TIMEOUT))
@@ -62,7 +62,7 @@ class JobTest(unittest.TestCase):
         self.assertEqual(self.job.files(), ['next'])
 
     def test_a_scan_that_fails_lets_the_next_one_run(self):
-        with mock.patch('dirdelta.hashes.hashing.job_scanning._list_files', side_effect=ValueError('bad')):
+        with mock.patch('dirdelta.hashes.hashing.job_scanning.list_files', side_effect=ValueError('bad')):
             with self.assertRaises(ValueError):
                 self.job.scan()
         self.job.scan({'a': (1, 1)})
@@ -147,14 +147,14 @@ class HashFileTest(unittest.TestCase):
         self.path = os.path.join(self.root, 'x')
 
     def test_paused_it_stops(self):
-        with self.assertRaises(hashing.reading._Paused):
-            hashing.reading._hash_file(self.path, lambda: True)
+        with self.assertRaises(hashing.reading.Paused):
+            hashing.reading.hash_file(self.path, lambda: True)
 
     def test_one_changed_while_read_has_none(self):
         real_stat = os.stat
         with mock.patch('os.stat', side_effect=lambda path, *args, **kwargs: os.stat_result(
                 (0,) * 6 + (99, 0, 0, 0)) if path == self.path else real_stat(path, *args, **kwargs)):
-            self.assertEqual(hashing.reading._hash_file(self.path, lambda: False), (None, None))
+            self.assertEqual(hashing.reading.hash_file(self.path, lambda: False), (None, None))
 
 
 class ListFilesTest(unittest.TestCase):

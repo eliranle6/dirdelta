@@ -26,7 +26,7 @@ QUIT_ANYWAY = "Quit"
 WAIT_INTERVAL = 0.5
 
 
-def _files(count):
+def files_text(count):
     return text.files(count, grouped=True)
 
 
@@ -34,9 +34,9 @@ is_local = localdiskdirtree.is_local
 
 
 # The dashboard's options: each (one of these, the replica's path), its text what shown_as says
-_HEADING_TEXT = "\u2500\u2500 %s \u2500\u2500"
-_HASH = 'hash'
-_HEADING, _INFO, _KNOWN, _BAR, _STATE, _TOGGLE, _FILES, _RESCAN, _DRIVE, _DRIVE_NOTE, _LABEL = (
+HEADING_TEXT = "\u2500\u2500 %s \u2500\u2500"
+HASH = 'hash'
+HEADING, INFO, KNOWN, BAR, STATE, TOGGLE, FILES, RESCAN, DRIVE, DRIVE_NOTE, LABEL = (
     'heading', 'info', 'known', 'bar', 'state', 'toggle', 'files', 'rescan', 'drive', 'drive note', 'label')
 BACK = "Back"
 TITLE = "Replicas dashboard"
@@ -44,7 +44,7 @@ TITLE = "Replicas dashboard"
 
 REPLICAS_HEADING = '\u2550\u2550 Replicas \u2550\u2550'
 PAIRS_HEADING = '\u2550\u2550 Pairs: what\'s synced to what \u2550\u2550'
-_PAIR, _PAIR_STATE = 'pair', 'pair state'
+PAIR, PAIR_STATE = 'pair', 'pair state'
 
 
 INBOXES_HEADING = '\u2550\u2550 Inboxes (files waiting to be sorted) \u2550\u2550'

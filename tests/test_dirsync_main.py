@@ -336,20 +336,20 @@ class MainMenuTest(unittest.TestCase):
                          picker.Disabled('Files only in LocalDisk:/b: none, LocalDisk:/a has them all'))
 
     def test_the_files_that_differ_option_is_loading_until_theyre_found(self):
-        way = ways._Way(None, None, {})
+        way = ways.Way(None, None, {})
         way.missing = concurrent.futures.Future()
         way.missing.set_result(replica_ops.Missing([], []))
         way.differs = concurrent.futures.Future()
-        action = menu_options._Action('/a', '/b', way, only_differing=True)
+        action = menu_options.Action('/a', '/b', way, only_differing=True)
         self.assertIn('(loading', action.shown_as())
         way.differs.set_exception(OSError('no'))
         self.assertEqual(action.shown_as(), "Files that differ at the same paths in both (couldn't compare them)")
 
     def test_an_option_whose_files_couldnt_be_found_says_so(self):
-        way = ways._Way(None, None, {})
+        way = ways.Way(None, None, {})
         way.missing = concurrent.futures.Future()
         way.missing.set_exception(RuntimeError('dirdiff failed'))
-        action = menu_options._Action('/a', '/b', way)
+        action = menu_options.Action('/a', '/b', way)
         self.assertEqual(action.shown_as(), "Files only in LocalDisk:/a (couldn't count the files)")
 
     def test_browsing_uses_the_files_found_in_the_background(self):

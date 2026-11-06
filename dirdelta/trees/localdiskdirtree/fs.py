@@ -9,7 +9,7 @@ import subprocess
 PART_PREFIX = '.dirdelta-part.'
 
 
-def _trash(path):
+def trash(path):
     """Move the file at path to the desktop's trash (gio trash), where it can be restored from.
     Raises OSError if it can't."""
     result = subprocess.run(['gio', 'trash', path], stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
@@ -18,7 +18,7 @@ def _trash(path):
         raise OSError(result.stdout.strip() or "gio trash failed")
 
 
-def _rename(path, new_path):
+def rename(path, new_path):
     """Move path to new_path: a rename, or between filesystems (which a rename can't), a copy and a
     removal"""
     try:

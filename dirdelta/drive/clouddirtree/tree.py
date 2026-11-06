@@ -12,7 +12,7 @@ from dirdelta.drive import drivecache
 from dirdelta.drive.clouddirtree.constants import DUP_SUFFIX
 from dirdelta.drive.clouddirtree.fetching import Fetching
 from dirdelta.drive.clouddirtree.folders import Folders
-from dirdelta.drive.clouddirtree.info import FileInfo, _NO_INFO
+from dirdelta.drive.clouddirtree.info import FileInfo, NO_INFO
 from dirdelta.drive.clouddirtree.moves import Moves
 from dirdelta.drive.clouddirtree.refresh import refresh_cache
 from dirdelta.drive.clouddirtree.removals import Removals
@@ -56,7 +56,7 @@ class CloudDirTree(Fetching, Uploads, Folders, Moves, Removals, WholeFolders, di
         self._infos = {}
 
     def _info(self, relpath):
-        return self._infos.get(relpath, _NO_INFO)
+        return self._infos.get(relpath, NO_INFO)
 
     def _rekey(self, relpath, new_relpath):
         """What's kept of the file or folder at relpath is new_relpath's now (it was moved)"""

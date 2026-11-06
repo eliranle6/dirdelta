@@ -2,7 +2,7 @@
 import subprocess
 
 
-def _run(command):
+def run_command(command):
     """Run command, with the terminal as its stdin (for sudo's password). Returns None if it
     succeeded, else what it said (or why it couldn't run)."""
     try:
@@ -15,7 +15,7 @@ def _run(command):
     return result.stdout.strip() or "exit code %d" % (result.returncode,)
 
 
-def _described(mount):
+def described(mount):
     """What the user may know the volume by: its device then, type and label"""
     return ', '.join([mount.source or 'UUID ' + mount.uuid, mount.fstype] +
                      (["'%s'" % (mount.label,)] if mount.label else []))

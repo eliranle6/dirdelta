@@ -13,20 +13,20 @@ META_NAME = 'hashes.sqlite'
 # How often what's put is committed, at most, in seconds (and when dirdelta exits, see save())
 SAVE_INTERVAL = 5
 
-_lock = threading.RLock()
+lock = threading.RLock()
 # The databases open, by their files (CACHE_FILE's, opened at first use, and the replicas')
 _dbs = {}
 # The ones with what's not committed yet
-_dirty = set()
+dirty = set()
 _last_saved = 0
 # The timer that commits what's put, once SAVE_INTERVAL passed, if one is due
 _timer = None
 # {a replica's root (a real path): its database's file}, of the replicas whose hashes are kept in
 # them (see use_replica())
-_replicas = {}
+replicas = {}
 
 
-def _save_soon():
+def save_soon():
     """Commit now, if SAVE_INTERVAL passed since the last commit, else once it has (with the lock
     held)"""
     global _timer
@@ -43,30 +43,30 @@ def _save_soon():
 def save():
     """Commit what was put, if anything"""
     global _last_saved, _timer
-    with _lock:
+    with lock:
         if _timer is not None:
             _timer.cancel()
             _timer = None
-        for db in list(_dirty):
+        for db in list(dirty):
             try:
                 db.commit()
             except sqlite3.Error:
                 # Only a cache: the hashes are worked out again next time
                 pass
-        _dirty.clear()
+        dirty.clear()
         _last_saved = time.monotonic()
 
 
 atexit.register(save)
 
 
-def _database():
+def cache_database():
     """CACHE_FILE's database, opened (and made) at first use (the tests point CACHE_FILE elsewhere);
     None if it can't be (only a cache: nothing is kept then)"""
-    return _open(CACHE_FILE)
+    return open_database(CACHE_FILE)
 
 
-def _open(file):
+def open_database(file):
     """The database at file, opened (and made) at first use; None if it can't be (with the lock
     held)"""
     if file in _dbs:

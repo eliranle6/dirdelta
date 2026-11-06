@@ -1,5 +1,5 @@
 """Removing and moving a tree's files, in batches, and what each kind of tree does for one file"""
-from dirdelta.trees.dirtree.common import _verb
+from dirdelta.trees.dirtree.common import batch_verb
 from dirdelta.ui import messages
 from dirdelta.util import dryrun
 
@@ -10,7 +10,7 @@ class Changes(object):
     def remove_files(self, file_entries):
         """Remove the files, and drop them from the tree (so the next diff doesn't list them). A dry
         run changes neither."""
-        verb = _verb('removing')
+        verb = batch_verb('removing')
         nr_started = nr_removed = 0
 
         def starting(what, nr_files=1):
@@ -31,7 +31,7 @@ class Changes(object):
         """Move files within the tree, or to another of its kind (to; a rename there too): each of
         moves is (relpath, new_relpath); a whole dir's, as one (see dir_moves()). Returns the moves
         done. A dry run changes nothing (and returns none)."""
-        verb = _verb('moving')
+        verb = batch_verb('moving')
         done = []
         to = to or self
         dir_moves, file_moves = self.dir_moves(moves, to)

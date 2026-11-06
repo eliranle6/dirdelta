@@ -3,8 +3,8 @@ import tempfile
 
 from dirdelta.ui.picker.kinds import Picked, SIDE_KEY
 from dirdelta.ui.picker.pictures import IMAGES_KEY
-from dirdelta.ui.picker.running import _header_args, _help_args, _run
-from dirdelta.ui.picker.updates import _null_terminated
+from dirdelta.ui.picker.running import header_args, help_args, run_treepicker
+from dirdelta.ui.picker.updates import null_terminated
 
 
 def pick_files(rootpath, relpaths, header='', picked=None, label=None, keys='', selected=None,
@@ -57,8 +57,8 @@ def pick_files(rootpath, relpaths, header='', picked=None, label=None, keys='', 
     Only the files are sent: treepicker adds their dirs, so no tree is built here."""
     if images is not None:
         help_lines = list(help_lines) + key_help_lines([(IMAGES_KEY, "show or hide the files' pictures (and from now on)")])
-    args = (['--typed', '--root', rootpath, '-m', '--print-selection'] + _header_args(header) +
-            _help_args(key_hints, help_lines))
+    args = (['--typed', '--root', rootpath, '-m', '--print-selection'] + header_args(header) +
+            help_args(key_hints, help_lines))
     if enter_picks_selection:
         args.append('--enter-picks-selection')
     for key, text in none_picked_key_hints:
@@ -72,7 +72,7 @@ def pick_files(rootpath, relpaths, header='', picked=None, label=None, keys='', 
         args += ['--select', selected or '.']
     with tempfile.NamedTemporaryFile('wb', prefix='dirdelta-picked-') as picked_file:
         if picked:
-            picked_file.write(_null_terminated(picked))
+            picked_file.write(null_terminated(picked))
             picked_file.flush()
             args += ['--picked', picked_file.name]
         notify = None
@@ -80,7 +80,7 @@ def pick_files(rootpath, relpaths, header='', picked=None, label=None, keys='', 
             files = set(relpaths)
             notify = (notify_keys, lambda key, selected, picked: on_notify(
                 key, selected, [path for path in picked if path in files]))
-        picked_paths = _run(args + ['-'], ('f ' + relpath for relpath in relpaths),
+        picked_paths = run_treepicker(args + ['-'], ('f ' + relpath for relpath in relpaths),
                             shown_as=shown_as, label=label, previews=previews,
                             on_selection=on_selection, notify=notify, side=side, images=images)
     if picked_paths is None:
@@ -108,11 +108,11 @@ def view_files(rootpath, relpaths, header='', previews=None, label=None, shown_a
     """Show the files at relpaths (relative to rootpath, as pick_files() takes them), e.g. what an
     action will make, with previews ({relpath: lines}) beside them, to look through. Returns
     whether the user pressed Enter (rather than quit). shown_as, on_selection: as pick_files()'s."""
-    args = ['--typed', '--root', rootpath] + _header_args(header) + _help_args(key_hints, help_lines)
+    args = ['--typed', '--root', rootpath] + header_args(header) + help_args(key_hints, help_lines)
     send_previews = None
     if previews:
         send_previews = lambda send: send(previews, default=[])
-    return _run(args + ['-'], ('f ' + relpath for relpath in relpaths), shown_as=shown_as, label=label,
+    return run_treepicker(args + ['-'], ('f ' + relpath for relpath in relpaths), shown_as=shown_as, label=label,
                 previews=send_previews, on_selection=on_selection) is not None
 
 
@@ -122,7 +122,7 @@ def key_help_lines(key_hints):
     return ["  %-17s%s" % hint for hint in key_hints]
 
 
-def _keys_args(keys, twice_keys=''):
+def keys_args(keys, twice_keys=''):
     """A one-node picker's args for keys that end picking too (and twice_keys, pressed twice):
     they're printed first, then the selected node (for Enter, the picked one)"""
     if not keys and not twice_keys:
@@ -131,8 +131,8 @@ def _keys_args(keys, twice_keys=''):
             ['--print-selection'])
 
 
-def _key_and_selected(keys, printed, twice_keys=''):
-    """With keys (see _keys_args()), the key ('' for Enter; a twice_keys' doubled) and [the
+def key_and_selected(keys, printed, twice_keys=''):
+    """With keys (see keys_args()), the key ('' for Enter; a twice_keys' doubled) and [the
     selected node's path]; else no key, and printed as it is"""
     if not keys and not twice_keys:
         return '', printed

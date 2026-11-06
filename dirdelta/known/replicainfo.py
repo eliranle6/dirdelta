@@ -10,15 +10,15 @@ from dirdelta.ui import picker
 from dirdelta.known import replicalog
 
 
-def _date(iso_date):
+def date_text(iso_date):
     """'YYYY-MM-DD' as the logs write dates, DD.MM.YYYY"""
     return datetime.date.fromisoformat(iso_date).strftime(replicalog.DATE_FORMAT)
 
 
-def _time(iso_time):
+def time_text(iso_time):
     """'YYYY-MM-DD HH:MM' as 'DD.MM.YYYY HH:MM'"""
     date, _, hours = iso_time.partition(' ')
-    return ('%s %s' % (_date(date), hours)).strip()
+    return ('%s %s' % (date_text(date), hours)).strip()
 
 
 # The colors of how fresh what's known is (when a replica was last synced, Drive's file list last
@@ -74,18 +74,18 @@ def known_lines(info, styled=False):
     entry = info.get('last_entry')
     if entry:
         text = (entry.get('text') or '').splitlines() or ['']
-        lines.append('  Last update: %s%s%s' % (_date(entry['date']) if entry.get('date') else '(no date)',
+        lines.append('  Last update: %s%s%s' % (date_text(entry['date']) if entry.get('date') else '(no date)',
                                                 ' - ' + text[0] if text[0] else '',
                                                 ' (+%d more line%s)' % (len(text) - 1, 's' if len(text) > 2 else '')
                                                 if len(text) > 1 else ''))
     else:
         lines.append('  Last update: (no %s)' % (replicalog.LOG_NAME,))
-    synced = ['synced %s' % (_time(info['seen']),)] if info.get('seen') else []
-    synced += ['changed by dirdelta %s' % (_time(info['changed']),)] if info.get('changed') else []
+    synced = ['synced %s' % (time_text(info['seen']),)] if info.get('seen') else []
+    synced += ['changed by dirdelta %s' % (time_text(info['changed']),)] if info.get('changed') else []
     if synced:
         line = '  ' + '; '.join(synced).capitalize()
         if styled and info.get('seen'):
-            first = '  Synced %s' % (_time(info['seen']),)
+            first = '  Synced %s' % (time_text(info['seen']),)
             line = picker.styled([('  ', None), (SYNCED_MARK + ' ', freshness(info['seen'])),
                                   (first[2:], freshness(info['seen'])),
                                   (line[len(first):], None)])

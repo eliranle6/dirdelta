@@ -5,7 +5,7 @@ import tempfile
 
 from dirdelta.drive import driveapi
 from dirdelta.drive import drivecache
-from dirdelta.drive.drivemeta.lookup import _folder_id, _found, _note_user
+from dirdelta.drive.drivemeta.lookup import folder_id_of, found_copy, note_user
 from dirdelta.drive.drivemeta.names import FILE_NAME, HEADER_KEY, NUM_RETRIES, USED
 
 
@@ -13,11 +13,11 @@ def check(folder_path):
     """Put the copy of folder_path's list kept in Drive (see the module's doc) in the cache, if it's
     newer than the cache's. Returns USED if it was, else None. Raises HttpError or OSError if Drive
     can't be asked."""
-    _note_user()
-    folder_id = _folder_id(folder_path)
+    note_user()
+    folder_id = folder_id_of(folder_path)
     if folder_id is None:
         return None
-    meta, found = _found(folder_id)
+    meta, found = found_copy(folder_id)
     if found is None or found.get('modifiedTime') == (drivecache.uploaded(folder_path) or {}).get('modified'):
         return None
     modified = drivecache.modified_time(found)

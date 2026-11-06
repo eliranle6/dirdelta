@@ -6,7 +6,7 @@ from googleapiclient.errors import HttpError
 from dirdelta.drive import driveapi
 from dirdelta.drive import drivecache
 from dirdelta.drive.clouddirtree.constants import DUP_SUFFIX, MAX_LISTED, NUM_RETRIES
-from dirdelta.drive.clouddirtree.refresh import _changing_both
+from dirdelta.drive.clouddirtree.refresh import changing_both
 from dirdelta.ui import messages
 
 
@@ -42,7 +42,7 @@ class Moves(object):
             return False
         # Stale until the change is in the cache, in case it's cut off in the middle
         try:
-            with _changing_both(self.fullpath(), to.fullpath()):
+            with changing_both(self.fullpath(), to.fullpath()):
                 parent_id = to._folder_id(os.path.dirname(new_relpath))
                 old_parent_id = self._cloud_ids[os.path.dirname(relpath)]
                 md = driveapi.service().files().update(
@@ -70,7 +70,7 @@ class Moves(object):
             return False
         # Stale until the change is in the cache, in case it's cut off in the middle
         try:
-            with _changing_both(self.fullpath(), to.fullpath()):
+            with changing_both(self.fullpath(), to.fullpath()):
                 parent_id = to._folder_id(os.path.dirname(new_dirpath))
                 md = driveapi.service().files().update(
                     fileId=self._cloud_ids[dirpath], body={'name': os.path.basename(new_dirpath)},
@@ -98,7 +98,7 @@ class Moves(object):
             messages.print_line("Skipped %s: %s is there already" % (relpath, new_relpath), "yellow")
             return False
         try:
-            with _changing_both(self.fullpath(), to.fullpath()):
+            with changing_both(self.fullpath(), to.fullpath()):
                 parent_id = to._folder_id(os.path.dirname(new_relpath))
                 body = {'name': os.path.basename(new_relpath), 'parents': [parent_id]}
                 md = driveapi.service().files().copy(

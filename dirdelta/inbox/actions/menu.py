@@ -8,7 +8,7 @@ from dirdelta.inbox.constants import (ASK, CLAUDES_DIR, CLAUDES_NAME, COPY, LABE
                                       READ, REMOVE, SORTED_TREE, THE_INBOX, VERB_COLORS, YOUR_DIR, YOUR_NAME)
 from dirdelta.inbox.actions.menu_moves import MenuMoves
 from dirdelta.inbox.actions.menu_options import MenuOptions
-from dirdelta.inbox.formatting import _files, _of, _option_text
+from dirdelta.inbox.formatting import files_text, of_picked, option_text
 from dirdelta.matching import elsewhere
 from dirdelta.trees import entries
 from dirdelta.ui import picker
@@ -43,7 +43,7 @@ class Menu(MenuOptions, MenuMoves):
                                             {action.label: self.SHORTCUTS[key] for key, action in offered.items()
                                              if key in self.SHORTCUTS})
         choices = picker.grouped([[picker.Option(self.NOTHING, self.NOTHING, prefixes[self.NOTHING] + self.NOTHING)]] + [
-            [picker.Option(key, action.label, prefixes[action.label] + _option_text(action.label, VERB_COLORS[action.verb], action.parts))
+            [picker.Option(key, action.label, prefixes[action.label] + option_text(action.label, VERB_COLORS[action.verb], action.parts))
              for key, action in offered.items() if action.verb in kind] for kind in kinds])
         lines = {key: (self._said_lines(*action.said) if action.said else
                        self._destination_lines(action.verb, action.parts, f.relpaths, action.acted_on or f.relpaths))
@@ -59,7 +59,7 @@ class Menu(MenuOptions, MenuMoves):
         says and offers, worked out once for its options (see _ask_options() and the like)"""
         node = self._inbox_tree.get_node(selected)
         folder = selected if node is None or isinstance(node.data, entries.DirEntry) else posixpath.dirname(selected)
-        count = _files(len(relpaths))
+        count = files_text(len(relpaths))
         undescribed = [relpath for relpath in relpaths
                        if relpath not in self._descriptions and relpath not in self._describing]
         # The ones Claude may be asked where they go: all but the ones it's being asked of now (the
@@ -98,7 +98,7 @@ class Menu(MenuOptions, MenuMoves):
         your_dir = ("<a dir you pick>/", YOUR_DIR)
         inbox_root = (self.inbox_path.rstrip('/') + '/', THE_INBOX)
         typed = ("<a name you type>", YOUR_NAME)
-        it = "it" if is_one else _of(len(recommended), len(relpaths))
+        it = "it" if is_one else of_picked(len(recommended), len(relpaths))
         they = "it" if is_one else "the %s" % (count,)
         def to_a_dir(action):
             return lambda: self._to_a_dir(action, relpaths, renamed, count)

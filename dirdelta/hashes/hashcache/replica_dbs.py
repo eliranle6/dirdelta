@@ -1,7 +1,7 @@
 """A local replica's own database (META_DIR/META_NAME in it), and which database has a file"""
 import os
 
-from dirdelta.hashes.hashcache.database import META_NAME, _database, _lock, _open, _replicas
+from dirdelta.hashes.hashcache.database import META_NAME, cache_database, lock, open_database, replicas
 from dirdelta.trees import paths
 from dirdelta.util import dryrun
 
@@ -25,23 +25,23 @@ def use_replica(root):
             os.makedirs(os.path.dirname(file), exist_ok=True)
         except OSError:
             return None
-    with _lock:
-        db = _open(file)
+    with lock:
+        db = open_database(file)
         if db is None:
             return None
-        _replicas[root] = file
+        replicas[root] = file
         _move_in(root, db)
     return file
 
 
 def uses_replica(root):
     """The database file of the replica at root, if its hashes are kept in it (else None)"""
-    return _replicas.get(os.path.realpath(root))
+    return replicas.get(os.path.realpath(root))
 
 
 def _move_in(root, db):
     """Move the hashes CACHE_FILE has of the files under root into db, root's (with the lock held)"""
-    central = _database()
+    central = cache_database()
     if central is None:
         return
     prefix = root.rstrip('/') + '/'
@@ -56,14 +56,14 @@ def _move_in(root, db):
     central.commit()
 
 
-def _where(path):
+def where(path):
     """(The database of the file at path (an absolute path), its key there: its path in the replica
     whose it is, or its absolute path in CACHE_FILE's), or (None, None) if none can be opened (with
     the lock held)"""
-    for root in sorted(_replicas, key=len, reverse=True):
+    for root in sorted(replicas, key=len, reverse=True):
         if path.startswith(root.rstrip('/') + '/'):
-            db = _open(_replicas[root])
+            db = open_database(replicas[root])
             if db is not None:
                 return db, path[len(root.rstrip('/')) + 1:]
-    db = _database()
+    db = cache_database()
     return (db, path) if db is not None else (None, None)

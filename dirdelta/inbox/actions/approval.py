@@ -4,7 +4,7 @@ import posixpath
 
 from dirdelta.claude import ai
 from dirdelta.inbox.constants import LABEL
-from dirdelta.inbox.formatting import _files, _join, _wrapped
+from dirdelta.inbox.formatting import files_text, join_path, wrapped
 from dirdelta.ui import messages
 from dirdelta.ui import picker
 from dirdelta.util import dryrun
@@ -27,7 +27,7 @@ class Approval(object):
             target = sorted(clashes)[0]
             messages.show("Files of the same name",
                           ["%d files would go to %s: %s. Pick them apart." %
-                           (len(clashes[target]), _join(self.root_path, target), ', '.join(clashes[target]))],
+                           (len(clashes[target]), join_path(self.root_path, target), ', '.join(clashes[target]))],
                           dryrun.label(), 'red')
             return None
         destinations = sorted({os.path.dirname(target) for _, target in plan})
@@ -41,13 +41,13 @@ class Approval(object):
             if os.path.dirname(target) in new_dirs:
                 lines += ["", "In a new dir."]
             if os.path.basename(target) != os.path.basename(relpath):
-                lines += ["", "Renamed, from:"] + _wrapped(os.path.basename(relpath), "  ")
+                lines += ["", "Renamed, from:"] + wrapped(os.path.basename(relpath), "  ")
             recommendation = self._recommendations.get(relpath)
             if recommendation and self._target(relpath) == target:
-                lines += ["", "Why (Claude):"] + _wrapped(recommendation.get('reason', ''), "  ")
+                lines += ["", "Why (Claude):"] + wrapped(recommendation.get('reason', ''), "  ")
             previews[target] = lines
         summary = ("%s %s from %s into %d dirs of %s%s" %
-                   (verb, _files(len(plan)), self.inbox_path, len(destinations), self.root_path,
+                   (verb, files_text(len(plan)), self.inbox_path, len(destinations), self.root_path,
                     " (%d of them new)" % (len(new_dirs),) if new_dirs else ""))
         header = "%s, where shown (beside each: where it's from). Look them through." % (summary,)
         if not is_reviewed and not picker.view_files(self.root_path, sorted(targets, key=lambda target: target.split('/')),

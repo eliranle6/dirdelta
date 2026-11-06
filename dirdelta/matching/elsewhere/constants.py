@@ -21,7 +21,7 @@ SURELY_MOVED = picker.highlighted("→ surely this file, moved")
 SURELY_RENAMED = picker.highlighted("→ surely this file, renamed")
 
 # The hashes that Drive gives (drivecache.HASH_FIELDS), the fastest to work out first
-_HASH_PREFERENCE = ('sha1', 'sha256')
+HASH_PREFERENCE = ('sha1', 'sha256')
 
 # A candidate in the other replica: its relpath, size, date taken and modification time (or None),
 # how many of the file's siblings (of how many tried) are in its dir too, whether its contents are

@@ -1,8 +1,8 @@
 """Asking Claude about a dir as a whole"""
 from dirdelta.claude.ai import query
-from dirdelta.claude.ai.cache import _load_cache, _save_cache, cached_dir
-from dirdelta.claude.ai.config import AIError, DIR_SYSTEM_PROMPT, MAX_DESCRIPTION_WORDS, MODEL, _cache_lock
-from dirdelta.claude.ai.prompts import _listed_dirs, _short
+from dirdelta.claude.ai.cache import load_cache, save_cache, cached_dir
+from dirdelta.claude.ai.config import AIError, DIR_SYSTEM_PROMPT, MAX_DESCRIPTION_WORDS, MODEL, cache_lock
+from dirdelta.claude.ai.prompts import listed_dirs, shortened
 
 
 def recommend_dir(dir_, key, dirs, root_name, anew=False):
@@ -18,10 +18,10 @@ def recommend_dir(dir_, key, dirs, root_name, anew=False):
         if recommendation:
             return recommendation
     recommendation = _ask_for_dir_recommendation(dir_, dirs, root_name)
-    with _cache_lock:
-        cache = _load_cache()
+    with cache_lock:
+        cache = load_cache()
         cache.setdefault(key, {}).setdefault('recommendations', {})[root_name] = recommendation
-        _save_cache(cache)
+        save_cache(cache)
     return recommendation
 
 
@@ -52,15 +52,15 @@ def _ask_for_dir_recommendation(dir_, dirs, root_name):
               "And the summary: what it is, in at most %d words (e.g. 'Rome trip photos, Oct 2024'), and "
               "the reason, in a few words.\n\n"
               "The dir:\n%s\n\nThe sorted tree's dirs:\n%s" %
-              (root_name, MAX_DESCRIPTION_WORDS, '\n'.join(lines), '\n'.join(_listed_dirs(dirs)) or "(none yet)"))
+              (root_name, MAX_DESCRIPTION_WORDS, '\n'.join(lines), '\n'.join(listed_dirs(dirs)) or "(none yet)"))
     schema = {"type": "object",
               "properties": {"action": {"type": "string", "enum": ["move", "split", "remove"]},
                              "path": {"type": "string"}, "summary": {"type": "string"},
                              "reason": {"type": "string"}},
               "required": ["action", "path", "summary", "reason"]}
-    result = query._run_query(prompt, [], schema, max_turns=5, model=MODEL, system_prompt=DIR_SYSTEM_PROMPT)
+    result = query.run_query(prompt, [], schema, max_turns=5, model=MODEL, system_prompt=DIR_SYSTEM_PROMPT)
     action = result.get('action')
-    answer = {'action': action, 'path': '', 'summary': _short(result.get('summary', '')),
+    answer = {'action': action, 'path': '', 'summary': shortened(result.get('summary', '')),
               'reason': result.get('reason', '').strip()}
     if action == 'move':
         parts = [part for part in result.get('path', '').strip().split('/') if part not in ('', '.')]

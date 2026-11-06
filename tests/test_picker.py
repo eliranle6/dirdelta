@@ -160,7 +160,7 @@ class PickerTest(unittest.TestCase):
         is_done = mock.Mock()
         is_done.wait.return_value = True
         with mock.patch('dirdelta.ui.picker.updates.ERRORS_LOG', log):
-            picker.updates._send_updates(write_fd, mock.Mock(side_effect=TypeError("a bug")), is_done)
+            picker.updates.send_updates(write_fd, mock.Mock(side_effect=TypeError("a bug")), is_done)
         os.close(write_fd)
         with os.fdopen(read_fd, 'rb') as pipe:
             self.assertIn(b"Something went wrong", pipe.read())
@@ -395,7 +395,7 @@ class PickerTest(unittest.TestCase):
             return '1 1 000000'
         selection._move('bad.jpg')
         thread = threading.Thread(target=picker.pictures._send_images, args=(selection, images, sender))
-        with mock.patch.object(picker.pictures, '_log_error') as log_error, \
+        with mock.patch.object(picker.pictures, 'log_error') as log_error, \
                 mock.patch.object(picker.pictures, 'IMAGE_DELAY', 0.01):
             thread.start()
             time.sleep(0.1)
@@ -414,7 +414,7 @@ class PickerTest(unittest.TestCase):
         def images(relpath, max_width, max_height):
             made.append(relpath)
             return '1 1 000000'
-        pictures = picker.pictures._Images(selection, images, sender)
+        pictures = picker.pictures.Images(selection, images, sender)
         thread = threading.Thread(target=pictures.run)
         with mock.patch.object(picker.pictures, 'IMAGE_DELAY', 0.01):
             thread.start()
@@ -439,7 +439,7 @@ class PickerTest(unittest.TestCase):
         os.environ['FAKE_PICKER_NOTIFY'] = 'i|a.jpg|;\t|a.jpg|'
         self.answer('a.jpg')
         notified = []
-        with mock.patch.object(picker.pictures._Images, 'toggle') as toggle:
+        with mock.patch.object(picker.pictures.Images, 'toggle') as toggle:
             picker.pick_files('/r', ['a.jpg'], previews=lambda send: None, images=lambda *_: None,
                               notify_keys='\t', on_notify=lambda *args: notified.append(args))
         args, _ = self.call()
@@ -610,18 +610,18 @@ class AmbientStatusTest(unittest.TestCase):
 
     def test_its_shown_by_a_picker_with_nothing_else_to_show(self):
         picker.set_ambient_status(lambda: [('hashing', 'orange')])
-        self.assertEqual(picker.updates._with_ambient_status(None)(), {'': picker.segments([('hashing', 'orange')])})
-        self.assertEqual(picker.updates._with_ambient_status(lambda: {'x': 'y'})(),
+        self.assertEqual(picker.updates.with_ambient_status(None)(), {'': picker.segments([('hashing', 'orange')])})
+        self.assertEqual(picker.updates.with_ambient_status(lambda: {'x': 'y'})(),
                          {'x': 'y', '': picker.segments([('hashing', 'orange')])})
 
     def test_a_pickers_own_status_comes_first(self):
         picker.set_ambient_status(lambda: [('hashing', 'orange')])
-        self.assertEqual(picker.updates._with_ambient_status(lambda: {'': 'mine'})(), {'': 'mine'})
+        self.assertEqual(picker.updates.with_ambient_status(lambda: {'': 'mine'})(), {'': 'mine'})
 
     def test_its_cleared_once_its_over(self):
         parts = [[('hashing', 'orange')], []]
         picker.set_ambient_status(lambda: parts[0])
-        shown = picker.updates._with_ambient_status(None)
+        shown = picker.updates.with_ambient_status(None)
         self.assertEqual(shown(), {'': picker.segments(parts[0])})
         parts.pop(0)
         self.assertEqual(shown(), {'': ''})

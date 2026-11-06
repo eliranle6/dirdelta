@@ -14,7 +14,7 @@ The file is this module's (load(), save()); what's kept in it is replica_history
 import json
 import os
 
-from dirdelta.known.replica_history import Replicas, _pair, normalized
+from dirdelta.known.replica_history import Replicas, pair_of, normalized
 from dirdelta.known.replica_history import MAX_HISTORY, MAX_PATHS_KEPT, MAX_RECENT_DIRS, MAX_SORTS  # noqa: F401
 
 REPLICAS_FILE = os.path.expanduser('~/.config/dirdelta/replicas.json')
@@ -66,7 +66,7 @@ def _pairs(items):
     for item in items:
         if not (isinstance(item, list) and len(item) == 2 and all(isinstance(path, str) for path in item)):
             raise ValueError("not a pair of paths: %r" % (item,))
-        pairs.append(_pair(*item))
+        pairs.append(pair_of(*item))
     return pairs
 
 
@@ -92,4 +92,4 @@ def _compared(content):
             isinstance(item, dict) and len(item.get('pair') or []) == 2 and len(item.get('only') or []) == 2 and
             isinstance(item.get('when'), str) for item in content):
         raise ValueError("not the pairs compared: %r" % (content,))
-    return [dict(item, pair=list(_pair(*item['pair']))) for item in content]
+    return [dict(item, pair=list(pair_of(*item['pair']))) for item in content]

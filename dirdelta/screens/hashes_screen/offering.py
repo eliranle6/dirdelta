@@ -2,7 +2,7 @@
 from dirdelta.hashes import hashing
 from dirdelta.known import replicanames
 from dirdelta.screens.hashes_screen.names import (HASH_AND_WAIT, HASH_IN_BACKGROUND, NOTHING, NOT_NOW,
-                                                  _files, is_local)
+                                                  files_text, is_local)
 from dirdelta.screens.hashes_screen.waiting import wait
 from dirdelta.ui import messages
 from dirdelta.ui import picker
@@ -54,7 +54,7 @@ def offer(jobs):
         return True
     names = replicanames.short_names([job.root for job, _ in left])
     lines = ["Hash unhashed files?", ""]
-    lines += ["%s unhashed in %s." % (_files(progress.nr_files - progress.nr_done), names[job.root])
+    lines += ["%s unhashed in %s." % (files_text(progress.nr_files - progress.nr_done), names[job.root])
               for job, progress in left]
     lines.append("It helps compare files, but may slow down the machine.")
     answer = picker.pick_option([NOTHING, NOT_NOW, HASH_AND_WAIT, HASH_IN_BACKGROUND],
