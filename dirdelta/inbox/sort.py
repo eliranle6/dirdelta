@@ -1,6 +1,5 @@
 """The sort of an inbox into a sorted tree (see dirdelta.inbox): InboxSort, one object whose
 parts are mixins, each in a module of its own, and run(), which runs one"""
-import collections
 import os
 import threading
 
@@ -95,50 +94,9 @@ class InboxSort(Listing, Screen, Keys, Side, Previews, Copies, Menu, Destination
         # What's changed live in the sorted tree, for its log's entry (see replicalog.py). An inbox
         # has no log: it's where files wait to be sorted, not a replica to keep track of
         self.changes = log_entries.Changes()
-        for path in (self.inbox_path, self.root_path):
-            if not paths.is_cloud_path(path) and not os.path.isdir(path):
-                raise InboxError("%s is not a directory" % (path,))
-        if any(paths.is_cloud_path(path) for path in (self.inbox_path, self.root_path)) and \
-                not drivecache.exists():
-            for path in (self.inbox_path, self.root_path):
-                if paths.is_cloud_path(path):
-                    clouddirtree.refresh_cache(paths.path_in_cloud(path))
-        # Both of a kind: a move is a rename (see DirTree.move_files()). Else a move is a copy (an upload
-        # or a download), then a removal from the inbox.
-        self.is_same_kind = self.inbox_is_cloud == self.root_is_cloud
-        inbox_parts, root_parts = paths.components(self.inbox_path), paths.components(self.root_path)
-        if self.is_same_kind and root_parts[:len(inbox_parts)] == inbox_parts:
-            raise InboxError("The sorted tree %s can't be in the inbox %s" % (self.root_path, self.inbox_path))
-        # The inbox's relpath in the sorted tree, if it's in it (its files aren't the sorted tree's)
-        self._inbox_in_root = ('/'.join(inbox_parts[len(root_parts):])
-                               if self.is_same_kind and inbox_parts[:len(root_parts)] == root_parts else None)
-        self._inbox_tree, self._root_tree = _tree(self.inbox_path), _tree(self.root_path)
-        # Neither is removed when it's left empty, nor moved whole
-        self._inbox_tree.keep_dirs([''])
-        self._root_tree.keep_dirs(['' if self._inbox_in_root is None else self._inbox_in_root])
-        # What Claude said of the inbox's files, by relpath (in the inbox)
-        self._descriptions = {}
-        self._recommendations = {}
-        # What Claude said of the inbox's dirs as wholes: {dir relpath: (its ai.dir_key() then, the
-        # recommendation)}; the ones being asked about, and why the ones that couldn't be weren't; how
-        # many of each one's files were copies of the sorted tree's then; and the threads asking
-        self._dir_recommendations = {}
-        self._dir_asking = set()
-        self._dir_failed = {}
-        self._dir_copies = {}
-        self._dir_threads = []
-        # The files being described (in the background), the queue of them, and the worker; and why
-        # the ones that couldn't be weren't
-        self._describing = set()
-        # The files to say where they go of; and all the queued ones (for either)
-        self._placing = set()
-        self._queued = set()
-        self._queue = collections.deque()
-        self._worker = None
-        self._state_lock = threading.Lock()
-        self._failed = {}
-        # The queued files to ask about anew (Ctrl-I on ones asked before), whatever Claude's cache has
-        self._anew = set()
+        self._check_paths()
+        self._make_trees()
+        self._init_claude()
         # One at a time: what the describer and the opener download (they'd write the same .part, see
         # downloads.get()), and what the screen changes in the trees, which those read. It isn't for
         # Drive's connection: each thread has its own (driveapi.service()).
@@ -161,6 +119,33 @@ class InboxSort(Listing, Screen, Keys, Side, Previews, Copies, Menu, Destination
         self._listing = {}
         # The sorted tree's dirs and files, for the tree beside the picker
         self._side_listing = sidetree.Listing(self.root_path, self._root_tree, self._inbox_in_root)
+
+    def _check_paths(self):
+        """Check the inbox's and the sorted tree's paths (making the Drive cache, if one's on Drive and
+        there's none), and whether a move is a rename; raises InboxError if they can't be sorted"""
+        for path in (self.inbox_path, self.root_path):
+            if not paths.is_cloud_path(path) and not os.path.isdir(path):
+                raise InboxError("%s is not a directory" % (path,))
+        if any(paths.is_cloud_path(path) for path in (self.inbox_path, self.root_path)) and \
+                not drivecache.exists():
+            for path in (self.inbox_path, self.root_path):
+                if paths.is_cloud_path(path):
+                    clouddirtree.refresh_cache(paths.path_in_cloud(path))
+        # Both of a kind: a move is a rename (see DirTree.move_files()). Else a move is a copy (an upload
+        # or a download), then a removal from the inbox.
+        self.is_same_kind = self.inbox_is_cloud == self.root_is_cloud
+        inbox_parts, root_parts = paths.components(self.inbox_path), paths.components(self.root_path)
+        if self.is_same_kind and root_parts[:len(inbox_parts)] == inbox_parts:
+            raise InboxError("The sorted tree %s can't be in the inbox %s" % (self.root_path, self.inbox_path))
+        # The inbox's relpath in the sorted tree, if it's in it (its files aren't the sorted tree's)
+        self._inbox_in_root = ('/'.join(inbox_parts[len(root_parts):])
+                               if self.is_same_kind and inbox_parts[:len(root_parts)] == root_parts else None)
+
+    def _make_trees(self):
+        """The inbox's and the sorted tree's trees, neither removed when it's left empty, nor moved whole"""
+        self._inbox_tree, self._root_tree = _tree(self.inbox_path), _tree(self.root_path)
+        self._inbox_tree.keep_dirs([''])
+        self._root_tree.keep_dirs(['' if self._inbox_in_root is None else self._inbox_in_root])
 
 
 def run(inbox_path, root_path, known_replicas=None):

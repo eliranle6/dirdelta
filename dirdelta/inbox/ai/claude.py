@@ -1,4 +1,5 @@
 """Asking Claude about the inbox's files in the background: describing them, and where they go"""
+import collections
 import threading
 
 from dirdelta.claude import ai
@@ -7,6 +8,32 @@ from dirdelta.matching import elsewhere
 
 class Claude(object):
     """Claude's queue of files (InboxSort's)"""
+
+    def _init_claude(self):
+        """What Claude said, and what it's asked, kept as it goes"""
+        # What Claude said of the inbox's files, by relpath (in the inbox)
+        self._descriptions = {}
+        self._recommendations = {}
+        # What Claude said of the inbox's dirs as wholes: {dir relpath: (its ai.dir_key() then, the
+        # recommendation)}; the ones being asked about, and why the ones that couldn't be weren't; how
+        # many of each one's files were copies of the sorted tree's then; and the threads asking
+        self._dir_recommendations = {}
+        self._dir_asking = set()
+        self._dir_failed = {}
+        self._dir_copies = {}
+        self._dir_threads = []
+        # The files being described (in the background), the queue of them, and the worker; and why
+        # the ones that couldn't be weren't
+        self._describing = set()
+        # The files to say where they go of; and all the queued ones (for either)
+        self._placing = set()
+        self._queued = set()
+        self._queue = collections.deque()
+        self._worker = None
+        self._state_lock = threading.Lock()
+        self._failed = {}
+        # The queued files to ask about anew (Ctrl-I on ones asked before), whatever Claude's cache has
+        self._anew = set()
 
     # Claude
 
