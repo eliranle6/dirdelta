@@ -2,12 +2,8 @@
 import os
 
 from dirdelta.claude.ai import query
-from dirdelta.claude.ai.config import (MAX_DESCRIPTION_WORDS,
-    MAX_DIRS_GIVEN,
-    MAX_READ_SIZE,
-    MODEL,
-    RECOMMEND_SYSTEM_PROMPT,
-    _schema)
+from dirdelta.claude.ai.config import (MAX_DESCRIPTION_WORDS, MAX_DIRS_GIVEN, MAX_READ_SIZE, MODEL,
+                                       RECOMMEND_SYSTEM_PROMPT, _schema)
 
 
 def _size_text(file):

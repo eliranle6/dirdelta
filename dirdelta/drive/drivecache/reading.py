@@ -7,12 +7,8 @@ import posixpath
 from dirdelta.drive.drivecache import database
 from dirdelta.drive.drivecache import names
 from dirdelta.drive.drivecache.database import _database_path, _generations, _opened, _root_of, exists
-from dirdelta.drive.drivecache.metadata import (DriveCacheError,
-    date_taken,
-    hashes,
-    is_google_file,
-    modified_time,
-    path_name)
+from dirdelta.drive.drivecache.metadata import (DriveCacheError, date_taken, hashes, is_google_file,
+                                                modified_time, path_name)
 from dirdelta.drive.drivecache.names import FOLDER_MIME_TYPE, MAX_PROBLEMS_SHOWN
 from dirdelta.trees import paths
 from dirdelta.util import text

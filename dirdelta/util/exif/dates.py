@@ -1,12 +1,8 @@
 """When a photo was taken, by its format"""
 import struct
 
-from dirdelta.util.exif.formats import (CR3_EXTENSIONS,
-    HEIF_EXTENSIONS,
-    JPEG_EXTENSIONS,
-    MAX_TIFF_HEADER,
-    RAF_EXTENSIONS,
-    TIFF_EXTENSIONS)
+from dirdelta.util.exif.formats import (CR3_EXTENSIONS, HEIF_EXTENSIONS, JPEG_EXTENSIONS, MAX_TIFF_HEADER,
+                                        RAF_EXTENSIONS, TIFF_EXTENSIONS)
 from dirdelta.util.exif.isobmff import _cr3_tiffs, _heif_exif
 from dirdelta.util.exif.jpeg import _exif_segment, _raf_exif
 from dirdelta.util.exif.tiff import _tiff_date

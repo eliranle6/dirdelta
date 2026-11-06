@@ -1,10 +1,8 @@
 """What a file's metadata (as Drive gives it) says of it"""
 import datetime
 
-from dirdelta.drive.drivecache.names import (FOLDER_MIME_TYPE,
-    GOOGLE_APPS_MIME_PREFIX,
-    GOOGLE_FILE_EXTENSIONS,
-    HASH_FIELDS)
+from dirdelta.drive.drivecache.names import (FOLDER_MIME_TYPE, GOOGLE_APPS_MIME_PREFIX,
+                                             GOOGLE_FILE_EXTENSIONS, HASH_FIELDS)
 from dirdelta.util import exif
 
 

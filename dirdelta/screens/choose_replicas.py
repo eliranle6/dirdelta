@@ -2,42 +2,20 @@
 two slots (a local dir under /, or a Drive one), or a favorite or recent pair at once; or an inbox
 to sort into a sorted tree (inbox.py), a new one or a recent one. Each kind is a section of its own,
 under a heading."""
-import collections
 import os
 
-from dirdelta.drive import drivecache
-from dirdelta.screens import hashes_screen
 from dirdelta.hashes import hashing
-from dirdelta.util import dryrun
-from dirdelta.ui import messages
+from dirdelta.screens import hashes_screen
+from dirdelta.screens.pair_labels import (favorite_label, help_lines, known_paths, recent_label, slot_label,
+                                          sort_label, styled_pair)
+from dirdelta.screens.replica_choices import _choose_replica, known_replicas
 from dirdelta.trees import paths
+from dirdelta.ui import messages
 from dirdelta.ui import picker
-from dirdelta.known import replicanames
-from dirdelta.known import replicainfo
-from dirdelta.matching import syncstate
-from dirdelta.trees import replicafactory
-
-NOT_CHOSEN = '<none: press Enter to choose one>'
-LOCAL = 'Local disk'
-CLOUD = 'Google Drive'
-QUIT = 'Quit'
-KNOWN_LIST = '  Replicas dashboard: every known replica (last updates, files, hashes)'
-SORT = '  New sort: choose an inbox, and the sorted tree its files go to (with Claude\'s help)'
-# The menu's sections' headings (shown in grey, and skipped when moving: they can't be picked)
-SYNC_SECTION = '\u2500\u2500 Sync two replicas \u2500\u2500'
-RECENT_SYNCS_SECTION = '\u2500\u2500 Recent syncs \u2500\u2500'
-SORT_SECTION = '\u2500\u2500 Sort an inbox into a sorted tree \u2500\u2500'
-RECENT_SORTS_SECTION = '\u2500\u2500 Recent inbox sorts \u2500\u2500'
-REPLICAS_SECTION = '\u2500\u2500 Replicas \u2500\u2500'
-# What a replica the user knows is offered as, when choosing a sorted tree
-KNOWN = 'Known replica: '
-
-# What run() returns for an inbox to sort (rather than a pair to sync)
-Sort = collections.namedtuple('Sort', ['inbox', 'root'])
-
-# Where a local replica is browsed from, and a cloud one (all of Drive)
-LOCAL_ROOT = '/'
-CLOUD_ROOT = 'cloud'
+from dirdelta.util import dryrun
+from dirdelta.screens.start_names import (CLOUD, KNOWN_LIST, LOCAL, NOT_CHOSEN, QUIT,  # noqa: F401
+                                          RECENT_SORTS_SECTION, RECENT_SYNCS_SECTION, REPLICAS_SECTION, SORT,
+                                          SORT_SECTION, SYNC_SECTION, Sort)
 
 
 def run(replicas):
@@ -115,115 +93,3 @@ def are_there(replica_paths):
                       dryrun.label(), 'red')
         return False
     return True
-
-
-def known_replicas(replicas):
-    """The replicas' paths the user knows, once each: the favorites', the recent pairs', then the
-    sorted trees of the recent sorts"""
-    found = [path for pair in replicas.favorites + replicas.history for path in pair]
-    found += [root for _, root in replicas.sorts]
-    return list(dict.fromkeys(found))
-
-
-
-def slot_label(name, path):
-    return '  Replica %s: %s' % (name, path or NOT_CHOSEN)
-
-
-def favorite_label(path_a, path_b, known=None):
-    return '  Favorite: %s' % (pair_label(path_a, path_b, known),)
-
-
-def recent_label(path_a, path_b, known=None):
-    return '  %s' % (pair_label(path_a, path_b, known),)
-
-
-def sort_label(inbox, root):
-    return '  %s -> %s' % (inbox, root)
-
-
-def pair_label(path_a, path_b, known=None):
-    """The pair's label: each path, with when it was last updated (its log's last entry, as known
-    (a Replicas), if it is)"""
-    return '%s%s <-> %s%s' % (replicanames.labeled(path_a), _updated(known, path_a),
-                              replicanames.labeled(path_b), _updated(known, path_b))
-
-
-def _updated(known, path):
-    """' (updated DD.MM.YYYY)' of the replica at path, by its log's last entry, as known has it;
-    '' if it doesn't"""
-    info = known.info_at(path) if known is not None else None
-    date = ((info or {}).get('last_entry') or {}).get('date')
-    return ' (updated %s)' % (_date(date),) if date else ''
-
-
-# What's known of a replica, as it's said (see replicainfo.py)
-_date = replicainfo._date
-_time = replicainfo._time
-FRESH, RECENT, OLD = replicainfo.FRESH, replicainfo.RECENT, replicainfo.OLD
-SYNCED_MARK, CACHE_MARK = replicainfo.SYNCED_MARK, replicainfo.CACHE_MARK
-freshness = replicainfo.freshness
-cache_time = replicainfo.cache_time
-path_marks_help = replicainfo.path_marks_help
-known_lines = replicainfo.known_lines
-
-
-def help_lines():
-    """The start menu's ? help: what the marks before a pair and its paths are"""
-    return (["Marks before a pair: whether it's in sync, as far as dirdelta knows"] +
-            ["  " + line for line in syncstate.help_lines()] + path_marks_help())
-
-
-def styled_pair(label, path_a, path_b, known):
-    """A pair's menu label (label, ending with pair_label()'s) as it's shown: after a mark of whether
-    it's in sync (see syncstate.py), each path after a mark in the color of when it was last synced
-    (grey: never, as far as known), and a Drive one's after one in the color of when Drive's file
-    list was read"""
-    def marks(path):
-        info = known.info_at(path) if known is not None else None
-        parts = [(SYNCED_MARK + " ", freshness((info or {}).get('seen')) or 'grey')]
-        if paths.is_cloud_path(path):
-            parts.append((CACHE_MARK + " ", freshness(cache_time(path)) or 'grey'))
-        return parts
-    pair = pair_label(path_a, path_b, known)
-    head = label[:len(label) - len(pair)] if label.endswith(pair) else label
-    a_text = '%s%s' % (replicanames.labeled(path_a), _updated(known, path_a))
-    sync_mark, sync_color = syncstate.mark(syncstate.of(known, path_a, path_b))
-    return picker.styled([(head, None), (sync_mark + " ", sync_color)] + marks(path_a) + [(a_text + " <-> ", None)] + marks(path_b) +
-                         [(pair[len(a_text) + 5:], None)])
-
-
-def known_paths(replicas):
-    """The paths of the replicas known (replicas', a Replicas), each at the path it was last seen at,
-    the latest updated first"""
-    def last_date(info):
-        return ((info.get('last_entry') or {}).get('date') or '', info.get('seen') or '')
-    return [(info.get('paths') or [identity])[-1]
-            for identity, info in sorted(replicas.known.items(), key=lambda item: last_date(item[1]), reverse=True)]
-
-
-def _choose_replica(name, known=()):
-    """Let the user choose a local dir or a Drive one, or one of known (paths) at once. Returns its
-    path, or None if they quit."""
-    options = {KNOWN + path: path for path in known}
-    where = picker.pick_option(list(options) + [LOCAL, CLOUD], header='Where is %s?' % (name,),
-                               title='Choose %s' % (name,))
-    if where in options:
-        return options[where]
-    header = 'Choose %s' % (name,)
-    key_hints = [('Enter', 'choose the selected dir')]
-    if where == LOCAL:
-        return picker.pick_under_dir(LOCAL_ROOT, dirs_only=True, lazy=True, header=header, key_hints=key_hints)
-    if where == CLOUD:
-        try:
-            tree = replicafactory.create_dirtree_from_arg(CLOUD_ROOT)
-        except drivecache.DriveCacheError as error:
-            messages.show("Cannot read Google Drive's file list", str(error).splitlines(),
-                          dryrun.label(), 'red')
-            return None
-        if tree is None:
-            return None
-        picked = picker.pick_from_tree(tree, header=header, dirs_only=True, key_hints=key_hints)
-        # A cloud tree's paths are Drive's (/mein/music), not cloud paths (cloud/mein/music)
-        return paths.join_cloud(picked[0].relpath) if picked else None
-    return None

@@ -4,17 +4,9 @@ import posixpath
 import time
 
 from dirdelta.hashes import hashing
-from dirdelta.inbox.constants import (CLAUDE_STYLE,
-    DESCRIBED,
-    DESCRIPTION_TITLE,
-    DESTINATION_TITLE,
-    DIR_TITLE,
-    JUNK_BY_CLAUDE,
-    JUNK_BY_NAME,
-    LOOKING,
-    LOOKING_AT_DIR,
-    MAYBE_JUNK,
-    PREVIEWS_INTERVAL)
+from dirdelta.inbox.constants import (CLAUDE_STYLE, DESCRIBED, DESCRIPTION_TITLE, DESTINATION_TITLE,
+                                      DIR_TITLE, JUNK_BY_CLAUDE, JUNK_BY_NAME, LOOKING, LOOKING_AT_DIR,
+                                      MAYBE_JUNK, PREVIEWS_INTERVAL)
 from dirdelta.inbox.formatting import _dirs, _files, _grey, _title, _wrapped, _wrapped_path
 from dirdelta.screens import hashes_screen
 from dirdelta.ui import opening

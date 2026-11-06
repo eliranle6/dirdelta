@@ -3,16 +3,8 @@ import os
 import posixpath
 import time
 
-from dirdelta.ui.opening.names import (COLOR,
-    DOWNLOADING_TAG,
-    FAILED_TAG,
-    OPENED_TAG,
-    PROGRESS_COLOR,
-    SHOWN_FOR,
-    WAITING_TAG,
-    _DOWNLOADING,
-    _OPENED,
-    _WAITING)
+from dirdelta.ui.opening.names import (COLOR, DOWNLOADING_TAG, FAILED_TAG, OPENED_TAG, PROGRESS_COLOR,
+                                       SHOWN_FOR, WAITING_TAG, _DOWNLOADING, _OPENED, _WAITING)
 from dirdelta.util.text import format_size as _size
 
 

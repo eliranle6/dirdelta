@@ -8,22 +8,9 @@ from dirdelta.known import replicalog
 from dirdelta.matching import syncstate
 from dirdelta.screens.hashes_screen.dashboard_actions import _is_there, _label_option
 from dirdelta.screens.hashes_screen.dashboard_lines import _cache_age, _drive_lines, _job_of
-from dirdelta.screens.hashes_screen.names import (_BAR,
-    _DRIVE,
-    _DRIVE_NOTE,
-    _FILES,
-    _HASH,
-    _HEADING,
-    _HEADING_TEXT,
-    _INFO,
-    _KNOWN,
-    _LABEL,
-    _PAIR,
-    _PAIR_STATE,
-    _RESCAN,
-    _STATE,
-    _TOGGLE,
-    _files)
+from dirdelta.screens.hashes_screen.names import (_BAR, _DRIVE, _DRIVE_NOTE, _FILES, _HASH, _HEADING,
+                                                  _HEADING_TEXT, _INFO, _KNOWN, _LABEL, _PAIR, _PAIR_STATE,
+                                                  _RESCAN, _STATE, _TOGGLE, _files)
 from dirdelta.trees import paths
 from dirdelta.ui import picker
 from dirdelta.util import text

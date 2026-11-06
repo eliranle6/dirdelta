@@ -1,14 +1,8 @@
 """The dashboard's lines of each replica's hashing and Drive's hashes"""
 from dirdelta.hashes import hashing
 from dirdelta.known import replicainfo
-from dirdelta.screens.hashes_screen.names import (_BAR,
-    _FILES,
-    _INFO,
-    _RESCAN,
-    _STATE,
-    _TOGGLE,
-    _files,
-    is_local)
+from dirdelta.screens.hashes_screen.names import (_BAR, _FILES, _INFO, _RESCAN, _STATE, _TOGGLE, _files,
+                                                  is_local)
 from dirdelta.screens.hashes_screen.waiting import progress_line
 from dirdelta.trees import paths
 from dirdelta.ui import picker

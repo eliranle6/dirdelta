@@ -8,6 +8,7 @@ from dirdelta.drive import drivecache
 from dirdelta.known import replicalog
 from dirdelta.known import replicas
 import helpers
+from dirdelta.known import replicainfo
 
 NONE = choose_replicas.NOT_CHOSEN
 SORT = choose_replicas.SORT
@@ -201,7 +202,7 @@ class ChooseReplicasTest(unittest.TestCase):
                              replicalog.Entry(datetime.date(2026, 5, 17), 'removed old money.ods\nremove Resume.*'),
                              datetime.datetime(2026, 10, 30, 9, 5))
         self.known.note_changed('uuid:U:/eliran', datetime.datetime(2026, 10, 30, 9, 30))
-        self.assertEqual(choose_replicas.known_lines(self.known.info_at('/mnt/win/eliran')), [
+        self.assertEqual(replicainfo.known_lines(self.known.info_at('/mnt/win/eliran')), [
             '  Last update: 17.05.2026 - removed old money.ods (+1 more line)',
             '  Synced 30.10.2026 09:05; changed by dirdelta 30.10.2026 09:30'])
 

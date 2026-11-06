@@ -2,23 +2,10 @@
 import collections
 import os
 import posixpath
-
 import types
-from dirdelta.inbox.constants import (ASK,
-    CLAUDES_DIR,
-    CLAUDES_NAME,
-    COPY,
-    LABEL,
-    MOVE,
-    OPEN,
-    OWN_NAME,
-    READ,
-    REMOVE,
-    SORTED_TREE,
-    THE_INBOX,
-    VERB_COLORS,
-    YOUR_DIR,
-    YOUR_NAME)
+
+from dirdelta.inbox.constants import (ASK, CLAUDES_DIR, CLAUDES_NAME, COPY, LABEL, MOVE, OPEN, OWN_NAME,
+                                      READ, REMOVE, SORTED_TREE, THE_INBOX, VERB_COLORS, YOUR_DIR, YOUR_NAME)
 from dirdelta.inbox.actions.menu_moves import MenuMoves
 from dirdelta.inbox.actions.menu_options import MenuOptions
 from dirdelta.inbox.formatting import _files, _of, _option_text

@@ -1,12 +1,8 @@
 """Whether to hash a replica's files when it's opened"""
 from dirdelta.hashes import hashing
 from dirdelta.known import replicanames
-from dirdelta.screens.hashes_screen.names import (HASH_AND_WAIT,
-    HASH_IN_BACKGROUND,
-    NOTHING,
-    NOT_NOW,
-    _files,
-    is_local)
+from dirdelta.screens.hashes_screen.names import (HASH_AND_WAIT, HASH_IN_BACKGROUND, NOTHING, NOT_NOW,
+                                                  _files, is_local)
 from dirdelta.screens.hashes_screen.waiting import wait
 from dirdelta.ui import messages
 from dirdelta.ui import picker

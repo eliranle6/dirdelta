@@ -9,14 +9,8 @@ from dirdelta.hashes.hashing.job_files import JobFiles
 from dirdelta.hashes.hashing.job_scanning import JobScanning
 from dirdelta.hashes.hashing.pool import _pool, is_rotational
 from dirdelta.hashes.hashing.reading import _Paused, _hash_file
-from dirdelta.hashes.hashing.states import (ALGORITHM,
-    DONE,
-    HASHING,
-    NOT_SCANNED,
-    Progress,
-    RATE_WINDOW,
-    SCANNED,
-    SCANNING)
+from dirdelta.hashes.hashing.states import (ALGORITHM, DONE, HASHING, NOT_SCANNED, Progress, RATE_WINDOW,
+                                            SCANNED, SCANNING)
 
 
 class Job(JobScanning, JobFiles):
