@@ -19,11 +19,11 @@ def known_replicas(replicas):
 def choose_replica(name, known=()):
     """Let the user choose a local dir or a Drive one, or one of known (paths) at once. Returns its
     path, or None if they quit."""
-    options = {KNOWN + path: path for path in known}
-    where = picker.pick_option(list(options) + [LOCAL, CLOUD], header='Where is %s?' % (name,),
+    options = [picker.Option(('known', path), KNOWN + path) for path in known]
+    where = picker.pick_option(options + [LOCAL, CLOUD], header='Where is %s?' % (name,),
                                title='Choose %s' % (name,))
-    if where in options:
-        return options[where]
+    if isinstance(where, tuple):
+        return where[1]
     header = 'Choose %s' % (name,)
     key_hints = [('Enter', 'choose the selected dir')]
     if where == LOCAL:

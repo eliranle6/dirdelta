@@ -265,9 +265,6 @@ unneeded, and none has been measured or tried: each is left for the reason it gi
 - **`hashing.py` without its screens' parts** (#18). Its tags, bar and status texts could move out of
   the thread pool's module, to `hashes_screen.py`. Left there (2026-11-01) since they say its jobs'
   states, and every picker uses them.
-- **Options with ids in the simple menus too** (#1). The label screen's, the mount's, the log entry's
-  and the replica's "Where is it?" still use plain strings: they compare constants or look answers
-  up in a dict, so renaming a label can't break them. Only for all the menus to be alike.
 - **One loop for both file screens** (#9). `filescreen.FilesScreen` has what `InteractiveDirSync.browse()`
   and `InboxSort.run()` share, the keys, the confirmations and where the selection goes, but each has
   its own loop: what comes after an action differs (a sync's files are what the other replica lacks,

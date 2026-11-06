@@ -76,7 +76,7 @@ def offer_entries(changes, replicas_and_paths, known_replicas):
         known_replicas.note_changed(replicalog.identity(path), changes.when(name) or datetime.datetime.now())
         while True:
             line = replicalog.entry_line(today, text)
-            add = ADD_ENTRY % (replicalog.LOG_NAME, path)
+            add = picker.Option(ADD_ENTRY, ADD_ENTRY % (replicalog.LOG_NAME, path))
             header = "Add to %s? (%s)\n\n  %s" % (replicalog.LOG_NAME, path, line)
             answer = picker.pick_option([NO_ENTRY, add, EDIT_ENTRY], header=header, title="Log entry")
             if answer == EDIT_ENTRY:
@@ -86,7 +86,7 @@ def offer_entries(changes, replicas_and_paths, known_replicas):
                                       "> ", text, dryrun.label())
                 text = edited or text
                 continue
-            if answer == add:
+            if answer == ADD_ENTRY:
                 _add_entry(tree, path, line, replicalog.Entry(today, text), known_replicas)
             break
     if changes.paths():

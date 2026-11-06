@@ -1,6 +1,7 @@
 import unittest
 from unittest import mock
 
+import helpers
 from dirdelta.screens import label_screen
 from dirdelta.known import mounts
 from dirdelta.known import replicanames
@@ -32,7 +33,7 @@ class RunTest(unittest.TestCase):
         if not chosen:
             return None
         start = chosen.pop(0)
-        return next(option for option in options if option.startswith(start))
+        return helpers.answer_of(options, start)
 
     def test_a_label_is_kept(self):
         self.run_with(['Label'])
@@ -54,7 +55,7 @@ class RunTest(unittest.TestCase):
 
     def test_two_replicas_on_one_disk_are_labeled_each_on_its_own(self):
         self.run_with(['Label /mnt/disk/b'], paths=('/mnt/disk/a', '/mnt/disk/b'))
-        self.assertEqual(len([option for option in self.menus[0] if option.startswith('Label')]), 2)
+        self.assertEqual(len([label for label in helpers.labels_of(self.menus[0]) if label.startswith('Label')]), 2)
         self.assertEqual(self.known.labels, {'uuid:AAAA-1234:/b': 'laptop'})
 
 

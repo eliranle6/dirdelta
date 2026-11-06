@@ -17,19 +17,20 @@ def run(known, replica_paths):
     """Let the user label the replicas at replica_paths, or remove their labels, until they go back.
     known: a replicas.Replicas, saved when they change"""
     while True:
-        forms = {}
+        options = [NOTHING]
         for path in replica_paths:
             key = replicanames.label_key(path)
             current = known.labels.get(key)
-            forms["Label %s%s" % (_what(path), ": now '%s'" % (current,) if current else "")] = (path, key, False)
+            options.append(picker.Option((path, key, False), "Label %s%s" % (
+                _what(path), ": now '%s'" % (current,) if current else "")))
             if current:
-                forms["Remove the label '%s' of %s" % (current, _what(path))] = (path, key, True)
-        answer = picker.pick_option([NOTHING] + list(forms),
+                options.append(picker.Option((path, key, True), "Remove the label '%s' of %s" % (current, _what(path))))
+        answer = picker.pick_option(options,
                                     header="A label says which replica is which, e.g. 'laptop' or 'blue WD ext. disk'.",
                                     title="Labels")
-        if answer not in forms:
+        if not isinstance(answer, tuple):
             return
-        path, key, is_removed = forms[answer]
+        path, key, is_removed = answer
         if is_removed:
             known.set_label(key, None)
         else:

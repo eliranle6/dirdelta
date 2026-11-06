@@ -30,8 +30,8 @@ def ensure_mounted(path):
             continue
         command = mount_command(mount)
         header = "Mount it? (%s)\n\nIt isn't mounted (last time: %s)." % (mount.target, described(mount))
-        mount_option = "%s (runs: %s)" % (MOUNT, shlex.join(command))
-        if picker.pick_option([mount_option, BACK], header=header, title='Mount') != mount_option:
+        mount_option = picker.Option(MOUNT, "%s (runs: %s)" % (MOUNT, shlex.join(command)))
+        if picker.pick_option([mount_option, BACK], header=header, title='Mount') != MOUNT:
             return False
         if not _mount(mount, command):
             # Asked again: it may be fixed meanwhile (e.g. the password mistyped)

@@ -161,7 +161,7 @@ class LogEntriesTest(unittest.TestCase):
 
     def test_edited_first_and_only_its_own_log(self):
         pick = self.offer([log_entries.EDIT_ENTRY, "Add it to its"], edited="copied the trip's photos")
-        self.assertEqual(pick.call_args.args[0],
+        self.assertEqual(helpers.labels_of(pick.call_args.args[0]),
                          [log_entries.NO_ENTRY, "Add it to its last_update.txt (%s)" % (self.b,), log_entries.EDIT_ENTRY])
         self.assertEqual(self.log(self.b), "1.1.2026 - started\n%s - copied the trip's photos\n" % (self.today,))
         # The other replica's log isn't of this one's changes
