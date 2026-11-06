@@ -7,7 +7,7 @@ from unittest import mock
 
 from dirdelta.drive import drivecache
 import helpers
-from test_clouddirtree import ITEMS
+from clouddirtree_support import ITEMS
 
 
 class EntriesTest(unittest.TestCase):
