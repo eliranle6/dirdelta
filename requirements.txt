@@ -4,3 +4,4 @@ google-auth-oauthlib
 termcolor
 treelib
 claude-agent-sdk
+pillow

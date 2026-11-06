@@ -719,6 +719,23 @@ class CloudDirTreeChangesTest(unittest.TestCase):
         self.service.files.return_value.update.assert_not_called()
         self.assertIn('song.mp3', self.tree)
 
+    def test_a_thumbnail_is_got_at_the_size_asked_for(self):
+        self.service.files.return_value.get.return_value.execute.return_value = {
+            'thumbnailLink': 'https://lh3.example/t/abc=s220'}
+        with mock.patch('dirdelta.driveapi.get_url', return_value=b'png') as get_url:
+            self.assertEqual(self.tree.thumbnail('album/track.mp3', 300), b'png')
+        self.service.files.return_value.get.assert_called_once_with(fileId='track', fields='thumbnailLink')
+        get_url.assert_called_once_with('https://lh3.example/t/abc=s300')
+
+    def test_no_thumbnail(self):
+        self.service.files.return_value.get.return_value.execute.return_value = {}
+        with mock.patch('dirdelta.driveapi.get_url') as get_url:
+            self.assertIsNone(self.tree.thumbnail('album/track.mp3', 300))
+            self.assertIsNone(self.tree.thumbnail('not/there.jpg', 300))
+            self.service.files.return_value.get.return_value.execute.side_effect = _http_error()
+            self.assertIsNone(self.tree.thumbnail('album/track.mp3', 300))
+        get_url.assert_not_called()
+
     def download_to_local_dir(self, relpaths):
         local = localdiskdirtree.LocalDiskDirTree(self.local_dir, silent=True)
         files = [self.tree.get_node(relpath).data for relpath in relpaths]

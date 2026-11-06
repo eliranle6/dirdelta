@@ -116,9 +116,12 @@ Ordered by how easy they are, easiest first (2026-10-30).
        window instead of a treepicker run, with the rest unchanged. A Python toolkit (Qt via
        PySide6 has tree views and image viewing built in; or a local web page served by dirdelta,
        opened in a browser, which also suits idea 8).
-   4.2 A cheaper first step, in the terminal: treepicker's preview column (`--preview`) showing
-       the image with a terminal graphics protocol (kitty's, sixel, or iTerm2's, via e.g.
-       `chafa`), in terminals that support one. Windows Terminal supports sixel (WSL included).
+   4.2 A cheaper first step, in the terminal: done (2026-11-06, `images.py`): the preview column
+       shows the selected file's picture below its text, with half blocks in 256 colors rather than
+       a graphics protocol (sixel, kitty's), which curses can't keep from covering the other panes.
+       What's left: a video's frame (needs `ffmpeg`), more rows for it when there's a side tree (it
+       gets what's left of the column's lower 2/5 now), and a key to see it bigger (the whole right
+       column, or the whole screen).
 
 5. **Bring the phone's new photos in, periodically.** The user connects the phone to the laptop
    now and then, to copy its new pictures into the laptop's replica (photos are kept in Drive,

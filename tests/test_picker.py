@@ -4,6 +4,8 @@ import shutil
 import stat
 import sys
 import tempfile
+import threading
+import time
 import unittest
 from unittest import mock
 
@@ -411,6 +413,44 @@ class PickerTest(unittest.TestCase):
         picker.pick_files('/r', ['a/1.txt'], on_selection=on_selection)
         self.assertEqual(seen[-1], 'a')
         self.assertEqual(self.log_entry('preview'), 'a\tdone\0')
+
+    def test_images_of_where_the_selection_stays_are_sent_once(self):
+        # The selection moves through a/1.txt to a/2.jpg, and stays there
+        os.environ['FAKE_PICKER_SELECTIONS'] = 'a/1.txt|a/2.jpg'
+        os.environ['FAKE_PICKER_PREVIEW_WAIT_FOR'] = '0000ff'
+        self.answer('a/2.jpg')
+        asked = []
+
+        def images(relpath, max_width, max_height):
+            asked.append(relpath)
+            self.assertGreater(max_width, 0)
+            self.assertGreater(max_height, 0)
+            return '1 1 0000ff' if relpath.endswith('.jpg') else None
+        picker.pick_files('/r', ['a/1.txt', 'a/2.jpg'], previews=lambda send: None, images=images)
+        self.assertEqual(asked, ['a/2.jpg'])
+        self.assertEqual(self.log_entry('preview'), '\x03a/2.jpg\t1 1 0000ff\0')
+
+    def test_an_image_that_fails_is_none_and_the_next_are_made(self):
+        selection = picker.Selection()
+        sent = []
+        sender = mock.Mock(send_image=lambda relpath, image: sent.append((relpath, image)))
+
+        def images(relpath, max_width, max_height):
+            if relpath == 'bad.jpg':
+                raise ValueError('bad')
+            selection._close()
+            return '1 1 000000'
+        selection._move('bad.jpg')
+        thread = threading.Thread(target=picker._send_images, args=(selection, images, sender))
+        with mock.patch.object(picker, '_log_error') as log_error, \
+                mock.patch.object(picker, 'IMAGE_DELAY', 0.01):
+            thread.start()
+            time.sleep(0.1)
+            selection._move('good.jpg')
+            thread.join(5)
+        self.assertFalse(thread.is_alive())
+        log_error.assert_called_once_with()
+        self.assertEqual(sent, [('good.jpg', '1 1 000000')])
 
     def test_notify_keys_tell_of_the_selection_and_the_picks(self):
         os.environ['FAKE_PICKER_NOTIFY'] = '\t|a|a/1.txt|a;\t|.'

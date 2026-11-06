@@ -88,6 +88,11 @@ Like fzf: dirdelta starts `treepicker`, which draws on the terminal itself
   treepicker shows it in a column on the right (2/5
   of the width, on a screen 60 columns wide or more), which `p` hides or shows,
   redrawn as previews come in.
+- A picture of the selected file below that text (`pick_files(images=...)`, `images.py`): a
+  `--preview` entry starting with `\x03`, then the path, a tab, and the image (`W H` and its pixels in
+  hex). treepicker keeps the last 64, scales the selected one's down to the rows the text leaves
+  (three at least), and draws it with half blocks (`▀`, two pixels a character) in the 256 colors'
+  pairs it makes as needed; with fewer than 256 colors, none.
 - Menus: `treepicker -0 --list [--header TEXT] -`, with the labels on stdin
   (`--list` keeps them flat, since labels contain '/'). With `shown_as`,
   `pick_option` adds `--updates FD`, a pipe that a thread writes `LABEL<tab>TEXT\0`

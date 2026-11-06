@@ -187,7 +187,7 @@ def pick_from_tree(tree, header='', dirs_only=False, root_name=None, keys='', ke
 def pick_files(rootpath, relpaths, header='', picked=None, label=None, keys='', selected=None,
                previews=None, on_selection=None, shown_as=None, notify_keys='', on_notify=None,
                enter_picks_selection=False, key_hints=(), help_lines=(), twice_keys='', side=None,
-               none_picked_key_hints=()):
+               none_picked_key_hints=(), images=None):
     """Let the user pick some of the files at relpaths (relative to rootpath, each dir's files and
     subdirs together, in the order to show them, as dirdiff lists them). Picking a dir picks the
     files under it. Returns a Picked: the picked ones (of relpaths), in that order, and where the
@@ -220,6 +220,11 @@ def pick_files(rootpath, relpaths, header='', picked=None, label=None, keys='', 
     more about the selected file than previews does for all of them. It too should stop on
     PickerClosed, which the Selection raises too, once the picker is gone.
 
+    images, if given (with previews or on_selection, which make the column), is called on a thread
+    of its own with the selected node's relpath, once the selection stays on it a moment, and the
+    most pixels the column can show (max_width, max_height): its picture, as images.encoded() makes
+    it, shown below its lines; or None for none.
+
     key_hints: [(key, what it does here)] for the keys row at the bottom (the caller's keys, or
     treepicker's, e.g. ('Enter', 'choose what to do')); help_lines: lines for its ? help (e.g. what
     the tags mean); none_picked_key_hints: what the keys row says instead of those while nothing's
@@ -251,7 +256,7 @@ def pick_files(rootpath, relpaths, header='', picked=None, label=None, keys='', 
                 key, selected, [path for path in picked if path in files]))
         picked_paths = _run(args + ['-'], ('f ' + relpath for relpath in relpaths),
                             shown_as=shown_as, label=label, previews=previews,
-                            on_selection=on_selection, notify=notify, side=side)
+                            on_selection=on_selection, notify=notify, side=side, images=images)
     if picked_paths is None:
         return None
     key = ''
@@ -468,7 +473,7 @@ def _with_ambient_status(shown_as):
 
 
 def _run(args, input_items, shown_as=None, label=None, previews=None, on_selection=None, notify=None,
-         side=None):
+         side=None, images=None):
     """Run treepicker with args and the items (or None) on its stdin, and with shown_as (see
     pick_option()) sending it what to show the items as, and previews and on_selection (see
     pick_files()) what to show beside them, and notify (keys, a function of what they say) what
@@ -527,6 +532,9 @@ def _run(args, input_items, shown_as=None, label=None, previews=None, on_selecti
             selections.append(selection)
             jobs.append(functools.partial(preview_sender.run,
                                           lambda send: on_selection(selection, send)))
+        if images is not None:
+            selections.append(Selection())
+            jobs.append(functools.partial(_send_images, selections[-1], images, preview_sender))
     if selections:
         jobs.append(functools.partial(_read_selection, pipe('--selection', False), selections))
     if notify is not None:
@@ -697,6 +705,53 @@ def _follow(selection, follow, fd):
         pass
 
 
+# How long the selection stays on a node before its picture is made (so moving through files doesn't
+# read each), in seconds; and how many pictures treepicker keeps (fewer than its own most, 64, so
+# those sent are still there)
+IMAGE_DELAY = 0.15
+MAX_IMAGES_SENT = 48
+
+
+def _send_images(selection, images, sender):
+    """Send treepicker the picture of each node the selection stays on (see pick_files()'s images),
+    once, until it's gone"""
+    sent = collections.OrderedDict()
+    max_width, max_height = _image_box()
+    try:
+        while True:
+            relpath = selection.wait_next()
+            while True:
+                later = selection.wait_next(IMAGE_DELAY)
+                if later is None:
+                    break
+                relpath = later
+            if relpath in sent:
+                continue
+            try:
+                image = images(relpath, max_width, max_height)
+            except Exception:
+                _log_error()
+                image = None
+            sent[relpath] = True
+            if len(sent) > MAX_IMAGES_SENT:
+                sent.popitem(last=False)
+            if image is not None:
+                sender.send_image(relpath, image)
+    except PickerClosed:
+        pass
+
+
+def _image_box():
+    """The most pixels (width, height) a picture may take in the preview column: its width and twice
+    its rows (treepicker's: 2/5 of the terminal), as the terminal is now"""
+    try:
+        with open('/dev/tty') as tty:
+            columns, rows = os.get_terminal_size(tty.fileno())
+    except OSError:
+        columns, rows = 100, 30
+    return max(1, columns * 2 // 5 - 2), max(2, rows * 2)
+
+
 def _read_selection(fd, selections):
     """Move each of selections as treepicker says the selection moves (each path ending with '\0'),
     until it stops saying (it's gone)"""
@@ -752,7 +807,11 @@ class _PreviewSender(object):
         if default is not None:
             # An empty path: the lines of the ones without any
             items.append(_preview('', default))
-        data = _null_terminated(items)
+        self._write(_null_terminated(items))
+
+    def _write(self, data):
+        if self._is_done.is_set():
+            raise PickerClosed()
         # A preview's lines in one piece, whichever thread sends it
         with self._lock:
             try:
@@ -760,6 +819,10 @@ class _PreviewSender(object):
                     data = data[os.write(self._fd, data):]
             except BrokenPipeError:
                 raise PickerClosed()
+
+    def send_image(self, relpath, image):
+        """Show image (see pick_files()'s images) below relpath's lines"""
+        self._write(_null_terminated(['\x03' + (relpath or '.') + '\t' + _one_line(image)]))
 
     def run(self, previews):
         """Call previews(send), until it returns, or treepicker is gone"""

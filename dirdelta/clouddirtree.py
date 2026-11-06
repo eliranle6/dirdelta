@@ -3,6 +3,7 @@ import contextlib
 import concurrent.futures
 import os
 import posixpath
+import re
 
 from googleapiclient.errors import HttpError
 from googleapiclient.http import MediaFileUpload, MediaIoBaseDownload
@@ -170,6 +171,23 @@ class CloudDirTree(dirtree.DirTree):
         for name, files in super(CloudDirTree, self).files_by_name(progress).items():
             found[name.split(DUP_SUFFIX)[0]] += files
         return found
+
+    def thumbnail(self, relpath, size):
+        """Drive's thumbnail of the file at relpath (an image file's contents, at most size pixels
+        on a side), or None if it has none (e.g. a file Drive makes none of), or it can't be got"""
+        cloud_id = self._cloud_ids.get(relpath)
+        if cloud_id is None:
+            return None
+        try:
+            link = driveapi.service().files().get(fileId=cloud_id, fields='thumbnailLink').execute(
+                num_retries=2).get('thumbnailLink')
+            if not link:
+                return None
+            # The link asks for a size (=s220, the default) at its end
+            link = re.sub(r'=s\d+$', '', link) + '=s%d' % (size,)
+            return driveapi.get_url(link)
+        except (HttpError, OSError):
+            return None
 
     def cant_fetch(self, relpath):
         if self._info(relpath).is_google:

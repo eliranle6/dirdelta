@@ -20,6 +20,7 @@ from dirdelta import filescreen
 from dirdelta import dryrun
 from dirdelta import hashes_screen
 from dirdelta import hashing
+from dirdelta import images
 from dirdelta import localdiskdirtree
 from dirdelta import paths
 from dirdelta import messages
@@ -248,7 +249,9 @@ class InteractiveDirSync(filescreen.FilesScreen):
                     previews=functools.partial(elsewhere.find_previews, missing, self._src, self.dst_index,
                                                checked=self.checked, src_index=self.src_index),
                     on_selection=functools.partial(elsewhere.check_contents, missing, self._src,
-                                                   self.src_index, self.dst_index, self.checked))
+                                                   self.src_index, self.dst_index, self.checked),
+                    # A photo's picture below that
+                    images=images.of_replica(self._src))
             finally:
                 if marks is not None:
                     marks.close()

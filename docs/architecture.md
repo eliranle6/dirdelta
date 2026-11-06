@@ -782,12 +782,26 @@ stdout, all `\0`-separated (`-0`). Exit code 1 means the user quit (→
   selected node (`--preview FD`, a pipe): `send(found, default)`. The input
   goes to treepicker from a temp file, not written by `communicate()`, so a
   busy thread holding the GIL doesn't slow treepicker's start; `_run()` waits
-  for the threads before returning.
+  for the threads before returning. `images(relpath, max_width, max_height)`, on a thread of its own,
+  makes the picture of the node the selection stays on (`IMAGE_DELAY`), once (`MAX_IMAGES_SENT`), sent
+  through the same pipe (`\x03PATH\tW H RRGGBB...`): treepicker scales it to the rows the column's
+  text leaves, and draws it with half blocks in 256 colors (see `images.py`).
 - `pick_under_dir(dirpath, max_depth, dirs_only, lazy, header)`:
   `treepicker [--max-depth N] [--dirs-only] [--lazy] DIR`.
 - `pick_option(options, header)`: `treepicker --list`, for menus.
 Names are passed as bytes with `surrogateescape`, so non-UTF-8 file names
 round-trip. Tests (`tests/test_picker.py`) run a fake treepicker script.
+
+### `images.py`
+The selected file's picture, below the preview column's text in the sync's and the inbox's file
+pickers (`images.of_replica()`, their `pick_files(images=...)`): a local image by Pillow (decoded at a
+fraction of its size with `draft()`, turned by its EXIF orientation, transparency on black), a PDF's
+first page by `pdftoppm`, a Drive file's thumbnail (`CloudDirTree.thumbnail()`: its `thumbnailLink`,
+asked for at the size wanted, got with the login by `driveapi.get_url()`). As small as the column
+can show (`picker._image_box()`: 2/5 of the terminal's width, twice its rows), sent as hex RGB.
+Half blocks rather than a terminal graphics protocol (sixel, kitty's): they're characters curses
+draws like the rest, so the picture never covers the tree, the side tree or the bottom lines, and
+goes with them on a redraw or resize; and every 256-color terminal shows them. No Pillow: no pictures.
 
 ## What replicas are called: `replicanames.py`, `label_screen.py`
 

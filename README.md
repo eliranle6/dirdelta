@@ -193,6 +193,12 @@ back; `Ctrl-L` and `Ctrl-H` do too). `d` there removes the selected file or dir,
 offers it, so you needn't go to the other direction's picker. Removing
 one version of a repository this way makes the other replica's version show up as missing, ready to copy.
 
+### Pictures of the files
+
+In the file pickers, the selected photo (an image, a PDF's first page, a Drive file's thumbnail) shows
+below the preview column's text, drawn in characters (two pixels each, in 256 colors), so a name like
+`IMG_2041.jpg` says what it is. It needs Pillow (in `requirements.txt`), and `pdftoppm` for PDFs.
+
 ### The menu of the keys (`:`)
 
 In a sync's and a sort's file pickers, `:` with nothing picked opens a menu of what can be done there with

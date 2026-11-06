@@ -35,6 +35,7 @@ from dirdelta import filescreen
 from dirdelta import hashcache
 from dirdelta import hashes_screen
 from dirdelta import hashing
+from dirdelta import images
 from dirdelta import interactive_dir_sync
 from dirdelta import junk
 from dirdelta import localdiskdirtree
@@ -372,7 +373,8 @@ class InboxSort(filescreen.FilesScreen):
                 on_notify=lambda key, selected, picked, files=files: self._on_key(key, selected, picked, files),
                 on_selection=functools.partial(elsewhere.check_contents, files, self._inbox_tree,
                                                self._inbox_index, self._root_index, self._checked,
-                                               sends_previews=False))
+                                               sends_previews=False),
+                images=images.of_replica(self._inbox_tree))
             if chosen is None:
                 self._finish_describing()
                 return

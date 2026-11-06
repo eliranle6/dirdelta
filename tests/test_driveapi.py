@@ -134,3 +134,26 @@ class ServiceTest(unittest.TestCase):
         driveapi.service()
         self.credentials.from_authorized_user_file.assert_not_called()
         self.assertEqual(self.token(), '{"fresh": true}')
+
+
+class GetUrlTest(unittest.TestCase):
+    def setUp(self):
+        patcher = mock.patch.object(driveapi, 'service')
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        patcher = mock.patch('google_auth_httplib2.AuthorizedHttp')
+        self.http = patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def test_its_contents_with_the_login(self):
+        self.http.return_value.request.return_value = (mock.Mock(status=200), b'data')
+        self.assertEqual(driveapi.get_url('https://example.invalid/t'), b'data')
+        self.http.return_value.request.assert_called_once_with('https://example.invalid/t')
+
+    def test_what_fails_is_an_oserror(self):
+        self.http.return_value.request.return_value = (mock.Mock(status=404), b'')
+        with self.assertRaises(OSError):
+            driveapi.get_url('https://example.invalid/t')
+        self.http.return_value.request.side_effect = OSError('down')
+        with self.assertRaises(OSError):
+            driveapi.get_url('https://example.invalid/t')

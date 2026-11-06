@@ -154,7 +154,7 @@ module:
 PYTHONPATH=tests bin/python -m unittest test_interactive_dir_sync -v
 ```
 
-Modules are tested where it's worth it, not for the sake of a test file each (864 tests, all passing as of 2026-11-05) except
+Modules are tested where it's worth it, not for the sake of a test file each (883 tests, all passing as of 2026-11-06) except
 the thin wiring in `main.py`/`dirsync_main.py`, covered only by running the
 app. Shared fakes:
 - `tests/helpers.py`: `scripted_option_picker` / `scripted_tree_picker` /

@@ -4,6 +4,9 @@ logging in in the browser)."""
 import os.path
 import threading
 
+import google_auth_httplib2
+import httplib2
+
 from google.auth.exceptions import RefreshError
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
@@ -46,6 +49,19 @@ def service():
                 _shared_credentials = _refreshed_one_at_a_time(_credentials())
         _local.service = build('drive', 'v3', credentials=_shared_credentials)
     return _local.service
+
+
+def get_url(url):
+    """The contents at url, got with the login's credentials (e.g. a file's thumbnailLink, which Drive
+    serves only to its owner). Raises OSError if it can't."""
+    service()
+    try:
+        response, content = google_auth_httplib2.AuthorizedHttp(_shared_credentials, httplib2.Http(timeout=30)).request(url)
+    except (httplib2.HttpLib2Error, OSError) as error:
+        raise OSError("Can't get %s: %s" % (url, error))
+    if response.status != 200:
+        raise OSError("Can't get %s: HTTP %s" % (url, response.status))
+    return content
 
 
 def _refreshed_one_at_a_time(creds):
