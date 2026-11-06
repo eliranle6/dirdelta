@@ -24,6 +24,7 @@ Deep dives live in `docs/`:
 - `docs/known-issues.md` — bugs and dead code, with file:line, the fixed ones kept as history
 - `docs/glossary.md` — project-specific terms (replica, dirtree, cloud path convention, etc.)
 - `docs/improvement-ideas.md` — what's left to do, not implemented: a backlog to pick from
+- `docs/plans.md` — worked-out plans for three of those ideas (changed files, sorting into several replicas, one combined tree)
 - `lib/treepicker/CLAUDE.md` and `lib/treepicker/docs/improvement-ideas.md` — treepicker's own (read before changing picker behavior; picker changes are made in treepicker, not here)
 - `docs/treepicker-integration.md` — how dirdelta runs the C++ `treepicker` for its pickers and menus (it replaced the Python picker)
 

@@ -11,7 +11,8 @@ it, a new dir and the recent ones for an inbox's "Move to...", an inbox's junk b
 sizes and what Claude says, and each replica's last_update.txt (read, shown, and written after a
 sync), 2026-10-30; hashing whole local replicas in the background, 2026-10-31; the 2026-10-31 peer review's, `docs/peer_review.md` until it was done) are in git history. treepicker's own are in `lib/treepicker/docs/improvement-ideas.md`.
 
-Ordered by how easy they are, easiest first (2026-10-30).
+Ordered by how easy they are, easiest first (2026-10-30). Ideas 3, 2.1 and 6 have worked-out plans in
+`docs/plans.md` (2026-11-06).
 
 1. **Find moved files better.** What's there (2026-10-29, `elsewhere.py`): each direction's
    picker shows, beside the selected file, where the other replica may have it: its files of the
