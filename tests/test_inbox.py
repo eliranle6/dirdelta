@@ -278,7 +278,7 @@ class InboxSortTest(unittest.TestCase):
             if path.endswith('b.jpg'):
                 raise PermissionError('read-only')
             real_unlink(path)
-        with mock.patch('dirdelta.trees.localdiskdirtree.os.unlink', side_effect=unlink):
+        with mock.patch('dirdelta.trees.localdiskdirtree.fs.os.unlink', side_effect=unlink):
             self.sort([['b.jpg', 'trip/c.jpg'], None], ['Remove the 2 files from', YES, SURE])
         title, lines = self.show.call_args.args[:2]
         self.assertEqual(title, 'Not all were removed')
@@ -984,7 +984,7 @@ class InboxSortTest(unittest.TestCase):
                 raise OSError('disk full')
             real_copy(src, dst)
         with mock.patch('dirdelta.util.dryrun.DRYRUN', False), \
-                mock.patch('dirdelta.trees.localdiskdirtree.shutil.copy2', side_effect=copy):
+                mock.patch('dirdelta.trees.localdiskdirtree.copying.shutil.copy2', side_effect=copy):
             done = sorter._transfer([('a.txt', 'docs/a.txt'), ('b.jpg', 'photos/b.jpg')], True)
         self.assertEqual(done, [('b.jpg', 'photos/b.jpg')])
         self.assertTrue(self.exists('inbox', 'a.txt'))

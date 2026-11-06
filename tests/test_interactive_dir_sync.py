@@ -88,14 +88,14 @@ class InteractiveDirSyncTest(unittest.TestCase):
 
     def test_the_other_picks_stay_picked(self):
         # Both picked, but only one copied: the other's copy fails
-        real_copy = localdiskdirtree.shutil.copy2
+        real_copy = localdiskdirtree.copying.shutil.copy2
 
         def copy(src, dst):
             if src.endswith('c.txt'):
                 raise OSError('disk full')
             real_copy(src, dst)
         with mock.patch('dirdelta.util.dryrun.DRYRUN', False), \
-                mock.patch('dirdelta.trees.localdiskdirtree.shutil.copy2', side_effect=copy):
+                mock.patch('dirdelta.trees.localdiskdirtree.copying.shutil.copy2', side_effect=copy):
             self._browse([['sub/b.txt', 'sub/c.txt'], None], ['Copy', YES])
         self.assertEqual(self._offered()[1], (['sub/c.txt'], ['sub/c.txt']))
 
@@ -377,7 +377,7 @@ class DifferingTest(unittest.TestCase):
 
     def test_a_failed_replacing_copy_keeps_dsts_version_and_the_pick(self):
         with mock.patch('dirdelta.util.dryrun.DRYRUN', False), \
-                mock.patch('dirdelta.trees.localdiskdirtree.shutil.copy2', side_effect=OSError('disk full')):
+                mock.patch('dirdelta.trees.localdiskdirtree.copying.shutil.copy2', side_effect=OSError('disk full')):
             self.browse([['a.txt'], None], ['Copy', YES])
         self.assertEqual(self.read(self.dst_root, 'a.txt'), 'old')
         self.assertEqual(self.offered()[1], ['a.txt', 'sub/b.txt'])

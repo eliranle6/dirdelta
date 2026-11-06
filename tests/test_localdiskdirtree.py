@@ -9,6 +9,7 @@ from dirdelta.trees import dirtree
 from dirdelta.trees import entries
 from dirdelta.trees import localdiskdirtree
 import helpers
+from dirdelta.hashes import hashcache
 
 
 class KeptHashesTest(unittest.TestCase):
@@ -40,7 +41,7 @@ class KeptHashesTest(unittest.TestCase):
         self.assertTrue(self.tree.has_file('copy'))
         self.assertIn('copy', self.tree)
         # Its hash goes with it
-        self.assertEqual(localdiskdirtree.hashcache.get(os.path.join(other_root, 'e', 'y2'), 'sha1'),
+        self.assertEqual(hashcache.get(os.path.join(other_root, 'e', 'y2'), 'sha1'),
                          hashlib.sha1(b'y').hexdigest())
 
     @unittest.skipIf(os.geteuid() == 0, "root can write anywhere")
@@ -127,7 +128,7 @@ class LocalDiskDirTreeTest(unittest.TestCase):
             src.add_file_by_relpath(name)
         dst = localdiskdirtree.LocalDiskDirTree(self.dst_root, silent=True)
 
-        real_copy = localdiskdirtree.shutil.copy2
+        real_copy = localdiskdirtree.copying.shutil.copy2
 
         def copy(source, dest):
             if source.endswith('2.txt'):
@@ -138,7 +139,7 @@ class LocalDiskDirTreeTest(unittest.TestCase):
 
         printed = []
         with mock.patch('dirdelta.util.dryrun.DRYRUN', False), \
-                mock.patch('dirdelta.trees.localdiskdirtree.shutil.copy2', side_effect=copy), \
+                mock.patch('dirdelta.trees.localdiskdirtree.copying.shutil.copy2', side_effect=copy), \
                 mock.patch('dirdelta.ui.messages.print_line', side_effect=lambda line, *_: printed.append(line)):
             dst.copy_inner_entries_from_dirtree(src)
 
@@ -160,7 +161,7 @@ class LocalDiskDirTreeTest(unittest.TestCase):
         dst = localdiskdirtree.LocalDiskDirTree(self.dst_root, silent=True)
 
         with mock.patch('dirdelta.util.dryrun.DRYRUN', False), \
-                mock.patch('dirdelta.trees.localdiskdirtree.shutil.copy2', side_effect=KeyboardInterrupt()), \
+                mock.patch('dirdelta.trees.localdiskdirtree.copying.shutil.copy2', side_effect=KeyboardInterrupt()), \
                 mock.patch('dirdelta.ui.messages.print_line'):
             dst.copy_inner_entries_from_dirtree(src)
 
@@ -182,7 +183,7 @@ class LocalDiskDirTreeTest(unittest.TestCase):
 
         printed = []
         with mock.patch('dirdelta.util.dryrun.DRYRUN', False), \
-                mock.patch('dirdelta.trees.localdiskdirtree.os.unlink', side_effect=unlink), \
+                mock.patch('dirdelta.trees.localdiskdirtree.fs.os.unlink', side_effect=unlink), \
                 mock.patch('dirdelta.ui.messages.print_line', side_effect=lambda line, *_: printed.append(line)):
             tree.remove_files(entries)
 
@@ -219,7 +220,7 @@ class LocalDiskDirTreeTest(unittest.TestCase):
         real_unlink = os.unlink
         with mock.patch('dirdelta.util.dryrun.DRYRUN', False), \
                 mock.patch('dirdelta.ui.messages.print_line') as print_line, \
-                mock.patch('dirdelta.trees.localdiskdirtree.os.unlink',
+                mock.patch('dirdelta.trees.localdiskdirtree.fs.os.unlink',
                            side_effect=lambda path: (_ for _ in ()).throw(PermissionError('denied'))
                            if path.endswith('a.txt') else real_unlink(path)):
             tree.remove_files([tree.get_node('a.txt').data, tree.get_node('b.txt').data])
@@ -240,8 +241,8 @@ class LocalDiskDirTreeTest(unittest.TestCase):
             return mock.Mock(returncode=code, stdout=said)
         with mock.patch('dirdelta.util.dryrun.DRYRUN', False), \
                 mock.patch('dirdelta.ui.messages.print_line') as print_line, \
-                mock.patch('dirdelta.trees.localdiskdirtree.subprocess.run', side_effect=run), \
-                mock.patch('dirdelta.trees.localdiskdirtree.os.unlink', wraps=os.unlink) as unlink:
+                mock.patch('dirdelta.trees.localdiskdirtree.fs.subprocess.run', side_effect=run), \
+                mock.patch('dirdelta.trees.localdiskdirtree.fs.os.unlink', wraps=os.unlink) as unlink:
             with tree.trashing():
                 tree.remove_files([tree.get_node('a.txt').data, tree.get_node('b.txt').data])
             # Only gio removed b.txt (the fake's own unlink); a.txt is kept, and said
@@ -269,7 +270,7 @@ class LocalDiskDirTreeTest(unittest.TestCase):
         listener = mock.Mock()
         dst.add_listener(listener)
         with mock.patch('dirdelta.util.dryrun.DRYRUN', False), mock.patch('dirdelta.ui.messages.print_line'), \
-                mock.patch('dirdelta.trees.localdiskdirtree.shutil.copy2', side_effect=copy or shutil.copy2), \
+                mock.patch('dirdelta.trees.localdiskdirtree.copying.shutil.copy2', side_effect=copy or shutil.copy2), \
                 dst.replacing():
             dst.copy_in([entries.FileEntry('a.txt', 'a.txt', os.path.join(self.src_root, 'a.txt'))])
         return dst, trash, listener
@@ -373,7 +374,7 @@ class LocalDiskDirTreeTest(unittest.TestCase):
                          ([('old', 'new/dir', [('old/a.txt', 'new/dir/a.txt'), ('old/sub/b.txt', 'new/dir/sub/b.txt')])],
                           [('keep/c.txt', 'k/c.txt')]))
         with mock.patch('dirdelta.util.dryrun.DRYRUN', False), mock.patch('dirdelta.ui.messages.print_line'), \
-                mock.patch('dirdelta.trees.localdiskdirtree.os.rename', wraps=os.rename) as rename:
+                mock.patch('dirdelta.trees.localdiskdirtree.fs.os.rename', wraps=os.rename) as rename:
             self.assertEqual(sorted(tree.move_files(moves)), sorted(moves))
         # One rename for the dir, one for the other file
         self.assertEqual(len(rename.call_args_list), 2)
