@@ -31,7 +31,7 @@ replicas.REPLICAS_FILE = os.path.join(_mounts_dir, 'replicas.json')
 # Nor read or write the real settings (~/.config/dirdelta/settings.json)
 settings.SETTINGS_FILE = os.path.join(_mounts_dir, 'settings.json')
 # Nor write the real errors' log (~/.cache/dirdelta/errors.log)
-picker.ERRORS_LOG = os.path.join(_hash_cache_dir, 'errors.log')
+picker.updates.ERRORS_LOG = os.path.join(_hash_cache_dir, 'errors.log')
 # Nor download into the real downloads' cache (~/.cache/dirdelta/downloads): test_inbox and
 # test_downloads import this module
 _downloads_dir = tempfile.mkdtemp(prefix='dirdelta-test-downloads-')

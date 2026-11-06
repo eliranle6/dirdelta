@@ -120,7 +120,7 @@ class PickerTest(unittest.TestCase):
 
         def shown_as():
             raise TypeError("a bug")
-        with mock.patch('dirdelta.ui.picker.ERRORS_LOG', log), mock.patch('sys.stderr') as stderr:
+        with mock.patch('dirdelta.ui.picker.updates.ERRORS_LOG', log), mock.patch('sys.stderr') as stderr:
             self.assertEqual(picker.pick_option(['x'], shown_as=shown_as), 'x')
         stderr.write.assert_not_called()
         with open(log) as f:
@@ -130,7 +130,7 @@ class PickerTest(unittest.TestCase):
         tree = dirtree.DirTree('/x')
         for relpath in ('meta/hashes', 'a/meta/mine', 'a/b/c', 'a/keep'):
             tree.add_file_by_relpath(relpath)
-        self.assertEqual(sorted(path[2:] for path in picker._tree_paths(tree, ['meta', 'a/b'])),
+        self.assertEqual(sorted(path[2:] for path in picker.trees._tree_paths(tree, ['meta', 'a/b'])),
                          ['a', 'a/keep', 'a/meta', 'a/meta/mine'])
 
     def test_an_options_id_is_returned_and_said_by_its_line(self):
@@ -159,8 +159,8 @@ class PickerTest(unittest.TestCase):
         read_fd, write_fd = os.pipe()
         is_done = mock.Mock()
         is_done.wait.return_value = True
-        with mock.patch('dirdelta.ui.picker.ERRORS_LOG', log):
-            picker._send_updates(write_fd, mock.Mock(side_effect=TypeError("a bug")), is_done)
+        with mock.patch('dirdelta.ui.picker.updates.ERRORS_LOG', log):
+            picker.updates._send_updates(write_fd, mock.Mock(side_effect=TypeError("a bug")), is_done)
         os.close(write_fd)
         with os.fdopen(read_fd, 'rb') as pipe:
             self.assertIn(b"Something went wrong", pipe.read())
@@ -252,8 +252,8 @@ class PickerTest(unittest.TestCase):
             with open(command[command.index('--picked') + 1], 'rb') as f:
                 self.picked_file_contents = f.read()
             return real_popen(command, **kwargs)
-        real_popen = picker.subprocess.Popen
-        with mock.patch('dirdelta.ui.picker.subprocess.Popen', side_effect=popen):
+        real_popen = picker.running.subprocess.Popen
+        with mock.patch('dirdelta.ui.picker.running.subprocess.Popen', side_effect=popen):
             picker.pick_files('/some/root', ['a/1.txt', 'b/2.txt'], picked=['b/2.txt'])
 
         self.assertEqual(self.picked_file_contents, b'b/2.txt\0')
@@ -394,9 +394,9 @@ class PickerTest(unittest.TestCase):
             selection._close()
             return '1 1 000000'
         selection._move('bad.jpg')
-        thread = threading.Thread(target=picker._send_images, args=(selection, images, sender))
-        with mock.patch.object(picker, '_log_error') as log_error, \
-                mock.patch.object(picker, 'IMAGE_DELAY', 0.01):
+        thread = threading.Thread(target=picker.pictures._send_images, args=(selection, images, sender))
+        with mock.patch.object(picker.pictures, '_log_error') as log_error, \
+                mock.patch.object(picker.pictures, 'IMAGE_DELAY', 0.01):
             thread.start()
             time.sleep(0.1)
             selection._move('good.jpg')
@@ -414,15 +414,15 @@ class PickerTest(unittest.TestCase):
         def images(relpath, max_width, max_height):
             made.append(relpath)
             return '1 1 000000'
-        pictures = picker._Images(selection, images, sender)
+        pictures = picker.pictures._Images(selection, images, sender)
         thread = threading.Thread(target=pictures.run)
-        with mock.patch.object(picker, 'IMAGE_DELAY', 0.01):
+        with mock.patch.object(picker.pictures, 'IMAGE_DELAY', 0.01):
             thread.start()
             selection._move('a.jpg')
             self.wait_for(lambda: sent)
             # Off: the one sent is dropped, and none is made
             pictures.toggle('a.jpg')
-            self.assertFalse(picker.settings.are_images_shown())
+            self.assertFalse(picker.pictures.settings.are_images_shown())
             self.assertEqual(sent[-1], ('a.jpg', ''))
             selection._move('b.jpg')
             time.sleep(0.1)
@@ -432,14 +432,14 @@ class PickerTest(unittest.TestCase):
             self.wait_for(lambda: made == ['a.jpg', 'b.jpg'])
             selection._close()
             thread.join(5)
-        self.assertTrue(picker.settings.are_images_shown())
+        self.assertTrue(picker.pictures.settings.are_images_shown())
         self.assertEqual(sent[-1], ('b.jpg', '1 1 000000'))
 
     def test_the_images_key_is_one_of_the_pickers_notify_keys(self):
         os.environ['FAKE_PICKER_NOTIFY'] = 'i|a.jpg|;\t|a.jpg|'
         self.answer('a.jpg')
         notified = []
-        with mock.patch.object(picker._Images, 'toggle') as toggle:
+        with mock.patch.object(picker.pictures._Images, 'toggle') as toggle:
             picker.pick_files('/r', ['a.jpg'], previews=lambda send: None, images=lambda *_: None,
                               notify_keys='\t', on_notify=lambda *args: notified.append(args))
         args, _ = self.call()
@@ -512,7 +512,7 @@ class PickerTest(unittest.TestCase):
             return {'Copy': 'Copy (loading)' if len(calls) < 3 else 'Copy (3 files)'}
         os.environ['FAKE_PICKER_WAIT_FOR'] = '3 files'
         self.answer('Copy')
-        with mock.patch('dirdelta.ui.picker.SHOWN_AS_INTERVAL', 0.01):
+        with mock.patch('dirdelta.ui.picker.updates.SHOWN_AS_INTERVAL', 0.01):
             self.assertEqual(picker.pick_option(options, shown_as=shown_as), 'Copy')
         args, items = self.call()
         self.assertEqual(args[:-2], ['-0', '--list', '--root', 'dirdelta'])
@@ -558,16 +558,16 @@ class StatusTest(unittest.TestCase):
 
 class UpdateLineTest(unittest.TestCase):
     def test_each_kind_of_option(self):
-        self.assertEqual(picker._update('a', 'A'), 'a\tA')
-        self.assertEqual(picker._update('a', picker.Disabled('A')), 'a\tA\tdisabled')
+        self.assertEqual(picker.updates._update('a', 'A'), 'a\tA')
+        self.assertEqual(picker.updates._update('a', picker.Disabled('A')), 'a\tA\tdisabled')
         # A heading: skipped when moving
-        self.assertEqual(picker._update('a', picker.Skipped('A')), 'a\tA\tskipped')
-        self.assertEqual(picker._update('a', picker.Colored('A', 'red')), 'a\tA\tcolor=red')
+        self.assertEqual(picker.updates._update('a', picker.Skipped('A')), 'a\tA\tskipped')
+        self.assertEqual(picker.updates._update('a', picker.Colored('A', 'red')), 'a\tA\tcolor=red')
 
 
 class MenuLinesTest(unittest.TestCase):
     def test_each_line_is_its_own(self):
-        lines, line_of, shown = picker._menu_lines([picker.Skipped('Head'), 'a', picker.BLANK, picker.Option(1, 'a'),
+        lines, line_of, shown = picker.menus._menu_lines([picker.Skipped('Head'), 'a', picker.BLANK, picker.Option(1, 'a'),
                                                     picker.BLANK])
         self.assertEqual(lines, ['Head', 'a', ' ', 'a ', '  '])
         self.assertEqual(len(set(lines)), 5)
@@ -576,7 +576,7 @@ class MenuLinesTest(unittest.TestCase):
         self.assertEqual(shown, {'Head': picker.Skipped('Head'), ' ': picker.BLANK, '  ': picker.BLANK})
 
     def test_a_styled_labels_line_is_its_text(self):
-        self.assertEqual(picker._menu_lines([picker.Skipped(picker.styled([('Head', 'bold')]))])[0], ['Head'])
+        self.assertEqual(picker.menus._menu_lines([picker.Skipped(picker.styled([('Head', 'bold')]))])[0], ['Head'])
 
 
 class GroupedTest(unittest.TestCase):
@@ -606,22 +606,22 @@ class StyledTest(unittest.TestCase):
 
 class AmbientStatusTest(unittest.TestCase):
     def setUp(self):
-        self.addCleanup(picker.set_ambient_status, picker._ambient_status)
+        self.addCleanup(picker.set_ambient_status, picker.updates._ambient_status)
 
     def test_its_shown_by_a_picker_with_nothing_else_to_show(self):
         picker.set_ambient_status(lambda: [('hashing', 'orange')])
-        self.assertEqual(picker._with_ambient_status(None)(), {'': picker.segments([('hashing', 'orange')])})
-        self.assertEqual(picker._with_ambient_status(lambda: {'x': 'y'})(),
+        self.assertEqual(picker.updates._with_ambient_status(None)(), {'': picker.segments([('hashing', 'orange')])})
+        self.assertEqual(picker.updates._with_ambient_status(lambda: {'x': 'y'})(),
                          {'x': 'y', '': picker.segments([('hashing', 'orange')])})
 
     def test_a_pickers_own_status_comes_first(self):
         picker.set_ambient_status(lambda: [('hashing', 'orange')])
-        self.assertEqual(picker._with_ambient_status(lambda: {'': 'mine'})(), {'': 'mine'})
+        self.assertEqual(picker.updates._with_ambient_status(lambda: {'': 'mine'})(), {'': 'mine'})
 
     def test_its_cleared_once_its_over(self):
         parts = [[('hashing', 'orange')], []]
         picker.set_ambient_status(lambda: parts[0])
-        shown = picker._with_ambient_status(None)
+        shown = picker.updates._with_ambient_status(None)
         self.assertEqual(shown(), {'': picker.segments(parts[0])})
         parts.pop(0)
         self.assertEqual(shown(), {'': ''})
