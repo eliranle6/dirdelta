@@ -7,7 +7,7 @@ from dirdelta.screens import choose_replicas
 from dirdelta.sync import dirsync_main
 from dirdelta import dirpick_main
 from dirdelta.drive import drivecache
-from dirdelta.inbox import inbox
+from dirdelta import inbox
 from dirdelta.known import mounts
 from dirdelta.util import programs
 from dirdelta.known import replicanames

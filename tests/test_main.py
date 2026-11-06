@@ -28,7 +28,7 @@ class StartMenuTest(unittest.TestCase):
                 mock.patch('dirdelta.known.replicanames.forget'), \
                 mock.patch('dirdelta.screens.choose_replicas.are_there', return_value=are_there) as self.are_there, \
                 mock.patch('dirdelta.sync.dirsync_main.run') as self.sync, \
-                mock.patch('dirdelta.inbox.inbox.run') as self.sort:
+                mock.patch('dirdelta.inbox.run') as self.sort:
             return main._run(_args())
 
     def test_a_pairs_volumes_are_checked_once_then_its_dirs(self):

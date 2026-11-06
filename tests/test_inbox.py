@@ -9,12 +9,20 @@ import zipfile
 from unittest import mock
 
 import helpers
+from dirdelta import inbox
 from dirdelta.claude import ai
 from dirdelta.drive import clouddirtree
-from dirdelta.inbox import inbox
-from dirdelta.ui import picker
+from dirdelta.drive import drivecache
+from dirdelta.hashes import hashing
+from dirdelta.inbox import constants
+from dirdelta.inbox import formatting
 from dirdelta.known import replicalog
 from dirdelta.known import replicas
+from dirdelta.matching import elsewhere
+from dirdelta.ui import messages
+from dirdelta.ui import picker
+from dirdelta.ui import renaming
+from dirdelta.ui import sidetree
 
 Sort = inbox.InboxSort
 NOTHING = Sort.NOTHING
@@ -39,7 +47,7 @@ class InboxSortTest(unittest.TestCase):
                         mock.patch('dirdelta.claude.ai.CACHE_FILE', os.path.join(self.tmpdir, 'ai.json'))):
             patcher.start()
             self.addCleanup(patcher.stop)
-        self.show = inbox.messages.show
+        self.show = messages.show
 
     def synchronously(self):
         """Patch InboxSort.ask_in_background to wait for what it asks Claude, so a test sees it done"""
@@ -113,7 +121,7 @@ class InboxSortTest(unittest.TestCase):
         self.assertEqual(self.pick_files.call_args.args[1], ['b.jpg', 'trip/c.jpg'])
 
     def test_a_move_waits_for_enter_and_says_if_some_werent_moved(self):
-        with mock.patch('dirdelta.ui.messages.progress_screen', wraps=inbox.messages.progress_screen) as screen:
+        with mock.patch('dirdelta.ui.messages.progress_screen', wraps=messages.progress_screen) as screen:
             self.sort([['a.txt'], None], ['Move it to a dir you pick', YES], dirs=[os.path.join(self.root, 'docs')])
         # "Press Enter to continue" once it's done
         self.assertNotIn('wait', screen.call_args.kwargs)
@@ -189,7 +197,7 @@ class InboxSortTest(unittest.TestCase):
                                                              ('[junk? a Windows thumbnails cache]', 'yellow')]))
         self.assertNotIn('a.txt', labels)
         preview = self.sent_previews(self.pick_files.call_args)['Thumbs.db']
-        self.assertIn(inbox.MAYBE_JUNK, preview)
+        self.assertIn(constants.MAYBE_JUNK, preview)
         with self.fake_gio_trash():
             self.sort([['a.txt', 'Thumbs.db', 'trip/~$plan.docx'], None],
                       ['Remove 2 of the 3 files: they look like junk (to the trash)', YES, SURE])
@@ -258,7 +266,7 @@ class InboxSortTest(unittest.TestCase):
         self.assertTrue(self.exists('inbox', 'b.jpg'))
 
     def test_a_removal_waits_for_enter_and_says_if_some_werent_removed(self):
-        with mock.patch('dirdelta.ui.messages.progress_screen', wraps=inbox.messages.progress_screen) as screen:
+        with mock.patch('dirdelta.ui.messages.progress_screen', wraps=messages.progress_screen) as screen:
             self.sort([['a.txt'], None], ['Remove it from', YES, SURE])
         # "Press Enter to continue" once it's done
         self.assertNotIn('wait', screen.call_args.kwargs)
@@ -379,7 +387,7 @@ class InboxSortTest(unittest.TestCase):
     def refreshed(self, pick):
         """How many times the side tree's listed in a sort with pick, then quitting, and the picks after pick"""
         sorter = Sort(self.inbox, self.root)
-        with mock.patch('dirdelta.ui.sidetree._listed', wraps=inbox.sidetree._listed) as listed, \
+        with mock.patch('dirdelta.ui.sidetree._listed', wraps=sidetree._listed) as listed, \
                 mock.patch('dirdelta.ui.picker.pick_files', side_effect=[pick, None]) as pick_files, \
                 mock.patch('dirdelta.sync.interactive_dir_sync.refresh_replica') as self.refresh_replica:
             sorter.run()
@@ -550,10 +558,10 @@ class InboxSortTest(unittest.TestCase):
         self.assertFalse(any("under Claude's name" in option for option in options))
 
     def test_a_bracket(self):
-        self.assertEqual(inbox._bracket(("your pick", "yours"), 14), "[your pick   ]")
-        self.assertEqual(inbox._bracket(("your pick", "yours"), 8), "[yours ]")
-        self.assertEqual(inbox._bracket(("your pick", "yours"), 5), "[you]")
-        self.assertEqual(inbox._bracket(("x",), 1), " ")
+        self.assertEqual(formatting._bracket(("your pick", "yours"), 14), "[your pick   ]")
+        self.assertEqual(formatting._bracket(("your pick", "yours"), 8), "[yours ]")
+        self.assertEqual(formatting._bracket(("your pick", "yours"), 5), "[you]")
+        self.assertEqual(formatting._bracket(("x",), 1), " ")
 
     def ask_claude(self, answers):
         """Patch ai._run_query to answer with answers ({relpath: {field: value}}) for the files in its
@@ -575,7 +583,7 @@ class InboxSortTest(unittest.TestCase):
             self.sort([['a.txt'], None], ['Describe it'])
         labels = self.pick_files.call_args.kwargs['shown_as']()
         self.assertEqual(labels, {'a.txt': picker.styled([('a.txt', None), ('  ', None),
-                                                          ('[claude: a shopping list]', inbox.CLAUDE_STYLE)]), '': ''})
+                                                          ('[claude: a shopping list]', constants.CLAUDE_STYLE)]), '': ''})
         self.assertEqual(self.queries[0][:2], (['description'], ai.MODEL))
         # Kept: shown on the next run too, without asking
         with mock.patch('dirdelta.claude.ai._run_query', side_effect=AssertionError('asked again')):
@@ -694,7 +702,7 @@ class InboxSortTest(unittest.TestCase):
 
     def test_cc_in_the_picker_shows_it_again_on_the_renamed_one(self):
         with mock.patch('dirdelta.ui.messages.ask', return_value='beach'):
-            self.sort([picker.Picked(inbox.renaming.PRESSED, 'trip', []), None], [], is_dry_run=False)
+            self.sort([picker.Picked(renaming.PRESSED, 'trip', []), None], [], is_dry_run=False)
         self.assertTrue(self.exists('inbox', 'beach', 'c.jpg'))
         self.assertEqual(self.pick_files.call_args.kwargs['selected'], 'beach')
         self.assertEqual(self.pick_files.call_args.kwargs['twice_keys'], 'c')
@@ -702,7 +710,7 @@ class InboxSortTest(unittest.TestCase):
     def test_cc_in_the_dir_picker_renames_a_sorted_dir_then_picks_again(self):
         with mock.patch('dirdelta.ui.messages.ask', return_value='documents'):
             self.sort([['a.txt'], None], ['Move it to a dir you pick', YES],
-                      dirs=[(inbox.renaming.PRESSED, os.path.join(self.root, 'docs')), os.path.join(self.root, 'documents')])
+                      dirs=[(renaming.PRESSED, os.path.join(self.root, 'docs')), os.path.join(self.root, 'documents')])
         self.assertTrue(self.exists('sorted', 'documents', 'old.txt'))
         self.assertTrue(self.exists('sorted', 'documents', 'a.txt'))
 
@@ -790,7 +798,7 @@ class InboxSortTest(unittest.TestCase):
                 sorter._descriptions['a.txt'] = 'a list'
             elif len(sends) == 3:
                 raise picker.PickerClosed()
-        with mock.patch('dirdelta.inbox.inbox.PREVIEWS_INTERVAL', 0), self.assertRaises(picker.PickerClosed):
+        with mock.patch('dirdelta.inbox.previews.PREVIEWS_INTERVAL', 0), self.assertRaises(picker.PickerClosed):
             sorter._send_previews(['a.txt', 'b.jpg'], send)
         self.assertEqual(sorted(sends[0]), ['a.txt', 'b.jpg'])
         # Only the one that changed
@@ -809,12 +817,12 @@ class InboxSortTest(unittest.TestCase):
         sorter._compare(['old.txt', 'a.txt'])
         self.assertEqual(sorter._copies('old.txt'), ['docs/old.txt'])
         lines = sorter._previews(['old.txt'])['old.txt']
-        title = lines.index(picker.styled([(inbox.IN_SORTED_TREE_TITLE + " ", 'bold,magenta'), ("Yes", 'bold,green')]))
-        self.assertEqual(''.join(line.strip() for line in lines[title + 1:lines.index(inbox.SURELY_A_COPY)]),
+        title = lines.index(picker.styled([(constants.IN_SORTED_TREE_TITLE + " ", 'bold,magenta'), ("Yes", 'bold,green')]))
+        self.assertEqual(''.join(line.strip() for line in lines[title + 1:lines.index(constants.SURELY_A_COPY)]),
                          os.path.join(self.root, 'docs', 'old.txt'))
-        self.assertIn(inbox.SURELY_A_COPY, lines)
+        self.assertIn(constants.SURELY_A_COPY, lines)
         # Its hash is kept, for next time
-        self.assertIsNotNone(inbox.elsewhere.hashcache.get(os.path.join(self.inbox, 'old.txt'), 'sha1'))
+        self.assertIsNotNone(elsewhere.hashcache.get(os.path.join(self.inbox, 'old.txt'), 'sha1'))
 
     def test_copies_found_by_contents_can_be_removed_without_claude(self):
         self.copy_in_the_inbox()
@@ -851,8 +859,8 @@ class InboxSortTest(unittest.TestCase):
             f.write('a.txt')
         sorter = Sort(self.inbox, self.root)
         for path in (self.inbox, self.root):
-            job = inbox.hashing.job(path)
-            self.addCleanup(inbox.hashing._jobs.pop, job.root, None)
+            job = hashing.job(path)
+            self.addCleanup(hashing._jobs.pop, job.root, None)
             job.scan()
             job._is_started = True
             for relpath in job.files():
@@ -862,7 +870,7 @@ class InboxSortTest(unittest.TestCase):
         self.assertEqual(sorter._checked, {})
         # Marked as hashed in the picker, with how far each got on the bottom line
         shown = sorter._shown_as(['a.txt'])
-        self.assertEqual(picker.unstyled(shown['a.txt']), 'a.txt  ' + inbox.hashing.HASHED_TAG)
+        self.assertEqual(picker.unstyled(shown['a.txt']), 'a.txt  ' + hashing.HASHED_TAG)
         self.assertIn('inbox: 100% hashed', shown[''])
 
     def test_claude_is_told_of_copies_and_its_removals_are_offered(self):
@@ -996,7 +1004,7 @@ class InboxSortTest(unittest.TestCase):
                                 'mimeType': 'application/vnd.google-apps.folder'}) + '\n')
         with mock.patch('dirdelta.drive.drivecache.LINES_FILE', cache):
             sorter = Sort(self.inbox, 'cloud/me')
-            with self.assertRaises(inbox.drivecache.DriveCacheError):
+            with self.assertRaises(drivecache.DriveCacheError):
                 Sort(self.inbox, 'cloud/nope')
         self.assertFalse(sorter.is_same_kind)
         self.assertIsInstance(sorter._root_tree, clouddirtree.CloudDirTree)
@@ -1053,7 +1061,7 @@ class InboxSortTest(unittest.TestCase):
         answer = {'action': 'move', 'path': '/photos/2024/rome trip/', 'summary': 'Rome trip photos.',
                   'reason': 'one trip'}
         with self.claude_on_dirs(answer) as query:
-            sorter._on_key(inbox.DESCRIBE_KEY, 'trip', [], files)
+            sorter._on_key(constants.DESCRIBE_KEY, 'trip', [], files)
             sorter.wait_for_claude()
         self.assertEqual(sorter._dir_recommendation('trip'),
                          {'action': 'move', 'path': 'photos/2024/rome trip', 'summary': 'Rome trip photos',
@@ -1082,8 +1090,8 @@ class InboxSortTest(unittest.TestCase):
         self.assertEqual(again._dir_recommendation('trip')['path'], 'photos/2024/rome trip')
         # Picked files, or the root: each file, as before
         with mock.patch.object(Sort, 'ask_in_background') as ask:
-            sorter._on_key(inbox.DESCRIBE_KEY, 'trip', ['trip/c.jpg'], files)
-            sorter._on_key(inbox.DESCRIBE_KEY, '', [], files)
+            sorter._on_key(constants.DESCRIBE_KEY, 'trip', ['trip/c.jpg'], files)
+            sorter._on_key(constants.DESCRIBE_KEY, '', [], files)
         self.assertEqual([call.args[0] for call in ask.call_args_list], [['trip/c.jpg'], files])
 
     def test_a_dir_that_changed_is_asked_about_anew(self):
@@ -1103,7 +1111,7 @@ class InboxSortTest(unittest.TestCase):
         sorter = Sort(self.inbox, self.root)
         files = sorter._inbox_files()
         with self.claude_on_dirs({'action': 'move', 'path': '..', 'summary': 's', 'reason': 'r'}):
-            sorter._on_key(inbox.DESCRIBE_KEY, 'trip', [], files)
+            sorter._on_key(constants.DESCRIBE_KEY, 'trip', [], files)
             sorter.wait_for_claude()
         self.assertIsNone(sorter._dir_recommendation('trip'))
         preview = '\n'.join(picker.unstyled(line) for line in sorter._previews(files)['trip'])
@@ -1150,9 +1158,9 @@ class InboxSortTest(unittest.TestCase):
         self.assertEqual(os.listdir(self.trash), ['c.jpg'])
 
     def test_spread(self):
-        self.assertEqual(inbox._spread([1, 2, 3], 5), [1, 2, 3])
-        self.assertEqual(inbox._spread(list(range(10)), 4), [0, 3, 6, 9])
-        self.assertEqual(inbox._spread(list(range(10)), 1), [0])
+        self.assertEqual(formatting._spread([1, 2, 3], 5), [1, 2, 3])
+        self.assertEqual(formatting._spread(list(range(10)), 4), [0, 3, 6, 9])
+        self.assertEqual(formatting._spread(list(range(10)), 1), [0])
 
 
 if __name__ == '__main__':
