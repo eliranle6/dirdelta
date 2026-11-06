@@ -252,8 +252,8 @@ class PickerTest(unittest.TestCase):
             with open(command[command.index('--picked') + 1], 'rb') as f:
                 self.picked_file_contents = f.read()
             return real_popen(command, **kwargs)
-        real_popen = picker.running.subprocess.Popen
-        with mock.patch('dirdelta.ui.picker.running.subprocess.Popen', side_effect=popen):
+        real_popen = picker.command.subprocess.Popen
+        with mock.patch('dirdelta.ui.picker.command.subprocess.Popen', side_effect=popen):
             picker.pick_files('/some/root', ['a/1.txt', 'b/2.txt'], picked=['b/2.txt'])
 
         self.assertEqual(self.picked_file_contents, b'b/2.txt\0')

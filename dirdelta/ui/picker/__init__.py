@@ -12,7 +12,7 @@ from dirdelta.ui.picker.files import key_help_lines, pick_files, view_files  # n
 from dirdelta.ui.picker.kinds import BLANK, Colored, Disabled, Option, Picked, Side, SIDE_KEY, Skipped  # noqa: F401
 from dirdelta.ui.picker.menus import option_id, option_label, pick_option  # noqa: F401
 from dirdelta.ui.picker.places import place, trail  # noqa: F401
-from dirdelta.ui.picker.running import PickerError  # noqa: F401
+from dirdelta.ui.picker.command import PickerError  # noqa: F401
 from dirdelta.ui.picker.selection import PickerClosed, Selection  # noqa: F401
 from dirdelta.ui.picker.styles import (HIGHLIGHT_MARK, display_width, grouped, highlighted,  # noqa: F401
                                        segments, shortcut_prefixes, styled, unstyled)
