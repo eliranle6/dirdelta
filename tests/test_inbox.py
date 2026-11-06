@@ -23,6 +23,7 @@ from dirdelta.ui import messages
 from dirdelta.ui import picker
 from dirdelta.ui import renaming
 from dirdelta.ui import sidetree
+from dirdelta.hashes import hashcache
 
 Sort = inbox.InboxSort
 NOTHING = Sort.NOTHING
@@ -822,7 +823,7 @@ class InboxSortTest(unittest.TestCase):
                          os.path.join(self.root, 'docs', 'old.txt'))
         self.assertIn(constants.SURELY_A_COPY, lines)
         # Its hash is kept, for next time
-        self.assertIsNotNone(elsewhere.hashcache.get(os.path.join(self.inbox, 'old.txt'), 'sha1'))
+        self.assertIsNotNone(hashcache.get(os.path.join(self.inbox, 'old.txt'), 'sha1'))
 
     def test_copies_found_by_contents_can_be_removed_without_claude(self):
         self.copy_in_the_inbox()

@@ -235,12 +235,12 @@ class ModifiedTimeTest(unittest.TestCase):
         src = _SizedTree('/src', {'x': 5}, times={'x': 1000})
         dst = _SizedTree('/dst', {'a/x': 5, 'b/x': 5, 'c/x': 5}, times={'a/x': 5000, 'b/x': 1001, 'c/x': 10})
         lines = _previews(['x'], src, dst).previews['x']
-        self.assertEqual(lines[1], "  modified " + elsewhere._format_time(1000))
+        self.assertEqual(lines[1], "  modified " + elsewhere.preview_lines._format_time(1000))
         # The same time (within SAME_TIME) first, then the others by path
         self.assertEqual(lines[3:5], ["  b/", "    x  5 B, same size"])
-        self.assertIn("    modified %s, the same" % (elsewhere._format_time(1001),), lines)
-        self.assertIn("    modified %s, newer" % (elsewhere._format_time(5000),), lines)
-        self.assertIn("    modified %s, older" % (elsewhere._format_time(10),), lines)
+        self.assertIn("    modified %s, the same" % (elsewhere.preview_lines._format_time(1001),), lines)
+        self.assertIn("    modified %s, newer" % (elsewhere.preview_lines._format_time(5000),), lines)
+        self.assertIn("    modified %s, older" % (elsewhere.preview_lines._format_time(10),), lines)
 
 
 class SureMatchTest(unittest.TestCase):
@@ -745,14 +745,14 @@ class HashedReplicasTest(unittest.TestCase):
         self.hash('dst')
         sent = _Sent()
         # Then it'd go on sending them as files are hashed, until the picker is gone
-        with mock.patch('dirdelta.matching.elsewhere.time.sleep', side_effect=picker.PickerClosed), \
+        with mock.patch('dirdelta.matching.elsewhere.previews.time.sleep', side_effect=picker.PickerClosed), \
                 self.assertRaises(picker.PickerClosed):
             elsewhere.find_previews(['small.txt'], self.src, self.dst_index, sent,
                                     src_index=elsewhere.Index(self.src))
         self.assertIn("  contents not hashed yet (src: 0% hashed (0/2, not hashing))", sent.previews['small.txt'])
         self.hash('src')
         sent = _Sent()
-        with mock.patch('dirdelta.matching.elsewhere.time.sleep', side_effect=picker.PickerClosed):
+        with mock.patch('dirdelta.matching.elsewhere.previews.time.sleep', side_effect=picker.PickerClosed):
             with self.assertRaises(picker.PickerClosed):
                 elsewhere.find_previews(['other.txt'], self.src, self.dst_index, sent, src_index=self.src_index)
         lines = sent.previews['other.txt']
@@ -771,7 +771,7 @@ class HashedReplicasTest(unittest.TestCase):
                 raise picker.PickerClosed()
             hashed.append(True)
             self.hash('src', 'dst')
-        with mock.patch('dirdelta.matching.elsewhere.time.sleep', side_effect=sleep), \
+        with mock.patch('dirdelta.matching.elsewhere.previews.time.sleep', side_effect=sleep), \
                 self.assertRaises(picker.PickerClosed):
             elsewhere.find_previews(['small.txt', 'other.txt'], self.src, self.dst_index,
                                     lambda found=None, default=None: sends.append(dict(found or {})),
