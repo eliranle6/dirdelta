@@ -1,102 +1,18 @@
-import json
+"""Running treepicker: its arguments, quitting and failing, and the labels every picker has"""
 import os
 import shutil
-import stat
-import sys
 import tempfile
-import threading
-import time
 import unittest
 from unittest import mock
 
 from dirdelta.trees import dirtree
 from dirdelta.ui import picker
 from dirdelta.util import programs
-
-# Stands in for treepicker: records its arguments and stdin into $FAKE_PICKER_LOG, and with
-# --updates (--preview), what it read from that fd until it read $FAKE_PICKER_WAIT_FOR
-# ($FAKE_PICKER_PREVIEW_WAIT_FOR), after writing $FAKE_PICKER_SELECTIONS ('|'-separated) to
-# --selection's fd; then prints
-# $FAKE_PICKER_OUTPUT (items separated by '|', each printed '\0'-terminated, empty ones too) and exits with
-# $FAKE_PICKER_EXIT_CODE
-FAKE_PICKER = '''#!%s
-import json, os, sys
-stdin = sys.stdin.buffer.read().decode('utf-8', 'surrogateescape')
-updates = b''
-def read_until(option, wait_for):
-    read = b''
-    if option in sys.argv:
-        fd = int(sys.argv[sys.argv.index(option) + 1])
-        while wait_for.encode() not in read:
-            chunk = os.read(fd, 4096)
-            if not chunk:
-                break
-            read += chunk
-    return read.decode()
-if '--selection' in sys.argv:
-    fd = int(sys.argv[sys.argv.index('--selection') + 1])
-    for path in os.environ.get('FAKE_PICKER_SELECTIONS', '').split('|'):
-        os.write(fd, path.encode() + b'\\0')
-if '--notify-fd' in sys.argv:
-    fd = int(sys.argv[sys.argv.index('--notify-fd') + 1])
-    # Records ('|'-separated items, ';'-separated records), each ended by an empty item
-    for record in os.environ.get('FAKE_PICKER_NOTIFY', '').split(';'):
-        os.write(fd, b''.join(item.encode() + b'\\0' for item in record.split('|')) + b'\\0')
-updates = read_until('--updates', os.environ.get('FAKE_PICKER_WAIT_FOR', ''))
-preview = read_until('--preview', os.environ.get('FAKE_PICKER_PREVIEW_WAIT_FOR', ''))
-with open(os.environ['FAKE_PICKER_LOG'], 'w') as log:
-    json.dump({'args': sys.argv[1:], 'stdin': stdin, 'updates': updates, 'preview': preview}, log)
-output = os.environ.get('FAKE_PICKER_OUTPUT', '')
-sys.stdout.buffer.write(b''.join(item.encode('utf-8', 'surrogateescape') + b'\\0'
-                                 for item in (output.split('|') if output else [])))
-sys.exit(int(os.environ.get('FAKE_PICKER_EXIT_CODE', '0')))
-''' % (sys.executable,)
+from picker_support import PickerTest
 
 
-class PickerTest(unittest.TestCase):
-    def setUp(self):
-        self.tmpdir = tempfile.mkdtemp()
-        self.program = os.path.join(self.tmpdir, 'treepicker')
-        with open(self.program, 'w') as f:
-            f.write(FAKE_PICKER)
-        os.chmod(self.program, os.stat(self.program).st_mode | stat.S_IEXEC)
-        self.log = os.path.join(self.tmpdir, 'log.json')
-        self.env = mock.patch.dict(os.environ, {'FAKE_PICKER_LOG': self.log})
-        self.env.start()
-        self.find = mock.patch('dirdelta.util.programs.find', return_value=self.program)
-        self.find.start()
-        settings_file = mock.patch('dirdelta.known.settings.SETTINGS_FILE', os.path.join(self.tmpdir, 'settings.json'))
-        settings_file.start()
-        self.addCleanup(settings_file.stop)
-
-    def tearDown(self):
-        self.find.stop()
-        self.env.stop()
-        shutil.rmtree(self.tmpdir)
-
-    def answer(self, output='', exit_code=0):
-        os.environ['FAKE_PICKER_OUTPUT'] = output
-        os.environ['FAKE_PICKER_EXIT_CODE'] = str(exit_code)
-
-    def log_entry(self, key):
-        """What the fake treepicker logged as key (e.g. 'preview': what it read from that fd)"""
-        with open(self.log) as f:
-            return json.load(f)[key]
-
-    def call(self, with_label=False):
-        """The arguments and the stdin items the fake treepicker got (the arguments without the
-        dry run label every call has, unless with_label)"""
-        with open(self.log) as f:
-            log = json.load(f)
-        args = log['args']
-        if not with_label:
-            index = args.index('--label')
-            args = args[:index] + args[index + 4:]
-            # Nor what q does, which every call says too (see test_q_quits_or_goes_back)
-            index = args.index('--key')
-            if args[index + 1] == 'q':
-                args = args[:index] + args[index + 3:]
-        return args, [item for item in log['stdin'].split('\0') if item]
+class RunningTest(PickerTest):
+    """Running treepicker"""
 
     def test_q_quits_or_goes_back(self):
         self.answer('x')
@@ -126,33 +42,6 @@ class PickerTest(unittest.TestCase):
         with open(log) as f:
             self.assertIn("TypeError: a bug", f.read())
 
-    def test_a_trees_pick_leaves_out_what_is_excluded_with_all_in_it(self):
-        tree = dirtree.DirTree('/x')
-        for relpath in ('meta/hashes', 'a/meta/mine', 'a/b/c', 'a/keep'):
-            tree.add_file_by_relpath(relpath)
-        self.assertEqual(sorted(path[2:] for path in picker.trees._tree_paths(tree, ['meta', 'a/b'])),
-                         ['a', 'a/keep', 'a/meta', 'a/meta/mine'])
-
-    def test_an_options_id_is_returned_and_said_by_its_line(self):
-        os.environ['FAKE_PICKER_WAIT_FOR'] = 'Later'
-        self.answer('Do it ')
-        options = ['Do it', picker.BLANK, picker.Option(('do', 1), 'Do it', 'Now'), picker.Option('later', 'Later')]
-        answer = picker.pick_option(options, selected=('do', 1), shown_as=lambda: {'later': 'Later', 'unknown': 'x'},
-                                    previews_below={('do', 1): ['what']})
-        self.assertEqual(answer, ('do', 1))
-        self.assertEqual(self.log_entry('stdin').split('\0')[:-1], ['Do it', ' ', 'Do it ', 'Later'])
-        args = self.log_entry('args')
-        self.assertEqual(args[args.index('--select') + 1], 'Do it ')
-        # The first updates: what they're shown as first, and by shown_as, not what it doesn't have
-        updates = self.log_entry('updates').split('\0')
-        self.assertIn('Do it \tNow', updates)
-        self.assertIn('Later\tLater', updates)
-        self.assertFalse(any('unknown' in update for update in updates))
-
-    def test_quitting_a_menu_of_options_is_none(self):
-        self.answer(exit_code=1)
-        self.assertIsNone(picker.pick_option([picker.Option(1, 'a')]))
-
     def test_a_failing_shown_as_says_so_on_the_bottom_line(self):
         log = os.path.join(tempfile.mkdtemp(prefix='dirdelta-picker-'), 'errors.log')
         self.addCleanup(shutil.rmtree, os.path.dirname(log))
@@ -176,307 +65,6 @@ class PickerTest(unittest.TestCase):
         args, _ = self.call(with_label=True)
         self.assertEqual(args[1:5], ['--label', 'LIVE', '--label-color', 'red'])
 
-    def make_tree(self):
-        tree = dirtree.DirTree('/some/root')
-        for relpath in ['b/2.txt', 'a/1.txt', 'b/sub/3.txt', 'c.txt']:
-            tree.add_file_by_relpath(relpath)
-        return tree
-
-    def test_tree_is_sent_each_dir_before_its_contents_sorted(self):
-        self.answer('a/1.txt')
-        picker.pick_from_tree(self.make_tree())
-        args, paths = self.call()
-        # Each after its type, so empty dirs show as dirs and picked files are counted
-        self.assertEqual(paths, ['d a', 'f a/1.txt', 'd b', 'f b/2.txt', 'd b/sub', 'f b/sub/3.txt', 'f c.txt'])
-        self.assertEqual(args, ['-0', '--typed', '--root', '/some/root', '-'])
-
-    def test_pick_only_dirs(self):
-        self.answer('a')
-        picker.pick_from_tree(self.make_tree(), dirs_only=True)
-        args, _ = self.call()
-        self.assertIn('--dirs-only', args)
-        self.answer('.')
-        self.assertEqual(picker.pick_under_dir('/', dirs_only=True, lazy=True, header='Pick'), '/')
-        args, _ = self.call()
-        self.assertEqual(args, ['-0', '--dirs-only', '--lazy', '--header', 'Pick', '/'])
-
-    def test_pick_the_root(self):
-        tree = self.make_tree()
-        self.answer('.')
-        self.assertEqual(picker.pick_from_tree(tree), [tree.get_node('').data])
-
-    def test_pick_from_tree_with_keys_says_which_ended_it(self):
-        tree = self.make_tree()
-        self.answer('n|a')
-        self.assertEqual(picker.pick_from_tree(tree, keys='n'), ('n', [tree.get_node('a').data]))
-        args, _ = self.call()
-        self.assertEqual(args[args.index('--expect') + 1], 'n')
-        self.assertIn('--print-selection', args)
-        # Enter: no key, the selected one picked
-        self.answer('|.|.')
-        self.assertEqual(picker.pick_from_tree(tree, keys='n'), ('', [tree.get_node('').data]))
-
-    def test_pick_under_dir_with_keys_says_which_ended_it(self):
-        self.answer('n|a/b')
-        self.assertEqual(picker.pick_under_dir('/r', keys='n'), ('n', '/r/a/b'))
-        self.answer('|.|.')
-        self.assertEqual(picker.pick_under_dir('/r', keys='n'), ('', '/r'))
-        self.answer('a/b')
-        self.assertEqual(picker.pick_under_dir('/r'), '/r/a/b')
-        args, _ = self.call()
-        self.assertNotIn('--expect', args)
-
-    def test_pick_files_sends_only_the_files(self):
-        # treepicker adds their dirs
-        self.answer('b/2.txt')
-        picker.pick_files('/some/root', ['a/1.txt', 'b/2.txt'], header='Pick\nfiles')
-        args, items = self.call()
-        self.assertEqual(items, ['f a/1.txt', 'f b/2.txt'])
-        self.assertEqual(args, ['-0', '--typed', '--root', '/some/root', '-m', '--print-selection',
-                                '--header', 'Pick\nfiles', '-'])
-
-    def test_pick_files_returns_only_files_and_the_selection(self):
-        # The selection first; a dir is printed when all its files are picked
-        self.answer('b/sub|b|b/2.txt|b/sub|b/sub/3.txt')
-        picked = picker.pick_files('/some/root', ['a/1.txt', 'b/2.txt', 'b/sub/3.txt'])
-        self.assertEqual(picked, picker.Picked('', 'b/sub', ['b/2.txt', 'b/sub/3.txt']))
-        # The root is ''
-        self.answer('.|a/1.txt')
-        self.assertEqual(picker.pick_files('/r', ['a/1.txt']).selected, '')
-
-    def test_picked_files_start_picked(self):
-        self.answer('b/2.txt')
-
-        # The fake records the --picked file's contents, which is gone once the picker returns
-        def popen(command, **kwargs):
-            with open(command[command.index('--picked') + 1], 'rb') as f:
-                self.picked_file_contents = f.read()
-            return real_popen(command, **kwargs)
-        real_popen = picker.command.subprocess.Popen
-        with mock.patch('dirdelta.ui.picker.command.subprocess.Popen', side_effect=popen):
-            picker.pick_files('/some/root', ['a/1.txt', 'b/2.txt'], picked=['b/2.txt'])
-
-        self.assertEqual(self.picked_file_contents, b'b/2.txt\0')
-
-    def test_a_key_pressed_twice_comes_doubled(self):
-        # cc
-        self.answer('c|b/sub|b/2.txt')
-        self.assertEqual(picker.pick_files('/r', ['a/1.txt', 'b/2.txt'], keys='r', twice_keys='c'),
-                         picker.Picked('cc', 'b/sub', ['b/2.txt']))
-        args, _ = self.call()
-        self.assertEqual(args[args.index('--expect-twice') + 1], 'c')
-        self.answer('c|a/b')
-        self.assertEqual(picker.pick_under_dir('/r', keys='n', twice_keys='c'), ('cc', '/r/a/b'))
-        self.answer('c|a/b')
-        self.assertEqual(picker.pick_under_dir('/r', twice_keys='c'), ('cc', '/r/a/b'))
-        args, _ = self.call()
-        self.assertEqual(args[args.index('--expect-twice') + 1], 'c')
-        self.assertNotIn('--expect', args)
-
-    def test_another_key_in_the_side_tree_says_itself(self):
-        self.answer(picker.SIDE_KEY + '|a|docs|d|a/1.txt')
-        side = picker.Side('sorted', ['d docs'], True, keys='d:', key_hints=[('d', 'remove')])
-        chosen = picker.pick_files('/root', ['a/1.txt'], side=side)
-        self.assertEqual(chosen.side_selected, 'docs')
-        self.assertEqual(chosen.side_pressed, 'd')
-        self.assertEqual(chosen.files, ['a/1.txt'])
-        args, _ = self.call()
-        self.assertEqual(args[args.index('--side-expect') + 1], 'd:')
-        self.assertEqual(args[args.index('--side-hint') + 1:args.index('--side-hint') + 3], ['d', 'remove'])
-
-    def test_enter_in_the_side_tree_with_other_keys_says_nothing_pressed(self):
-        self.answer(picker.SIDE_KEY + '|a|docs||a/1.txt')
-        side = picker.Side('sorted', ['d docs'], True, keys='d:')
-        chosen = picker.pick_files('/root', ['a/1.txt'], side=side)
-        self.assertEqual((chosen.side_selected, chosen.side_pressed, chosen.files), ('docs', '', ['a/1.txt']))
-
-    def test_enter_in_the_side_tree_says_its_selection(self):
-        self.answer(picker.SIDE_KEY + '|a|docs|a/1.txt')
-        side = picker.Side('sorted', ['d docs'], True)
-        self.assertEqual(picker.pick_files('/r', ['a/1.txt'], side=side),
-                         picker.Picked(picker.SIDE_KEY, 'a', ['a/1.txt'], 'docs'))
-        args, _ = self.call()
-        self.assertEqual(args[args.index('--side-root') + 1], 'sorted')
-        self.assertEqual(args[args.index('--side-key') + 1], picker.SIDE_KEY)
-
-    def test_it_can_start_in_the_side_tree(self):
-        for start, argument in (('docs', 'docs'), ('', '.')):
-            self.answer('|a|a/1.txt')
-            picker.pick_files('/r', ['a/1.txt'], side=picker.Side('sorted', ['d docs'], True, start=start))
-            args, _ = self.call()
-            self.assertEqual(args[args.index('--side-start') + 1], argument)
-        self.answer('|a|a/1.txt')
-        picker.pick_files('/r', ['a/1.txt'], side=picker.Side('sorted', ['d docs'], True))
-        self.assertNotIn('--side-start', self.call()[0])
-
-    def test_pick_files_starts_on_the_selected(self):
-        self.answer('a/1.txt')
-        picker.pick_files('/r', ['a/1.txt'], selected='a')
-        args, _ = self.call()
-        self.assertEqual(args[args.index('--select') + 1], 'a')
-        picker.pick_files('/r', ['a/1.txt'], selected='')
-        args, _ = self.call()
-        self.assertEqual(args[args.index('--select') + 1], '.')
-
-    def test_pick_files_sends_previews_as_they_come(self):
-        os.environ['FAKE_PICKER_PREVIEW_WAIT_FOR'] = 'done'
-        self.answer('a/1.txt')
-
-        def previews(send):
-            send({'a/1.txt': ['In b:', '  x\ty']})
-            send({'': ['root']}, default=['done'])
-        picker.pick_files('/r', ['a/1.txt'], previews=previews)
-
-        # Each line after a tab, the root as '.', the default's path empty, and a tab in a line
-        # shown as '?'
-        self.assertEqual(self.log_entry('preview').split('\0'),
-                         ['a/1.txt\tIn b:\t  x?y', '.\troot', '\tdone', ''])
-
-    def test_previews_stop_once_the_picker_is_gone(self):
-        self.answer('a/1.txt')
-        stopped = []
-
-        def previews(send):
-            try:
-                while True:
-                    send(default=['still going'])
-            except picker.PickerClosed:
-                stopped.append(True)
-                raise
-        picker.pick_files('/r', ['a/1.txt'], previews=previews)
-        # pick_files() waited for it
-        self.assertEqual(stopped, [True])
-
-    def test_on_selection_follows_the_selection_and_sends_previews(self):
-        os.environ['FAKE_PICKER_SELECTIONS'] = 'a/1.txt|.|a'
-        os.environ['FAKE_PICKER_PREVIEW_WAIT_FOR'] = 'done'
-        self.answer('a/1.txt')
-        seen = []
-
-        def on_selection(selection, send):
-            while len(seen) < 3:
-                relpath = selection.wait_next()
-                # Moves between waits may come as one
-                seen.append(relpath)
-                if relpath == 'a':
-                    break
-            self.assertTrue(selection.is_at('a'))
-            send({'a': ['done']})
-            selection.wait_next()
-        picker.pick_files('/r', ['a/1.txt'], on_selection=on_selection)
-        self.assertEqual(seen[-1], 'a')
-        self.assertEqual(self.log_entry('preview'), 'a\tdone\0')
-
-    def test_images_of_where_the_selection_stays_are_sent_once(self):
-        # The selection moves through a/1.txt to a/2.jpg, and stays there
-        os.environ['FAKE_PICKER_SELECTIONS'] = 'a/1.txt|a/2.jpg'
-        os.environ['FAKE_PICKER_PREVIEW_WAIT_FOR'] = '0000ff'
-        self.answer('a/2.jpg')
-        asked = []
-
-        def images(relpath, max_width, max_height):
-            asked.append(relpath)
-            self.assertGreater(max_width, 0)
-            self.assertGreater(max_height, 0)
-            return '1 1 0000ff' if relpath.endswith('.jpg') else None
-        picker.pick_files('/r', ['a/1.txt', 'a/2.jpg'], previews=lambda send: None, images=images)
-        self.assertEqual(asked, ['a/2.jpg'])
-        self.assertEqual(self.log_entry('preview'), '\x03a/2.jpg\t1 1 0000ff\0')
-
-    def test_an_image_that_fails_is_none_and_the_next_are_made(self):
-        selection = picker.Selection()
-        sent = []
-        sender = mock.Mock(send_image=lambda relpath, image: sent.append((relpath, image)))
-
-        def images(relpath, max_width, max_height):
-            if relpath == 'bad.jpg':
-                raise ValueError('bad')
-            selection._close()
-            return '1 1 000000'
-        selection._move('bad.jpg')
-        thread = threading.Thread(target=picker.pictures._send_images, args=(selection, images, sender))
-        with mock.patch.object(picker.pictures, 'log_error') as log_error, \
-                mock.patch.object(picker.pictures, 'IMAGE_DELAY', 0.01):
-            thread.start()
-            time.sleep(0.1)
-            selection._move('good.jpg')
-            thread.join(5)
-        self.assertFalse(thread.is_alive())
-        log_error.assert_called_once_with()
-        self.assertEqual(sent, [('good.jpg', '1 1 000000')])
-
-    def test_the_images_key_switches_them_off_and_on_for_the_next_pickers_too(self):
-        selection = picker.Selection()
-        sent = []
-        sender = mock.Mock(send_image=lambda relpath, image: sent.append((relpath, image)))
-        made = []
-
-        def images(relpath, max_width, max_height):
-            made.append(relpath)
-            return '1 1 000000'
-        pictures = picker.pictures.Images(selection, images, sender)
-        thread = threading.Thread(target=pictures.run)
-        with mock.patch.object(picker.pictures, 'IMAGE_DELAY', 0.01):
-            thread.start()
-            selection._move('a.jpg')
-            self.wait_for(lambda: sent)
-            # Off: the one sent is dropped, and none is made
-            pictures.toggle('a.jpg')
-            self.assertFalse(picker.pictures.settings.are_images_shown())
-            self.assertEqual(sent[-1], ('a.jpg', ''))
-            selection._move('b.jpg')
-            time.sleep(0.1)
-            self.assertEqual(made, ['a.jpg'])
-            # On: the selected one's is made at once
-            pictures.toggle('b.jpg')
-            self.wait_for(lambda: made == ['a.jpg', 'b.jpg'])
-            selection._close()
-            thread.join(5)
-        self.assertTrue(picker.pictures.settings.are_images_shown())
-        self.assertEqual(sent[-1], ('b.jpg', '1 1 000000'))
-
-    def test_the_images_key_is_one_of_the_pickers_notify_keys(self):
-        os.environ['FAKE_PICKER_NOTIFY'] = 'i|a.jpg|;\t|a.jpg|'
-        self.answer('a.jpg')
-        notified = []
-        with mock.patch.object(picker.pictures.Images, 'toggle') as toggle:
-            picker.pick_files('/r', ['a.jpg'], previews=lambda send: None, images=lambda *_: None,
-                              notify_keys='\t', on_notify=lambda *args: notified.append(args))
-        args, _ = self.call()
-        self.assertEqual(args[args.index('--notify') + 1], '\ti')
-        toggle.assert_called_once_with('a.jpg')
-        self.assertEqual(notified, [('\t', 'a.jpg', [])])
-
-    def wait_for(self, condition):
-        for _ in range(500):
-            if condition():
-                return
-            time.sleep(0.01)
-        self.fail("it didn't happen")
-
-    def test_notify_keys_tell_of_the_selection_and_the_picks(self):
-        os.environ['FAKE_PICKER_NOTIFY'] = '\t|a|a/1.txt|a;\t|.'
-        self.answer('.')
-        notified = []
-        picker.pick_files('/r', ['a/1.txt', 'b.txt'], notify_keys='\t',
-                          on_notify=lambda *args: notified.append(args))
-        args, _ = self.call()
-        self.assertEqual(args[args.index('--notify') + 1], '\t')
-        # The picks are files only (a dir all of whose files are picked is printed too); the root is ''
-        self.assertEqual(notified, [('\t', 'a', ['a/1.txt']), ('\t', '', [])])
-
-    def test_a_selection_says_the_picker_is_gone(self):
-        selection = picker.Selection()
-        self.assertIsNone(selection.wait_next(timeout=0.01))
-        selection._move('x')
-        self.assertEqual(selection.wait_next(), 'x')
-        self.assertIsNone(selection.wait_next(timeout=0.01))
-        selection._close()
-        with self.assertRaises(picker.PickerClosed):
-            selection.wait_next()
-        with self.assertRaises(picker.PickerClosed):
-            selection.is_at('x')
-
     def test_quitting_returns_none(self):
         self.answer(exit_code=1)
         self.assertIsNone(picker.pick_from_tree(self.make_tree()))
@@ -493,42 +81,6 @@ class PickerTest(unittest.TestCase):
         programs.find.return_value = os.path.join(self.tmpdir, 'no-such-program')
         with self.assertRaises(picker.PickerError):
             picker.pick_option(['x'])
-
-    def test_pick_option(self):
-        # Labels with '/' are fine: --list keeps them flat
-        options = ['Copy from /a to /b', 'Quit']
-        self.answer('Copy from /a to /b')
-        self.assertEqual(picker.pick_option(options, header='What now?'), 'Copy from /a to /b')
-        args, items = self.call()
-        self.assertEqual(args, ['-0', '--list', '--root', 'dirdelta', '--header', 'What now?'])
-        self.assertEqual(items, options)
-
-    def test_pick_option_sends_what_options_are_shown_as_as_it_changes(self):
-        options = ['Copy', 'Quit']
-        # Loading until asked a few times, then counted
-        calls = []
-        def shown_as():
-            calls.append(None)
-            return {'Copy': 'Copy (loading)' if len(calls) < 3 else 'Copy (3 files)'}
-        os.environ['FAKE_PICKER_WAIT_FOR'] = '3 files'
-        self.answer('Copy')
-        with mock.patch('dirdelta.ui.picker.updates.SHOWN_AS_INTERVAL', 0.01):
-            self.assertEqual(picker.pick_option(options, shown_as=shown_as), 'Copy')
-        args, items = self.call()
-        self.assertEqual(args[:-2], ['-0', '--list', '--root', 'dirdelta'])
-        self.assertEqual(args[-2], '--updates')
-        self.assertEqual(items, options)
-        with open(self.log) as f:
-            updates = json.load(f)['updates']
-        # Each change once, in order
-        self.assertEqual(updates, 'Copy\tCopy (loading)\0Copy\tCopy (3 files)\0')
-
-    def test_pick_under_dir(self):
-        self.answer('sub/file.txt')
-        self.assertEqual(picker.pick_under_dir('/some/dir', max_depth=3), '/some/dir/sub/file.txt')
-        args, items = self.call()
-        self.assertEqual(args, ['-0', '--max-depth', '3', '/some/dir'])
-        self.assertEqual(items, [])
 
     def test_names_that_arent_utf8_come_back_as_they_were(self):
         tree = dirtree.DirTree('/root')
@@ -549,11 +101,11 @@ class TrailTest(unittest.TestCase):
             self.assertEqual(picker.trail('Hashing'), 'dirdelta > Sync a \u21c4 b > Hashing')
         self.assertEqual(picker.trail(), 'dirdelta')
 
+
 class StatusTest(unittest.TestCase):
     def test_labels_each_in_its_color(self):
         self.assertEqual(picker.segments([("a: hashed", 'green'), ("", 'red'), ("b: 40% hashed", 'orange')]),
                          "\x01green\x01a: hashed\x01orange\x01b: 40% hashed")
-
 
 
 class UpdateLineTest(unittest.TestCase):
@@ -563,68 +115,6 @@ class UpdateLineTest(unittest.TestCase):
         # A heading: skipped when moving
         self.assertEqual(picker.updates._update('a', picker.Skipped('A')), 'a\tA\tskipped')
         self.assertEqual(picker.updates._update('a', picker.Colored('A', 'red')), 'a\tA\tcolor=red')
-
-
-class MenuLinesTest(unittest.TestCase):
-    def test_each_line_is_its_own(self):
-        lines, line_of, shown = picker.menus._menu_lines([picker.Skipped('Head'), 'a', picker.BLANK, picker.Option(1, 'a'),
-                                                    picker.BLANK])
-        self.assertEqual(lines, ['Head', 'a', ' ', 'a ', '  '])
-        self.assertEqual(len(set(lines)), 5)
-        self.assertEqual(line_of, {'a': 'a', 1: 'a '})
-        # What's skipped isn't an option
-        self.assertEqual(shown, {'Head': picker.Skipped('Head'), ' ': picker.BLANK, '  ': picker.BLANK})
-
-    def test_a_styled_labels_line_is_its_text(self):
-        self.assertEqual(picker.menus._menu_lines([picker.Skipped(picker.styled([('Head', 'bold')]))])[0], ['Head'])
-
-
-class GroupedTest(unittest.TestCase):
-    def test_a_blank_line_between_groups(self):
-        self.assertEqual(picker.grouped([['a'], [], ['b', 'c'], ['d']]), ['a', picker.BLANK, 'b', 'c', picker.BLANK, 'd'])
-
-
-class ShortcutPrefixesTest(unittest.TestCase):
-    def test_the_keys_in_a_column_and_spaces_for_the_others(self):
-        prefixes = picker.shortcut_prefixes(['a', 'b', 'c'], {'a': 'Ctrl-X', 'c': 'r'})
-        self.assertEqual({label: picker.unstyled(text) for label, text in prefixes.items()},
-                         {'a': '[Ctrl-X] ', 'b': ' ' * 9, 'c': '[r]      '})
-        self.assertEqual(prefixes['a'], picker.styled([('[Ctrl-X]', 'bold'), (' ', None)]))
-        # None has a key: nothing before them
-        self.assertEqual(picker.shortcut_prefixes(['a'], {}), {'a': ''})
-
-
-class StyledTest(unittest.TestCase):
-    def test_parts_in_their_styles_and_back(self):
-        text = picker.styled([('a.jpg', None), ('  ', None), ('[x]', 'bold,magenta'), ('', 'red')])
-        self.assertEqual(text, '\x02\x02a.jpg\x02\x02  \x02bold,magenta\x02[x]')
-        self.assertEqual(picker.unstyled(text), 'a.jpg  [x]')
-        # Without styles, plain
-        self.assertEqual(picker.styled([('a', None), ('b', '')]), 'ab')
-
-
-
-class AmbientStatusTest(unittest.TestCase):
-    def setUp(self):
-        self.addCleanup(picker.set_ambient_status, picker.updates._ambient_status)
-
-    def test_its_shown_by_a_picker_with_nothing_else_to_show(self):
-        picker.set_ambient_status(lambda: [('hashing', 'orange')])
-        self.assertEqual(picker.updates.with_ambient_status(None)(), {'': picker.segments([('hashing', 'orange')])})
-        self.assertEqual(picker.updates.with_ambient_status(lambda: {'x': 'y'})(),
-                         {'x': 'y', '': picker.segments([('hashing', 'orange')])})
-
-    def test_a_pickers_own_status_comes_first(self):
-        picker.set_ambient_status(lambda: [('hashing', 'orange')])
-        self.assertEqual(picker.updates.with_ambient_status(lambda: {'': 'mine'})(), {'': 'mine'})
-
-    def test_its_cleared_once_its_over(self):
-        parts = [[('hashing', 'orange')], []]
-        picker.set_ambient_status(lambda: parts[0])
-        shown = picker.updates.with_ambient_status(None)
-        self.assertEqual(shown(), {'': picker.segments(parts[0])})
-        parts.pop(0)
-        self.assertEqual(shown(), {'': ''})
 
 
 if __name__ == '__main__':
