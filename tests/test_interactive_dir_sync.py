@@ -677,7 +677,7 @@ class AskAITest(_TwoDirsTestCase):
         def pick_files(root, items, **_):
             self.items = list(items)
             return (review or (lambda items: picker.Picked('', '', list(items))))(items)
-        with mock.patch('dirdelta.claude.ai._run_query', return_value={'summary': 'ok', 'steps': steps}) as query, \
+        with mock.patch('dirdelta.claude.ai.query._run_query', return_value={'summary': 'ok', 'steps': steps}) as query, \
                 mock.patch('dirdelta.ui.picker.pick_files', side_effect=pick_files), \
                 mock.patch('dirdelta.ui.picker.pick_option', side_effect=lambda options, **_: options[-1]), \
                 mock.patch('dirdelta.util.dryrun.DRYRUN', is_dry_run), mock.patch.object(
@@ -720,7 +720,7 @@ class AskAITest(_TwoDirsTestCase):
         self.assertEqual(self.items, ['Copy to destination/c.txt'])
 
     def test_it_may_read_the_files_of_its_focus(self):
-        with mock.patch('dirdelta.claude.ai._run_query', return_value={'summary': '', 'answer': 'It says hi', 'steps': []}) as query, \
+        with mock.patch('dirdelta.claude.ai.query._run_query', return_value={'summary': '', 'answer': 'It says hi', 'steps': []}) as query, \
                 mock.patch('dirdelta.ui.messages.show') as show:
             self.assertIsNone(self.sync._ask_ai(['a.txt', 'b.txt'], ['b.txt']))
         prompt, readable_dirs = query.call_args.args[:2]

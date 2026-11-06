@@ -12,7 +12,7 @@ from dirdelta.claude import ai
 
 
 class _Answering(object):
-    """A fake ai._run_query(): answers each request with answer(prompt, files numbered in it), and
+    """A fake ai.query._run_query(): answers each request with answer(prompt, files numbered in it), and
     keeps the requests"""
     def __init__(self, answer):
         self.answer = answer
@@ -28,7 +28,7 @@ class AITest(unittest.TestCase):
     def setUp(self):
         self.tmpdir = tempfile.mkdtemp(prefix='dirdelta-ai-')
         self.addCleanup(shutil.rmtree, self.tmpdir)
-        patcher = mock.patch('dirdelta.claude.ai.CACHE_FILE', os.path.join(self.tmpdir, 'cache', 'ai.json'))
+        patcher = mock.patch('dirdelta.claude.ai.config.CACHE_FILE', os.path.join(self.tmpdir, 'cache', 'ai.json'))
         patcher.start()
         self.addCleanup(patcher.stop)
         self.key = lambda file: 'inbox/%s\t%s' % (file.relpath, file.size)
@@ -41,13 +41,13 @@ class AITest(unittest.TestCase):
         answering = _Answering(lambda prompt: [
             {'number': number, 'description': 'file number %d of the batch' % (number,)}
             for number in range(1, prompt.count('. f') + 1)])
-        with mock.patch('dirdelta.claude.ai._run_query', side_effect=answering):
+        with mock.patch('dirdelta.claude.ai.query._run_query', side_effect=answering):
             found = ai.describe(self.files(ai.BATCH_SIZE + 2), self.key)
         self.assertEqual(len(answering.prompts), 2)
         self.assertEqual(found['f0.txt'], 'file number 1 of the batch')
         self.assertEqual(found['f%d.txt' % (ai.BATCH_SIZE + 1,)], 'file number 2 of the batch')
         # Asked once: the cache has them
-        with mock.patch('dirdelta.claude.ai._run_query', side_effect=AssertionError('asked again')):
+        with mock.patch('dirdelta.claude.ai.query._run_query', side_effect=AssertionError('asked again')):
             self.assertEqual(ai.describe(self.files(2), self.key)['f1.txt'], 'file number 2 of the batch')
         self.assertEqual(ai.cached(self.files(1), self.key, 'root')[0], {'f0.txt': 'file number 1 of the batch'})
 
@@ -56,7 +56,7 @@ class AITest(unittest.TestCase):
                  ai.File('b.gdoc', None, None),
                  ai.File('big.mov', os.path.join(self.tmpdir, 'sub', 'big.mov'), ai.MAX_READ_SIZE + 1)]
         answering = _Answering(lambda prompt: [])
-        with mock.patch('dirdelta.claude.ai._run_query', side_effect=answering):
+        with mock.patch('dirdelta.claude.ai.query._run_query', side_effect=answering):
             ai.describe(files, self.key)
         prompt, readable_dirs, _ = answering.prompts[0]
         self.assertIn("1. a.txt (size 10 bytes): read it at %s" % (files[0].local_path,), prompt)
@@ -66,7 +66,7 @@ class AITest(unittest.TestCase):
 
     def test_descriptions_are_cut_short(self):
         answering = _Answering(lambda prompt: [{'number': 1, 'description': ' '.join(['word'] * 15) + '.'}])
-        with mock.patch('dirdelta.claude.ai._run_query', side_effect=answering):
+        with mock.patch('dirdelta.claude.ai.query._run_query', side_effect=answering):
             found = ai.describe(self.files(1), self.key)
         self.assertEqual(found['f0.txt'], ' '.join(['word'] * ai.MAX_DESCRIPTION_WORDS))
 
@@ -76,7 +76,7 @@ class AITest(unittest.TestCase):
             {'number': 2, 'action': 'move', 'path': '../outside/f1.txt', 'reason': 'no'},
             {'number': 3, 'action': 'move', 'path': 'top', 'reason': 'top level'}])
         dirs = {'': ['notes.txt'], 'lists': ['2026-09 groceries.txt'], 'photos/2024': []}
-        with mock.patch('dirdelta.claude.ai._run_query', side_effect=answering):
+        with mock.patch('dirdelta.claude.ai.query._run_query', side_effect=answering):
             found = ai.recommend(self.files(3), self.key, dirs, 'cloud/me', {'f0.txt': 'a shopping list'})
         self.assertEqual(found['f0.txt'], {'action': 'move', 'path': 'lists/shopping/2026-10 groceries.txt',
                                            'reason': 'a list', 'copies': []})
@@ -101,7 +101,7 @@ class AITest(unittest.TestCase):
             {'number': 1, 'action': 'remove', 'path': '', 'reason': 'a copy'},
             # Not a copy: junk, as Claude says (no copies)
             {'number': 2, 'action': 'remove', 'path': '', 'reason': 'an empty file'}])
-        with mock.patch('dirdelta.claude.ai._run_query', side_effect=answering):
+        with mock.patch('dirdelta.claude.ai.query._run_query', side_effect=answering):
             found = ai.recommend(self.files(2), self.key, {}, 'root', {}, {'f0.txt': ['docs/f0.txt']})
         self.assertEqual(found, {'f0.txt': {'action': 'remove', 'path': '', 'reason': 'a copy',
                                             'copies': ['docs/f0.txt']},
@@ -112,15 +112,15 @@ class AITest(unittest.TestCase):
                       answering.prompts[0][0])
         self.assertIsNone(ai.recommended_path(found['f0.txt']))
         # A file found to be a copy since is asked about again
-        with mock.patch('dirdelta.claude.ai._run_query', side_effect=AssertionError('asked again')):
+        with mock.patch('dirdelta.claude.ai.query._run_query', side_effect=AssertionError('asked again')):
             ai.recommend(self.files(1), self.key, {}, 'root', {}, {'f0.txt': ['docs/f0.txt']})
         answering = _Answering(lambda prompt: [{'number': 1, 'action': 'move', 'path': 'a/f0.txt', 'reason': ''}])
-        with mock.patch('dirdelta.claude.ai._run_query', side_effect=answering):
+        with mock.patch('dirdelta.claude.ai.query._run_query', side_effect=answering):
             ai.recommend(self.files(1), self.key, {}, 'root', {}, {'f0.txt': ['docs/f0.txt', 'other/f0.txt']})
         self.assertEqual(len(answering.prompts), 1)
 
     def test_what_the_cache_has_goes_with_the_files(self):
-        with mock.patch('dirdelta.claude.ai._run_query', side_effect=_Answering(
+        with mock.patch('dirdelta.claude.ai.query._run_query', side_effect=_Answering(
                 lambda prompt: [{'number': 1, 'description': 'a list'}])):
             ai.describe(self.files(1), self.key)
         ai.carry({self.key(self.files(1)[0]): 'sorted/f0.txt\t10', 'nothing\t1': 'else\t1'})
@@ -129,16 +129,16 @@ class AITest(unittest.TestCase):
         self.assertEqual(ai.cached([moved], lambda file: 'else\t1', 'root')[0], {})
 
     def test_a_hashed_file_is_kept_by_its_hash_and_found_by_the_key_it_had(self):
-        with mock.patch('dirdelta.claude.ai._run_query', side_effect=_Answering(
+        with mock.patch('dirdelta.claude.ai.query._run_query', side_effect=_Answering(
                 lambda prompt: [{'number': 1, 'description': 'a list'}])):
             ai.describe(self.files(1), self.key)
         hashed = lambda file: [ai.hash_key('abc'), self.key(file)]
         # Hashed since: what it said by its path is still found, so nothing's asked
-        with mock.patch('dirdelta.claude.ai._run_query') as query:
+        with mock.patch('dirdelta.claude.ai.query._run_query') as query:
             self.assertEqual(ai.describe(self.files(1), hashed), {'f0.txt': 'a list'})
         query.assert_not_called()
         # What's asked now is kept by the hash, with what was known; a copy elsewhere shares it
-        with mock.patch('dirdelta.claude.ai._run_query', side_effect=_Answering(
+        with mock.patch('dirdelta.claude.ai.query._run_query', side_effect=_Answering(
                 lambda prompt: [{'number': 1, 'action': 'move', 'path': 'docs/f0.txt', 'reason': 'r'}])):
             ai.recommend(self.files(1), hashed, {}, 'root', {})
         copy = ai.File('elsewhere/copy.txt', None, 10)
@@ -147,22 +147,22 @@ class AITest(unittest.TestCase):
         self.assertEqual(recommendations['elsewhere/copy.txt']['path'], 'docs/f0.txt')
 
     def test_threads_dont_overwrite_each_others_entries(self):
-        with mock.patch('dirdelta.claude.ai._run_query', side_effect=_Answering(
+        with mock.patch('dirdelta.claude.ai.query._run_query', side_effect=_Answering(
                 lambda prompt: [{'number': 1, 'description': 'first'}])):
             ai.describe(self.files(1), self.key)
-        real_save, started = ai._save_cache, threading.Event()
+        real_save, started = ai.cache._save_cache, threading.Event()
 
         def slow_save(cache):
             # Another thread's carry() comes while this one is writing what it read
             started.set()
             time.sleep(0.05)
             real_save(cache)
-        with mock.patch('dirdelta.claude.ai._save_cache', side_effect=slow_save):
+        with mock.patch('dirdelta.claude.ai.cache._save_cache', side_effect=slow_save):
             carrying = threading.Thread(target=lambda: (started.wait(), ai.carry({self.key(self.files(1)[0]): 'moved\t10'})))
             carrying.start()
             ai.carry({self.key(self.files(1)[0]): 'also\t10'})
             carrying.join()
-        cache = ai._load_cache()
+        cache = ai.cache._load_cache()
         self.assertIn('moved\t10', cache)
         self.assertIn('also\t10', cache)
 
@@ -171,18 +171,18 @@ class AITest(unittest.TestCase):
             if 'f1.txt' in prompt:
                 raise ai.AIError('too big')
             return {'files': [{'number': 1, 'description': 'fine'}]}
-        with mock.patch('dirdelta.claude.ai._run_query', side_effect=run_query) as query:
+        with mock.patch('dirdelta.claude.ai.query._run_query', side_effect=run_query) as query:
             found = ai.describe(self.files(3), self.key)
         self.assertEqual(found, {'f0.txt': 'fine', 'f2.txt': 'fine'})
         self.assertEqual(query.call_count, 4)
         # All of them failing is an error
-        with mock.patch('dirdelta.claude.ai._run_query', side_effect=ai.AIError('not logged in')), \
+        with mock.patch('dirdelta.claude.ai.query._run_query', side_effect=ai.AIError('not logged in')), \
                 self.assertRaises(ai.AIError):
             ai.describe(self.files(2)[1:], self.key)
 
     def test_progress(self):
         progress = []
-        with mock.patch('dirdelta.claude.ai._run_query', side_effect=_Answering(lambda prompt: [])):
+        with mock.patch('dirdelta.claude.ai.query._run_query', side_effect=_Answering(lambda prompt: [])):
             ai.describe(self.files(ai.BATCH_SIZE + 1), self.key, lambda *args: progress.append(args))
         self.assertEqual(progress, [(0, ai.BATCH_SIZE + 1), (ai.BATCH_SIZE, ai.BATCH_SIZE + 1),
                                     (ai.BATCH_SIZE + 1, ai.BATCH_SIZE + 1)])
@@ -194,7 +194,7 @@ class AITest(unittest.TestCase):
     def test_a_dir_is_asked_about_once_and_cached(self):
         answer = {'action': 'move', 'path': '/photos/2024/rome/', 'summary': 'Rome trip photos.', 'reason': 'one trip'}
         key = ai.dir_key('/inbox/rome', 3, 300)
-        with mock.patch('dirdelta.claude.ai._run_query', return_value=answer) as query:
+        with mock.patch('dirdelta.claude.ai.query._run_query', return_value=answer) as query:
             found = ai.recommend_dir(self.dir_(), key, {'': [], 'photos': ['x.jpg']}, 'root')
             self.assertEqual(ai.recommend_dir(self.dir_(), key, {}, 'root'), found)
             self.assertEqual(ai.cached_dirs({'rome': key, 'other': 'nothing'}, 'root'), {'rome': found})
@@ -214,7 +214,7 @@ class AITest(unittest.TestCase):
 
     def test_a_dir_split_or_removed_has_no_path(self):
         for action in ('split', 'remove'):
-            with mock.patch('dirdelta.claude.ai._run_query',
+            with mock.patch('dirdelta.claude.ai.query._run_query',
                             return_value={'action': action, 'path': 'x', 'summary': 's', 'reason': 'r'}):
                 self.assertEqual(ai.recommend_dir(self.dir_(), action, {}, 'root')['path'], '')
 
@@ -222,7 +222,7 @@ class AITest(unittest.TestCase):
         for answer in ({'action': 'move', 'path': '', 'summary': 's', 'reason': 'r'},
                        {'action': 'move', 'path': 'a/../..', 'summary': 's', 'reason': 'r'},
                        {'action': 'keep', 'path': 'a', 'summary': 's', 'reason': 'r'}):
-            with mock.patch('dirdelta.claude.ai._run_query', return_value=answer), self.assertRaises(ai.AIError):
+            with mock.patch('dirdelta.claude.ai.query._run_query', return_value=answer), self.assertRaises(ai.AIError):
                 ai.recommend_dir(self.dir_(), 'key', {}, 'root')
         self.assertIsNone(ai.cached_dir('key', 'root'))
 
@@ -243,7 +243,7 @@ class RunQueryTest(unittest.TestCase):
                 yield result
         with mock.patch.object(claude_agent_sdk, 'query', query), \
                 mock.patch.object(claude_agent_sdk, 'ResultMessage', _Result):
-            return ai._run_query('the prompt', ['/in', '/in/sub'], {'type': 'object'}, 7, 'the-model')
+            return ai.query._run_query('the prompt', ['/in', '/in/sub'], {'type': 'object'}, 7, 'the-model')
 
     def test_with_nothing_to_read_claude_gets_no_tools(self):
         async def query(prompt, options):
@@ -251,7 +251,7 @@ class RunQueryTest(unittest.TestCase):
             yield _Result(structured_output={'files': []})
         with mock.patch.object(claude_agent_sdk, 'query', query), \
                 mock.patch.object(claude_agent_sdk, 'ResultMessage', _Result):
-            ai._run_query('the prompt', [], {'type': 'object'}, 5, 'the-model', system_prompt='sorting')
+            ai.query._run_query('the prompt', [], {'type': 'object'}, 5, 'the-model', system_prompt='sorting')
         self.assertEqual((self.options.tools, self.options.allowed_tools), ([], []))
         self.assertEqual(self.options.system_prompt, 'sorting')
 
@@ -283,7 +283,7 @@ class RunQueryTest(unittest.TestCase):
                 mock.patch.object(claude_agent_sdk, 'ResultMessage', _Result), \
                 mock.patch('sys.stderr') as stderr:
             with self.assertRaises(ai.AIError) as raised:
-                ai._run_query('the prompt', [], {'type': 'object'}, 5, 'the-model')
+                ai.query._run_query('the prompt', [], {'type': 'object'}, 5, 'the-model')
         self.assertEqual(str(raised.exception), 'Claude failed: Command failed (Fatal error in message reader: too big)')
         stderr.write.assert_not_called()
         self.assertFalse(logging.getLogger('claude_agent_sdk').propagate)
