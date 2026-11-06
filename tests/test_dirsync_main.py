@@ -10,22 +10,22 @@ from dirdelta.ui import picker
 from dirdelta.trees import dirtree
 from dirdelta.matching import elsewhere
 from dirdelta.hashes import hashing
-from dirdelta.sync import interactive_dir_sync
 from dirdelta.trees import localdiskdirtree
 from dirdelta.ui import picker
 from dirdelta.known import replicanames
 from dirdelta.known import replicas
+from dirdelta.sync import replica_ops
 
 
 class ScanErrorsWarningTest(unittest.TestCase):
     def warning(self, scan_errors):
         tree = dirtree.DirTree('/some/dir')
         tree.scan_errors = scan_errors
-        return interactive_dir_sync.scan_errors_warning(tree)
+        return replica_ops.scan_errors_warning(tree)
 
     def test_trees_without_scan_errors_get_no_warning(self):
         # E.g. cloud trees, which aren't scanned with find
-        self.assertEqual(interactive_dir_sync.scan_errors_warning(dirtree.DirTree('cloud/mein')), [])
+        self.assertEqual(replica_ops.scan_errors_warning(dirtree.DirTree('cloud/mein')), [])
 
     def test_errors_are_listed(self):
         self.assertEqual(self.warning(["find: '/some/dir/a': Permission denied"]), [
@@ -45,7 +45,7 @@ class MainMenuTest(unittest.TestCase):
         # The local dirs are writable unless a test says otherwise, and no message waits for Enter
         self.writable = {'/a', '/b'}
         for patcher in (mock.patch('dirdelta.known.replicanames.mounts.current_mount', return_value=None),
-                        mock.patch('dirdelta.sync.interactive_dir_sync.os.access',
+                        mock.patch('dirdelta.sync.replica_ops.os.access',
                                    side_effect=lambda path, mode: path in self.writable),
                         mock.patch('dirdelta.ui.messages.show')):
             self.addCleanup(patcher.stop)
@@ -56,8 +56,8 @@ class MainMenuTest(unittest.TestCase):
         self.find_missing_calls = []
         def find_missing(src, dst):
             self.find_missing_calls.append(src.fullpath())
-            return interactive_dir_sync.Missing(self.missing[src.fullpath()], [])
-        patcher = mock.patch('dirdelta.sync.interactive_dir_sync.find_missing', side_effect=find_missing)
+            return replica_ops.Missing(self.missing[src.fullpath()], [])
+        patcher = mock.patch('dirdelta.sync.replica_ops.find_missing', side_effect=find_missing)
         patcher.start()
         self.addCleanup(patcher.stop)
         # The files both have that differ, /a's way (none unless a test says so)
@@ -335,7 +335,7 @@ class MainMenuTest(unittest.TestCase):
     def test_the_files_that_differ_option_is_loading_until_theyre_found(self):
         way = dirsync_main._Way(None, None, {})
         way.missing = concurrent.futures.Future()
-        way.missing.set_result(interactive_dir_sync.Missing([], []))
+        way.missing.set_result(replica_ops.Missing([], []))
         way.differs = concurrent.futures.Future()
         action = dirsync_main._Action('/a', '/b', way, only_differing=True)
         self.assertIn('(loading', action.shown_as())

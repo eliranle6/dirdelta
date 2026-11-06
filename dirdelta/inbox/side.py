@@ -6,11 +6,11 @@ from dirdelta.hashes import hashcache
 from dirdelta.inbox.formatting import _join
 from dirdelta.known import replicas
 from dirdelta.screens import hashes_screen
-from dirdelta.sync import interactive_dir_sync
 from dirdelta.trees import entries
 from dirdelta.trees import localdiskdirtree
 from dirdelta.ui import messages
 from dirdelta.util import dryrun
+from dirdelta.sync import replica_ops
 
 
 class Side(object):
@@ -38,9 +38,9 @@ class Side(object):
         asked of its disk; a Drive one's folder of relpath is read now), if it could be"""
         if is_cloud:
             with self._drive_lock:
-                if not interactive_dir_sync.refresh_replica(tree, relpath):
+                if not replica_ops.refresh_replica(tree, relpath):
                     return
-        elif not interactive_dir_sync.rescan_replica(tree):
+        elif not replica_ops.rescan_replica(tree):
             return
         index.invalidate()
         # Its files may have other contents now

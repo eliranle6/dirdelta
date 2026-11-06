@@ -15,6 +15,8 @@ from dirdelta.sync import interactive_dir_sync
 from dirdelta.trees import localdiskdirtree
 from dirdelta.ui import picker
 from dirdelta.known import replicalog
+from dirdelta.sync import replica_ops
+from dirdelta.ui import messages
 
 Sync = interactive_dir_sync.InteractiveDirSync
 YES = Sync.CONFIRM_YES
@@ -185,7 +187,7 @@ class InteractiveDirSyncTest(unittest.TestCase):
     def test_what_cant_be_done_is_greyed_out(self):
         # A read-only dst, and nothing has a match in it to rename
         real_access = os.access
-        with mock.patch('dirdelta.sync.interactive_dir_sync.os.access',
+        with mock.patch('dirdelta.sync.replica_ops.os.access',
                         side_effect=lambda path, mode: path != self.dst_root and real_access(path, mode)):
             self._browse([['sub/b.txt'], None], [NOTHING])
         texts = sorted(self.disabled())
@@ -215,14 +217,14 @@ class InteractiveDirSyncTest(unittest.TestCase):
     def test_nothing_missing_says_so_without_a_picker(self):
         helpers.make_files(self.dst_root, ['sub/b.txt', 'sub/c.txt'])
         self._browse([], [])
-        title, lines, _ = interactive_dir_sync.messages.show.call_args.args
+        title, lines, _ = messages.show.call_args.args
         self.assertEqual(title, 'Nothing to do')
         self.assertEqual(lines, ["%s has all of %s's files." % (self.dst_root, self.src_root)])
 
     def test_after_the_last_ones_are_done_it_says_so_and_ends(self):
         with mock.patch('dirdelta.util.dryrun.DRYRUN', False):
             self._browse([['sub/b.txt', 'sub/c.txt']], ['Copy', YES])
-        self.assertEqual(interactive_dir_sync.messages.show.call_args.args[0], 'Nothing to do')
+        self.assertEqual(messages.show.call_args.args[0], 'Nothing to do')
 
     def test_trees_other_than_two_local_dirs_are_diffed_as_they_are(self):
         # (A cloud tree, say.) Sorted by path components, so each dir's files stay together.
@@ -489,7 +491,7 @@ class RenameTest(unittest.TestCase):
         with open(os.path.join(self.dst_root, 'old/x.jpg'), 'w') as f:
             f.write('another!!')
         self.browse(['Rename the'])
-        self.assertEqual(interactive_dir_sync.messages.show.call_args.args[0], 'Nothing to rename')
+        self.assertEqual(messages.show.call_args.args[0], 'Nothing to rename')
         self.assertTrue(os.path.isfile(os.path.join(self.dst_root, 'old/x.jpg')))
 
     def test_a_dry_run_moves_nothing(self):
@@ -509,7 +511,7 @@ class RefreshKeyTest(unittest.TestCase):
                         mock.patch('dirdelta.ui.picker.pick_option', return_value=NOTHING)):
             self.addCleanup(patcher.stop)
             patcher.start()
-        self.show = interactive_dir_sync.messages.show
+        self.show = messages.show
 
     def browse(self, src, dst, answers, refresh=None):
         """Browse, the file picker answering answers in turn; returns pick_files's calls"""
@@ -730,14 +732,14 @@ class AskAITest(_TwoDirsTestCase):
     def test_the_key_with_nothing_picked_asks_about_all_the_files(self):
         with mock.patch.object(Sync, '_ask_ai', return_value=None) as ask, helpers.scripted_files_picker(
                 mock.Mock(side_effect=[picker.Picked('a', '', []), None])), \
-                mock.patch('dirdelta.sync.interactive_dir_sync.hashes_screen.jobs_of', return_value=[]):
+                mock.patch('dirdelta.screens.hashes_screen.jobs_of', return_value=[]):
             self.sync.browse()
         ask.assert_called_once_with(['a.txt', 'b.txt', 'c.txt'], [])
 
     def test_the_key_asks_about_the_picked_ones(self):
         with mock.patch.object(Sync, '_ask_ai', return_value=None) as ask, helpers.scripted_files_picker(
                 mock.Mock(side_effect=[picker.Picked('a', '', ['b.txt']), None])), \
-                mock.patch('dirdelta.sync.interactive_dir_sync.hashes_screen.jobs_of', return_value=[]):
+                mock.patch('dirdelta.screens.hashes_screen.jobs_of', return_value=[]):
             self.sync.browse()
         ask.assert_called_once_with(['b.txt'], ['b.txt'])
 
@@ -762,7 +764,7 @@ class ActInDstTest(_TwoDirsTestCase):
         picks = iter([picker.Picked(picker.SIDE_KEY, 'a.txt', [], side_selected), None])
         with helpers.scripted_files_picker(lambda relpaths: next(picks)) as pick_files, \
                 mock.patch('dirdelta.ui.picker.pick_option', side_effect=pick_option), \
-                mock.patch('dirdelta.sync.interactive_dir_sync.hashes_screen.jobs_of', return_value=[]), \
+                mock.patch('dirdelta.screens.hashes_screen.jobs_of', return_value=[]), \
                 mock.patch('dirdelta.util.dryrun.DRYRUN', is_dry_run):
             self.sync.browse()
         return pick_files
@@ -798,19 +800,19 @@ class ActInDstTest(_TwoDirsTestCase):
         self.assertFalse(os.path.exists(os.path.join(self.dst_path, 'repo', 'x.txt')))
 
     def test_d_on_a_read_only_one_says_so(self):
-        with mock.patch('dirdelta.sync.interactive_dir_sync.is_writable', return_value=False), \
+        with mock.patch('dirdelta.sync.replica_ops.is_writable', return_value=False), \
                 mock.patch('dirdelta.ui.picker.pick_option') as pick_option:
             self.assertIsNone(self.sync._act_in_dst('repo', True))
         pick_option.assert_not_called()
-        self.assertEqual(interactive_dir_sync.messages.show.call_args.args[0], "Can't remove it")
+        self.assertEqual(messages.show.call_args.args[0], "Can't remove it")
 
     def test_not_all_of_dst(self):
         self.enter('')
-        self.assertEqual(interactive_dir_sync.messages.show.call_args.args[0], "That's all of %s" % (self.dst_path,))
+        self.assertEqual(messages.show.call_args.args[0], "That's all of %s" % (self.dst_path,))
         self.assertTrue(os.path.exists(os.path.join(self.dst_path, 'repo', 'x.txt')))
 
     def test_a_read_only_one_cant(self):
-        with mock.patch('dirdelta.sync.interactive_dir_sync.is_writable', return_value=False):
+        with mock.patch('dirdelta.sync.replica_ops.is_writable', return_value=False):
             self.enter('repo', ('No',))
         self.assertIsInstance(self.shown[self.options[-1]], picker.Disabled)
 
@@ -827,7 +829,7 @@ class ExploreTest(_TwoDirsTestCase):
     def browse(self, picks):
         results = iter(picks + [None])
         with helpers.scripted_files_picker(lambda relpaths: next(results)), \
-                mock.patch('dirdelta.sync.interactive_dir_sync.hashes_screen.jobs_of', return_value=[]), \
+                mock.patch('dirdelta.screens.hashes_screen.jobs_of', return_value=[]), \
                 mock.patch('dirdelta.ui.picker.view_files') as view:
             self.sync.browse()
         return view
@@ -858,7 +860,7 @@ class ContextMenuTest(_TwoDirsTestCase):
             return helpers.answer_of(options, answer)
         results = iter(picks + [None])
         with helpers.scripted_files_picker(lambda relpaths: next(results)) as pick_files, mock.patch('dirdelta.ui.picker.pick_option', side_effect=pick_option), \
-                mock.patch('dirdelta.sync.interactive_dir_sync.hashes_screen.jobs_of', return_value=[]):
+                mock.patch('dirdelta.screens.hashes_screen.jobs_of', return_value=[]):
             self.sync.browse()
         return pick_files
 
@@ -905,7 +907,7 @@ class FindMissingTest(unittest.TestCase):
             self.addCleanup(shutil.rmtree, root)
         helpers.make_files(roots[0], ['a.txt', 'meta/hashes.sqlite', 'metal/b.txt'])
         a, b = [localdiskdirtree.LocalDiskDirTree(root, silent=True) for root in roots]
-        self.assertEqual(interactive_dir_sync.find_missing(a, b).relpaths, ['a.txt', 'metal/b.txt'])
+        self.assertEqual(replica_ops.find_missing(a, b).relpaths, ['a.txt', 'metal/b.txt'])
 
 if __name__ == '__main__':
     unittest.main()

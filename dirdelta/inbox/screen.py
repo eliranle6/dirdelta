@@ -10,7 +10,6 @@ from dirdelta.matching import junk
 from dirdelta.screens import aiplan_screen
 from dirdelta.screens import archive_screen
 from dirdelta.screens import hashes_screen
-from dirdelta.sync import interactive_dir_sync
 from dirdelta.ui import contextmenu
 from dirdelta.ui import filescreen
 from dirdelta.ui import images
@@ -19,6 +18,7 @@ from dirdelta.ui import opening
 from dirdelta.ui import picker
 from dirdelta.ui import renaming
 from dirdelta.util import dryrun
+from dirdelta.sync import replica_ops
 
 
 class Screen(object):
@@ -30,11 +30,11 @@ class Screen(object):
         """The actions of the kinds that a read-only inbox (what takes files out of it, or moves them in
         it) or sorted tree (what puts files in it) can't have done"""
         cant = set()
-        if not interactive_dir_sync.is_writable(self._inbox_tree):
+        if not replica_ops.is_writable(self._inbox_tree):
             cant |= {self.MOVE_TO, self.MOVE_RECOMMENDED, self.MOVE_TO_CLAUDES_DIR, self.MOVE_TO_CLAUDES_DIR_TYPED,
                      self.MOVE_TO_CLAUDES_NAMES, self.MOVE_TO_TYPED, self.MOVE_IN_INBOX,
                      self.REMOVE, self.REMOVE_COPIES, self.REMOVE_JUNK}
-        if not interactive_dir_sync.is_writable(self._root_tree):
+        if not replica_ops.is_writable(self._root_tree):
             cant |= {self.MOVE_TO, self.MOVE_RECOMMENDED, self.MOVE_TO_CLAUDES_DIR, self.MOVE_TO_CLAUDES_DIR_TYPED,
                      self.MOVE_TO_CLAUDES_NAMES, self.MOVE_TO_TYPED, self.COPY_TO}
         return cant
@@ -42,11 +42,11 @@ class Screen(object):
     def _warn_if_read_only(self):
         """Say what can't be done if the inbox or the sorted tree is read-only, and what still can"""
         lines = []
-        if not interactive_dir_sync.is_writable(self._inbox_tree):
+        if not replica_ops.is_writable(self._inbox_tree):
             lines.append("%s is read-only: you can still copy its files to the sorted tree, but they can't be "
                          "moved out of it or removed." % (self.inbox_path,))
             lines += mounts.read_only_lines_of(self.inbox_path)
-        if not interactive_dir_sync.is_writable(self._root_tree):
+        if not replica_ops.is_writable(self._root_tree):
             lines.append("%s is read-only: no files can go into it." % (self.root_path,))
             lines += mounts.read_only_lines_of(self.root_path)
         if lines:

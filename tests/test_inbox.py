@@ -389,7 +389,7 @@ class InboxSortTest(unittest.TestCase):
         sorter = Sort(self.inbox, self.root)
         with mock.patch('dirdelta.ui.sidetree._listed', wraps=sidetree._listed) as listed, \
                 mock.patch('dirdelta.ui.picker.pick_files', side_effect=[pick, None]) as pick_files, \
-                mock.patch('dirdelta.sync.interactive_dir_sync.refresh_replica') as self.refresh_replica:
+                mock.patch('dirdelta.sync.replica_ops.refresh_replica') as self.refresh_replica:
             sorter.run()
         return listed.call_count, pick_files.call_args_list[-1].kwargs['picked']
 
@@ -457,7 +457,7 @@ class InboxSortTest(unittest.TestCase):
             self.assertEqual(pick.call_args.kwargs['excluded'], ['meta'])
 
     def read_only_inbox(self):
-        patcher = mock.patch('dirdelta.sync.interactive_dir_sync.is_writable', side_effect=lambda tree: tree.fullpath() != os.path.realpath(self.inbox))
+        patcher = mock.patch('dirdelta.sync.replica_ops.is_writable', side_effect=lambda tree: tree.fullpath() != os.path.realpath(self.inbox))
         patcher.start()
         self.addCleanup(patcher.stop)
 
@@ -471,7 +471,7 @@ class InboxSortTest(unittest.TestCase):
         self.assertFalse(any(option.startswith(('Move', 'Remove')) for option in options))
 
     def read_only_root(self):
-        patcher = mock.patch('dirdelta.sync.interactive_dir_sync.is_writable', side_effect=lambda tree: tree.fullpath() != os.path.realpath(self.root))
+        patcher = mock.patch('dirdelta.sync.replica_ops.is_writable', side_effect=lambda tree: tree.fullpath() != os.path.realpath(self.root))
         patcher.start()
         self.addCleanup(patcher.stop)
 
@@ -504,14 +504,14 @@ class InboxSortTest(unittest.TestCase):
         sorter = Sort(self.inbox, self.root)
         names = lambda: [action.name for action in sorter._ai_task(['a.txt']  , []).actions]
         self.assertEqual(len(names()), 4)
-        with mock.patch('dirdelta.sync.interactive_dir_sync.is_writable', side_effect=lambda tree: tree.fullpath() != os.path.realpath(self.inbox)):
+        with mock.patch('dirdelta.sync.replica_ops.is_writable', side_effect=lambda tree: tree.fullpath() != os.path.realpath(self.inbox)):
             self.assertEqual(names(), [Sort.COPY_TO])
-        with mock.patch('dirdelta.sync.interactive_dir_sync.is_writable', side_effect=lambda tree: tree.fullpath() != os.path.realpath(self.root)):
+        with mock.patch('dirdelta.sync.replica_ops.is_writable', side_effect=lambda tree: tree.fullpath() != os.path.realpath(self.root)):
             self.assertEqual(names(), [Sort.MOVE_IN_INBOX, Sort.REMOVE])
 
     def test_with_both_read_only_the_ai_isnt_asked(self):
         sorter = Sort(self.inbox, self.root)
-        with mock.patch('dirdelta.sync.interactive_dir_sync.is_writable', return_value=False), \
+        with mock.patch('dirdelta.sync.replica_ops.is_writable', return_value=False), \
                 mock.patch('dirdelta.screens.aiplan_screen.ask') as ask:
             self.assertIsNone(sorter._ask_ai(['a.txt']))
         ask.assert_not_called()
@@ -765,7 +765,7 @@ class InboxSortTest(unittest.TestCase):
         with mock.patch('dirdelta.drive.drivecache.LINES_FILE', cache), \
                 helpers.scripted_files_picker(lambda relpaths: picks.pop(0)) as pick_files, \
                 helpers.answering_option_picker(['Read cloud/me/in/trip/ anew from Google Drive']) as pick_option, \
-                mock.patch('dirdelta.sync.interactive_dir_sync.refresh_replica') as refresh:
+                mock.patch('dirdelta.sync.replica_ops.refresh_replica') as refresh:
             sorter = Sort('cloud/me/in', 'cloud/me/sorted')
             sorter.run()
         # As r does: its folder is the one read (see CloudDirTree.refresh_from_drive())

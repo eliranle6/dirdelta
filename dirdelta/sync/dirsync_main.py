@@ -25,6 +25,7 @@ from dirdelta.known import replicas
 from dirdelta.matching import syncstate
 from dirdelta.trees import replicafactory
 from dirdelta.util import text
+from dirdelta.sync import replica_ops
 
 
 # The sync menu's last option: it doesn't quit dirdelta, the start menu shows again (as with q)
@@ -53,7 +54,7 @@ def _run(args):
         dirtree_b = replicafactory.create_dirtree_from_arg(args.dir_b_path, args.max_depth)
         if dirtree_b is None:
             return
-        warnings = interactive_dir_sync.scan_errors_warning(dirtree_a) + interactive_dir_sync.scan_errors_warning(dirtree_b)
+        warnings = replica_ops.scan_errors_warning(dirtree_a) + replica_ops.scan_errors_warning(dirtree_b)
         if warnings:
             messages.show("Warning: couldn't read everything", warnings, dryrun.label(), 'red')
     # Both are dirs (or Drive's), so they're the history's latest; and what's known of each (its
@@ -170,7 +171,7 @@ def _sync(replica_a, replica_b, replica_a_path, replica_b_path, known_replicas=N
             messages.print_line("Finding the files that each lacks...")
         concurrent.futures.wait([way.missing for way in ways] + [way.differs for way in ways])
         if option in rescans:
-            if interactive_dir_sync.rescan_replica(rescans[option]):
+            if replica_ops.rescan_replica(rescans[option]):
                 indexes[rescans[option]].invalidate()
                 for way in ways:
                     # Its files may have other contents now
@@ -180,7 +181,7 @@ def _sync(replica_a, replica_b, replica_a_path, replica_b_path, known_replicas=N
                     job.scan_in_background()
             continue
         if option in refreshes:
-            if interactive_dir_sync.refresh_replica(refreshes[option]):
+            if replica_ops.refresh_replica(refreshes[option]):
                 indexes[refreshes[option]].invalidate()
                 for way in ways:
                     # Its files may have other contents now
@@ -282,7 +283,7 @@ class _Way(object):
 
     def _find_missing(self, missing):
         try:
-            missing.set_result(interactive_dir_sync.find_missing(self.src, self.dst))
+            missing.set_result(replica_ops.find_missing(self.src, self.dst))
         except Exception as error:
             # Raised by result(), when the files are needed
             missing.set_exception(error)
@@ -346,7 +347,7 @@ class _Action(object):
 
 def _read_only_lines(replica, replica_path):
     """What can't be done with the replica, and what can, if it's read-only"""
-    if not interactive_dir_sync.is_writable(replica):
+    if not replica_ops.is_writable(replica):
         return ["%s is read-only (no write permission): you can still copy its files to the other replica, "
                 "but dirdelta won't copy files into it, remove files from it or move them in it." % (replica_path,)
                 ] + mounts.read_only_lines_of(replica_path)
