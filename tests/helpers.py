@@ -16,7 +16,7 @@ from dirdelta.known import settings
 # The tests never keep hashes in the real hash cache (~/.cache/dirdelta/hashes.sqlite): every test
 # module that hashes files imports this one, and unittest imports them all before running any
 _hash_cache_dir = tempfile.mkdtemp(prefix='dirdelta-test-hashes-')
-hashcache.CACHE_FILE = os.path.join(_hash_cache_dir, 'hashes.sqlite')
+hashcache.database.CACHE_FILE = os.path.join(_hash_cache_dir, 'hashes.sqlite')
 atexit.register(shutil.rmtree, _hash_cache_dir, ignore_errors=True)
 # Nor read, or import into, the real Drive cache (~/.cache/dirdelta): the tests that make its own patch
 # it, but a Drive replica's identity asks it for the root's id
