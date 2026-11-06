@@ -33,8 +33,8 @@ class MountsTest(unittest.TestCase):
         self.mounted = set()
         self.answers = {}
         self.commands = []
-        for patcher in (mock.patch('dirdelta.known.mounts.MOUNTS_FILE', os.path.join(self.tmpdir, 'mounts.json')),
-                        mock.patch('dirdelta.known.mounts.BY_UUID_DIR', self.by_uuid),
+        for patcher in (mock.patch('dirdelta.known.mounts.names.MOUNTS_FILE', os.path.join(self.tmpdir, 'mounts.json')),
+                        mock.patch('dirdelta.known.mounts.names.BY_UUID_DIR', self.by_uuid),
                         mock.patch('os.path.ismount', side_effect=lambda path: path in self.mounted),
                         mock.patch('subprocess.run', side_effect=self.fake_run),
                         mock.patch('dirdelta.ui.messages.print_line')):
@@ -76,7 +76,7 @@ class MountsTest(unittest.TestCase):
         mounts.remember('/tmp/x')
         mounts.remember('cloud/eliran')
         self.assertEqual(mounts.load(), {})
-        self.assertFalse(os.path.exists(mounts.MOUNTS_FILE))
+        self.assertFalse(os.path.exists(mounts.names.MOUNTS_FILE))
 
     def test_without_findmnt_nothing_is_remembered(self):
         self.answers['findmnt'] = lambda command: (_ for _ in ()).throw(FileNotFoundError('findmnt'))
@@ -84,7 +84,7 @@ class MountsTest(unittest.TestCase):
         self.assertEqual(mounts.load(), {})
 
     def test_a_broken_file_is_an_error(self):
-        with open(mounts.MOUNTS_FILE, 'w') as f:
+        with open(mounts.names.MOUNTS_FILE, 'w') as f:
             f.write('{')
         with self.assertRaises(mounts.MountsError):
             mounts.load()
@@ -153,14 +153,14 @@ class MountsTest(unittest.TestCase):
         self.answers['mount'] = lambda command: self.mounted.add(mount.target) or (0, '')
         now = mount._replace(vfs_options=vfs_options)
         with helpers.answering_option_picker([mounts.MOUNT]), \
-                mock.patch('dirdelta.known.mounts.current_mount', return_value=now), \
-                mock.patch('dirdelta.known.mounts._fstab_options', return_value=fstab), \
+                mock.patch('dirdelta.known.mounts.current.current_mount', return_value=now), \
+                mock.patch('dirdelta.known.mounts.mounting._fstab_options', return_value=fstab), \
                 mock.patch('dirdelta.ui.messages.show') as show:
             self.assertTrue(mounts.ensure_mounted(mount.target))
         return show
 
     def test_one_that_comes_up_read_only_says_so_and_why(self):
-        with mock.patch('dirdelta.known.mounts._is_windows_hibernated', return_value=True):
+        with mock.patch('dirdelta.known.mounts.read_only._is_windows_hibernated', return_value=True):
             show = self.mount_coming_up('ro,relatime')
         title, lines = show.call_args.args[:2]
         self.assertEqual(title, 'Mounted read-only: /mnt/win')
@@ -175,12 +175,12 @@ class MountsTest(unittest.TestCase):
         return WIN._replace(target=target)
 
     def test_windows_is_hibernated_by_its_files_start(self):
-        self.assertTrue(mounts._is_windows_hibernated(self.hibernation_file(b'HIBR and more')))
-        self.assertTrue(mounts._is_windows_hibernated(self.hibernation_file(b'hibr')))
-        self.assertFalse(mounts._is_windows_hibernated(self.hibernation_file(b'\0\0\0\0')))
-        self.assertFalse(mounts._is_windows_hibernated(WIN._replace(target=os.path.join(self.tmpdir, 'none'))))
+        self.assertTrue(mounts.read_only._is_windows_hibernated(self.hibernation_file(b'HIBR and more')))
+        self.assertTrue(mounts.read_only._is_windows_hibernated(self.hibernation_file(b'hibr')))
+        self.assertFalse(mounts.read_only._is_windows_hibernated(self.hibernation_file(b'\0\0\0\0')))
+        self.assertFalse(mounts.read_only._is_windows_hibernated(WIN._replace(target=os.path.join(self.tmpdir, 'none'))))
         # Another filesystem's file isn't Windows' session
-        self.assertFalse(mounts._is_windows_hibernated(self.hibernation_file(b'HIBR')._replace(fstype='ext4')))
+        self.assertFalse(mounts.read_only._is_windows_hibernated(self.hibernation_file(b'HIBR')._replace(fstype='ext4')))
 
     def test_read_only_without_hibernation_doesnt_blame_windows(self):
         lines = mounts.read_only_reason(self.hibernation_file(b'\0\0\0\0'))
@@ -189,11 +189,11 @@ class MountsTest(unittest.TestCase):
 
     def test_the_reason_of_a_dir_already_read_only(self):
         hibernated = self.hibernation_file(b'HIBR')._replace(vfs_options='ro,relatime')
-        with mock.patch('dirdelta.known.mounts.current_mount', return_value=hibernated):
+        with mock.patch('dirdelta.known.mounts.current.current_mount', return_value=hibernated):
             self.assertTrue(any('powercfg' in line for line in mounts.read_only_lines_of(hibernated.target + '/x')))
             self.assertEqual(mounts.read_only_lines_of('cloud/x'), [])
         # Read-write: it's only its permissions, if it's read-only
-        with mock.patch('dirdelta.known.mounts.current_mount', return_value=hibernated._replace(vfs_options='rw')):
+        with mock.patch('dirdelta.known.mounts.current.current_mount', return_value=hibernated._replace(vfs_options='rw')):
             self.assertEqual(mounts.read_only_lines_of(hibernated.target), [])
 
     def test_one_that_comes_up_read_write_says_nothing_more(self):

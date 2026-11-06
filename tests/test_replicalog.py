@@ -60,7 +60,7 @@ class IdentityTest(unittest.TestCase):
         tmpdir = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, tmpdir)
         open(os.path.join(tmpdir, 'UUID1'), 'w').close()
-        with mock.patch('dirdelta.known.mounts.BY_UUID_DIR', tmpdir):
+        with mock.patch('dirdelta.known.mounts.names.BY_UUID_DIR', tmpdir):
             self.assertTrue(replicalog.is_disk_connected('uuid:UUID1:/x'))
             self.assertFalse(replicalog.is_disk_connected('uuid:UUID2:/x'))
             self.assertTrue(replicalog.is_disk_connected('drive:ROOT:/eliran'))

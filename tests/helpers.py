@@ -24,7 +24,7 @@ drivecache.names.LINES_FILE = os.path.join(_hash_cache_dir, 'dirdelta', 'files.t
 # Nor read or write the real mounts' file (~/.config/dirdelta/mounts.json): the tests that may check
 # replicas' mounts (choose_replicas') import this module
 _mounts_dir = tempfile.mkdtemp(prefix='dirdelta-test-mounts-')
-mounts.MOUNTS_FILE = os.path.join(_mounts_dir, 'mounts.json')
+mounts.names.MOUNTS_FILE = os.path.join(_mounts_dir, 'mounts.json')
 atexit.register(shutil.rmtree, _mounts_dir, ignore_errors=True)
 # Nor go by the real labels (~/.config/dirdelta/replicas.json), which say what screens call a replica
 replicas.REPLICAS_FILE = os.path.join(_mounts_dir, 'replicas.json')

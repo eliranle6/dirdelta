@@ -96,7 +96,7 @@ def disk_uuid(replica_identity):
 def is_disk_connected(replica_identity):
     """Whether the disk a local replica is on is connected (True if it isn't known by a disk)"""
     uuid = disk_uuid(replica_identity)
-    return uuid is None or os.path.exists(os.path.join(mounts.BY_UUID_DIR, uuid))
+    return uuid is None or os.path.exists(os.path.join(mounts.names.BY_UUID_DIR, uuid))
 
 
 def read(tree):
