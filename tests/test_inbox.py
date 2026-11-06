@@ -861,7 +861,7 @@ class InboxSortTest(unittest.TestCase):
         sorter = Sort(self.inbox, self.root)
         for path in (self.inbox, self.root):
             job = hashing.job(path)
-            self.addCleanup(hashing._jobs.pop, job.root, None)
+            self.addCleanup(hashing.registry._jobs.pop, job.root, None)
             job.scan()
             job._is_started = True
             for relpath in job.files():

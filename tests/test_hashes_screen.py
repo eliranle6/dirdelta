@@ -95,7 +95,7 @@ class PrepareTest(unittest.TestCase):
     def test_the_local_replicas_jobs_scanned_once(self):
         root = os.path.realpath(tempfile.mkdtemp(prefix='dirdelta-hashes-screen-'))
         self.addCleanup(shutil.rmtree, root)
-        self.addCleanup(hashing._jobs.pop, root, None)
+        self.addCleanup(hashing.registry._jobs.pop, root, None)
         helpers.make_files(root, ['x'])
         local = localdiskdirtree.LocalDiskDirTree(root, True)
         other = dirtree.DirTree('/cloud-like')
@@ -108,11 +108,11 @@ class PrepareTest(unittest.TestCase):
     def test_a_scanned_replicas_listing_is_used_rather_than_listing_it_again(self):
         root = os.path.realpath(tempfile.mkdtemp(prefix='dirdelta-hashes-screen-'))
         self.addCleanup(shutil.rmtree, root)
-        self.addCleanup(hashing._jobs.pop, root, None)
+        self.addCleanup(hashing.registry._jobs.pop, root, None)
         helpers.make_files(root, ['d/x'])
         with mock.patch('dirdelta.ui.messages.print_line'):
             local = localdiskdirtree.factory(root)
-        with mock.patch('dirdelta.hashes.hashing._list_files') as list_files, \
+        with mock.patch('dirdelta.hashes.hashing.job_scanning._list_files') as list_files, \
                 mock.patch('dirdelta.ui.messages.print_line') as print_line:
             job, = hashes_screen.prepare([local])
         list_files.assert_not_called()
@@ -154,7 +154,7 @@ class DashboardTest(unittest.TestCase):
     def dashboard(self, job, answers, trees=None, **kwargs):
         """The dashboard of trees (default: /photos's, whose job is job), answering answers; returns
         the pick_option mock"""
-        with mock.patch('dirdelta.hashes.hashing._jobs', {'/photos': job} if job is not None else {}), \
+        with mock.patch('dirdelta.hashes.hashing.registry._jobs', {'/photos': job} if job is not None else {}), \
                 helpers.answering_option_picker(answers) as pick:
             hashes_screen.dashboard(trees if trees is not None else [self.tree], self.known, **kwargs)
             # What it showed last, while the jobs are still there
@@ -190,7 +190,7 @@ class DashboardTest(unittest.TestCase):
 
     def test_quitting_is_asked_only_while_hashing(self):
         job = _Job('/photos', _progress())
-        with mock.patch('dirdelta.hashes.hashing._jobs', {'/photos': job}), \
+        with mock.patch('dirdelta.hashes.hashing.registry._jobs', {'/photos': job}), \
                 helpers.answering_option_picker([hashes_screen.KEEP_HASHING, hashes_screen.QUIT_ANYWAY]) as pick:
             self.assertTrue(hashes_screen.is_ok_to_quit())
             pick.assert_not_called()
@@ -246,7 +246,7 @@ class DashboardTest(unittest.TestCase):
 
     def test_a_done_one_cant_be_paused(self):
         job = _Job('/photos', _progress(state=hashing.DONE))
-        with mock.patch('dirdelta.hashes.hashing._jobs', {'/photos': job}):
+        with mock.patch('dirdelta.hashes.hashing.registry._jobs', {'/photos': job}):
             shown = hashes_screen._jobs_shown([('/photos', self.tree)], {'/photos': 'photos'})
         self.assertIsInstance(shown[(hashes_screen._TOGGLE, '/photos')], picker.Disabled)
 

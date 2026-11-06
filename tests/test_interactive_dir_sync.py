@@ -651,7 +651,7 @@ class ReadingLocalReplicasAnewTest(_TwoDirsTestCase):
 
     def test_dsts_hashing_gets_the_side_trees_listing_and_srcs_lists_its_own(self):
         src_job, dst_job = hashing.Job(self.src_path), hashing.Job(self.dst_path)
-        with mock.patch('dirdelta.hashes.hashing._jobs', {self.src_path: src_job, self.dst_path: dst_job}), \
+        with mock.patch('dirdelta.hashes.hashing.registry._jobs', {self.src_path: src_job, self.dst_path: dst_job}), \
                 mock.patch.object(hashing.Job, 'scan'), \
                 mock.patch.object(src_job, 'scan_in_background') as src_scan, \
                 mock.patch.object(dst_job, 'scan_in_background') as dst_scan:

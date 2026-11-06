@@ -691,7 +691,7 @@ class HashedReplicasTest(unittest.TestCase):
         self.jobs = {}
         for name in ('src', 'dst'):
             job = hashing.job(os.path.join(self.root, name))
-            self.addCleanup(hashing._jobs.pop, job.root, None)
+            self.addCleanup(hashing.registry._jobs.pop, job.root, None)
             self.jobs[name] = job
         self.src_index, self.dst_index = elsewhere.Index(self.src), elsewhere.Index(self.dst)
 

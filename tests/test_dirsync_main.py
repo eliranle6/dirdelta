@@ -110,7 +110,7 @@ class MainMenuTest(unittest.TestCase):
         def pick_option(options, shown_as, **_):
             shown.append(shown_as())
             return answers.pop(0)
-        with mock.patch('dirdelta.hashes.hashing._jobs', {'/a': job}), \
+        with mock.patch('dirdelta.hashes.hashing.registry._jobs', {'/a': job}), \
                 mock.patch('dirdelta.ui.picker.pick_option', side_effect=pick_option), \
                 mock.patch('dirdelta.screens.hashes_screen.dashboard') as dashboard:
             dirsync_main._sync(a, b, '/a', '/b')
