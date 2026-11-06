@@ -32,13 +32,16 @@ lines. A module that grew big became a package of its own (e.g. `inbox/`, `ui/pi
 `drive/clouddirtree/`): its `__init__.py` re-exports the names the rest of dirdelta uses, so
 callers still write `picker.pick_option()` or `clouddirtree.factory()`. A big class (InboxSort,
 InteractiveDirSync, DirTree, LocalReplica, CloudDirTree, Index, Job, Opener) is one object whose
-methods are in mixins, each in a module of its own (named by what it does). The sections below
+methods are in mixins, each in a module of its own (named by what it does); a long function is
+steps of their own (InboxSort's menu: _menu_facts() and its options by kind; the sync's picker:
+_browse() and its steps; the sync menu: sync_menu.SyncMenu; treepicker's run: picker.command._Command). The sections below
 still name the modules by their own names (`inbox.py` is now `inbox/`, and so on).
 
 Tests patch a name where it's looked up: in the module that uses it (e.g.
 `dirdelta.claude.ai.query._run_query`, `dirdelta.drive.drivecache.names.LINES_FILE`,
 `dirdelta.trees.localdiskdirtree.fs._trash`), not in the package that re-exports it. A module
-global that tests change (those three, `ai.config.CACHE_FILE`, `opening.names.MAX_OPENED`) is
+global that tests change (those three, `ai.config.CACHE_FILE`, `hashcache.database.CACHE_FILE`,
+`mounts.names.MOUNTS_FILE`, `opening.names.MAX_OPENED`) is
 read through its module (`names.LINES_FILE`) by the others, so one patch reaches all of them.
 
 The map (each module's docstring's first line; generated from the code):
@@ -46,7 +49,6 @@ The map (each module's docstring's first line; generated from the code):
 - `dirpick_main.py`: Picker mode: pick a file or dir under a path, then print it, or run a program (-x) on it
 - `main.py`: dirdelta's entry point: the arguments, then the start menu (no path), picker mode (one path), sync mode (two) ...
 - `claude/`: What Claude says of files, and the AI's plans of what to do with them
-  - `aiplan.py`: Asking AI about files: the user says what they want in their own words, and the AI answers it (if it's a quest...
   - `ai/`: What Claude (MODEL) says of files: a short description of each (which reads them), and where in a sorted tree ...
     - `cache.py`: What Claude said, kept by the files' hashes, or their paths and sizes
     - `config.py`: The models, the cache's file, the limits and the system prompts; and what's asked about
@@ -54,10 +56,14 @@ The map (each module's docstring's first line; generated from the code):
     - `files.py`: Asking Claude about files in batches: their descriptions, and where they go
     - `prompts.py`: The prompts about files, and reading Claude's answers to them
     - `query.py`: Running a query with the Claude Agent SDK: Read only, answering by a schema
+  - `aiplan/`: Asking AI about files: the user says what they want in their own words, and the AI answers it (if it's a quest...
+    - `answer.py`: The AI's answer, checked into a Plan: only what can be done
+    - `asking.py`: Asking the AI about a Task (make())
+    - `kinds.py`: What the AI is told and answers: its limits, its system prompt, and Action, File, Task, Step, Plan
+    - `prompt.py`: The prompt of a Task (with the files of its focus, which the AI may read), and the schema of its answer
 - `drive/`: Google Drive: its API, the cache of its file list, and a Drive folder as a replica
   - `clouddirtreefactory.py`: A Drive replica's tree, after asking whether to refresh its file list from Drive first
   - `driveapi.py`: dirdelta's connection to the Google Drive API (service()), logged in with the OAuth secrets in SECRETS_DIR: cr...
-  - `drivemeta.py`: A Drive replica's file list, kept in it too: FILE_NAME in its paths.META_DIR (cloud/X/meta/ files.jsonl), so a...
   - `clouddirtree/`: A Google Drive folder as a replica (CloudDirTree): its files read from the Drive cache (drivecache.py), copied...
     - `constants.py`: How a Drive tree's changes are made: how many at once, in what requests, retried how often
     - `fetching.py`: Copying a Drive tree's files out of it: downloading them
@@ -77,8 +83,18 @@ The map (each module's docstring's first line; generated from the code):
     - `reading.py`: Reading the cache into the paths of what's under a folder
     - `stale.py`: The folders whose part of the cache may be out of date: a change to them was cut off
     - `times.py`: When each folder's list was last read from Drive, and uploaded to it; and whose Drive it is
+  - `drivemeta/`: A Drive replica's file list, kept in it too: FILE_NAME in its paths.META_DIR (cloud/X/meta/ files.jsonl), so a...
+    - `checking.py`: Using a newer copy from Drive, at a sync's start (check())
+    - `lookup.py`: Finding a folder's copy in Drive
+    - `names.py`: The copy's name and header, and how often it's uploaded
+    - `uploader.py`: Uploading it again as it changes, while a sync goes on (Uploader, kept())
+    - `uploading.py`: Uploading the cache's list of a folder to its copy (upload())
 - `hashes/`: Hashing local replicas' files in the background, and the cache of their hashes
-  - `hashcache.py`: Local files' contents' hashes, kept in SQLite databases, so a file is read to hash it once: by its path, with ...
+  - `hashcache/`: Local files' contents' hashes, kept in SQLite databases, so a file is read to hash it once: by its path, with ...
+    - `access.py`: Getting a file's hashes, putting them, and the ones known under a dir
+    - `database.py`: The databases kept (CACHE_FILE's, and each replica's own), opened once, from any thread, and committed at most...
+    - `moving.py`: A moved file's or dir's hashes, moved with it
+    - `replica_dbs.py`: A local replica's own database (META_DIR/META_NAME in it), and which database has a file
   - `hashing/`: Hashing local replicas' files in the background, all of them, so a file can be looked up by its contents (else...
     - `job.py`: A local replica's hashing job (Job): its files hashed in the background, by the pool's threads
     - `job_files.py`: What a job knows of its files, and who it tells as they're hashed
@@ -103,6 +119,8 @@ The map (each module's docstring's first line; generated from the code):
     - `destinations.py`: Where the action menu's options put the files, and the lines saying so
     - `dirs.py`: Choosing a dir of the sorted tree (or the inbox) for files to go to
     - `menu.py`: The action menu of the picked files
+    - `menu_moves.py`: The action menu's options that move or copy the picked files
+    - `menu_options.py`: The action menu's options but the moves: asking Claude or the AI, removing, opening
     - `transfer.py`: Moving, copying and removing the inbox's files
   - `ai/`: The inbox sort's Claude: describing and placing files and dirs, and the AI's plans
     - `ask_ai.py`: Asking the AI what to do with the inbox's files (see aiplan.py)
@@ -110,12 +128,20 @@ The map (each module's docstring's first line; generated from the code):
     - `claude_dirs.py`: Asking Claude about an inbox's dir as a whole
     - `claude_files.py`: Waiting for Claude, and the files it's given (downloaded from Drive, if they must be)
 - `known/`: What's known of the replicas: recent pairs and favorites, their logs, names, labels and mounts
-  - `mounts.py`: The volumes that local replicas are on, kept in MOUNTS_FILE (JSON) so that one that isn't mounted now (a disk'...
+  - `log_entries.py`: What a sync or a sort changed in each replica, and the entries offered for their logs once it's done
+  - `replica_history.py`: What's known of the replicas (Replicas): the pairs synced, the favorites, the sorts, each sorted tree's recent...
   - `replicainfo.py`: What's known of a replica, as the screens say it: when it was last synced and changed, its log's last entry, t...
   - `replicalog.py`: Each replica's log of changes, LOG_NAME at its root, which the user keeps, newest last:
   - `replicanames.py`: What to call a replica on the screens, telling which disk or Drive account it's on, as the user labeled it if ...
   - `replicas.py`: The pairs of replicas the user synced (history, the latest first) and the ones they made favorites, and the in...
   - `settings.py`: The user's choices that last from one run to the next (SETTINGS_FILE): whether the file pickers show the selec...
+  - `mounts/`: The volumes that local replicas are on, kept in MOUNTS_FILE (JSON) so that one that isn't mounted now (a disk'...
+    - `current.py`: What's mounted now, and remembering it
+    - `file.py`: The mounts kept, in MOUNTS_FILE
+    - `mounting.py`: Mounting a volume again where it was, once the user says so
+    - `names.py`: Where the mounts are kept, what's looked for, the mount question's options, and a Mount
+    - `read_only.py`: Why a volume is read-only, and what to do about it
+    - `running.py`: Running the commands that say what's mounted, and mount
 - `matching/`: Matching files across replicas: where a missing file may be, files that differ, junk, sync state
   - `differing.py`: The files that two replicas both have at the same path, but not alike: of other sizes, or of the same size wit...
   - `junk.py`: Junk an inbox's files may be, by their names and sizes alone (no Claude, nothing read): system files, temporar...
@@ -135,6 +161,9 @@ The map (each module's docstring's first line; generated from the code):
   - `archive_screen.py`: Exploring an archive (see archives.py) in a picker, as a tree of what's in it, each file's size and date besid...
   - `choose_replicas.py`: The menu that chooses what to sync, when dirdelta is run without paths: a replica for each of its two slots (a...
   - `label_screen.py`: Labeling replicas (see replicanames.py), e.g. 'laptop' or 'blue WD ext. disk'.
+  - `pair_labels.py`: How the start menu labels pairs, sorts and replicas: their names, when each was updated, and their marks
+  - `replica_choices.py`: Choosing one replica for a slot: a local dir, a Drive one, or one already known
+  - `start_names.py`: The start menu's options, sections and what it returns
   - `hashes_screen/`: The screens of hashing local replicas' files (hashing.py): whether to hash a replica's files when it's opened ...
     - `dashboard_actions.py`: What the dashboard's options do, and the dashboard shown as it changes
     - `dashboard_lines.py`: The dashboard's lines of each replica's hashing and Drive's hashes
@@ -149,6 +178,7 @@ The map (each module's docstring's first line; generated from the code):
   - `dirsync_main.py`: Sync mode: the menu of a pair of replicas, until it goes back to the start menu
   - `options.py`: The sync menu's lines: whether the two are in sync, and each way's option
   - `replica_ops.py`: What a sync does to its replicas outside its screens: what one lacks of the other, reading them anew, and whet...
+  - `sync_menu.py`: The sync menu of a pair of replicas (SyncMenu): each way's files, the files that differ, reading the replicas ...
   - `ways.py`: A sync's two ways (src's files that dst lacks), and the files that differ, found in the background
   - `way/`: A way of a sync (InteractiveDirSync) and its parts, as mixins
     - `ask_ai.py`: Asking the AI what to do with the picked files (see aiplan.py)
@@ -158,6 +188,7 @@ The map (each module's docstring's first line; generated from the code):
     - `keys.py`: What the sync picker's own keys do: its menus, the tree beside it, exploring and renaming
     - `lists.py`: What the sync's picker lists: the missing files, the ones that differ, and their previews
     - `menu.py`: The action menu of the picked files
+    - `picking.py`: What the sync's file picker is shown with, and showing it once
     - `renames.py`: Renaming files to where the other replica has them (see elsewhere.py)
 - `trees/`: Trees of a replica's files: the base DirTree, a local dir's, listing and diffing local dirs, and paths
   - `dirdiff.py`: Diffing two local dirs with the dirdiff program (from the lib/treepicker submodule): it scans them in C++, muc...
@@ -195,13 +226,14 @@ The map (each module's docstring's first line; generated from the code):
     - `screens.py`: Opening from a menu (confirmed on a screen of its own), and a picker's tags with opening's
     - `status.py`: What a picker shows of an opener's work: its status bar, and each file's tag
   - `picker/`: dirdelta's pickers: they run the treepicker program, from github.com/eliranle6/treepicker.
+    - `command.py`: A treepicker command being made, and run: its arguments, the pipes to and from it, and the threads that serve ...
     - `files.py`: Picking files (pick_files()), and viewing them (view_files())
     - `kinds.py`: What pickers are given and give back: their options' kinds, and what a pick returns
     - `menus.py`: Menus of options (pick_option()), and what an option may be
     - `pictures.py`: The pictures of the files a picker's selection stays on
     - `places.py`: Where the user is, the screens' breadcrumbs (place(), trail())
     - `previews.py`: What's sent to treepicker's preview column
-    - `running.py`: Running treepicker: its arguments, its input and output, and the threads beside it
+    - `running.py`: Running treepicker: its arguments, its input and output, and the threads beside it (see command.py)
     - `selection.py`: Where a picker's selection is, as treepicker says, and the keys it was told of
     - `styles.py`: Text in styles and colors, as treepicker shows it: styled(), segments(), highlighted()
     - `trees.py`: Picking a node of a tree (pick_from_tree()) or a path under a dir (pick_under_dir())

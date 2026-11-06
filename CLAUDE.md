@@ -181,7 +181,7 @@ another test, or another module's, already covers. Shared fakes:
   rather than using `tests/fixtures/`, so they never depend on (or modify)
   the repo.
 - The real hash cache isn't written: `tests/helpers.py` points
-  `hashcache.CACHE_FILE` at a temp file when it's imported, and every test
+  `hashcache.database.CACHE_FILE` at a temp file when it's imported, and every test
   module that hashes files imports it. Hashing jobs (`hashes/hashing/`) are made
   with `hashing.Job(...)` directly, or `hashing.job()` with a cleanup that pops
   it from `hashing.registry._jobs`; tests that hash without the pool's threads set
@@ -201,7 +201,7 @@ another test, or another module's, already covers. Shared fakes:
 - The real `~/.config/dirdelta/settings.json` isn't read or written: `tests/helpers.py` (and
   `test_picker`) point `settings.SETTINGS_FILE` at a temp file.
 - Nothing is mounted, and the real `~/.config/dirdelta/mounts.json` isn't read or
-  written: `tests/helpers.py` points `mounts.MOUNTS_FILE` at a temp file, and
+  written: `tests/helpers.py` points `mounts.names.MOUNTS_FILE` at a temp file, and
   `test_mounts` fakes `findmnt`, `lsblk`, `mount` (`subprocess.run`),
   `os.path.ismount` and `/dev/disk/by-uuid`.
 - The real Drive cache isn't read or imported: `tests/helpers.py` points
