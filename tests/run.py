@@ -3,7 +3,10 @@ per process: see helpers.py), the slowest first, and sums them up as unittest wo
 
     python tests/run.py [unittest's options, e.g. -v, -k PATTERN, -f] [test_x ...]
 
-With no modules named, all of tests/test_*.py. Each module's output is shown if it failed, or with -v."""
+With no modules named, all the test_*.py under tests/ (in folders mirroring dirdelta's packages; a
+module is named by its file's name, which is unique). A module imports helpers.py (tests/) and the
+support modules beside it (its own folder) by name. Each module's output is shown if it failed, or
+with -v."""
 import concurrent.futures
 import json
 import os
@@ -17,9 +20,22 @@ TESTS = os.path.dirname(os.path.abspath(__file__))
 MARK = '\x00counts '
 
 
+def test_modules():
+    """{module name: its file} of the test modules under TESTS"""
+    found = {}
+    for dirpath, dirnames, filenames in os.walk(TESTS):
+        dirnames[:] = sorted(name for name in dirnames if name not in ('fixtures', '__pycache__'))
+        for name in filenames:
+            if name.startswith('test_') and name.endswith('.py'):
+                if name[:-3] in found:
+                    sys.exit('Two test modules named %s: in %s and %s' % (name, found[name[:-3]], dirpath))
+                found[name[:-3]] = os.path.join(dirpath, name)
+    return found
+
+
 def run_one(module, args):
     """Runs module's tests, its output on stderr, and prints how many ran, failed and so on"""
-    sys.path.insert(0, TESTS)
+    sys.path[:0] = [os.path.dirname(test_modules()[module]), TESTS]
     program = unittest.main(module=None, argv=['run.py'] + args + [module], exit=False)
     result = program.result
     print(MARK + json.dumps([result.testsRun, len(result.failures), len(result.errors), len(result.skipped),
@@ -45,10 +61,14 @@ def main(argv):
             options += [arg, next(args)] if arg == '-k' else [arg]
         else:
             named.append(arg)
-    modules = [name[:-3] if name.endswith('.py') else name for name in named] or sorted(
-        name[:-3] for name in os.listdir(TESTS) if name.startswith('test_') and name.endswith('.py'))
+    files = test_modules()
+    modules = [os.path.basename(name)[:-3] if name.endswith('.py') else name for name in named] or sorted(files)
+    unknown = [module for module in modules if module not in files]
+    if unknown:
+        sys.stderr.write('No such test module: %s\n' % (', '.join(unknown),))
+        return 2
     # The biggest first, as they take the longest
-    modules.sort(key=lambda module: -os.path.getsize(os.path.join(TESTS, module + '.py')))
+    modules.sort(key=lambda module: -os.path.getsize(files[module]))
     verbose = '-v' in options
     started = time.time()
     totals = [0] * 6
