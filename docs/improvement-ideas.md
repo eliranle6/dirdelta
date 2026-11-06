@@ -129,9 +129,9 @@ Ordered by how easy they are, easiest first (2026-10-30). Ideas 3, 2.1 and 6 hav
    4.2 A cheaper first step, in the terminal: done (2026-11-06, `images.py`): the preview column
        shows the selected file's picture below its text, with half blocks in 256 colors rather than
        a graphics protocol (sixel, kitty's), which curses can't keep from covering the other panes.
-       What's left: a video's frame (needs `ffmpeg`), more rows for it when there's a side tree (it
-       gets what's left of the column's lower 2/5 now), and a key to see it bigger (the whole right
-       column, or the whole screen).
+       What's left: a video's frame (needs `ffmpeg`), and more rows for it when there's a side tree
+       (it gets what's left of the column's lower 2/5 now). A key to see it bigger is there
+       (2026-11-07: treepicker's `z`, on the whole screen).
 
 5. **Bring the phone's new photos in, periodically.** The user connects the phone to the laptop
    now and then, to copy its new pictures into the laptop's replica (photos are kept in Drive,

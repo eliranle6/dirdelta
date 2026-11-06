@@ -1061,8 +1061,9 @@ The selected file's picture, below the preview column's text in the sync's and t
 pickers (`images.of_replica()`, their `pick_files(images=...)`): a local image by Pillow (decoded at a
 fraction of its size with `draft()`, turned by its EXIF orientation, transparency on black), a PDF's
 first page by `pdftoppm`, a Drive file's thumbnail (`CloudDirTree.thumbnail()`: its `thumbnailLink`,
-asked for at the size wanted, got with the login by `driveapi.get_url()`). As small as the column
-can show (`picker._image_box()`: 2/5 of the terminal's width, twice its rows), sent as hex RGB.
+asked for at the size wanted, got with the login by `driveapi.get_url()`). As big as the whole
+screen can show (`picker._image_box()`: the terminal's width and twice its rows, for treepicker's `z`,
+which shows it on the whole screen; it's made smaller for the column there), sent as hex RGB.
 Half blocks rather than a terminal graphics protocol (sixel, kitty's): they're characters curses
 draws like the rest, so the picture never covers the tree, the side tree or the bottom lines, and
 goes with them on a redraw or resize; and every 256-color terminal shows them. No Pillow: no pictures.

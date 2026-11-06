@@ -223,8 +223,8 @@ differ)"), and "Files that differ at the same paths in both" shows only them, fr
 In the file pickers, the selected photo (an image, a PDF's first page, a Drive file's thumbnail) shows
 in the preview column, drawn in characters (two pixels each, in 256 colors), so a name like
 `IMG_2041.jpg` says what it is: a landscape one below the column's text, a portrait one on the
-column's right half, beside the text. `i` switches the pictures off and on, for the pickers after it
-too (kept in `~/.config/dirdelta/settings.json`). It needs Pillow (in `requirements.txt`), and
+column's right half, beside the text. `z` shows it on the whole screen (any key goes back). `i`
+switches the pictures off and on, for the pickers after it too (kept in `~/.config/dirdelta/settings.json`). It needs Pillow (in `requirements.txt`), and
 `pdftoppm` for PDFs.
 
 ### The menu of the keys (`:`)

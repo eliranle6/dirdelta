@@ -80,11 +80,12 @@ class Images(object):
 
 
 def _image_box():
-    """The most pixels (width, height) a picture may take in the preview column: its width and twice
-    its rows (treepicker's: 2/5 of the terminal), as the terminal is now"""
+    """The most pixels (width, height) a picture may take: the whole screen's, as treepicker's z shows
+    it (the terminal's width, but its last column, and twice its rows, but the one with the name),
+    as the terminal is now; treepicker makes it smaller for the preview column"""
     try:
         with open('/dev/tty') as tty:
             columns, rows = os.get_terminal_size(tty.fileno())
     except OSError:
         columns, rows = 100, 30
-    return max(1, columns * 2 // 5 - 2), max(2, rows * 2)
+    return max(1, columns - 1), max(2, (rows - 1) * 2)

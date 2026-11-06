@@ -95,7 +95,8 @@ Like fzf: dirdelta starts `treepicker`, which draws on the terminal itself
   half), and draws it with half blocks (`▀`, two pixels a character) in the 256 colors'
   pairs it makes as needed; with fewer than 256 colors, none. `i` (`picker.IMAGES_KEY`, a `--notify`
   key that `_run()` adds to the caller's) switches them off (an empty image for each one sent) and
-  on, kept by `settings.py`.
+  on, kept by `settings.py`. treepicker's own `z` shows the selected one on the whole screen, until a
+  key is pressed; so dirdelta sends them as big as the whole screen (`_image_box()`).
 - Menus: `treepicker -0 --list [--header TEXT] -`, with the labels on stdin
   (`--list` keeps them flat, since labels contain '/'). With `shown_as`,
   `pick_option` adds `--updates FD`, a pipe that a thread writes `LABEL<tab>TEXT\0`
