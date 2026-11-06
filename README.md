@@ -98,10 +98,20 @@ Drive folders; choosing it, the replicas you sync are offered too). The inbox's 
 `Enter` (with none picked, it picks the selected file, or a dir's files), and choose what to do with
 them, with "Nothing" selected first:
 
-- `Ctrl-I` in the picker, on the picked files (or else the selected file or dir): all of what's
+- `Ctrl-I` in the picker, on the picked files (or else the selected file): all of what's
   below, describing them and saying where they go, in the background. Files Claude was asked
   about before are asked about anew (and compared with the sorted tree again), since they may have
   changed; so does the menu's "Ask Claude where" (marked `[Ctrl-I]`).
+- `Ctrl-I` on a dir, with nothing picked, asks about the dir as a whole (to ask about each of its
+  files, pick them first, with Space): Claude describes a few of its files, then gets its size, its
+  types of files, some of their names, their dates and how many are in the sorted tree already, and
+  says what it is (a tag after its name: `rome-2024/  [claude: Rome trip photos, Oct 2024]`) and what
+  to do with it: move it (its own name or a better one, under the dir where it belongs, or into an
+  existing dir, merging), split it (its files don't go together: ask about each), or remove it.
+  `Enter` on the dir then offers "Move the dir ... to Claude's recommendation", "Move the dir ...
+  into a dir you pick" (keeping its name) and "Remove the dir ..., as Claude says", each moving or
+  removing all of its files, a local dir with one rename. What Claude said is kept by the dir's
+  path, its number of files and their size: a dir that changed is asked about again.
 - `Ctrl-X` in the picker opens the selected file (or dir) with its program (`xdg-open`), as a
   double-click would; "Open" in the menu opens the picked files (up to 10), and has no key (a
   sync's picker has both too). A Drive file is downloaded first, into

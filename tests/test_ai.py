@@ -204,6 +204,45 @@ class AITest(unittest.TestCase):
         self.assertEqual(progress, [(0, ai.BATCH_SIZE + 1), (ai.BATCH_SIZE, ai.BATCH_SIZE + 1),
                                     (ai.BATCH_SIZE + 1, ai.BATCH_SIZE + 1)])
 
+    def dir_(self):
+        return ai.Dir('rome', 3, 300, {'.jpg': 2, '.mov': 1}, ['a.jpg', 'b.jpg', 'c.mov'],
+                      ('2024-10-01', '2024-10-05'), {'a.jpg': 'the Colosseum'}, 1)
+
+    def test_a_dir_is_asked_about_once_and_cached(self):
+        answer = {'action': 'move', 'path': '/photos/2024/rome/', 'summary': 'Rome trip photos.', 'reason': 'one trip'}
+        key = ai.dir_key('/inbox/rome', 3, 300)
+        with mock.patch('dirdelta.ai._run_query', return_value=answer) as query:
+            found = ai.recommend_dir(self.dir_(), key, {'': [], 'photos': ['x.jpg']}, 'root')
+            self.assertEqual(ai.recommend_dir(self.dir_(), key, {}, 'root'), found)
+            self.assertEqual(ai.cached_dirs({'rome': key, 'other': 'nothing'}, 'root'), {'rome': found})
+            self.assertIsNone(ai.cached_dir(key, 'another root'))
+            # Anew: asked again
+            ai.recommend_dir(self.dir_(), key, {}, 'root', anew=True)
+        self.assertEqual(found, {'action': 'move', 'path': 'photos/2024/rome', 'summary': 'Rome trip photos',
+                                 'reason': 'one trip'})
+        self.assertEqual(query.call_count, 2)
+        prompt = query.call_args_list[0].args[0]
+        for said in ("Its name: rome", "3 files, 300 bytes in all: 2 .jpg, 1 .mov", "a.jpg, b.jpg, c.mov",
+                     "from 2024-10-01 to 2024-10-05", "What a.jpg is: the Colosseum",
+                     "1 of its files are in the sorted tree already", "photos (e.g. x.jpg)"):
+            self.assertIn(said, prompt)
+        self.assertEqual(query.call_args.kwargs['system_prompt'], ai.DIR_SYSTEM_PROMPT)
+        self.assertEqual(query.call_args.args[1], [])
+
+    def test_a_dir_split_or_removed_has_no_path(self):
+        for action in ('split', 'remove'):
+            with mock.patch('dirdelta.ai._run_query',
+                            return_value={'action': action, 'path': 'x', 'summary': 's', 'reason': 'r'}):
+                self.assertEqual(ai.recommend_dir(self.dir_(), action, {}, 'root')['path'], '')
+
+    def test_a_dir_answer_without_what_to_do_fails(self):
+        for answer in ({'action': 'move', 'path': '', 'summary': 's', 'reason': 'r'},
+                       {'action': 'move', 'path': 'a/../..', 'summary': 's', 'reason': 'r'},
+                       {'action': 'keep', 'path': 'a', 'summary': 's', 'reason': 'r'}):
+            with mock.patch('dirdelta.ai._run_query', return_value=answer), self.assertRaises(ai.AIError):
+                ai.recommend_dir(self.dir_(), 'key', {}, 'root')
+        self.assertIsNone(ai.cached_dir('key', 'root'))
+
 
 class _Result(object):
     def __init__(self, subtype='success', structured_output=None):
@@ -272,6 +311,7 @@ class RunQueryTest(unittest.TestCase):
             self.run_query([_Result('error_max_structured_output_retries')])
         with self.assertRaises(ai.AIError):
             self.run_query([])
+
 
 
 if __name__ == '__main__':

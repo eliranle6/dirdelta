@@ -47,7 +47,11 @@ Ordered by how easy they are, easiest first (2026-10-30).
        description; and near-duplicates (a burst of shots of one scene, a resized or WhatsApp copy of
        a photo, `report-v1`...`v3`): grouping files that look like one (dates taken seconds apart,
        names in a sequence, similar sizes) and asking Claude which to keep.
-   2.3 Recommendations per dir. Claude is asked about each file, but an inbox often has dirs whose
+   2.3 Recommendations per dir: done (2026-11-06), as below, but for what's still open: which dirs
+       are asked about (only those Ctrl-I is pressed on), a whole dir picked as a destination's plan
+       moving file by file across replica kinds (local to Drive), a typed name for a moved dir, and
+       nested dirs' answers (each is asked about on its own). The original idea:
+       Claude is asked about each file, but an inbox often has dirs whose
        files go together (`rome-2024/`, 300 photos; `scans/tax-2025/`, 40 PDFs). Per file, that's 30
        batches of 10 images read, files of one trip sent to different places (`photos/2024/rome/`,
        `photos/italy/`) as each batch decides on its own, and 300 recommendations to look through

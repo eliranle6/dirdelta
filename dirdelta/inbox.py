@@ -90,6 +90,12 @@ DESCRIPTION_TITLE = "Description (ai):"
 DESTINATION_TITLE = "Dest. path recommendation (ai):"
 # The title of whether the sorted tree has the file already (by its contents)
 IN_SORTED_TREE_TITLE = "Is in replica dir:"
+DIR_TITLE = "Dir recommendation (ai):"
+LOOKING_AT_DIR = "(Claude is looking at the dir...)"
+# How many of a dir's files Claude describes (reading them) when it's asked about the dir as a whole,
+# and the most of them whose dates are read for it
+DIR_FILES_DESCRIBED = 4
+DIR_FILES_DATED = 200
 
 
 # What an option of the action menu does to the files, and its color: its text's, and its label's
@@ -157,6 +163,11 @@ class InboxSort(filescreen.FilesScreen):
     RECOMMEND = 'recommend'
     ASK_AI = 'ask AI'
     EXPLORE = 'explore'
+    # A dir's files, all picked: Claude's say of the dir as a whole, and moving or removing it whole
+    ASK_DIR = 'ask about the dir'
+    MOVE_DIR = "move the dir to Claude's"
+    MOVE_DIR_TO = 'move the dir to'
+    REMOVE_DIR = 'remove the dir'
     # The picker's keys that do an option of the menu, shown before it
     # (Ctrl-X opens the selected one, not the picked ones: Open has no key)
     SHORTCUTS = {ASK_AI: aiplan_screen.KEY_NAME, EXPLORE: archive_screen.KEY_NAME, RECOMMEND: 'Ctrl-I', READ_ANEW: 'Ctrl-R'}
@@ -218,6 +229,14 @@ class InboxSort(filescreen.FilesScreen):
         # What Claude said of the inbox's files, by relpath (in the inbox)
         self._descriptions = {}
         self._recommendations = {}
+        # What Claude said of the inbox's dirs as wholes: {dir relpath: (its ai.dir_key() then, the
+        # recommendation)}; the ones being asked about, and why the ones that couldn't be weren't; how
+        # many of each one's files were copies of the sorted tree's then; and the threads asking
+        self._dir_recommendations = {}
+        self._dir_asking = set()
+        self._dir_failed = {}
+        self._dir_copies = {}
+        self._dir_threads = []
         # The files being described (in the background), the queue of them, and the worker; and why
         # the ones that couldn't be weren't
         self._describing = set()
@@ -290,6 +309,46 @@ class InboxSort(filescreen.FilesScreen):
                                                   self.root_path)
         self._descriptions.update(descriptions)
         self._recommendations.update(recommendations)
+        # The dirs': the ones that changed since are dropped (asked about again, they're asked anew)
+        keys = {dirpath: self._dir_key(dirpath, count, size)
+                for dirpath, (count, size) in self._dir_stats(relpaths).items()}
+        cached = ai.cached_dirs(keys, self.root_path)
+        with self._state_lock:
+            for dirpath in list(self._dir_recommendations):
+                if keys.get(dirpath) != self._dir_recommendations[dirpath][0]:
+                    del self._dir_recommendations[dirpath]
+            for dirpath, recommendation in cached.items():
+                self._dir_recommendations.setdefault(dirpath, (keys[dirpath], recommendation))
+
+    # The inbox's dirs
+
+    def _dir_stats(self, relpaths):
+        """{dir relpath: (how many files, their total size)} of each dir that the inbox's files at
+        relpaths are in (not the root)"""
+        stats = {}
+        for relpath in relpaths:
+            size = self._listed(relpath)[0] or 0
+            parts = relpath.split('/')[:-1]
+            for depth in range(1, len(parts) + 1):
+                count, total = stats.get('/'.join(parts[:depth]), (0, 0))
+                stats['/'.join(parts[:depth])] = (count + 1, total + size)
+        return stats
+
+    def _dir_key(self, dirpath, count, size):
+        return ai.dir_key(posixpath.join(self.inbox_path, dirpath), count, size)
+
+    def _dir_recommendation(self, dirpath):
+        """What Claude said of the inbox's dir at dirpath as a whole (see ai.recommend_dir()), or None"""
+        found = self._dir_recommendations.get(dirpath)
+        return found[1] if found is not None else None
+
+    def _whole_dir(self, relpaths, selected):
+        """The dir at selected, if relpaths are all its files (as Enter on it picks them; not the
+        inbox's root), else None"""
+        if not selected or selected in relpaths:
+            return None
+        under = [relpath for relpath in self._listing if _is_at_or_under(relpath, selected)]
+        return selected if under and set(under) == set(relpaths) else None
 
     # The screens
 
@@ -328,7 +387,7 @@ class InboxSort(filescreen.FilesScreen):
         keys = self.REFRESH_KEY + hashes_screen.KEY + aiplan_screen.KEY + contextmenu.KEY + archive_screen.KEY
         # The keys row has little room: the rest are in the menu (:), and ?
         key_hints = [('Enter', 'choose what to do'), contextmenu.KEY_HINT]
-        more_keys = ([aiplan_screen.KEY_HINT, archive_screen.KEY_HINT, ('Ctrl-I', 'Claude: describe, and say where they go'),
+        more_keys = ([aiplan_screen.KEY_HINT, archive_screen.KEY_HINT, ('Ctrl-I', 'Claude: describe, and say where they go (a dir: as a whole)'),
                       opening.KEY_HINT, renaming.KEY_HINT,
                       ('Ctrl-W l', 'move to the sorted tree, on the right (Ctrl-W h: back)')] +
                      [(self.REFRESH_KEY_NAME, 'read the folder anew from Drive' if self.inbox_is_cloud else 'see what changed outside dirdelta'),
@@ -442,7 +501,10 @@ class InboxSort(filescreen.FilesScreen):
                    contextmenu.Entry('Space', "Pick %s" % (name,), contextmenu.PICK),
                    contextmenu.Entry(aiplan_screen.KEY_NAME, "Ask AI what to do with all the files, and review its plan",
                                      aiplan_screen.KEY),
-                   contextmenu.Entry('Ctrl-I', "Have Claude describe %s and say where it goes, while you go on" % (name,),
+                   contextmenu.Entry('Ctrl-I', ("Have Claude say what %s is and where it goes, as a whole, while you go "
+                                                "on (each of its files: pick them, then Ctrl-I)" % (name,))
+                                     if selected and not is_file else
+                                     "Have Claude describe %s and say where it goes, while you go on" % (name,),
                                      DESCRIBE_KEY)]
         if is_file and archives.is_archive(selected):
             entries.append(contextmenu.Entry(archive_screen.KEY_NAME, "Explore %s" % (name,), archive_screen.KEY))
@@ -631,10 +693,22 @@ class InboxSort(filescreen.FilesScreen):
             if tags:
                 shown[relpath] = picker.styled([(os.path.basename(relpath), None)] +
                                                [part for tag in tags for part in (("  ", None), tag)])
+        # The dirs Claude said what they are of, as wholes (treepicker skips the ones that aren't there)
+        with self._state_lock:
+            dirpaths = set(self._dir_recommendations) | set(self._dir_asking)
+        for dirpath in dirpaths:
+            recommendation = self._dir_recommendation(dirpath)
+            tag = ((DESCRIBED % (recommendation['summary'],), CLAUDE_STYLE) if recommendation and recommendation.get('summary') else
+                   (LOOKING_AT_DIR, 'grey') if dirpath in self._dir_asking else None)
+            if tag is not None:
+                # treepicker puts the dir's '/' after its name
+                shown[dirpath] = picker.styled([(posixpath.basename(dirpath), None), ("  ", None), tag])
         describing, placing = len(self._describing), len(self._placing)
         failed = len([relpath for relpath in relpaths if relpath in self._failed])
         busy = ["%s %s" % (what, _files(count))
                 for what, count in (("describing", describing), ("placing", placing)) if count]
+        if self._dir_asking:
+            busy.append("asking about %s" % (_dirs(len(self._dir_asking)),))
         status = ("Claude: " + ', '.join(busy) if busy else
                   "Claude: couldn't do %s" % (_files(failed),) if failed else '')
         # Downloading files to open them: how far it got (on the status bar, first), and each
@@ -698,7 +772,40 @@ class InboxSort(filescreen.FilesScreen):
             else:
                 lines += ["", picker.styled([("Dest. path:", 'bold')]), _grey("  Ctrl-I asks Claude")]
             previews[relpath] = lines
+        for dirpath, (count, size) in self._dir_stats(relpaths).items():
+            previews[dirpath] = self._dir_preview(dirpath, count, size)
         return previews
+
+    def _dir_preview(self, dirpath, count, size):
+        """The lines beside the picker of the inbox's dir at dirpath (of count files, of size): what
+        Claude said of it as a whole, if it was asked (Ctrl-I)"""
+        lines = [picker.styled([("Dir: ", 'bold'), ("%s, %s" % (_files(count), text.format_size(size)), None)])]
+        recommendation = self._dir_recommendation(dirpath)
+        if dirpath in self._dir_asking:
+            return lines + ["", _title(DIR_TITLE, CLAUDE_STYLE), _grey("  Claude is looking at it...")]
+        if recommendation is None and dirpath in self._dir_failed:
+            return lines + ["", _title(DIR_TITLE + " failed", 'red')] + _wrapped(self._dir_failed[dirpath], "  ")
+        if recommendation is None:
+            return lines + ["", picker.styled([("Dir recommendation:", 'bold')]),
+                            _grey("  Ctrl-I asks Claude about the dir"), _grey("  as a whole")]
+        lines += ["", _title(DIR_TITLE, CLAUDE_STYLE)] + _wrapped(recommendation.get('summary', ''), "  ") + [""]
+        if recommendation['action'] == 'move':
+            is_merged = self._root_tree.exists(recommendation['path'])
+            lines += [picker.styled([("Move it %s:" % ("into the dir there" if is_merged else "to"), 'bold')])]
+            lines += _wrapped_path(recommendation['path'] + '/', "  ")
+        elif recommendation['action'] == 'remove':
+            lines += [picker.styled([("Remove it", 'bold')])]
+        else:
+            lines += [picker.styled([("Its files don't go together:", 'bold')]),
+                      _grey("  pick them (Space), then Ctrl-I"), _grey("  asks about each")]
+        if recommendation.get('reason'):
+            lines += [""] + _wrapped(recommendation['reason'], "  ")
+        copies = self._dir_copies.get(dirpath)
+        if copies:
+            lines += ["", "%s of it in the sorted tree already" % (_files(copies),)]
+        if recommendation['action'] != 'split':
+            lines += ["", _grey("  Enter: the menu, to do it")]
+        return lines
 
     def _act(self, relpaths, selected=None):
         """Let the user choose what to do with the picked files at relpaths, and do it once they
@@ -731,6 +838,13 @@ class InboxSort(filescreen.FilesScreen):
                    if os.path.basename(self._target(relpath)) != os.path.basename(relpath)]
         is_one = len(relpaths) == 1
         name = os.path.basename(relpaths[0]) if is_one else None
+        # All the files of the selected dir: what Claude said of it as a whole, and what's done with it whole
+        whole_dir = self._whole_dir(relpaths, selected)
+        dir_recommendation = self._dir_recommendation(whole_dir) if whole_dir else None
+        dir_action = dir_recommendation['action'] if dir_recommendation else None
+        the_dir = ("the dir %s/ (%s)" % (posixpath.basename(whole_dir), count)) if whole_dir else None
+        claudes_dir_path = ((dir_recommendation['path'] + '/', CLAUDES_DIR) if dir_action == 'move' else None)
+        own_dir_name = ((posixpath.basename(whole_dir) + '/', OWN_NAME) if whole_dir else None)
         # Where each option puts the files: the parts of the path, each with where it's from (see
         # _destination_lines())
         root = (self.root_path.rstrip('/') + '/', SORTED_TREE)
@@ -764,6 +878,25 @@ class InboxSort(filescreen.FilesScreen):
                                       if asked_before else ""),
                                      None if askable else "being asked", ASK, [],
                                      lambda: self.ask_in_background(askable, anew=True))),
+            (self.ASK_DIR, _Action("Ask Claude about %s as a whole: what it is, and where it goes, while you go on%s" %
+                                   (the_dir, " (anew)" if dir_recommendation else ""),
+                                   None if whole_dir and whole_dir not in self._dir_asking else
+                                   "being asked" if whole_dir else "not a dir", ASK, [],
+                                   lambda: self.ask_dir_in_background(whole_dir, relpaths),
+                                   said=(ASK, " Claude, about %s, while you go on" % (the_dir,)))),
+            (self.MOVE_DIR, _Action("Move %s to Claude's recommendation%s: %s" %
+                                    (the_dir, ", into the dir there" if dir_action == 'move' and
+                                     self._root_tree.exists(dir_recommendation['path']) else "",
+                                     path_of(root, claudes_dir_path)) if dir_action == 'move' else "",
+                                    None if dir_action == 'move' else "no recommendation to move it", MOVE,
+                                    [root, claudes_dir_path],
+                                    lambda: self._approve(self.MOVE_TO, [(relpath, _join(dir_recommendation['path'],
+                                                                                         relpath[len(whole_dir) + 1:]))
+                                                                         for relpath in relpaths]))),
+            (self.MOVE_DIR_TO, _Action("Move %s into a dir you pick: %s" %
+                                       (the_dir, path_of(root, your_dir, own_dir_name)) if whole_dir else "",
+                                       None if whole_dir else "not a dir", MOVE, [root, your_dir, own_dir_name],
+                                       lambda: self._dir_to_a_dir(whole_dir, relpaths))),
             (self.MOVE_RECOMMENDED, _Action("Move %s to Claude's recommendation: %s" %
                                             (it, path_of(root, claudes_dir, claudes_name))
                                             if is_one or len(destinations) == 1 else
@@ -808,6 +941,13 @@ class InboxSort(filescreen.FilesScreen):
                                          lambda: self._remove(removable, ["  %s: a copy of %s" % (relpath, ', '.join(
                                              _join(self.root_path, copy) for copy in self._copies(relpath)[:2]))
                                              for relpath in removable]), acted_on=removable)),
+            (self.REMOVE_DIR, _Action("Remove %s, as Claude says%s" %
+                                      (the_dir, ": " + dir_recommendation['reason'] if dir_recommendation and
+                                       dir_recommendation.get('reason') else "") if dir_action == 'remove' else "",
+                                      None if dir_action == 'remove' else "no recommendation to remove it", REMOVE, [],
+                                      lambda: self._remove(relpaths, ["  %s/: %s" % (whole_dir, dir_recommendation.get('reason') or
+                                                                                      "Claude says so")] +
+                                                           ["  " + relpath for relpath in relpaths], to_trash=True))),
             (self.REMOVE_JUNK, _Action("Remove %s: %s like junk (to %s)" %
                                        ("it" if is_one else _of(len(junky), len(relpaths)),
                                         "it looks" if is_one or len(junky) == 1 else "they look",
@@ -879,6 +1019,19 @@ class InboxSort(filescreen.FilesScreen):
         if is_typed:
             plan = self._typed_name(plan)
         return None if plan is None else self._approve(self.MOVE_TO, plan)
+
+    def _dir_to_a_dir(self, dirpath, relpaths):
+        """Move the inbox's dir at dirpath (its files: relpaths) into a dir the user chooses, under its
+        own name, as a whole; offered first next time, if it went"""
+        destination = self._choose_dir('move', "%s of %s/" % (_files(len(relpaths)), dirpath))
+        if destination is None:
+            return None
+        done = self._approve(self.MOVE_TO, [(relpath, _join(destination, posixpath.basename(dirpath),
+                                                             relpath[len(dirpath) + 1:])) for relpath in relpaths])
+        if done and self._known_replicas is not None:
+            self._known_replicas.record_dir(self.root_path, destination)
+            replicas.save(self._known_replicas)
+        return done
 
     def _to_a_dir(self, action, relpaths, renamed, count):
         """Move or copy (action) the files to a dir the user chooses, under their own names, Claude's
@@ -1105,28 +1258,94 @@ class InboxSort(filescreen.FilesScreen):
         self._indexing.join()
         elsewhere.check_all(relpaths, self._inbox_tree, self._inbox_index, self._root_index, self._checked)
 
+    def ask_dir_in_background(self, dirpath, relpaths):
+        """Have Claude say what the inbox's dir at dirpath (whose files are at relpaths) is, and what
+        to do with it as a whole (ai.recommend_dir()), anew: a few of its files are described first,
+        and all of them compared with the sorted tree's, so it knows how many are copies. On a thread
+        of its own, while the user goes on; once the dir is asked about, Ctrl-I again does nothing."""
+        with self._state_lock:
+            if dirpath in self._dir_asking or not relpaths:
+                return
+            self._dir_asking.add(dirpath)
+            self._dir_failed.pop(dirpath, None)
+            self._dir_recommendations.pop(dirpath, None)
+            thread = threading.Thread(target=self._ask_about_dir, args=(dirpath, list(relpaths)), daemon=True)
+            self._dir_threads.append(thread)
+        thread.start()
+
+    def _ask_about_dir(self, dirpath, relpaths):
+        """ask_dir_in_background()'s thread"""
+        try:
+            described = _spread(relpaths, DIR_FILES_DESCRIBED)
+            undescribed = [relpath for relpath in described if relpath not in self._descriptions]
+            with self._state_lock:
+                self._describing.update(undescribed)
+            self._describe(undescribed)
+            self._compare(relpaths)
+            sizes = [self._listed(relpath)[0] or 0 for relpath in relpaths]
+            types = collections.Counter(os.path.splitext(relpath)[1].lower() for relpath in relpaths)
+            copies = len([relpath for relpath in relpaths if self._copies(relpath)])
+            within = lambda relpath: relpath[len(dirpath) + 1:]
+            dir_ = ai.Dir(dirpath, len(relpaths), sum(sizes), dict(types),
+                          [within(relpath) for relpath in _spread(relpaths, ai.DIR_NAMES_GIVEN)],
+                          self._dates(_spread(relpaths, DIR_FILES_DATED)),
+                          {within(relpath): self._descriptions[relpath] for relpath in described
+                           if relpath in self._descriptions}, copies)
+            key = self._dir_key(dirpath, len(relpaths), sum(sizes))
+            recommendation = ai.recommend_dir(dir_, key, self._root_dirs(), self.root_path, anew=True)
+            with self._state_lock:
+                self._dir_recommendations[dirpath] = (key, recommendation)
+                self._dir_copies[dirpath] = copies
+        except Exception as error:
+            self._dir_failed[dirpath] = str(error)
+        finally:
+            with self._state_lock:
+                self._dir_asking.discard(dirpath)
+
+    def _dates(self, relpaths):
+        """(the first, the last) of the dates ('YYYY-MM-DD') the inbox's files at relpaths were taken
+        (photos), or else modified; None if none is known"""
+        dates = []
+        for relpath in relpaths:
+            taken = self._inbox_tree.date_taken(relpath)
+            if taken:
+                dates.append(taken[:10])
+                continue
+            modified = self._inbox_tree.modified_time(relpath)
+            if modified is not None:
+                dates.append(time.strftime('%Y-%m-%d', time.localtime(modified)))
+        return (min(dates), max(dates)) if dates else None
+
     def wait_for_claude(self):
-        """Wait for what Claude is asked of files, without a screen (e.g. for a test)"""
+        """Wait for what Claude is asked of files and dirs, without a screen (e.g. for a test)"""
         while True:
             worker = self._worker
-            if worker is None:
+            if worker is not None:
+                worker.join()
+                continue
+            with self._state_lock:
+                threads, self._dir_threads = self._dir_threads, []
+            if not threads:
                 return
-            worker.join()
+            for thread in threads:
+                thread.join()
 
     def _finish_describing(self):
         """Wait for what Claude is asked of files, if anything, on a progress screen (Ctrl-C stops
         waiting: what it said so far is kept)"""
-        if not self._queued:
+        if not self._queued and not self._dir_asking:
             return
         title = ("Waiting for Claude to finish with %s (what it said so far is kept)" %
-                 (_files(len(self._queued)),))
+                 (', '.join(([_files(len(self._queued))] if self._queued else []) +
+                            ([_dirs(len(self._dir_asking))] if self._dir_asking else [])),))
         failed_before = len(self._failed)
         with messages.progress_screen(title, dryrun.label(), wait=False):
             try:
-                while self._queued:
-                    messages.print_progress("%s left (%d being described, %d placed), %d failed" % (
+                while self._queued or self._dir_asking:
+                    messages.print_progress("%s left (%d being described, %d placed), %d failed%s" % (
                         _files(len(self._queued)), len(self._describing),
-                        len(self._queued) - len(self._describing), len(self._failed) - failed_before))
+                        len(self._queued) - len(self._describing), len(self._failed) - failed_before,
+                        "; %s being asked about" % (_dirs(len(self._dir_asking)),) if self._dir_asking else ""))
                     time.sleep(DESCRIBED_WAIT_INTERVAL)
             except KeyboardInterrupt:
                 messages.note_stopped()
@@ -1188,10 +1407,13 @@ class InboxSort(filescreen.FilesScreen):
     def _on_key(self, key, selected, picked, files):
         """A notify key pressed in the picker of files (on another thread): Ctrl-X opens the
         selected file (not the picked ones: the menu's Open does, see opening.confirm()), Ctrl-I asks Claude about the picked ones (or the selected one, or
-        a dir's)"""
+        with none picked, the selected dir as a whole; the root's files each)"""
         if key == OPEN_KEY:
             # The selected one only (the picked ones: the menu's Open, which downloads them first)
             self._opener.press([selected], files)
+        elif not picked and selected and selected not in set(files):
+            # A dir: Claude says what it is and where it goes as a whole (Space picks its files, for each)
+            self.ask_dir_in_background(selected, [relpath for relpath in files if _is_at_or_under(relpath, selected)])
         else:
             self.ask_in_background(picked or [relpath for relpath in files if _is_at_or_under(relpath, selected)],
                                    anew=True)
@@ -1713,5 +1935,19 @@ def _relpath(path, root):
 
 # One answer for all (see paths.is_at_or_under()): the root has all
 _is_at_or_under = paths.is_at_or_under
+
+
+def _dirs(count):
+    return "%d dir%s" % (count, "" if count == 1 else "s")
+
+
+def _spread(items, count):
+    """count of items (all, if there are no more), spread over them: the first, the last, and evenly
+    between, in their order"""
+    if len(items) <= count:
+        return list(items)
+    if count == 1:
+        return [items[0]]
+    return [items[round(i * (len(items) - 1) / (count - 1))] for i in range(count)]
 
 

@@ -144,7 +144,18 @@ treepicker's `--notify`, `_on_key()`: the picked files, or else the selected fil
 describing and placing) or the menu (Describe: describing only; Ask where:
 both). `Ctrl-I` and Ask where ask anew about the files asked about before (`ask_in_background(anew=True)`,
 `_forget()`: what Claude said, and the contents compared, are dropped, and `ai.describe()`/`recommend()`
-skip their cache entries, `anew=`); quitting waits for it (`_finish_describing()`). `Ctrl-X` (`OPEN_KEY`, `opening.KEY`)
+skip their cache entries, `anew=`); quitting waits for it (`_finish_describing()`).
+`Ctrl-I` on a dir with nothing picked (not the root) asks about the dir as a whole instead
+(`ask_dir_in_background()`, a thread per dir: `_describe()` of `DIR_FILES_DESCRIBED` of its files
+spread over them (`_spread()`), `_compare()` of all, `_dates()` of `DIR_FILES_DATED`, then
+`ai.recommend_dir()` with an `ai.Dir`: move to a path, split, or remove, and a summary). It's kept in
+`ai.json` by `ai.dir_key()` (the dir's path, file count and total size), loaded with the files'
+(`_load_cached()`, `ai.cached_dirs()`), and dropped once the dir's key changes. `_shown_as()` tags the
+dir (treepicker puts its `/` after the name, and draws the rest in its styles), `_dir_preview()` says
+it beside it, and `_act()`, when the picked files are all of the selected dir's (`_whole_dir()`, as Enter
+on it picks them), adds ASK_DIR, MOVE_DIR (to Claude's path: the files' plan keeps their paths under
+it, so `move_files()` moves the dir with one rename where nothing's there, else file by file, merging),
+MOVE_DIR_TO (`_dir_to_a_dir()`: into a picked dir, under its own name) and REMOVE_DIR. `Ctrl-X` (`OPEN_KEY`, `opening.KEY`)
 opens the selected file (`Opener.press([selected])`; the picked ones only from the menu's Open,
 which has no key; an `opening.Opener`: `xdg-open`
 in a session of its own, a queue of them on a thread of its own, a Drive file downloaded first,

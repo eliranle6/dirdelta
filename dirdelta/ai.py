@@ -1,5 +1,6 @@
 """What Claude (MODEL) says of files: a short description of each (which reads them), and where in
-a sorted tree it belongs (by their names, sizes and descriptions: it reads nothing), for sorting an inbox (see inbox.py). Through the Claude Agent SDK, which runs Claude Code, and so the
+a sorted tree it belongs (by their names, sizes and descriptions: it reads nothing), and of a dir of
+them as a whole, where it goes (recommend_dir()), for sorting an inbox (see inbox.py). Through the Claude Agent SDK, which runs Claude Code, and so the
 laptop's logged-in Claude (or ANTHROPIC_API_KEY, if set).
 
 Claude reads the files itself, with its Read tool (text, images, PDFs), and with no other tool: it
@@ -47,6 +48,14 @@ RECOMMEND_SYSTEM_PROMPT = (
     "list, by its number.")
 
 
+DIR_SYSTEM_PROMPT = (
+    "You help sort a person's files into their sorted tree of dirs. You get a dir of their inbox: "
+    "what's in it (its size, its types of files, some of their names, dates and what a few of them are), "
+    "and the tree's dirs. Say what to do with the dir as a whole.")
+# How many of a dir's files' names Claude is given (the first, the last, and some between)
+DIR_NAMES_GIVEN = 12
+
+
 class AIError(Exception):
     pass
 
@@ -68,9 +77,24 @@ def _schema(fields, enums=None):
     return {"type": "object", "properties": {"files": {"type": "array", "items": item}}, "required": ["files"]}
 
 
+# A dir of the inbox to ask about as a whole (see recommend_dir()): its relpath (in the inbox), how
+# many files it has (under it, at any depth) and their total size, how many of each type
+# ({extension: count}), some of their relpaths (in the dir), the dates they were taken or modified
+# (the first and the last, 'YYYY-MM-DD', or None), {relpath in the dir: description} of a few, and how many
+# of them are in the sorted tree already (copies)
+Dir = collections.namedtuple('Dir', ['relpath', 'file_count', 'total_size', 'types', 'names', 'dates',
+                                     'descriptions', 'copies'])
+
+
 def path_key(path, size):
     """A cache's key of a file by where it is, for what isn't hashed yet"""
     return '%s\t%s' % (path, size)
+
+
+def dir_key(path, file_count, total_size):
+    """A cache's key of a dir by where it is, how many files it has and their total size: a dir that
+    changed is asked about again"""
+    return 'dir:%s\t%d\t%d' % (path, file_count, total_size)
 
 
 def hash_key(sha1):
@@ -142,6 +166,44 @@ def cached(files, cache_key, root_name):
         if recommendation:
             recommendations[file.relpath] = recommendation
     return descriptions, recommendations
+
+
+def recommend_dir(dir_, key, dirs, root_name, anew=False):
+    """What to do with the inbox's dir (a Dir) as a whole, in the sorted tree root_name (whose dirs
+    are dirs, as recommend()'s): {'action', 'path', 'summary', 'reason'}: 'move' it to path (its
+    relpath in the sorted tree: its name kept or a better one, in the dir it belongs in; or an
+    existing dir to merge it into), 'split' it (its files don't go together: to ask about each), or
+    'remove' it (e.g. all its files are copies of the sorted tree's; path ''); summary: what it is, in
+    a few words. From the cache (by key, dir_key()'s), unless anew, or Claude (which reads nothing).
+    Raises AIError if Claude can't be asked, or says nothing to go by."""
+    if not anew:
+        recommendation = cached_dir(key, root_name)
+        if recommendation:
+            return recommendation
+    recommendation = _ask_for_dir_recommendation(dir_, dirs, root_name)
+    with _cache_lock:
+        cache = _load_cache()
+        cache.setdefault(key, {}).setdefault('recommendations', {})[root_name] = recommendation
+        _save_cache(cache)
+    return recommendation
+
+
+def cached_dir(key, root_name):
+    """What the cache has of the dir of key (dir_key()'s) in the sorted tree root_name, as
+    recommend_dir() gives it, or None"""
+    return cached_dirs({key: key}, root_name).get(key)
+
+
+def cached_dirs(keys, root_name):
+    """{name: what the cache has of the dir} of the dirs of keys ({name: dir_key()'s}) it has
+    anything of, in the sorted tree root_name, as recommend_dir() gives it (one read of the cache)"""
+    cache = _load_cache()
+    found = {}
+    for name, key in keys.items():
+        recommendation = cache.get(key, {}).get('recommendations', {}).get(root_name)
+        if recommendation and recommendation.get('action') in ('move', 'split', 'remove'):
+            found[name] = recommendation
+    return found
 
 
 def _ask(files, cache_key, is_cached, keep, ask, progress, anew=()):
@@ -229,8 +291,7 @@ def _ask_for_recommendations(files, dirs, root_name, descriptions, copies):
                                   "; already in the sorted tree, with the same contents, at %s" %
                                   (', '.join(copies[file.relpath]),) if copies.get(file.relpath) else "")
              for number, file in enumerate(files, 1)]
-    listed = ["%s%s" % (dirpath or '. (the root)', " (e.g. %s)" % (', '.join(dirs[dirpath]),) if dirs[dirpath] else "")
-              for dirpath in sorted(dirs, key=lambda relpath: (relpath.count('/'), relpath))[:MAX_DIRS_GIVEN]]
+    listed = _listed_dirs(dirs)
     prompt = ("Where each of these files belongs in the sorted tree %s, whose dirs are listed below "
               "(relative to its root, with a few of the names of the files in each): its new path, "
               "relative to the root, a dir and a file name. The dir: an existing one from the list "
@@ -262,6 +323,60 @@ def _ask_for_recommendations(files, dirs, root_name, descriptions, copies):
         if path is not None:
             answers[relpath] = {'action': 'move', 'path': path, 'reason': reason, 'copies': known}
     return answers
+
+
+def _listed_dirs(dirs):
+    """The lines that list the sorted tree's dirs ({relpath: a few of its files' names}) for Claude,
+    the shallowest first"""
+    return ["%s%s" % (dirpath or '. (the root)', " (e.g. %s)" % (', '.join(dirs[dirpath]),) if dirs[dirpath] else "")
+            for dirpath in sorted(dirs, key=lambda relpath: (relpath.count('/'), relpath))[:MAX_DIRS_GIVEN]]
+
+
+def _ask_for_dir_recommendation(dir_, dirs, root_name):
+    """{'action', 'path', 'summary', 'reason'} of what Claude says to do with the inbox's dir (a Dir)"""
+    types = ', '.join("%d %s" % (count, extension or "without an extension")
+                      for extension, count in sorted(dir_.types.items(), key=lambda item: (-item[1], item[0])))
+    lines = ["Its name: %s" % (dir_.relpath,),
+             "%d files, %d bytes in all: %s" % (dir_.file_count, dir_.total_size, types)]
+    lines.append("Some of their names: %s" % (', '.join(dir_.names),))
+    if dir_.dates:
+        lines.append("Taken or modified from %s to %s" % dir_.dates)
+    for relpath, description in sorted(dir_.descriptions.items()):
+        lines.append("What %s is: %s" % (relpath, description))
+    if dir_.copies:
+        lines.append("%d of its files are in the sorted tree already, with the same contents" % (dir_.copies,))
+    prompt = ("What to do with this dir of the inbox, as a whole, in the sorted tree %s, whose dirs are "
+              "listed below (relative to its root, with a few of the names of the files in each).\n"
+              "- 'move': its files go together (e.g. one trip's photos, one year's tax papers): the path "
+              "relative to the root it should have there, a dir in the tree's style. Its own name, "
+              "unless that says little (e.g. 'New folder', 'DCIM', 'export'): then a name like the tree's "
+              "(e.g. with the year, or what it's of). Under the existing dir where it belongs (a new one "
+              "where none fits). Or an existing dir itself, if the files are more of what's in it, to "
+              "merge them into it.\n"
+              "- 'split': its files don't go together (e.g. a Downloads dir of this and that), so each "
+              "should be asked about on its own (an empty path).\n"
+              "- 'remove': it's all copies of the sorted tree's files, or clearly junk (an empty path).\n"
+              "And the summary: what it is, in at most %d words (e.g. 'Rome trip photos, Oct 2024'), and "
+              "the reason, in a few words.\n\n"
+              "The dir:\n%s\n\nThe sorted tree's dirs:\n%s" %
+              (root_name, MAX_DESCRIPTION_WORDS, '\n'.join(lines), '\n'.join(_listed_dirs(dirs)) or "(none yet)"))
+    schema = {"type": "object",
+              "properties": {"action": {"type": "string", "enum": ["move", "split", "remove"]},
+                             "path": {"type": "string"}, "summary": {"type": "string"},
+                             "reason": {"type": "string"}},
+              "required": ["action", "path", "summary", "reason"]}
+    result = _run_query(prompt, [], schema, max_turns=5, model=MODEL, system_prompt=DIR_SYSTEM_PROMPT)
+    action = result.get('action')
+    answer = {'action': action, 'path': '', 'summary': _short(result.get('summary', '')),
+              'reason': result.get('reason', '').strip()}
+    if action == 'move':
+        parts = [part for part in result.get('path', '').strip().split('/') if part not in ('', '.')]
+        if not parts or '..' in parts:
+            raise AIError("Claude said to move it, but not where to (%r)" % (result.get('path', ''),))
+        answer['path'] = '/'.join(parts)
+    elif action not in ('split', 'remove'):
+        raise AIError("Claude didn't say what to do with it (%r)" % (action,))
+    return answer
 
 
 def recommended_path(recommendation):
