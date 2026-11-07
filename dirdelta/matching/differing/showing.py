@@ -23,10 +23,14 @@ def mark(change):
     return {1: NEWER_MARK, -1: OLDER_MARK, 0: MARK}[newer(change)]
 
 
-def tag(change):
+def tag(change, names=None):
     """The tag after a changed file's name in src's picker: '[> newer here, 2.1 MB vs 1.9 MB]',
-    '[< older here, same size, other contents]', or '[≠ 3 B vs 4 B]' when the times don't say"""
-    parts = [{1: "newer here", -1: "older here", 0: ""}[newer(change)]]
+    '[< older here, same size, other contents]', or '[≠ 3 B vs 4 B]' when the times don't say. With
+    names (src's, dst's), for a tree of both: '[> newer in A, ...]'"""
+    if names is not None:
+        parts = [{1: "newer in %s" % (names[0],), -1: "newer in %s" % (names[1],), 0: ""}[newer(change)]]
+    else:
+        parts = [{1: "newer here", -1: "older here", 0: ""}[newer(change)]]
     if change.by == BY_SIZE:
         parts.append("%s vs %s" % _sizes(change.src_size, change.dst_size))
     else:
@@ -39,29 +43,37 @@ def style(change):
     return {1: NEWER_STYLE, -1: OLDER_STYLE, 0: STYLE}[newer(change)]
 
 
-def styled_tag(change):
+def styled_tag(change, names=None):
     """tag(), styled (style()), after two spaces, to follow a name (see picker.styled())"""
-    return picker.styled([("  ", None), (tag(change), style(change))])
+    return picker.styled([("  ", None), (tag(change, names), style(change))])
 
 
 def preview_lines(change, dst_name, can_replace=True):
     """A changed file's preview: both versions (size, modification time, which is newer), and what
     Copy does with it"""
     lines = [picker.styled([("%s Another version is in %s" % (mark(change), dst_name), 'bold,' + style(change))])]
-    newer_side = newer(change)
-    src_size, dst_size = _sizes(change.src_size, change.dst_size)
-    for title, size, mtime, is_newer in (("Here:  ", src_size, change.src_mtime, newer_side > 0),
-                                         ("There: ", dst_size, change.dst_mtime, newer_side < 0)):
-        about = [size] + (["modified " + format_time(mtime)] if mtime is not None else [])
-        lines.append(picker.styled([(title, 'bold'), (", ".join(about), None),
-                                    (" (newer)" if is_newer else "", NEWER_STYLE)]))
-    if change.by == BY_CONTENTS:
-        lines.append("Same size, other contents (by their hashes)")
+    lines += versions_lines(change, "Here:  ", "There: ")
     lines.append("")
     if can_replace:
         lines += ["Copy replaces the one there", "(%s)." % ("it goes to the trash" if not paths.is_cloud_path(dst_name)
                                                        else "Drive keeps it as an older version",)]
     lines += ["Remove removes this one only."]
+    return lines
+
+
+def versions_lines(change, src_title, dst_title):
+    """A changed file's versions: each one's title, size, modification time and whether it's newer,
+    and why they differ if not by size"""
+    lines = []
+    newer_side = newer(change)
+    src_size, dst_size = _sizes(change.src_size, change.dst_size)
+    for title, size, mtime, is_newer in ((src_title, src_size, change.src_mtime, newer_side > 0),
+                                         (dst_title, dst_size, change.dst_mtime, newer_side < 0)):
+        about = [size] + (["modified " + format_time(mtime)] if mtime is not None else [])
+        lines.append(picker.styled([(title, 'bold'), (", ".join(about), None),
+                                    (" (newer)" if is_newer else "", NEWER_STYLE)]))
+    if change.by == BY_CONTENTS:
+        lines.append("Same size, other contents (by their hashes)")
     return lines
 
 

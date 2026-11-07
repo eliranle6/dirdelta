@@ -35,6 +35,29 @@ def state_line(ways, path_a, path_b):
                                           differing.STYLE)]))
 
 
+# The sync menu's option of the combined tree (sync/combined/), the first
+SYNC_ALL = "Sync: all the differences in one tree"
+
+
+def sync_all_shown_as(ways, path_a, path_b):
+    """SYNC_ALL's label, with how many files it shows of each (or that they're still being found);
+    with none, it can't be picked"""
+    futures = [way.missing for way in ways] + [ways[0].differs]
+    if not all(future is not None and future.done() for future in futures):
+        dots = int(time.monotonic() / DOTS_INTERVAL) % 4
+        return "%s (loading%s)" % (SYNC_ALL, '.' * dots)
+    if any(future.exception() is not None for future in futures):
+        return "%s (couldn't compare them)" % (SYNC_ALL,)
+    names = replicanames.short_names([path_a, path_b])
+    only_a, only_b, differ = [len(future.result().relpaths) for future in futures[:2]] + [len(futures[2].result())]
+    if not (only_a or only_b or differ):
+        return picker.Disabled("%s: nothing differs" % (SYNC_ALL,))
+    parts = (["%d only in %s" % (only_a, names[path_a])] if only_a else []) + (
+        ["%d only in %s" % (only_b, names[path_b])] if only_b else []) + (
+        ["%d %s" % (differ, differ_word(differ))] if differ else [])
+    return "%s (%s)" % (SYNC_ALL, ", ".join(parts))
+
+
 # How often the "loading" dots of a menu option change, in seconds
 DOTS_INTERVAL = 0.4
 

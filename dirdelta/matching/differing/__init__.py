@@ -12,4 +12,5 @@ Its parts are in the modules here; the names the rest of dirdelta uses are here 
 from dirdelta.matching.differing.finding import (ALGORITHM, BY_CONTENTS, BY_SIZE, SAME_TIME, Change,  # noqa: F401
                                                  Changes, find, flipped, newer)
 from dirdelta.matching.differing.showing import (MARK, NEWER_MARK, NEWER_STYLE, OLDER_MARK, OLDER_STYLE,  # noqa: F401
-                                                 STYLE, format_time, mark, preview_lines, style, styled_tag, tag)
+                                                 STYLE, format_time, mark, preview_lines, style, styled_tag, tag,
+                                                 versions_lines)

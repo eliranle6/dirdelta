@@ -50,7 +50,12 @@ Like fzf: dirdelta starts `treepicker`, which draws on the terminal itself
   the caller's (`--key KEY TEXT`, `picker.py`'s `key_hints`, which can also say what one of
   treepicker's does there), `/`, `?` and `q`; `--help-line` adds lines to `?`'s help (the tags'
   legend). The status line no longer ends with `?: help`.
-- A blank row between the header and the tree, on every screen.
+- A blank row between the header and the tree, on every screen (with tabs, the tabs' row).
+- States rather than picks (`picker.pick_states()`, the combined sync tree): `-m` with `--state NAME
+  MARK COLOR KEY` for each state (the first is "nothing": unpicked), `--state-mark NAME GROUP MARK
+  COLOR` for a group's files, `--states FILE` (each file's allowed states, first state, group and
+  path, tab-separated, `\0`-ended), `--tab TITLE GROUPS` for each tab. treepicker prints
+  `NAME\tPATH` for each file not in the first state.
 - `--preview-below`: the selected option's preview above the status bar, its lines in colored
   parts (`picker.pick_option(previews_below=...)`, `picker.segments()`), e.g. the inbox's action
   menu's destination path, and under it a bracket per part saying where it's from. And an

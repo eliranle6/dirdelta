@@ -224,6 +224,30 @@ next to it first, so a failed copy leaves it as it was), and a Drive file gets t
 Remove removes only this side's version. The sync menu counts them ("Files only in A (12 files, and 3 that
 differ)"), and "Files that differ at the same paths in both" shows only them, from the first replica's side.
 
+### Syncing everything in one tree
+
+The sync menu's first option, "Sync: all the differences in one tree (3 only in A, 1 only in B, 2 differ)",
+shows the files only in A, the ones only in B and the ones that differ, in one tree, each tagged ("only in
+B", or the differ tag with the replicas' names: `[> newer in A, ...]`). Each starts skipped; you choose
+what to do with it, a dir's files at once:
+
+- `>` makes B like A: copies A's file to B (a green `→`), A's version replaces B's (a yellow `→`), or
+  removes B's file, which A doesn't have (a red `x`).
+- `<` makes A like B, the same the other way (`←`).
+- `s` skips it; `Space` goes to the next of these; `Esc` puts them all back to skipped.
+
+A dir shows its files' mark, or `*` if they're marked differently. So `>` on the root makes B a mirror of
+A, and `>` on one dir and `<` on another syncs each its own way. Tabs above the tree (`Tab`, `Shift-Tab`)
+show only some of them: All, Only in A, Only in B, Differ (with their counts); what's marked in one is
+the same in the others, and `Space` or a key on a dir marks only what the tab shows. The stats line
+counts each mark. A replica that can't be changed (read-only) allows only the other arrow.
+
+`Enter` shows the plan ("Copy 2 files from A to B", "Replace A's versions of 1 file with B's", "Remove
+1 file from B", with the files) to confirm, twice if it removes files; No goes back to the tree, as you
+left it. It's done in one go, on one progress screen: the copies, then the replacements (the old
+versions to the trash, or kept by Drive), then the removals (to the trash). Ctrl-C stops it, leaving what's
+after undone. (Moved files, and asking AI here, aren't in it yet: see docs/plans.md, plan C.)
+
 ### Pictures of the files
 
 In the file pickers, the selected photo (an image, a PDF's first page, a Drive file's thumbnail) shows
@@ -286,7 +310,9 @@ bin/python -m dirdelta /tmp/dd/alpha /tmp/dd/bravo             # a dry run: chan
 DRYRUN=0 bin/python -m dirdelta /tmp/dd/alpha /tmp/dd/bravo    # Copy, Remove and Rename really do
 ```
 
-The menu offers, for each direction, "Files in A, not in B" (with how many there are). Choose one,
+The menu's first option, "Sync: all the differences in one tree", shows everything that differs in one
+tree (see "Syncing everything in one tree" below). Below it, it offers, for each direction, "Files in A, not
+in B" (with how many there are), for the simple cases (e.g. a read-only replica). Choose one,
 pick files with `Space` (on a directory it picks everything under it, or while a search filters
 the tree, the matches under it), and press `Enter`. A
 directory is marked picked (`X`, red) when everything under it is, and partly picked (`-`, magenta)

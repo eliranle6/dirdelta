@@ -49,7 +49,8 @@ class OptionsTest(MainMenuTest):
         for b, rescans in ((localdiskdirtree.LocalDiskDirTree('/b', silent=True), ['Rescan /a', 'Rescan /b']),
                            (dirtree.DirTree('cloud/b'), ['Rescan /a'])):
             a = localdiskdirtree.LocalDiskDirTree('/a', silent=True)
-            self.assertEqual(self.options(a, b), ['Files only in /a', 'Files only in /b', ways.DIFFER, comparing.COMPARE] + rescans +
+            self.assertEqual(self.options(a, b), [menu_options.SYNC_ALL, 'Files only in /a', 'Files only in /b', ways.DIFFER,
+                                                  comparing.COMPARE] + rescans +
                              ['Replicas dashboard', dirsync_main.BACK])
 
     def test_back_and_q_go_back_to_the_start_menu(self):
@@ -87,7 +88,8 @@ class OptionsTest(MainMenuTest):
         self.writable = set()
         a = localdiskdirtree.LocalDiskDirTree('/a', silent=True)
         b = dirtree.DirTree('cloud/b')
-        self.assertEqual(self.options(a, b), ['Files only in /a', 'Files only in /b', ways.DIFFER, comparing.COMPARE, 'Rescan /a',
+        self.assertEqual(self.options(a, b), [menu_options.SYNC_ALL, 'Files only in /a', 'Files only in /b', ways.DIFFER,
+                                              comparing.COMPARE, 'Rescan /a',
                                               'Replicas dashboard', dirsync_main.BACK])
         title, lines = self.show.call_args.args[:2]
         self.assertEqual(title, 'Read-only')
@@ -105,6 +107,7 @@ class OptionsTest(MainMenuTest):
         a = localdiskdirtree.LocalDiskDirTree('/a', silent=True)
         b = localdiskdirtree.LocalDiskDirTree('/b', silent=True)
         self.assertEqual(self.shown(a, b), [
+            menu_options.SYNC_ALL + ' (3 only in a, 1 only in b)',
             'Files only in LocalDisk:/a (3 files)',
             'Files only in LocalDisk:/b (1 file)',
             picker.Disabled('Files that differ at the same paths in both: none'),
@@ -120,7 +123,8 @@ class OptionsTest(MainMenuTest):
         b = localdiskdirtree.LocalDiskDirTree('/b', silent=True)
         self.differ = {'d1': differing.Change(1, 2, None, None, differing.BY_SIZE),
                        'd2': differing.Change(3, 3, None, None, differing.BY_CONTENTS)}
-        self.assertEqual(self.shown(a, b)[:3], [
+        self.assertEqual(self.shown(a, b)[:4], [
+            menu_options.SYNC_ALL + ' (3 only in a, 1 only in b, 2 differ)',
             'Files only in LocalDisk:/a (3 files, and 2 that differ)',
             'Files only in LocalDisk:/b (1 file, and 2 that differ)',
             'Files that differ at the same paths in both (2 files)',
@@ -132,7 +136,7 @@ class OptionsTest(MainMenuTest):
         b = localdiskdirtree.LocalDiskDirTree('/b', silent=True)
         self.missing['/b'] = []
         self.differ = {'d1': differing.Change(1, 2, None, None, differing.BY_SIZE)}
-        self.assertEqual(self.shown(a, b)[1], 'Files only in LocalDisk:/b (0 files, and 1 that differs)')
+        self.assertEqual(self.shown(a, b)[2], 'Files only in LocalDisk:/b (0 files, and 1 that differs)')
 
     def test_the_first_line_says_whether_theyre_in_sync(self):
         a = localdiskdirtree.LocalDiskDirTree('/a', silent=True)
@@ -162,8 +166,14 @@ class OptionsTest(MainMenuTest):
         self.missing['/b'] = []
         a = localdiskdirtree.LocalDiskDirTree('/a', silent=True)
         b = localdiskdirtree.LocalDiskDirTree('/b', silent=True)
-        self.assertEqual(self.shown(a, b)[1],
+        self.assertEqual(self.shown(a, b)[2],
                          picker.Disabled('Files only in LocalDisk:/b: none, LocalDisk:/a has them all'))
+
+    def test_sync_all_cant_be_picked_when_nothing_differs(self):
+        self.missing['/a'] = self.missing['/b'] = []
+        a = localdiskdirtree.LocalDiskDirTree('/a', silent=True)
+        b = localdiskdirtree.LocalDiskDirTree('/b', silent=True)
+        self.assertEqual(self.shown(a, b)[0], picker.Disabled(menu_options.SYNC_ALL + ': nothing differs'))
 
     def test_the_files_that_differ_option_is_loading_until_theyre_found(self):
         way = ways.Way(None, None, {})

@@ -41,6 +41,11 @@ def print_progress(line):
     _is_progress_shown = True
 
 
+def is_stopped():
+    """Whether the action on the progress screen was stopped with Ctrl-C (see note_stopped())"""
+    return _is_stopped
+
+
 def note_stopped():
     """Say that an action was stopped with Ctrl-C (also on the progress screen's top line), e.g. by an
     action that catches it to say how far it got."""

@@ -118,6 +118,9 @@ class ChangeTest(unittest.TestCase):
         self.assertEqual(differing.tag(Change(3, 4, None, None, differing.BY_SIZE)), "[≠ 3 B vs 4 B]")
         # Sizes that would look the same are in bytes
         self.assertEqual(differing.tag(Change(2000, 2001, None, None, differing.BY_SIZE)), "[≠ 2000 B vs 2001 B]")
+        # In a tree of both replicas, by their names
+        self.assertEqual(differing.tag(Change(3, 3, 50, 100, differing.BY_CONTENTS), ('A', 'B')),
+                         "[< newer in B, same size, other contents]")
 
     def test_the_tags_color_says_which_side_is_newer(self):
         self.assertEqual(differing.style(Change(1, 2, 100, 50, differing.BY_SIZE)), 'blue')

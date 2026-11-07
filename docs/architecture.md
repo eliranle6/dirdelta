@@ -185,6 +185,10 @@ The map (each module's docstring's first line; generated from the code):
     - `status.py`: What's shown of the hashing jobs (hashing.py): each file's tag, and how far each job got
     - `waiting.py`: Waiting for the hashing, and whether it's all right to quit meanwhile
 - `sync/`: Sync mode: the menu of a pair of replicas, its two ways, and what it does to the replicas
+  - `combined/`: The combined tree of a sync (CombinedSync): everything that differs in one tree, each file in a state, one plan
+    - `doing.py`: Doing a combined tree's plan, on one progress screen: copies, replacements, then removals
+    - `plan.py`: The combined tree's entries (in groups), their states (skip, →, ←), and the plan they make
+    - `screen.py`: The combined tree's screen: the tree, its tabs, tags and previews, the plan to confirm, doing it
   - `comparing.py`: Comparing, on request, the files two replicas both have at the same paths, of the same size, whose hashes aren't both known
   - `dirsync_main.py`: Sync mode: the menu of a pair of replicas, until it goes back to the start menu
   - `options.py`: The sync menu's lines: whether the two are in sync, and each way's option
@@ -246,6 +250,7 @@ The map (each module's docstring's first line; generated from the code):
     - `previews.py`: What's sent to treepicker's preview column
     - `running.py`: Running treepicker: its arguments, its input and output, and the threads beside it (see command.py)
     - `selection.py`: Where a picker's selection is, as treepicker says, and the keys it was told of
+    - `states.py`: Putting files in states (pick_states()), rather than picking them: e.g. what a sync does with each
     - `styles.py`: Text in styles and colors, as treepicker shows it: styled(), segments(), highlighted()
     - `trees.py`: Picking a node of a tree (pick_from_tree()) or a path under a dir (pick_under_dir())
     - `updates.py`: What's sent to a running picker as it changes: how its items are shown, the status of what goes on behind it, ...
@@ -826,6 +831,23 @@ it, moves the old one to the trash (`gio trash`), then renames the copy over it;
 `_upload()` with the file's id does `files.update` with the new media (a new version). Either tells
 its listeners remove then add. Copy back (`COPY_BACK`, "Replace it with its version in B") is the
 same into src (`_copy_back()`); which were done is what an `_Added` listener heard.
+
+### `sync/combined/` (plan C)
+`CombinedSync(replica_a, replica_b, path_a, path_b, only_a, only_b, changes)`, run from the sync menu's
+first option (`options.SYNC_ALL`, `SyncMenu._sync_all()`, with each way's `missing` and A's `differs`).
+`plan.groups()` puts each relpath in a group (`only-a`, `only-b`, `differ`); `plan.allowed()` says which
+states each group allows: `to-b` changes B (copying into it needs `replica_ops.can_copy(a, b)`, removing
+from it `is_writable(b)`), `to-a` A. The tree is `picker.pick_states()` (treepicker's `--state`,
+`--state-mark` per group, `--states FILE`, `--tab`), all skipped at first; its tags are the file's name and
+"only in X", or `differing.styled_tag(change, names)`; a differing file's preview, both versions
+(`differing.versions_lines()`) and what each arrow does. `plan.plan_of(chosen, grouped)` makes a `Plan` (six
+lists: copy_to_b, copy_to_a, replace_b, replace_a, remove_from_a, remove_from_b); the confirmation is its
+`summary()` with the files, then "Are you sure?" if it removes; No goes back to the tree with the states
+(and the selection) kept. `doing.do()` does it on one progress screen in that order: copies (`copy_in()`),
+replacements (`copy_in()` inside `replacing()`), removals (`remove_files()`, a local replica's inside
+`trashing()`); the trees catch Ctrl-C themselves (`messages.note_stopped()`), so it checks
+`messages.is_stopped()` before each step. What it did live is noted in the log's `Changes`. Then the sync
+menu finds the differences again.
 
 ### `sync/way/` (`interactive_dir_sync.py` and its mixins)
 `InteractiveDirSync(src, dst)`. Its diff (`_missing()`): for two local dirs,
