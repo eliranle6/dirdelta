@@ -248,6 +248,41 @@ Ordered by how easy they are, easiest first (2026-10-30). Ideas 3, 2.1 and 6 hav
        laptop's (`/mnt/win` is the laptop's Windows drive), so the replicas it serves may
        differ.
 
+9. **Hash media last, and offer to leave it out** (2026-11-07). Today a replica's files are hashed in
+   find's order (a dir's files together), after the ones asked for first. Images, audio and video are
+   the least likely to change, and the most likely to be the same file when the name and size match,
+   so hashing them tells the least for the time it takes (they're also the biggest). So:
+   9.1 Order: the other files first, media last (by extension, as `images.py`'s lists, plus audio and
+       video's), each group in find's order as now.
+   9.2 The offer to hash (`hashes_screen/offering.py`'s "Hash unhashed files?") asks whether to hash
+       all, or all but the media, with the counts and sizes of each ("3,200 files, 4 GB; and 18,000
+       media files, 210 GB"); the dashboard can add the media later. A job then has a filter, and
+       its progress counts only what it's to hash (so "100% hashed" still means done).
+   9.3 What it costs: media files left unhashed are matched by name and size only (`elsewhere`),
+       and same-sized media at the same paths stay "not verified" (the sync pickers' warning).
+   Effort: small to medium (the job's order and filter, the offer's question, the dashboard, tests).
+
+10. **Suggested actions in the combined tree: a record of each sync, or policies** (2026-11-07, not
+    sure it's needed yet). Plan C's combined tree starts every entry at skip. Two ways to start
+    them at the right action instead:
+    10.1 A record of each pair's last sync (Unison's archive): the files both sides held when
+         they agreed, with sizes and hashes. Each difference is checked against it: a file only
+         in A that the record lacks was added in A (copy it to B), one the record has was removed
+         from B (remove it from A); a file that differs was changed on one side (its version
+         wins) or both (a conflict, left to the user). It doesn't matter how the files were
+         changed (outside dirdelta too), as each side is compared with what they agreed on.
+         What it misses: the first sync of a pair (no record yet); a file added on both sides and
+         removed from one between two syncs (taken as added); local files not hashed yet (changed
+         by size and time only). A difference left skipped keeps its old record, not the current
+         state. A rename is a remove and an add whose hashes match: the same rename on the other
+         side. (Checking each side's trash, for removed files, was considered and not wanted.)
+    10.2 Policies per pair, kept with a favorite (Backup A→B: copy A's, skip B's, A's wins;
+         Mirror A→B: remove B's too; Two-way: copy both, the newer wins). Simpler, but the user
+         changes files on both sides, so no one direction fits, and "the newer wins" can't tell
+         an edit on both sides from one on one side.
+    Effort: medium (10.1: the record's file, written after a sync and checked before the
+    next; the picker's initial states from it).
+
 ## Refactors (no behavior change)
 
 What the 2026-10-31 peer review's fixes left out (2026-11-02), easiest first. None was found to be

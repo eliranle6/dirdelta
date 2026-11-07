@@ -197,16 +197,19 @@ marked by where it is and given an action:
 Then one review of the whole plan ("copy 120 to B, 1.2 GB; copy 4 to A; remove 30 from B; replace
 2"), one confirmation (twice if it removes), and it's done in one go.
 
-### Defaults, so most entries need no decision
+### Views: tabs over the one tree
 
-A pair has a policy, chosen in the menu and kept with a favorite pair in `replicas.json`:
+A row of tabs under the header, each with its count: `All 156 │ Only in A 120 │ Only in B 30 │
+Differ 2 │ Moved 4`. Tab and Shift-Tab switch. A tab is a filter of the one tree (like a search's),
+so an action set in one tab is the same in the others, and the stats line counts all of them.
+Two trees side by side were considered: today's pickers already show the other replica's tree
+beside the tree, and the merged tree shows each entry once.
 
-- **Backup A→B**: `A>` copy, `<B` skip, `≠` A wins.
-- **Mirror A→B**: `A>` copy, `<B` remove, `≠` A wins.
-- **Two-way**: `A>` copy, `<B` copy, `≠` the newer wins (skipped if unclear), `↔` skipped.
-- **Manual**: everything skipped.
+### Every entry starts at skip
 
-Each entry starts at its policy's action; the user changes only the exceptions.
+No policies and no record of past syncs (idea 10, not sure they're needed): an entry starts at
+skip, as a file starts unpicked today. Keys set a state on the selection, a dir's on all under it,
+so a dir is decided at once.
 
 ### treepicker: a few states per node
 
@@ -231,8 +234,8 @@ Today a node is picked or not. This needs states from a list given by the caller
 
 - `matching/combined.py`: the entries, from what each way lacks (`sync/ways.py`: dirdiff for two
   local dirs, else the trees' diff), plan A's changes (`differing.find()`, with `differing.newer()`
-  for Two-way's "the newer wins") and `matching/elsewhere/`'s sure matches for moved pairs (by hash
-  only, so only certain ones are `↔`). Each with its allowed actions and its policy default.
+  for the `>`/`<` marks) and `matching/elsewhere/`'s sure matches for moved pairs (by hash
+  only, so only certain ones are `↔`). Each with its allowed actions and its tab.
 - The screen as a package like `sync/way/`, e.g. `sync/combined/`: one object, its steps in mixins.
 - `picker.pick_actions()`, in a module of its own in `ui/picker/` (e.g. `states.py`): runs
   treepicker with the states, and returns `{relpath: state}`.
@@ -247,15 +250,14 @@ Today a node is picked or not. This needs states from a list given by the caller
 
 ### Phases, each usable on its own
 
-1. treepicker's states (and its tests), with the demo program.
-2. The combined tree of only-in-A and only-in-B, with the Manual and Backup policies.
-3. Mirror and Two-way, kept per favorite pair.
-4. `≠` entries (plan A's `differing.find()` gives them).
-5. `↔` moved pairs.
-6. "Ask AI" (`a`) sets states from its plan (`claude/aiplan/`'s steps), so the plan is reviewed in
+1. treepicker's states and tabs (and their tests), with the demo program.
+2. The combined tree of only-in-A and only-in-B.
+3. `≠` entries (plan A's `differing.find()` gives them).
+4. `↔` moved pairs.
+5. "Ask AI" (`a`) sets states from its plan (`claude/aiplan/`'s steps), so the plan is reviewed in
    this same tree.
 
-Effort: large. Phase 1 is the biggest single change in treepicker so far. Phases 2-3 are a medium
+Effort: large. Phase 1 is the biggest single change in treepicker so far. Phases 2-4 are a medium
 change in dirdelta.
 
 ## Order
