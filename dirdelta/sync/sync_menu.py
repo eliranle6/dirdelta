@@ -65,6 +65,8 @@ class SyncMenu(object):
                         if localdiskdirtree.is_local(replica)}
         # The files of the same size compared on request (see comparing.py), a's way
         self.compared = {}
+        for way in self.ways:
+            way.compared = self.compared
         self.jobs = hashes_screen.jobs_of([self.replica_a, self.replica_b])
         # When to find the files that differ again, as the replicas' files are hashed
         self.as_hashed = comparing.AsHashed(self.jobs)

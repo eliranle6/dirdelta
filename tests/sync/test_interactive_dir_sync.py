@@ -210,7 +210,9 @@ class InteractiveDirSyncTest(unittest.TestCase):
         self._browse([], [])
         title, lines, _ = messages.show.call_args.args
         self.assertEqual(title, 'Nothing to do')
-        self.assertEqual(lines, ["%s has all of %s's files." % (self.dst_root, self.src_root)])
+        self.assertEqual(lines[0], "%s has all of %s's files." % (self.dst_root, self.src_root))
+        # Its files of the same size, not hashed, are taken as the same, and it says so
+        self.assertIn("3 files of the same size in both not shown", lines[2])
 
     def test_after_the_last_ones_are_done_it_says_so_and_ends(self):
         with mock.patch('dirdelta.util.dryrun.DRYRUN', False):

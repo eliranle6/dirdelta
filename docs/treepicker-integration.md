@@ -88,6 +88,9 @@ Like fzf: dirdelta starts `treepicker`, which draws on the terminal itself
   treepicker shows it in a column on the right (2/5
   of the width, on a screen 60 columns wide or more), which `p` hides or shows,
   redrawn as previews come in.
+- `--footer TEXT` (`pick_files(footer=...)`): lines below the tree, above the status bar, plain or
+  styled as the previews' (`picker.styled()`); the sync's pickers say there how many files of the
+  same size they don't show, their contents unverified (`sync/comparing.py`).
 - A picture of the selected file below that text (`pick_files(images=...)`, `images.py`): a
   `--preview` entry starting with `\x03`, then the path, a tab, and the image (`W H` and its pixels in
   hex). treepicker keeps the last 64, scales the selected one's down to the rows the text leaves

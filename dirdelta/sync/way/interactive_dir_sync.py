@@ -52,18 +52,20 @@ class InteractiveDirSync(Browsing, Keys, Lists, Menu, Copying, AskAI, Renames,
     SIDE_REMOVE_KEY = 'd'
 
     def __init__(self, src, dst, missing=None, src_index=None, dst_index=None, checked=None, changes=None,
-                 differs=None, only_differing=False):
+                 differs=None, only_differing=False, compared=None):
         """missing: a future (concurrent.futures.Future) of find_missing(src, dst), e.g. found in
         the background, to use rather than finding it again; differs, likewise, of
         differing.find(src, dst). With only_differing, only the files that differ are shown. src_index, dst_index: the replicas'
         elsewhere.Index, kept by the caller so they're built once, and kept up to date here.
         checked: which of src's files' matches have the same contents (see
-        elsewhere.check_contents()), kept by the caller too, so each is compared once."""
+        elsewhere.check_contents()), kept by the caller too, so each is compared once. compared: the
+        files of the same size compared on request (see differing.find()), kept by the caller."""
         self._src = src
         self._dst = dst
         self._missing_future = missing
         self._differs_future = differs
         self._only_differing = only_differing
+        self._compared = compared
         # The files shown that differ ({relpath: differing.Change}), as of the last diff
         self.differs = {}
         self.src_index = src_index or elsewhere.Index(src)

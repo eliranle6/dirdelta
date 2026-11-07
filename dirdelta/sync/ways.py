@@ -54,6 +54,9 @@ class Way(object):
         # Which of src's files' matches in dst have the same contents (see
         # elsewhere.check_contents()), kept so each is compared once
         self.checked = {}
+        # The files of the same size compared on request (see comparing.py), the sync menu's (a
+        # same-sized pair's sizes are the same either way)
+        self.compared = {}
         self.missing = None
         # A future of the files both have that differ, src's way (differing.find(), see find_all())
         self.differs = None

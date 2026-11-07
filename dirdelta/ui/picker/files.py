@@ -10,7 +10,7 @@ from dirdelta.ui.picker.updates import null_terminated
 def pick_files(rootpath, relpaths, header='', picked=None, label=None, keys='', selected=None,
                previews=None, on_selection=None, shown_as=None, notify_keys='', on_notify=None,
                enter_picks_selection=False, key_hints=(), help_lines=(), twice_keys='', side=None,
-               none_picked_key_hints=(), images=None):
+               none_picked_key_hints=(), images=None, footer=''):
     """Let the user pick some of the files at relpaths (relative to rootpath, each dir's files and
     subdirs together, in the order to show them, as dirdiff lists them). Picking a dir picks the
     files under it. Returns a Picked: the picked ones (of relpaths), in that order, and where the
@@ -52,13 +52,16 @@ def pick_files(rootpath, relpaths, header='', picked=None, label=None, keys='', 
     key_hints: [(key, what it does here)] for the keys row at the bottom (the caller's keys, or
     treepicker's, e.g. ('Enter', 'choose what to do')); help_lines: lines for its ? help (e.g. what
     the tags mean); none_picked_key_hints: what the keys row says instead of those while nothing's
-    picked.
+    picked. footer: lines below the tree, above the bottom lines, e.g. a warning (each plain, or
+    styled: see styled()).
 
     Only the files are sent: treepicker adds their dirs, so no tree is built here."""
     if images is not None:
         help_lines = list(help_lines) + key_help_lines([(IMAGES_KEY, "show or hide the files' pictures (and from now on)")])
     args = (['--typed', '--root', rootpath, '-m', '--print-selection'] + header_args(header) +
             help_args(key_hints, help_lines))
+    if footer:
+        args += ['--footer', footer]
     if enter_picks_selection:
         args.append('--enter-picks-selection')
     for key, text in none_picked_key_hints:

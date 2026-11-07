@@ -26,6 +26,17 @@ def shown_as(differs):
     return "%s, not compared yet (%s)" % (label, replica_ops.files_text(len(differs.result().uncompared)))
 
 
+def unverified_line(changes):
+    """The sync pickers' warning, below the tree, that changes' (differing.find()'s) uncompared files
+    aren't shown, taken as the same though their contents weren't compared: '' if there are none"""
+    uncompared = getattr(changes, 'uncompared', ())
+    if not uncompared:
+        return ''
+    return picker.styled([("\u26a0 %s of the same size in both not shown: taken as the same, contents not "
+                           "verified yet (the sync menu's Compare checks them)" %
+                           (replica_ops.files_text(len(uncompared)),), 'yellow')])
+
+
 def compare(relpaths, src, dst, src_index, dst_index, compared):
     """Compare src's files at relpaths with dst's at the same paths, on a progress screen (stoppable:
     what was compared is kept), noting in compared {relpath: (src's size, dst's size, whether

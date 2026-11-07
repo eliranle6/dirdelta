@@ -19,6 +19,12 @@ class FilesTest(PickerTest):
         self.assertEqual(args, ['-0', '--typed', '--root', '/some/root', '-m', '--print-selection',
                                 '--header', 'Pick\nfiles', '-'])
 
+    def test_a_footer_goes_below_the_tree(self):
+        self.answer('a/1.txt')
+        picker.pick_files('/r', ['a/1.txt'], footer='Careful')
+        args, _ = self.call()
+        self.assertEqual(args[args.index('--footer') + 1], 'Careful')
+
     def test_pick_files_returns_only_files_and_the_selection(self):
         # The selection first; a dir is printed when all its files are picked
         self.answer('b/sub|b|b/2.txt|b/sub|b/sub/3.txt')

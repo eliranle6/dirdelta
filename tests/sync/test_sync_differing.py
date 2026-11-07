@@ -43,11 +43,11 @@ class DifferingTest(unittest.TestCase):
         with open(os.path.join(root, relpath)) as f:
             return f.read()
 
-    def browse(self, picks, answers, only_differing=False):
+    def browse(self, picks, answers, only_differing=False, compared=None):
         picks = list(picks)
         src = localdiskdirtree.LocalReplica(self.src_root)
         dst = localdiskdirtree.LocalReplica(self.dst_root)
-        self.sync = Sync(src, dst, only_differing=only_differing)
+        self.sync = Sync(src, dst, only_differing=only_differing, compared=compared)
         with helpers.scripted_files_picker(lambda relpaths: picks.pop(0)) as self.pick_files, \
                 helpers.answering_option_picker(answers) as self.pick_option:
             self.sync.browse()
@@ -64,6 +64,17 @@ class DifferingTest(unittest.TestCase):
         self.assertNotIn('sub/b.txt', shown)
         # Once: then only with what's sent of them again
         self.assertNotIn('a.txt', self.pick_files.call_args.kwargs['shown_as']())
+
+    def test_the_ones_of_the_same_size_not_compared_are_said_not_to_be_shown(self):
+        # same.txt: the same size in both, neither hashed
+        self.browse([None], [])
+        footer = picker.unstyled(self.pick_files.call_args.kwargs['footer'])
+        self.assertIn("1 file of the same size in both not shown", footer)
+        self.assertIn("contents not verified yet", footer)
+        # Once compared (the sync menu's Compare), it isn't
+        size = os.path.getsize(os.path.join(self.src_root, 'same.txt'))
+        self.browse([None], [], compared={'same.txt': (size, size, True)})
+        self.assertEqual(self.pick_files.call_args.kwargs['footer'], '')
 
     def test_their_previews_show_both_versions_and_the_missing_ones_where_dst_may_have_them(self):
         self.browse([None], [])

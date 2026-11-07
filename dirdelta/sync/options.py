@@ -88,7 +88,7 @@ class Action(object):
         sync = interactive_dir_sync.InteractiveDirSync(way.src, way.dst, way.missing,
                                                        way.indexes[way.src], way.indexes[way.dst],
                                                        way.checked, self.changes, way.differs,
-                                                       self.only_differing)
+                                                       self.only_differing, way.compared)
         with picker.place(DIFFER if self.only_differing else "Files in %s" % (replicanames.full(self.src_path),)):
             sync.browse()
         self.was_read_anew = sync.was_read_anew

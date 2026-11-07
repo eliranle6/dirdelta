@@ -809,7 +809,10 @@ while both sizes are still those. The sync menu's "Compare the files of the same
 `elsewhere.same_contents()` (two local files side by side, a Drive file by its hash) into `compared`,
 then finds them again. And while the local replicas are hashed, `comparing.AsHashed` has the menu's
 `shown_as` find them again (only them, `ways.find_differing()`) once more files were hashed and a job
-is done, or `REFIND_INTERVAL` (30 s) went by, as long as some are uncompared; `compared` is
+is done, or `REFIND_INTERVAL` (30 s) went by, as long as some are uncompared. Each way's picker
+says how many it doesn't show for that (`comparing.unverified_line()`, as `pick_files(footer=...)`,
+treepicker's `--footer`, and on the "Nothing to do" screen); the ways share the menu's `compared`
+(`Way.compared`), so a way's own diff after an action uses it too; `compared` is
 cleared when a replica is rescanned or read anew. `flipped()` is the other way's; `tag()`, `styled_tag()` and `preview_lines()` are what
 the pickers show, their mark and color by `newer()` (modification times, within 2 s the same):
 `>` blue newer here, `<` red older here, `≠` yellow when the times don't say (`mark()`, `style()`). `sync/ways.py`'s

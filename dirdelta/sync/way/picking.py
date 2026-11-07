@@ -11,6 +11,7 @@ from dirdelta.matching import elsewhere
 from dirdelta.screens import aiplan_screen
 from dirdelta.screens import archive_screen
 from dirdelta.screens import hashes_screen
+from dirdelta.sync import comparing
 from dirdelta.sync import replica_ops
 from dirdelta.ui import contextmenu
 from dirdelta.ui import filescreen
@@ -95,7 +96,9 @@ class Picking(object):
                 on_selection=functools.partial(elsewhere.check_contents, only_missing, self._src,
                                                self.src_index, self.dst_index, self.checked),
                 # A photo's picture below that
-                images=images.of_replica(self._src))
+                images=images.of_replica(self._src),
+                # That some files both have are taken as the same, unverified
+                footer=comparing.unverified_line(self.differs))
         finally:
             if marks is not None:
                 marks.close()

@@ -3,8 +3,10 @@ import os
 
 from dirdelta.matching import differing
 from dirdelta.matching import elsewhere
+from dirdelta.sync import comparing
 from dirdelta.sync import replica_ops
 from dirdelta.ui import messages
+from dirdelta.ui import picker
 from dirdelta.util import dryrun
 
 
@@ -35,6 +37,9 @@ class Lists(object):
             lines = ["No file at the same path in %s and %s differs." % (self._src.displayname(), self._dst.displayname())]
         else:
             lines = ["%s has all of %s's files." % (self._dst.displayname(), self._src.displayname())]
+        unverified = comparing.unverified_line(self.differs)
+        if unverified:
+            lines += ["", picker.unstyled(unverified)]
         messages.show("Nothing to do", lines, dryrun.label())
 
     def _listed(self):
@@ -52,7 +57,7 @@ class Lists(object):
         try:
             if self._differs_future is not None:
                 return self._differs_future.result()
-            return differing.find(self._src, self._dst)
+            return differing.find(self._src, self._dst, self._compared)
         except Exception as error:
             messages.show("Warning: couldn't compare the files both have",
                           ["So the ones that differ aren't shown: %s" % (error,)], dryrun.label(), 'red')

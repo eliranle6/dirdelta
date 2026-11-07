@@ -212,7 +212,9 @@ finds the ones older here). Copy over a newer version, or Replace over one, says
 local file's once it's hashed, a Drive file's always); files aren't read just for this, unless you ask. The
 ones of the same size whose hashes aren't both known yet are counted in the sync menu's "Compare the files of
 the same size at the same paths in both, not compared yet (N files)", which reads and compares them (Ctrl-C
-stops it, keeping what was compared); and while the local replicas are hashed in the background, the menu
+stops it, keeping what was compared). Until then each direction's picker says, on a yellow line above
+its status bar, how many such files it doesn't show ("⚠ 2 files of the same size in both not shown:
+taken as the same, contents not verified yet"); and while the local replicas are hashed in the background, the menu
 finds them again as their hashes come in (at once when a replica's hashing is done, else every 30 s at
 most). Modification times only say which is newer. The preview shows both versions.
 
