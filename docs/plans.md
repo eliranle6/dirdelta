@@ -1,15 +1,19 @@
 # Plans: changed files, sorting into several replicas, one combined tree
 
-Plans for three of `improvement-ideas.md`'s ideas, not implemented yet (2026-11-06): its 3 (files at
-the same path that differ), 2.1 (an inbox's sort reaching the sorted tree's other replicas), and 6
-(one tree of both replicas' differences). Plan A comes first: plan C uses what it adds.
+Plans for three of `improvement-ideas.md`'s ideas (2026-11-06): its 3 (files at the same path that
+differ), 2.1 (an inbox's sort reaching the sorted tree's other replicas), and 6 (one tree of both
+replicas' differences). Plan A is done (2026-11-06); B and C aren't. Their module names were checked
+against the code's packages on 2026-11-07.
 
 ## A. Files at the same path that differ (idea 3)
 
 Done (2026-11-06). What differs from the plan below: no dirdiff option (step 1): both replicas'
 `listed()` gives each file's size and known hash in one listing (find, and one query of the hash
 cache), for a local one and Drive's alike, found once per pair in the background
-(`dirsync_main._find_all()`). The tag's mark and color say which side is newer: `[> newer here, ...]` in blue, `[< older here, ...]`
+(`sync/ways.py`'s `find_all()`, by `differing.find()`). The sync menu's entry is "Files that differ
+at the same paths in both", rather than "Changed files (N)"; Copy replaces the other side's version
+by `copy_in()` inside the tree's `replacing()` (a local file to the trash, a Drive file a new
+version). The tag's mark and color say which side is newer: `[> newer here, ...]` in blue, `[< older here, ...]`
 in red (and a "Careful" line in the confirmation), `≠` in yellow when the times don't say; not green
 (hashed) nor orange (progress). Copy
 back is the action menu's "Replace it with its version in B". Comparing same-sized files with a hash
@@ -155,14 +159,20 @@ has.
 
 ### Steps
 
-1. `replicas.py`: `followers` and `pending`, saved and loaded, with tests.
-2. `propagate.py`: `check(root, relpaths, follower)` → (to copy, there already, different,
-   unreachable), and `bring(root, relpaths, follower)`, using the trees' copy methods
-   (`copy_in`, `copy_inner_entries_from_dirtree`) on the progress screen, with the dry run.
-3. `inbox.py`: after `_approve()` moves or copies into the sorted tree (live), the summary screen,
-   then copying or queueing.
-4. The start menu's "behind" line, and the offer when a pending replica is reached.
-5. The dashboard's "Other replicas of this tree".
+1. `known/replicas.py` (and `known/replica_history.py`, where each sorted tree's recent dirs are):
+   `followers` and `pending`, saved and loaded, with tests.
+2. A module of its own, e.g. `sync/followers.py`: `check(root, relpaths, follower)` → (to copy,
+   there already, different, unreachable: not mounted by `known/mounts`' `unmounted()`, read-only by
+   `sync/replica_ops.is_writable()`), and `bring(root, relpaths, follower)`, using the trees' `copy_in()`
+   on the progress screen, with the dry run. "Different" can use the hashes known on both sides, as
+   `matching/differing.py` does.
+3. The inbox sort (`inbox/`): after `_approve()` (`inbox/actions/approval.py`) moves or copies into
+   the sorted tree (live), the summary screen, then copying or queueing. Its plan is per file even
+   for a dir moved whole, so the relpaths are all there. The followers' part as a collaborator object
+   of InboxSort's (like `self._claude`), not another mixin.
+4. The start menu's "behind" line (`screens/choose_replicas.py`), and the offer when a pending
+   replica is reached.
+5. The dashboard's "Other replicas of this tree" (`screens/hashes_screen/dashboard_*`).
 6. Tests: check/bring with local followers (temp dirs) and a fake Drive, queueing for an unmounted
    one, conflicts never overwritten.
 
@@ -181,7 +191,7 @@ marked by where it is and given an action:
 | Only in A | `A>` | copy to B · remove from A · skip |
 | Only in B | `<B` | copy to A · remove from B · skip |
 | In both, different (plan A) | `≠` | A's wins · B's wins · skip |
-| Moved (same contents at different paths, `elsewhere.py`'s sure matches) | `↔` | rename B's to A's path · rename A's to B's · skip |
+| Moved (same contents at different paths, `matching/elsewhere/`'s sure matches) | `↔` | rename B's to A's path · rename A's to B's · skip |
 
 Then one review of the whole plan ("copy 120 to B, 1.2 GB; copy 4 to A; remove 30 from B; replace
 2"), one confirmation (twice if it removes), and it's done in one go.
@@ -218,29 +228,36 @@ Today a node is picked or not. This needs states from a list given by the caller
 
 ### dirdelta
 
-- `combined.py`: the entries, from dirdiff both ways, plan A's changed list and `elsewhere`'s sure
-  matches for moved pairs (by hash only, so only certain ones are `↔`). Each with its allowed
-  actions and its policy default.
-- `picker.pick_actions()`: runs treepicker with the states, and returns `{relpath: state}`.
+- `matching/combined.py`: the entries, from what each way lacks (`sync/ways.py`: dirdiff for two
+  local dirs, else the trees' diff), plan A's changes (`differing.find()`, with `differing.newer()`
+  for Two-way's "the newer wins") and `matching/elsewhere/`'s sure matches for moved pairs (by hash
+  only, so only certain ones are `↔`). Each with its allowed actions and its policy default.
+- The screen as a package like `sync/way/`, e.g. `sync/combined/`: one object, its steps in mixins.
+- `picker.pick_actions()`, in a module of its own in `ui/picker/` (e.g. `states.py`): runs
+  treepicker with the states, and returns `{relpath: state}`.
 - The review: `view_files` of the plan grouped by action, then the confirmation(s).
 - Doing it, each phase on the progress screen, in an order where a failure loses nothing: renames,
-  then copies, then replacements (old versions to the trash), then removals. The existing
-  `move_files`, `copy_inner_entries_from_dirtree`, `remove_files` do the work.
-- The main menu: "Sync (all differences in one tree)" first, with the per-direction entries kept
-  below it for simple cases (e.g. a read-only replica, where only one way makes sense).
+  then copies, then replacements (old versions to the trash, or a new Drive version), then
+  removals. The existing `move_files()`, `copy_in()` (inside `replacing()` for replacements, as the
+  way's `_copy_back()` does) and `remove_files()` do the work.
+- The sync menu (`sync/sync_menu.py`, its lines in `sync/options.py`): "Sync (all differences in one
+  tree)" first, an option with an id as the others, with the per-direction entries kept below it for
+  simple cases (e.g. a read-only replica, where only one way makes sense).
 
 ### Phases, each usable on its own
 
 1. treepicker's states (and its tests), with the demo program.
 2. The combined tree of only-in-A and only-in-B, with the Manual and Backup policies.
 3. Mirror and Two-way, kept per favorite pair.
-4. `≠` entries (after plan A).
+4. `≠` entries (plan A's `differing.find()` gives them).
 5. `↔` moved pairs.
-6. "Ask AI" (`a`) sets states from its plan, so the plan is reviewed in this same tree.
+6. "Ask AI" (`a`) sets states from its plan (`claude/aiplan/`'s steps), so the plan is reviewed in
+   this same tree.
 
 Effort: large. Phase 1 is the biggest single change in treepicker so far. Phases 2-3 are a medium
 change in dirdelta.
 
 ## Order
 
-A, then C, since C's `≠` entries are A's. B is independent of both, and can come before or after.
+A is done, so C no longer waits for it (its `≠` entries are A's). B is independent of C, and can come
+before or after it; B is the smaller of the two.
