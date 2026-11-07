@@ -228,25 +228,32 @@ differ)"), and "Files that differ at the same paths in both" shows only them, fr
 
 The sync menu's first option, "Sync: all the differences in one tree (3 only in A, 1 only in B, 2 differ)",
 shows the files only in A, the ones only in B and the ones that differ, in one tree, each tagged ("only in
-B", or the differ tag with the replicas' names: `[> newer in A, ...]`). Each starts skipped; you choose
+B", or the differ tag with the replicas' names: `[> newer in A, ...]`). A file only in A whose contents
+are known to be in B at another path (by the hashes known, or compared before: nothing's read for it) is
+one entry, a moved one, at A's path: "moved: in B at pics/2026/trip.jpg". Each starts skipped; you choose
 what to do with it, a dir's files at once:
 
 - `>` makes B like A: copies A's file to B (a green `→`), A's version replaces B's (a yellow `→`), or
   removes B's file, which A doesn't have (a red `x`).
 - `<` makes A like B, the same the other way (`←`).
+- For a moved file, `>` moves B's file to A's path, `<` moves A's to B's (cyan arrows).
 - `s` skips it; `Space` goes to the next of these; `Esc` puts them all back to skipped.
 
 A dir shows its files' mark, or `*` if they're marked differently. So `>` on the root makes B a mirror of
 A, and `>` on one dir and `<` on another syncs each its own way. Tabs above the tree (`Tab`, `Shift-Tab`)
-show only some of them: All, Only in A, Only in B, Differ (with their counts); what's marked in one is
+show only some of them: All, Only in A, Only in B, Differ, Moved (with their counts); what's marked in one is
 the same in the others, and `Space` or a key on a dir marks only what the tab shows. The stats line
 counts each mark. A replica that can't be changed (read-only) allows only the other arrow.
 
-`Enter` shows the plan ("Copy 2 files from A to B", "Replace A's versions of 1 file with B's", "Remove
+`a` asks AI (as in the other pickers): say what you want ("sync the photos both ways, keep the newer
+notes"), and its plan sets those files' arrows in the tree, with its reasons in the preview column, for
+you to review and change before `Enter`.
+
+`Enter` shows the plan ("Move 1 file in B to where A has them", "Copy 2 files from A to B", "Replace A's versions of 1 file with B's", "Remove
 1 file from B", with the files) to confirm, twice if it removes files; No goes back to the tree, as you
-left it. It's done in one go, on one progress screen: the copies, then the replacements (the old
+left it. It's done in one go, on one progress screen: the moves, the copies, then the replacements (the old
 versions to the trash, or kept by Drive), then the removals (to the trash). Ctrl-C stops it, leaving what's
-after undone. (Moved files, and asking AI here, aren't in it yet: see docs/plans.md, plan C.)
+after undone.
 
 ### Pictures of the files
 

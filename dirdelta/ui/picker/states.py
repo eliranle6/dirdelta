@@ -16,19 +16,19 @@ StateEntry = collections.namedtuple('StateEntry', ['relpath', 'group', 'allowed'
 # A tab above the tree: its title, and the groups of files it shows (empty: all)
 Tab = collections.namedtuple('Tab', ['title', 'groups'], defaults=((),))
 
-# What pick_states() returns: where the selection was ('' the root), and each file's state but the
-# first's ({relpath: name})
-StatesPicked = collections.namedtuple('StatesPicked', ['selected', 'states'])
+# What pick_states() returns: where the selection was ('' the root), each file's state but the
+# first's ({relpath: name}), and the key that ended it ('' for Enter)
+StatesPicked = collections.namedtuple('StatesPicked', ['selected', 'states', 'key'], defaults=('',))
 
 
 def pick_states(rootpath, entries, states, tabs=(), header='', label=None, selected=None, shown_as=None,
-                previews=None, key_hints=(), help_lines=(), footer=''):
+                previews=None, key_hints=(), help_lines=(), footer='', keys=''):
     """Let the user put each of the files of entries (StateEntry, relative to rootpath, as pick_files() takes
     relpaths) in one of states (State, the first, e.g. skip, being "nothing"): Space puts the selected
     file (a dir's files) in the next state it allows, and a state's key in that one. tabs: Tab, each
     showing some groups of the files. Returns a StatesPicked once the user is done (Enter, with a file
-    in a state other than the first), or None if they quit. selected, shown_as, previews, label,
-    key_hints, help_lines, footer: as pick_files()'s."""
+    in a state other than the first, or one of keys, which end it too, with the states so far), or None
+    if they quit. selected, shown_as, previews, label, key_hints, help_lines, footer: as pick_files()'s."""
     args = (['--typed', '--root', rootpath, '-m', '--print-selection'] + header_args(header) +
             help_args(key_hints, help_lines))
     for state in states:
@@ -42,6 +42,8 @@ def pick_states(rootpath, entries, states, tabs=(), header='', label=None, selec
         args += ['--footer', footer]
     if selected is not None:
         args += ['--select', selected or '.']
+    if keys:
+        args += ['--expect', keys]
     with tempfile.NamedTemporaryFile('wb', prefix='dirdelta-states-') as states_file:
         states_file.write(null_terminated('%s\t%s\t%s\t%s' % (','.join(entry.allowed), entry.state, entry.group,
                                                               entry.relpath) for entry in entries))
@@ -51,9 +53,12 @@ def pick_states(rootpath, entries, states, tabs=(), header='', label=None, selec
                                  label=label, previews=previews)
     if printed is None:
         return None
+    key = ''
+    if keys:
+        key, printed = printed[0], printed[1:]
     selected, printed = printed[0], printed[1:]
     chosen = {}
     for line in printed:
         name, _, relpath = line.partition('\t')
         chosen[relpath] = name
-    return StatesPicked('' if selected == '.' else selected, chosen)
+    return StatesPicked('' if selected == '.' else selected, chosen, key)

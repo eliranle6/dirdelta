@@ -170,8 +170,12 @@ class SyncMenu(object):
         warnings = list(dict.fromkeys(line for found in missing for line in (found.warning or [])))
         if warnings:
             messages.show("Warning: couldn't read everything", warnings, dryrun.label(), 'red')
+        # The moved files, by the hashes known (or what was compared before): nothing's read
+        messages.print_line("Finding the moved files...")
+        moved = combined.find_moved(missing[0].relpaths, missing[1].relpaths, self.replica_a,
+                                    self.indexes[self.replica_a], self.indexes[self.replica_b], self.ways[0].checked)
         sync = combined.CombinedSync(self.replica_a, self.replica_b, self.replica_a_path, self.replica_b_path,
-                                     missing[0].relpaths, missing[1].relpaths, changes, self.changes)
+                                     missing[0].relpaths, missing[1].relpaths, changes, self.changes, moved)
         with picker.place("Sync"):
             return sync.run()
 

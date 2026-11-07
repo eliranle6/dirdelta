@@ -26,11 +26,11 @@ WAITING_INTERVAL = 1
 SCREEN_MARGIN = 6
 
 
-def ask(task, default='', label=None):
+def ask(task, default='', label=None, review=True):
     """Ask what's wanted of the task's files (default: how it starts, to edit), and the AI, showing what
     it answers: its answer to a question, or its plan to review. Returns (what they typed, the
     aiplan.Steps they approved), or (what they typed, None) if none are, and (default, None) if they
-    typed nothing."""
+    typed nothing. Without review, all the plan's steps, for the caller to show them for review."""
     if aiplan.too_many(task):
         messages.show("Too many files for the AI", [
             "That's %s, and it can be told of %d at most: pick some of them, then ask again." %
@@ -62,7 +62,7 @@ def ask(task, default='', label=None):
         if not plan.answer:
             messages.show("The AI has no plan", [plan.summary or "It said nothing to do."], dryrun.label())
         return instruction, None
-    return instruction, _review(task, plan, label)
+    return instruction, _review(task, plan, label) if review else plan.steps
 
 
 def _what_its_told(task):

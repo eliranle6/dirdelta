@@ -7,9 +7,12 @@ import unittest
 from unittest import mock
 
 import helpers
+from dirdelta.claude import aiplan
 from dirdelta.known import log_entries
 from dirdelta.matching import differing
+from dirdelta.matching import elsewhere
 from dirdelta.sync.combined import doing
+from dirdelta.sync.combined import moved
 from dirdelta.sync.combined import plan as plans
 from dirdelta.sync.combined import screen
 from dirdelta.trees import dirtree
@@ -30,7 +33,7 @@ class PlanTest(unittest.TestCase):
         chosen = {'a1': plans.TO_B, 'd/a2': plans.TO_A, 'b1': plans.TO_B, 'c': plans.TO_A}
         self.assertEqual(plans.plan_of(chosen, self.grouped),
                          plans.Plan(copy_to_b=['a1'], copy_to_a=[], replace_b=[], replace_a=['c'],
-                                    remove_from_a=['d/a2'], remove_from_b=['b1']))
+                                    remove_from_a=['d/a2'], remove_from_b=['b1'], move_in_b=[], move_in_a=[]))
         chosen = {'b1': plans.TO_A, 'c': plans.TO_B, 'a1': plans.SKIP}
         plan = plans.plan_of(chosen, self.grouped)
         self.assertEqual((plan.copy_to_a, plan.replace_b, plans.removals(plan)), (['b1'], ['c'], 0))
@@ -38,8 +41,19 @@ class PlanTest(unittest.TestCase):
 
     def test_the_summary_says_each_thing_done(self):
         plan = plans.plan_of({'a1': plans.TO_B, 'd/a2': plans.TO_B, 'b1': plans.TO_B, 'c': plans.TO_A}, self.grouped)
-        self.assertEqual(plans.summary(plan, 'A', 'B'), ["Copy 2 files from A to B", "Replace A's versions of 1 file with B's",
-                                                         "Remove 1 file from B"])
+        self.assertEqual(plans.summary(plan, 'A', 'B'), [("Copy 2 files from A to B", ['a1', 'd/a2']),
+                                                         ("Replace A's versions of 1 file with B's", ['c']),
+                                                         ("Remove 1 file from B", ['b1'])])
+
+    def test_a_moved_pair_is_one_entry_at_as_path_moved_either_way(self):
+        moved = {'d/a2': 'b1'}
+        grouped = plans.groups(['a1', 'd/a2'], ['b1', 'b2'], differing.Changes(), moved)
+        self.assertEqual(grouped, {'a1': plans.ONLY_A, 'd/a2': plans.MOVED, 'b2': plans.ONLY_B})
+        plan = plans.plan_of({'d/a2': plans.TO_B}, grouped, moved)
+        self.assertEqual((plan.move_in_b, plan.move_in_a), ([('b1', 'd/a2')], []))
+        plan = plans.plan_of({'d/a2': plans.TO_A}, grouped, moved)
+        self.assertEqual(plan.move_in_a, [('d/a2', 'b1')])
+        self.assertEqual(plans.summary(plan, 'A', 'B'), [("Move 1 file in A to where B has them", ['d/a2 -> b1'])])
 
     def test_entries_keep_each_dirs_files_together_and_the_states_chosen(self):
         entries = plans.entries(self.grouped, plans.allowed(dirtree.DirTree('/a'), dirtree.DirTree('/b')), {'b1': plans.TO_A})
@@ -75,20 +89,59 @@ class AllowedTest(ReplicasTest):
     def test_an_arrow_is_allowed_only_where_it_can_be_done(self):
         local, cloud = self.replica_a, dirtree.DirTree('cloud/b')
         both = (plans.SKIP, plans.TO_B, plans.TO_A)
-        self.assertEqual(plans.allowed(local, cloud), {plans.ONLY_A: both, plans.ONLY_B: both, plans.DIFFER: both})
-        # A read-only replica can't be changed: no copying into it, nor removing from it
+        self.assertEqual(plans.allowed(local, cloud), {plans.ONLY_A: both, plans.ONLY_B: both, plans.DIFFER: both,
+                                                       plans.MOVED: both})
+        # A read-only replica can't be changed: no copying into it, removing from it nor moving in it
         with mock.patch('os.access', return_value=False):
             self.assertEqual(plans.allowed(local, cloud), {plans.ONLY_A: (plans.SKIP, plans.TO_B),
                                                            plans.ONLY_B: (plans.SKIP, plans.TO_B),
-                                                           plans.DIFFER: (plans.SKIP, plans.TO_B)})
-        # Nor are files copied within Drive (removing is)
+                                                           plans.DIFFER: (plans.SKIP, plans.TO_B),
+                                                           plans.MOVED: (plans.SKIP, plans.TO_B)})
+        # Nor are files copied within Drive (removing and moving are)
         other_cloud = dirtree.DirTree('cloud/c')
         self.assertEqual(plans.allowed(cloud, other_cloud), {plans.ONLY_A: (plans.SKIP, plans.TO_A),
                                                              plans.ONLY_B: (plans.SKIP, plans.TO_B),
-                                                             plans.DIFFER: (plans.SKIP,)})
+                                                             plans.DIFFER: (plans.SKIP,), plans.MOVED: both})
+
+
+class MovedTest(ReplicasTest):
+    def find(self, checked):
+        return moved.find(['new/a.txt', 'gone.txt'], ['b.txt', 'old/b2.txt'], self.replica_a, elsewhere.Index(self.replica_a),
+                          elsewhere.Index(self.replica_b), checked)
+
+    def test_a_pair_is_only_where_the_contents_are_known_the_same(self):
+        self.assertEqual(self.find({}), {})
+        self.assertEqual(self.find({'gone.txt': {'old/b2.txt': True}}), {'gone.txt': 'old/b2.txt'})
+        self.assertEqual(self.find({'gone.txt': {'old/b2.txt': False}}), {})
+
+    def test_by_the_hashes_known(self):
+        # Hashed on both sides (as a hashing job would): the same, whatever their names
+        for root, relpath in ((self.path_a, 'gone.txt'), (self.path_b, 'old/b2.txt')):
+            with open(os.path.join(root, relpath), 'w') as f:
+                f.write('the same')
+        hashes = {os.path.join(self.path_a, 'gone.txt'): 'h', os.path.join(self.path_b, 'old/b2.txt'): 'h'}
+        with mock.patch('dirdelta.matching.elsewhere.index.Index.known',
+                        lambda index, relpath: {'sha1': hashes[index.replica.local_path(relpath)]}
+                        if index.replica.local_path(relpath) in hashes else {}), \
+                mock.patch('dirdelta.matching.elsewhere.index.Index.files_hashed',
+                           lambda index, algorithm, value: [relpath for relpath in ('old/b2.txt',)
+                                                            if index.replica is self.replica_b and value == 'h']):
+            self.assertEqual(self.find({}), {'gone.txt': 'old/b2.txt'})
+
+    def test_duplicates_arent_paired(self):
+        checked = {'gone.txt': {'old/b2.txt': True}, 'new/a.txt': {'old/b2.txt': True}}
+        self.assertEqual(self.find(checked), {})
 
 
 class DoingTest(ReplicasTest):
+    def test_moves_go_first(self):
+        plan = plans.Plan(copy_to_b=[], copy_to_a=[], replace_b=[], replace_a=[], remove_from_a=[], remove_from_b=[],
+                          move_in_b=[('old/b2.txt', 'gone.txt')])
+        with mock.patch('dirdelta.util.dryrun.DRYRUN', False):
+            doing.do(plan, self.replica_a, self.replica_b)
+        self.assertEqual(self.read(self.path_b, 'gone.txt'), 'old/b2.txt')
+        self.assertFalse(os.path.exists(os.path.join(self.path_b, 'old/b2.txt')))
+
     def test_copies_replaces_and_removes_each_way(self):
         plan = plans.Plan(copy_to_b=['new/a.txt'], copy_to_a=['b.txt'], replace_b=[], replace_a=['both.txt'],
                           remove_from_a=['gone.txt'], remove_from_b=['old/b2.txt'])
@@ -159,6 +212,44 @@ class ScreenTest(ReplicasTest):
     def test_tabs_are_for_the_groups_that_have_files(self):
         self.run_screen([None], [], changes=differing.Changes())
         self.assertEqual([tab.title for tab in self.pick_states.call_args.kwargs['tabs']], ['All', 'Only in A', 'Only in B'])
+
+    def test_a_moved_pair_has_its_tab_and_says_where_b_has_it(self):
+        sync = screen.CombinedSync(self.replica_a, self.replica_b, self.path_a, self.path_b, ['gone.txt'], ['old/b2.txt'],
+                                   differing.Changes(), moved={'gone.txt': 'old/b2.txt'})
+        pick_states = mock.Mock(return_value=None)
+        with mock.patch('dirdelta.ui.picker.pick_states', pick_states):
+            sync.run()
+        self.assertEqual([tab.title for tab in pick_states.call_args.kwargs['tabs']], ['All', 'Moved'])
+        self.assertEqual([entry.relpath for entry in pick_states.call_args.args[1]], ['gone.txt'])
+        self.assertEqual(picker.unstyled(pick_states.call_args.kwargs['shown_as']()['gone.txt']),
+                         "gone.txt  moved: in B at old/b2.txt")
+
+    def test_the_ais_steps_set_the_arrows_to_review_in_the_tree(self):
+        steps = [aiplan.Step(plans.TO_B, 'new/a.txt', None, "it's new"), aiplan.Step(plans.TO_A, 'both.txt', None, "B's is newer")]
+        with mock.patch('dirdelta.screens.aiplan_screen.ask', return_value=('sync the new ones', steps)) as ask:
+            self.run_screen([picker.StatesPicked('new', {'b.txt': plans.TO_A}, 'a'), None], [])
+        task = ask.call_args.args[0]
+        self.assertFalse(ask.call_args.kwargs['review'])
+        notes = {file.relpath: file.note for file in task.files}
+        self.assertEqual(notes['b.txt'], 'only in B')
+        self.assertTrue(notes['both.txt'].startswith('in both, different: '))
+        self.assertEqual(task.focus, ['new/a.txt'])
+        again = self.pick_states.call_args_list[1]
+        states = {entry.relpath: entry.state for entry in again.args[1]}
+        # Its steps, and what was set before
+        self.assertEqual((states['new/a.txt'], states['both.txt'], states['b.txt']), (plans.TO_B, plans.TO_A, plans.TO_A))
+        self.assertIn("The AI set the arrows of 2 files", picker.unstyled(again.kwargs['footer']))
+
+    def test_the_ai_cant_set_an_arrow_that_isnt_allowed(self):
+        sync = screen.CombinedSync(self.replica_a, self.replica_b, self.path_a, self.path_b, ['gone.txt'], [],
+                                   differing.Changes())
+        with mock.patch('dirdelta.sync.replica_ops.is_writable', side_effect=lambda replica: replica is not self.replica_a):
+            allowed = plans.allowed(self.replica_a, self.replica_b)
+        task = sync._ai_task(allowed)
+        checks = {action.name: action.check for action in task.actions}
+        # A read-only: no removing from it
+        self.assertIsNotNone(checks[plans.TO_A]('gone.txt', None))
+        self.assertIsNone(checks[plans.TO_B]('gone.txt', None))
 
     def test_nothing_to_do_says_so(self):
         sync = screen.CombinedSync(self.replica_a, self.replica_b, self.path_a, self.path_b, [], [], differing.Changes())

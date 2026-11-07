@@ -2,7 +2,7 @@
 
 Plans for three of `improvement-ideas.md`'s ideas (2026-11-06): its 3 (files at the same path that
 differ), 2.1 (an inbox's sort reaching the sorted tree's other replicas), and 6 (one tree of both
-replicas' differences). Plan A is done (2026-11-06), C's phases 1-3 too (2026-11-07); B isn't. Their module names were checked
+replicas' differences). Plan A is done (2026-11-06), C too (2026-11-07); B isn't. Their module names were checked
 against the code's packages on 2026-11-07.
 
 ## A. Files at the same path that differ (idea 3)
@@ -182,15 +182,17 @@ summary screen and the queue.
 
 ## C. One combined tree of both replicas' differences (idea 6)
 
-Phases 1-3 done (2026-11-07): the sync menu's first option, "Sync: all the differences in one tree"
+Done (2026-11-07): the sync menu's first option, "Sync: all the differences in one tree"
 (`sync/combined/`, `picker.pick_states()`, treepicker's `--state`, `--state-mark`, `--states`, `--tab`).
 What differs from the plan below: three states, not an action per kind of entry: skip, `to-b` (`>`,
 make B like A) and `to-a` (`<`, make A like B), whatever the entry is; the mark says what it does
 there (`--state-mark` per group): a green arrow copies, a yellow one replaces, a red `x` removes. So
 every entry allows the same states (but what a read-only replica can't have), Space and the keys
-work alike on a dir of mixed entries, and `>` on the root mirrors A onto B. No rename (no moved
-pairs yet), and the review is the confirmation's summary with the files listed (no `view_files`).
-V (a range) isn't there with states. Phases 4 (moved pairs) and 5 (AI) are left.
+work alike on a dir of mixed entries, and `>` on the root mirrors A onto B; a moved pair's arrows
+move B's file to A's path or A's to B's. Moved pairs are by the contents known only (hashes, or
+compared before), with no reading (`sync/combined/moved.py`). The review is the confirmation's
+summary with the files listed (no `view_files`). AI (`a`) sets the arrows of its plan's steps, its
+reasons in the previews, without aiplan_screen's own review. V (a range) isn't there with states.
 
 ### What it is
 
@@ -272,5 +274,4 @@ change in dirdelta.
 
 ## Order
 
-A is done, and so is most of C. What's left of C (moved pairs, then AI) and B are independent of each
-other; B is the bigger.
+A and C are done; B is left.

@@ -40,6 +40,12 @@ class StatesTest(PickerTest):
         args, _ = self.call()
         self.assertEqual(args[args.index('--select') + 1], 'b/2.txt')
 
+    def test_a_key_ends_it_with_the_states_so_far(self):
+        self.answer('a|b|to-b\ta/1.txt')
+        self.assertEqual(self.pick(keys='a'), picker.StatesPicked('b', {'a/1.txt': 'to-b'}, 'a'))
+        args, _ = self.call()
+        self.assertEqual(args[args.index('--expect') + 1], 'a')
+
     def test_quitting_returns_none(self):
         self.answer('', exit_code=1)
         self.assertIsNone(self.pick())

@@ -1,5 +1,5 @@
 """Doing a combined tree's plan: on one progress screen, in an order where being stopped (Ctrl-C) or
-failing loses nothing: the copies, then the replacements (the old versions to the trash, or kept by
+failing loses nothing: the moves (within a replica), the copies, then the replacements (the old versions to the trash, or kept by
 Drive), then the removals (a local replica's to the trash)"""
 import contextlib
 import os
@@ -14,7 +14,8 @@ def do(plan, replica_a, replica_b, changes=None):
     """Do the plan (see plan.Plan) to replica_a and replica_b, noting what was done live in changes (a
     log_entries.Changes, if given)"""
     name_a, name_b = replica_a.displayname(), replica_b.displayname()
-    steps = [(_copy, plan.copy_to_b, replica_a, replica_b, False), (_copy, plan.copy_to_a, replica_b, replica_a, False),
+    steps = [(_move, plan.move_in_b, replica_b, None, False), (_move, plan.move_in_a, replica_a, None, False),
+             (_copy, plan.copy_to_b, replica_a, replica_b, False), (_copy, plan.copy_to_a, replica_b, replica_a, False),
              (_copy, plan.replace_b, replica_a, replica_b, True), (_copy, plan.replace_a, replica_b, replica_a, True),
              (_remove, plan.remove_from_a, replica_a, None, False), (_remove, plan.remove_from_b, replica_b, None, False)]
     title = "Syncing %s and %s" % (name_a, name_b) + (" (a dry run)" if dryrun.DRYRUN else "")
@@ -29,7 +30,7 @@ def do(plan, replica_a, replica_b, changes=None):
             if step is _copy:
                 _copy(relpaths, replica, other, changes, is_replacing)
             else:
-                _remove(relpaths, replica, changes)
+                step(relpaths, replica, changes)
 
 
 def _entries(relpaths, replica):
@@ -48,6 +49,14 @@ def _copy(relpaths, src, dst, changes, is_replacing=False):
     if not dryrun.DRYRUN and changes is not None:
         done = [relpath for relpath in relpaths if dst.has_file(relpath)]
         changes.note(dst.displayname(), 'copied', len(done), src.displayname())
+
+
+def _move(moves, replica, changes):
+    """Move the replica's files, each of moves (relpath, new_relpath), a whole dir's as one"""
+    messages.print_line("Moving %s in %s" % (replica_ops.files_text(len(moves)), replica.displayname()))
+    done = replica.move_files(moves)
+    if not dryrun.DRYRUN and changes is not None:
+        changes.note(replica.displayname(), 'moved', len(done))
 
 
 def _remove(relpaths, replica, changes):

@@ -186,9 +186,12 @@ The map (each module's docstring's first line; generated from the code):
     - `waiting.py`: Waiting for the hashing, and whether it's all right to quit meanwhile
 - `sync/`: Sync mode: the menu of a pair of replicas, its two ways, and what it does to the replicas
   - `combined/`: The combined tree of a sync (CombinedSync): everything that differs in one tree, each file in a state, one plan
-    - `doing.py`: Doing a combined tree's plan, on one progress screen: copies, replacements, then removals
+    - `ask_ai.py`: Asking AI what to do with the combined tree's files: its plan's steps set their arrows, to review in the tree
+    - `doing.py`: Doing a combined tree's plan, on one progress screen: moves, copies, replacements, then removals
+    - `moved.py`: The moved pairs: a file only in A and one only in B with the same contents, as far as is known
     - `plan.py`: The combined tree's entries (in groups), their states (skip, →, ←), and the plan they make
-    - `screen.py`: The combined tree's screen: the tree, its tabs, tags and previews, the plan to confirm, doing it
+    - `screen.py`: The combined tree's screen: the tree, the plan to confirm, doing it
+    - `showing.py`: What the combined tree shows: its header, tabs, footer, keys and help, tags and previews
   - `comparing.py`: Comparing, on request, the files two replicas both have at the same paths, of the same size, whose hashes aren't both known
   - `dirsync_main.py`: Sync mode: the menu of a pair of replicas, until it goes back to the start menu
   - `options.py`: The sync menu's lines: whether the two are in sync, and each way's option
@@ -835,19 +838,27 @@ same into src (`_copy_back()`); which were done is what an `_Added` listener hea
 ### `sync/combined/` (plan C)
 `CombinedSync(replica_a, replica_b, path_a, path_b, only_a, only_b, changes)`, run from the sync menu's
 first option (`options.SYNC_ALL`, `SyncMenu._sync_all()`, with each way's `missing` and A's `differs`).
-`plan.groups()` puts each relpath in a group (`only-a`, `only-b`, `differ`); `plan.allowed()` says which
+`moved.find()` pairs a file only in A with one only in B whose contents are known to be the same
+(`elsewhere`'s `Matcher.compared()`: the hashes known of both, and A's way's `checked`; nothing's read),
+one to one (duplicates aren't paired). `plan.groups()` puts each relpath in a group (`only-a`, `only-b`,
+`differ`, `moved`: a pair at A's path, B's left out); `plan.allowed()` says which
 states each group allows: `to-b` changes B (copying into it needs `replica_ops.can_copy(a, b)`, removing
 from it `is_writable(b)`), `to-a` A. The tree is `picker.pick_states()` (treepicker's `--state`,
 `--state-mark` per group, `--states FILE`, `--tab`), all skipped at first; its tags are the file's name and
 "only in X", or `differing.styled_tag(change, names)`; a differing file's preview, both versions
 (`differing.versions_lines()`) and what each arrow does. `plan.plan_of(chosen, grouped)` makes a `Plan` (six
-lists: copy_to_b, copy_to_a, replace_b, replace_a, remove_from_a, remove_from_b); the confirmation is its
+lists: copy_to_b, copy_to_a, replace_b, replace_a, remove_from_a, remove_from_b, and the moves
+move_in_b, move_in_a: (relpath, new_relpath)); the confirmation is its
 `summary()` with the files, then "Are you sure?" if it removes; No goes back to the tree with the states
-(and the selection) kept. `doing.do()` does it on one progress screen in that order: copies (`copy_in()`),
+(and the selection) kept. `doing.do()` does it on one progress screen: moves (`move_files()`), copies (`copy_in()`),
 replacements (`copy_in()` inside `replacing()`), removals (`remove_files()`, a local replica's inside
 `trashing()`); the trees catch Ctrl-C themselves (`messages.note_stopped()`), so it checks
 `messages.is_stopped()` before each step. What it did live is noted in the log's `Changes`. Then the sync
-menu finds the differences again.
+menu finds the differences again. `a` (an `--expect` key, `pick_states(keys=...)`) asks AI
+(`ask_ai.AskAI`): an `aiplan.Task` of every entry (its note: what it is) with two actions, `to-b` and
+`to-a` (each checked against `plan.allowed()`), its focus the files under the selection;
+`aiplan_screen.ask(review=False)` returns all its steps, which set the entries' states, their reasons
+shown in the previews, and a line below the tree says so: the review is the tree itself.
 
 ### `sync/way/` (`interactive_dir_sync.py` and its mixins)
 `InteractiveDirSync(src, dst)`. Its diff (`_missing()`): for two local dirs,

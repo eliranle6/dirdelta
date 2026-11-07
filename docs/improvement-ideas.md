@@ -174,8 +174,8 @@ Ordered by how easy they are, easiest first (2026-10-30). Ideas 3, 2.1 and 6 hav
        folder they went into (at the start, from the menu, or `Ctrl-R` in the file picker) picks them up, and the laptop's replica gets them by a sync
        from `cloud/...`.
 
-6. **One combined diff tree of both replicas, decided per file or dir.** Mostly done (2026-11-07,
-   plan C's phases 1-3: `sync/combined/`); moved pairs and asking AI there are left (see plans.md).
+6. **One combined diff tree of both replicas, decided per file or dir.** Done (2026-11-07, plan C:
+   `sync/combined/`, with moved pairs and asking AI).
    Before, the flow was per
    direction: the main menu offers each way's files ("Files in A, not in B"), and its picker
    acts on picks (copy, remove, rename), so a decision about a file is spread over the two
