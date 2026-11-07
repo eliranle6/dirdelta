@@ -6,6 +6,7 @@ from unittest import mock
 from dirdelta.known import replicanames
 from dirdelta.sync import dirsync_main
 from dirdelta.sync import options as menu_options
+from dirdelta.matching import differing
 from dirdelta.sync import replica_ops
 from dirdelta.trees import localdiskdirtree
 from dirdelta.ui import picker
@@ -33,7 +34,13 @@ class MainMenuTest(unittest.TestCase):
         self.addCleanup(patcher.stop)
         # The files both have that differ, /a's way (none unless a test says so)
         self.differ = {}
-        patcher = mock.patch('dirdelta.matching.differing.find', side_effect=lambda src, dst: dict(self.differ))
+        # And the ones of the same size not compared (their hashes unknown), and what's compared
+        self.uncompared = []
+        self.compared_given = []
+        def find(src, dst, compared=None):
+            self.compared_given.append(dict(compared or {}))
+            return differing.Changes(self.differ, self.uncompared)
+        patcher = mock.patch('dirdelta.matching.differing.find', side_effect=find)
         patcher.start()
         self.addCleanup(patcher.stop)
 

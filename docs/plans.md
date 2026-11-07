@@ -16,8 +16,9 @@ by `copy_in()` inside the tree's `replacing()` (a local file to the trash, a Dri
 version). The tag's mark and color say which side is newer: `[> newer here, ...]` in blue, `[< older here, ...]`
 in red (and a "Careful" line in the confirmation), `≠` in yellow when the times don't say; not green
 (hashed) nor orange (progress). Copy
-back is the action menu's "Replace it with its version in B". Comparing same-sized files with a hash
-unknown, on request, is left (see improvement-ideas.md, 3).
+back is the action menu's "Replace it with its version in B". The same-sized files with a hash
+unknown are counted, and compared on request from the sync menu rather than the picker (they aren't in
+it), and found again as hashing goes on (2026-11-07, `sync/comparing.py`).
 
 ### What there is to show
 
@@ -165,7 +166,7 @@ has.
    there already, different, unreachable: not mounted by `known/mounts`' `unmounted()`, read-only by
    `sync/replica_ops.is_writable()`), and `bring(root, relpaths, follower)`, using the trees' `copy_in()`
    on the progress screen, with the dry run. "Different" can use the hashes known on both sides, as
-   `matching/differing.py` does.
+   `matching/differing/` does.
 3. The inbox sort (`inbox/`): after `_approve()` (`inbox/actions/approval.py`) moves or copies into
    the sorted tree (live), the summary screen, then copying or queueing. Its plan is per file even
    for a dir moved whole, so the relpaths are all there. The followers' part as a collaborator object

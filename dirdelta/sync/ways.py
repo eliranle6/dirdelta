@@ -17,17 +17,23 @@ def differ_word(count):
     return "differs" if count == 1 else "differ"
 
 
-def find_all(ways):
-    """Start finding (again) what each way lacks, and the files both have that differ: once, for
-    both ways (the second's, flipped)"""
+def find_all(ways, compared=None):
+    """Start finding (again) what each way lacks, and the files both have that differ (see
+    find_differing())"""
     for way in ways:
         way.find_missing()
+    find_differing(ways, compared)
+
+
+def find_differing(ways, compared=None):
+    """Start finding (again) the files both ways' replicas have that differ: once, for both ways (the
+    second's, flipped); compared: as differing.find()'s, the first way's"""
     way_a, way_b = ways
     way_a.differs, way_b.differs = concurrent.futures.Future(), concurrent.futures.Future()
 
     def find(futures=(way_a.differs, way_b.differs)):
         try:
-            changes = differing.find(way_a.src, way_a.dst)
+            changes = differing.find(way_a.src, way_a.dst, compared)
         except Exception as error:
             for future in futures:
                 future.set_exception(error)

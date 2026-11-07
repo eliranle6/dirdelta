@@ -209,8 +209,12 @@ A file both replicas have at the same path, but not alike, shows in each directi
 missing ones, tagged by which is newer (by modification time): `[> newer here, 2.1 MB vs 1.9 MB]` in blue,
 `[< older here, same size, other contents]` in red, or `[≠ 3 B vs 4 B]` in yellow when the times don't say (`/<`
 finds the ones older here). Copy over a newer version, or Replace over one, says "Careful" in its confirmation. They differ by size, or, at the same size, by their hashes when both are known (a
-local file's once it's hashed, a Drive file's always); files never read just for this. Modification times
-only say which is newer. The preview shows both versions.
+local file's once it's hashed, a Drive file's always); files aren't read just for this, unless you ask. The
+ones of the same size whose hashes aren't both known yet are counted in the sync menu's "Compare the files of
+the same size at the same paths in both, not compared yet (N files)", which reads and compares them (Ctrl-C
+stops it, keeping what was compared); and while the local replicas are hashed in the background, the menu
+finds them again as their hashes come in (at once when a replica's hashing is done, else every 30 s at
+most). Modification times only say which is newer. The preview shows both versions.
 
 Copy then replaces the other replica's version: a local one goes to the desktop's trash (the copy is made
 next to it first, so a failed copy leaves it as it was), and a Drive file gets the copy as a new version

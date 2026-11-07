@@ -18,7 +18,7 @@ Its parts are in the modules here; the names the rest of dirdelta uses are here 
 from dirdelta.matching.elsewhere.candidates import known_same, matches_of_size  # noqa: F401
 from dirdelta.matching.elsewhere.constants import (MAX_MATCHES, RENAMED_MIN_SIZE, SAME_TIME,  # noqa: F401
                                                    SURELY_MOVED, SURELY_RENAMED, Match)
-from dirdelta.matching.elsewhere.contents import check_all, check_contents, to_check  # noqa: F401
+from dirdelta.matching.elsewhere.contents import check_all, check_contents, same_contents, to_check  # noqa: F401
 from dirdelta.matching.elsewhere.index import Index  # noqa: F401
 from dirdelta.matching.elsewhere.previews import find_previews  # noqa: F401
 from dirdelta.matching.elsewhere.sure import may_be_elsewhere, sure_match, sure_matches  # noqa: F401

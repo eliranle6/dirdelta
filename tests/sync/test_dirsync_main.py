@@ -8,6 +8,7 @@ from dirdelta.drive import clouddirtree
 from dirdelta.hashes import hashing
 from dirdelta.known import replicas
 from dirdelta.matching import differing
+from dirdelta.sync import comparing
 from dirdelta.sync import dirsync_main
 from dirdelta.sync import options as menu_options
 from dirdelta.sync import replica_ops
@@ -48,7 +49,7 @@ class OptionsTest(MainMenuTest):
         for b, rescans in ((localdiskdirtree.LocalDiskDirTree('/b', silent=True), ['Rescan /a', 'Rescan /b']),
                            (dirtree.DirTree('cloud/b'), ['Rescan /a'])):
             a = localdiskdirtree.LocalDiskDirTree('/a', silent=True)
-            self.assertEqual(self.options(a, b), ['Files only in /a', 'Files only in /b', ways.DIFFER] + rescans +
+            self.assertEqual(self.options(a, b), ['Files only in /a', 'Files only in /b', ways.DIFFER, comparing.COMPARE] + rescans +
                              ['Replicas dashboard', dirsync_main.BACK])
 
     def test_back_and_q_go_back_to_the_start_menu(self):
@@ -86,7 +87,7 @@ class OptionsTest(MainMenuTest):
         self.writable = set()
         a = localdiskdirtree.LocalDiskDirTree('/a', silent=True)
         b = dirtree.DirTree('cloud/b')
-        self.assertEqual(self.options(a, b), ['Files only in /a', 'Files only in /b', ways.DIFFER, 'Rescan /a',
+        self.assertEqual(self.options(a, b), ['Files only in /a', 'Files only in /b', ways.DIFFER, comparing.COMPARE, 'Rescan /a',
                                               'Replicas dashboard', dirsync_main.BACK])
         title, lines = self.show.call_args.args[:2]
         self.assertEqual(title, 'Read-only')
@@ -107,6 +108,7 @@ class OptionsTest(MainMenuTest):
             'Files only in LocalDisk:/a (3 files)',
             'Files only in LocalDisk:/b (1 file)',
             picker.Disabled('Files that differ at the same paths in both: none'),
+            picker.Disabled('Compare the files of the same size at the same paths in both: none not compared'),
             'Rescan /a',
             'Rescan /b',
             'Replicas dashboard: files, last updates, hashes',

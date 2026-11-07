@@ -1,28 +1,10 @@
-"""The files that two replicas both have at the same path, but not alike: of other sizes, or of the
-same size with other contents by hashes known without reading the files (the hash cache's for a
-local one, Drive's for Drive's; see docs/plans.md, plan A). The same size with a hash unknown on
-either side isn't counted, so there are no false alarms. Modification times say only which one is
-newer, never whether they differ (copies made before 2026-10-29 have their copy's time).
-
-They're shown in the same pickers as the files only one has (interactive_dir_sync), with a tag: in
-each way's, as either side can win, and Copy replaces the other side's version (to the trash)."""
-import collections
+"""What's shown of the files that differ: their tags, and their previews"""
 import time
 
+from dirdelta.matching.differing.finding import BY_CONTENTS, BY_SIZE, newer
 from dirdelta.trees import paths
 from dirdelta.ui import picker
 from dirdelta.util import text
-
-# The hash both kinds of replica know: Drive's, which the hash cache keeps too
-ALGORITHM = 'sha1'
-
-# Why a file differs: its sizes, or its contents (same size, other hashes)
-BY_SIZE = 'size'
-BY_CONTENTS = 'contents'
-
-# A file of src's that dst has another version of, at the same path: each side's size and
-# modification time (None if it isn't known), and why it differs (BY_SIZE or BY_CONTENTS)
-Change = collections.namedtuple('Change', ['src_size', 'dst_size', 'src_mtime', 'dst_mtime', 'by'])
 
 # The tags' marks, by which side is newer (by modification time): '>' this one, '<' the other one,
 # and '≠' when the times don't say. A search finds them by it (e.g. /< for the ones older here).
@@ -35,50 +17,6 @@ OLDER_MARK = '<'
 STYLE = 'yellow'
 NEWER_STYLE = 'blue'
 OLDER_STYLE = 'red'
-
-# How close two modification times are to be the same, in seconds (FAT's are by 2 s)
-SAME_TIME = 2
-
-
-def find(src, dst):
-    """{relpath: Change} of the files both have at the same paths that differ, src's way, each
-    dir's together, sorted. Lists both (a local one by one find and one query of the hash cache),
-    so it can take a moment: shows nothing, so it can run in the background."""
-    src_files = src.listed(ALGORITHM)
-    dst_files = dst.listed(ALGORITHM)
-    found = {}
-    for relpath, (size, hash_) in src_files.items():
-        other = dst_files.get(relpath)
-        if other is None or paths.is_meta(relpath):
-            continue
-        other_size, other_hash = other
-        if size is None or other_size is None:
-            # e.g. Google's own files, which have none
-            continue
-        if size != other_size:
-            by = BY_SIZE
-        elif hash_ and other_hash and hash_ != other_hash:
-            by = BY_CONTENTS
-        else:
-            continue
-        found[relpath] = by
-    return {relpath: Change(src_files[relpath][0], dst_files[relpath][0], src.modified_time(relpath),
-                            dst.modified_time(relpath), found[relpath])
-            for relpath in sorted(found, key=lambda relpath: relpath.split('/'))}
-
-
-def flipped(changes):
-    """changes (find()'s) the other way: dst's files that src has another version of"""
-    return {relpath: Change(change.dst_size, change.src_size, change.dst_mtime, change.src_mtime, change.by)
-            for relpath, change in changes.items()}
-
-
-def newer(change):
-    """1 if src's version is newer, -1 if dst's is, 0 if they're as new (or it isn't known)"""
-    if change.src_mtime is None or change.dst_mtime is None or abs(change.src_mtime - change.dst_mtime) <= SAME_TIME:
-        return 0
-    return 1 if change.src_mtime > change.dst_mtime else -1
-
 
 def mark(change):
     """The tag's mark (see NEWER_MARK), by which side is newer"""

@@ -150,7 +150,9 @@ The map (each module's docstring's first line; generated from the code):
     - `read_only.py`: Why a volume is read-only, and what to do about it
     - `running.py`: Running the commands that say what's mounted, and mount
 - `matching/`: Matching files across replicas: where a missing file may be, files that differ, junk, sync state
-  - `differing.py`: The files that two replicas both have at the same path, but not alike: of other sizes, or of the same size wit...
+  - `differing/`: The files that two replicas both have at the same path, but not alike: of other sizes, or of the same size wit...
+    - `finding.py`: Finding the files two replicas both have at the same path that differ, and which is newer
+    - `showing.py`: What's shown of the files that differ: their tags, and their previews
   - `junk.py`: Junk an inbox's files may be, by their names and sizes alone (no Claude, nothing read): system files, temporar...
   - `syncstate.py`: Whether a pair of replicas is in sync, as far as dirdelta knows: what a sync of them last found (replicas.Repl...
   - `elsewhere/`: Where the other replica has a file that a replica lacks, moved or renamed, shown beside the file picker (picke...
@@ -183,6 +185,7 @@ The map (each module's docstring's first line; generated from the code):
     - `status.py`: What's shown of the hashing jobs (hashing.py): each file's tag, and how far each job got
     - `waiting.py`: Waiting for the hashing, and whether it's all right to quit meanwhile
 - `sync/`: Sync mode: the menu of a pair of replicas, its two ways, and what it does to the replicas
+  - `comparing.py`: Comparing, on request, the files two replicas both have at the same paths, of the same size, whose hashes aren't both known
   - `dirsync_main.py`: Sync mode: the menu of a pair of replicas, until it goes back to the start menu
   - `options.py`: The sync menu's lines: whether the two are in sync, and each way's option
   - `replica_ops.py`: What a sync does to its replicas outside its screens: what one lacks of the other, reading them anew, and whet...
@@ -794,15 +797,23 @@ It scans both dirs in C++ (~1s for two 119k-file dirs, where building their
 Python trees took ~6s). `programs.find(name)` finds treepicker and
 dirdiff: this copy's build (`DIRDELTA_PROGRAMS_DIR`, set by `bin/python` and make), next to the running python, `PATH`.
 
-### `differing.py`
+### `differing/`
 The files both replicas have at the same path that differ (`docs/plans.md`, plan A): `find(src, dst)`
 lists both (`listed('sha1')`: size and known hash of each, a local one by one `find` and one query of
 the hash cache) and returns `{relpath: Change(src_size, dst_size, src_mtime, dst_mtime, by)}`, `by`
-being `BY_SIZE`, or `BY_CONTENTS` for the same size with both hashes known and different (one unknown:
-not counted). `flipped()` is the other way's; `tag()`, `styled_tag()` and `preview_lines()` are what
+being `BY_SIZE`, or `BY_CONTENTS` for the same size with both hashes known and different. One
+unknown: not counted, but in the result's `uncompared` (a `Changes`, the dict with that list), unless
+`find()`'s `compared` (`{relpath: (src_size, dst_size, is_same)}`, kept by the sync menu) settles it
+while both sizes are still those. The sync menu's "Compare the files of the same size ..."
+(`sync/comparing.py`'s `compare()`, on a progress screen) compares the uncompared ones by
+`elsewhere.same_contents()` (two local files side by side, a Drive file by its hash) into `compared`,
+then finds them again. And while the local replicas are hashed, `comparing.AsHashed` has the menu's
+`shown_as` find them again (only them, `ways.find_differing()`) once more files were hashed and a job
+is done, or `REFIND_INTERVAL` (30 s) went by, as long as some are uncompared; `compared` is
+cleared when a replica is rescanned or read anew. `flipped()` is the other way's; `tag()`, `styled_tag()` and `preview_lines()` are what
 the pickers show, their mark and color by `newer()` (modification times, within 2 s the same):
-`>` blue newer here, `<` red older here, `≠` yellow when the times don't say (`mark()`, `style()`). `dirsync_main._find_all()`
-finds them once per pair, on a thread, with both ways' diffs (`_Way.differs`, a future, the second
+`>` blue newer here, `<` red older here, `≠` yellow when the times don't say (`mark()`, `style()`). `sync/ways.py`'s
+`find_all()` finds them once per pair, on a thread, with both ways' diffs (`Way.differs`, a future, the second
 way's flipped); `InteractiveDirSync` lists them with the missing files (`_listed()`, kept in
 `differs`), adds their tags to `shown_as` (once, then with what's sent again) and their previews
 before `elsewhere`'s (`_find_previews()`), and leaves them out of what's about the missing ones

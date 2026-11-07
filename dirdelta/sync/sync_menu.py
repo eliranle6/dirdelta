@@ -11,9 +11,10 @@ from dirdelta.matching import elsewhere
 from dirdelta.matching import syncstate
 from dirdelta.screens import hashes_screen
 from dirdelta.screens import label_screen
+from dirdelta.sync import comparing
 from dirdelta.sync import replica_ops
 from dirdelta.sync.options import STATE, Action, state_line
-from dirdelta.sync.ways import DIFFER, Way, find_all
+from dirdelta.sync.ways import DIFFER, Way, find_all, find_differing
 from dirdelta.trees import localdiskdirtree
 from dirdelta.ui import messages
 from dirdelta.ui import picker
@@ -62,8 +63,12 @@ class SyncMenu(object):
         self.rescans = {"Rescan %s" % (path,): replica
                              for replica, path in ((self.replica_a, self.replica_a_path), (self.replica_b, self.replica_b_path))
                         if localdiskdirtree.is_local(replica)}
-        find_all(self.ways)
+        # The files of the same size compared on request (see comparing.py), a's way
+        self.compared = {}
         self.jobs = hashes_screen.jobs_of([self.replica_a, self.replica_b])
+        # When to find the files that differ again, as the replicas' files are hashed
+        self.as_hashed = comparing.AsHashed(self.jobs)
+        self._find_all()
         # What each way found last, noted in known_replicas (once each time they're found)
         self.noted = []
 
@@ -75,7 +80,7 @@ class SyncMenu(object):
                 is_favorite = self.known_replicas.is_favorite(self.replica_a_path, self.replica_b_path)
                 favorite_options = [self.REMOVE_FAVORITE if is_favorite else self.ADD_FAVORITE]
             options = ([picker.Option(STATE, STATE, picker.Skipped(STATE)), picker.BLANK] + list(self.actions) +
-                       list(self.rescans) + list(self.refreshes) + [self.DASHBOARD] + favorite_options +
+                       [comparing.COMPARE] + list(self.rescans) + list(self.refreshes) + [self.DASHBOARD] + favorite_options +
                        ([self.LABELS] if self.known_replicas is not None else []) + [BACK])
             option = picker.pick_option(options,
                                         shown_as=self.shown_as, selected=list(self.actions)[0],
@@ -103,13 +108,21 @@ class SyncMenu(object):
         if not all(way.missing.done() and way.differs.done() for way in self.ways):
             messages.print_line("Finding the files that each lacks...")
         concurrent.futures.wait([way.missing for way in self.ways] + [way.differs for way in self.ways])
+        if option == comparing.COMPARE:
+            changes = self.ways[0].differs.result()
+            if changes.uncompared:
+                comparing.compare(changes.uncompared, self.replica_a, self.replica_b, self.indexes[self.replica_a],
+                                  self.indexes[self.replica_b], self.compared)
+                self._find_differing()
+            return
         if option in self.rescans:
             if replica_ops.rescan_replica(self.rescans[option]):
                 self.indexes[self.rescans[option]].invalidate()
                 for way in self.ways:
                     # Its files may have other contents now
                     way.checked.clear()
-                find_all(self.ways)
+                self.compared.clear()
+                self._find_all()
                 for job in hashes_screen.jobs_of([self.rescans[option]]):
                     job.scan_in_background()
             return
@@ -119,7 +132,8 @@ class SyncMenu(object):
                 for way in self.ways:
                     # Its files may have other contents now
                     way.checked.clear()
-                find_all(self.ways)
+                self.compared.clear()
+                self._find_all()
             return
         # Copying, removing and renaming change the files (unless it's a dry run), and so what each
         # lacks, and so does reading a replica anew from Drive (in the file picker)
@@ -128,10 +142,22 @@ class SyncMenu(object):
                 # The way shown cleared its own; its files may have other contents for this one too
                 if self.actions[option].was_read_anew:
                     way.checked.clear()
-            find_all(self.ways)
+            if self.actions[option].was_read_anew:
+                self.compared.clear()
+            self._find_all()
             # Files copied into a local replica (or moved in it) are hashed too
             for job in self.jobs:
                 job.scan_in_background()
+
+    def _find_all(self):
+        """Start finding (again) what each way lacks, and the files that differ"""
+        self.as_hashed.found()
+        find_all(self.ways, self.compared)
+
+    def _find_differing(self):
+        """Start finding (again) the files that differ"""
+        self.as_hashed.found()
+        find_differing(self.ways, self.compared)
 
     def note_compared(self):
         """Note what each way found last in known_replicas (once each time they're found)"""
@@ -148,7 +174,10 @@ class SyncMenu(object):
     def shown_as(self):
         """The menu's options as they're shown now: each way's count, the state line, the
         dashboard's and the refreshes' notes"""
+        if self.as_hashed.is_due(self.ways[0].differs):
+            self._find_differing()
         shown = {label: action.shown_as() for label, action in self.actions.items()}
+        shown[comparing.COMPARE] = comparing.shown_as(self.ways[0].differs)
         # Only to read: moving goes past them
         shown[STATE] = state_line(self.ways, self.replica_a_path, self.replica_b_path)
         shown[self.DASHBOARD] = "%s: files, last updates, hashes%s" % (

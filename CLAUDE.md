@@ -5,7 +5,7 @@ filesystem path or a Google Drive ("cloud") tree. What each lacks is found by
 **path only** (no content/hash comparison); then hashes (and names and sizes) find
 where the other replica may have a file, moved or renamed. For each file present in one replica but not the
 other, the user can choose to copy it across, delete it or rename it to match. The files both have at
-the same path that differ (by size, or by hashes known on both sides: `differing.py`) are shown with
+the same path that differ (by size, or by hashes known on both sides: `differing/`) are shown with
 them, tagged `>`, `<` (newer or older here) or `≠`, to copy either way over the other's version (to the trash, or a new Drive version).
 
 This is the main repo (github.com/eliranle6/dirdelta). Its pickers and menus are `treepicker`, a C++ program
@@ -174,7 +174,7 @@ them by name. A big class's tests are split by topic into modules of their own, 
 prefix), which a test module imports by name: the runner puts its folder and the ones above it, up to
 `tests/` (helpers.py), on the path.
 
-Modules are tested where it's worth it, not for the sake of a test file each (780 tests, all passing as of 2026-11-07; 150 were removed on 2026-11-06 as redundant, white-box or pinning styling) except
+Modules are tested where it's worth it, not for the sake of a test file each (785 tests, all passing as of 2026-11-07; 150 were removed on 2026-11-06 as redundant, white-box or pinning styling) except
 the thin wiring in `main.py`/`dirsync_main.py`, covered only by running the
 app. A test is worth keeping if it says what the code does for whoever uses it: not one that sets
 or reads private state, counts calls to an inner function, restates a constant or a style (colors,
@@ -249,8 +249,9 @@ Notes for whoever changes things next:
 - The diff itself is path-only (see `DirTree.get_unknown_entries_in_given_dirtree`
   in `dirdelta/trees/dirtree/`, and `dirdiff.py`) — no hashing, no size/mtime comparison.
   What it finds is then looked for elsewhere by contents (`hashes/hashing/`, `matching/elsewhere/`).
-  The files at the same paths are compared apart (`differing.py`), by the sizes and the hashes
-  already known (`listed()`), never by reading them; modification times only say which is newer.
+  The files at the same paths are compared apart (`differing/`), by the sizes and the hashes
+  already known (`listed()`), not by reading them (but on request: `sync/comparing.py`);
+  modification times only say which is newer.
 - Local dirs are listed by `localscan.scan()`, which shells out to the real `find`
   binary (one run per listing) rather than using `os.walk`.
 - Cloud state is cached to disk (`~/.cache/dirdelta/files.sqlite`) rather than

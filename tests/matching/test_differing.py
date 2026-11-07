@@ -66,7 +66,20 @@ class FindTest(unittest.TestCase):
                 path = self.write(root, relpath, 'abc' if root == self.a_root else 'xyz', 1000)
                 if value is not None:
                     hashcache.put(path, {differing.ALGORITHM: value})
-        self.assertEqual(self.find(), {'known.txt': Change(3, 3, 1000, 1000, differing.BY_CONTENTS)})
+        found = self.find()
+        self.assertEqual(found, {'known.txt': Change(3, 3, 1000, 1000, differing.BY_CONTENTS)})
+        # The one with a hash unknown isn't counted, but said
+        self.assertEqual(found.uncompared, ['half.txt'])
+
+    def test_files_compared_on_request_are_settled_while_their_sizes_are_the_same(self):
+        a = _Listed({'differs': (2, None, 5), 'same': (2, None, 5), 'grew': (2, None, 5), 'new': (2, None, 5)})
+        b = _Listed({'differs': (2, None, 9), 'same': (2, None, 9), 'grew': (2, None, 9), 'new': (2, None, 9)})
+        compared = {'differs': (2, 2, False), 'same': (2, 2, True), 'grew': (1, 2, False)}
+        found = differing.find(a, b, compared)
+        self.assertEqual(found, {'differs': Change(2, 2, 5, 9, differing.BY_CONTENTS)})
+        # Compared when its size was another: compared anew
+        self.assertEqual(found.uncompared, ['grew', 'new'])
+        self.assertEqual(differing.flipped(found).uncompared, ['grew', 'new'])
 
     def test_whats_kept_in_a_replica_isnt_one_of_its_files(self):
         self.write(self.a_root, 'meta/hashes.sqlite', 'abcdef')

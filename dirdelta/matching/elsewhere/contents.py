@@ -69,7 +69,7 @@ def check_all(relpaths, src, src_index, index, checked, progress=None):
 
 def _check(relpath, candidates, src, src_index, index, checked, should_stop):
     """Compare the contents of src's file at relpath with those of candidates (relpaths in index;
-    see _same_contents()), and if index knows its files' hashes (Drive's), look its own up there
+    see same_contents()), and if index knows its files' hashes (Drive's), look its own up there
     (any name and size), and note which are the same in checked[relpath] (not those where it
     couldn't be told, e.g. a Google file's, which has no hash). Raises dirtree.HashStopped once
     should_stop() says to, noting nothing."""
@@ -80,7 +80,7 @@ def _check(relpath, candidates, src, src_index, index, checked, should_stop):
         for algorithm, value in src_index.content_hashes(relpath, algorithms, should_stop).items():
             if value is not None:
                 found.update((match_relpath, True) for match_relpath in index.files_hashed(algorithm, value))
-    found.update((match_relpath, _same_contents(src, src_index, relpath, index, match_relpath, should_stop))
+    found.update((match_relpath, same_contents(src, src_index, relpath, index, match_relpath, should_stop))
                  for match_relpath in candidates if match_relpath not in found)
     checked[relpath] = {match_relpath: is_same for match_relpath, is_same in found.items()
                         if is_same is not None}
@@ -90,7 +90,7 @@ def _check(relpath, candidates, src, src_index, index, checked, should_stop):
 COMPARE_READ_SIZE = 1 << 20
 
 
-def _same_contents(src, src_index, relpath, index, match_relpath, should_stop):
+def same_contents(src, src_index, relpath, index, match_relpath, should_stop):
     """Whether src's file at relpath has the same contents as index's at match_relpath, or None if
     it can't be told. Two local files are read side by side, up to where they differ (no hash: it
     would read them all, and the first chunk usually tells); with a Drive file, its hash (the
