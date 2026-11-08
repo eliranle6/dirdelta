@@ -4,7 +4,7 @@ import os
 import time
 import traceback
 
-from dirdelta.ui.picker.kinds import Colored, Disabled, Skipped
+from dirdelta.ui.picker.kinds import Colored, Disabled, Skipped, Stated
 from dirdelta.ui.picker.styles import segments
 
 
@@ -83,7 +83,7 @@ def send_updates(fd, shown_as, is_done):
             changed = {item: shown for item, shown in now.items() if sent.get(item) != shown}
             if changed:
                 try:
-                    updates.write(null_terminated(_update(item, shown)
+                    updates.write(null_terminated(_update(item, shown, sent.get(item))
                                                    for item, shown in changed.items()))
                     updates.flush()
                 except BrokenPipeError:
@@ -93,9 +93,14 @@ def send_updates(fd, shown_as, is_done):
                 return
 
 
-def _update(item, shown):
-    """treepicker's --updates line showing item as shown (a string, a Disabled, a Skipped or a
-    Colored)"""
+def _update(item, shown, before=None):
+    """treepicker's --updates line showing item as shown (a string, a Disabled, a Skipped, a Colored
+    or a Stated), after before (what was sent of it last, or None). A Stated's state is sent once: its
+    text changing after doesn't put it back in that state (the user may have put it in another)."""
+    if isinstance(shown, Stated):
+        if isinstance(before, Stated) and (before.state, before.generation) == (shown.state, shown.generation):
+            return '%s\t%s' % (item, shown.text)
+        return '%s\t%s\tstate=%s' % (item, shown.text, shown.state)
     if isinstance(shown, Skipped):
         return '%s\t%s\tskipped' % (item, shown.text)
     if isinstance(shown, Disabled):

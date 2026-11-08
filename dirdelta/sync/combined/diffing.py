@@ -1,4 +1,4 @@
-"""d in the combined tree: the selected file's diff, A's version against B's (a file only one has:
+"""Ctrl-O in the combined tree: the selected file's diff, A's version against B's (a file only one has:
 against nothing), in less over the screen, if they're text"""
 import os
 import subprocess
@@ -9,7 +9,7 @@ from dirdelta.ui import opening
 from dirdelta.util import dryrun
 from dirdelta.util import text
 
-KEY = 'd'
+KEY, KEY_NAME = '\x0f', 'Ctrl-O'
 # The biggest file it's done for (a Drive one is downloaded first)
 MAX_SIZE = 10 * 1024 * 1024
 # How much of a file says whether it's text: no NUL bytes, and few control characters

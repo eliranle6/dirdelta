@@ -247,16 +247,22 @@ A, and `>` on one dir and `<` on another syncs each its own way. Tabs above the 
 the same in the others, and `Space` or a key on a dir marks only what the tab shows. The stats line
 counts each mark. A replica that can't be changed (read-only) allows only the other arrow.
 
-A differing text file's right column shows its diff below what it is: `v` switches the view (side by
-side, the changed lines marked `≠`, `<` or `>`; as `diff -u` shows it; A's version; B's version, their
-changed lines colored), `Ctrl-W l` moves into the column to scroll it (`Ctrl-W h` back), `Ctrl-P` hides
-the column. `d` shows the whole diff in `less` (`q` back), a Drive file downloaded for it.
+A differing text file's right column shows its diff below what it is: `Ctrl-T` switches the view (side
+by side, the changed lines marked `≠`, `<` or `>`; as `diff -u` shows it; A's version; B's version, their
+changed lines colored); a text file only one has, its contents. `Ctrl-W l` moves into the column to
+scroll it (`Ctrl-W h` back), `Ctrl-P` hides the column. `Ctrl-O` shows the whole diff in `less` (`q`
+back), a Drive file downloaded for it.
 
-`Ctrl-I` asks the AI what to do with the selected file (a dir: its files), as `Ctrl-I` asks Claude where an
-inbox's files go: it sets their arrows, and the right column says what it suggests for each and why (or
-that it'd leave the file as it is). `a` asks AI anything (as in the other pickers): say what you want
-("sync the photos both ways, keep the newer notes"), and its plan sets those files' arrows the same way.
-Either way you review and change them before `Enter`.
+`Ctrl-I` has the AI work out what to do with the selected file (a dir: its files) in the background, as
+`Ctrl-I` has Claude work out where an inbox's files go in a sort: you go on meanwhile. Each file says
+`(AI is looking at it...)` after its name until it's answered, then what it suggests (`[ai: ⇒ B]`, `[ai:
+leave it]`), and the right column why (a dir's: what it suggests for its files, in all); the bottom line
+says how many files it's asking about. It's told what each file is (only in A, in both and how they
+differ, moved), and may read the ones it's asked about, 10 at a time. `Ctrl-A` sets the arrows of the
+selected file (a dir: its files) as it suggests, there and then. `a` asks AI anything (as in the other
+pickers): say what you want ("sync the photos both ways, keep the newer notes"), and its plan sets those
+files' arrows, its reasons in the right column too. Either way you review and change them before
+`Enter`.
 
 `Enter` shows the plan ("Move 1 file in B to where A has them", "Copy 2 files from A to B", "Replace A's versions of 1 file with B's", "Remove
 1 file from B", with the files) to confirm, twice if it removes files; No goes back to the tree, as you

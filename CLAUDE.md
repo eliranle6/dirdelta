@@ -9,7 +9,7 @@ the same path that differ (by size, or by hashes known on both sides: `differing
 them, tagged `>`, `<` (newer or older here) or `≠`, to copy either way over the other's version (to the trash, or a new Drive version).
 The sync menu's first option shows all of it in one tree instead (`sync/combined/`, plan C): each file
 marked `⇒` (make B like A: copy, replace, move or remove) or `⇐`, a dir's files at once, with tabs for each
-kind (moved pairs too, by known hashes), `Ctrl-I` asking AI about the selection's (or `a`, anything) to set them, then one plan to confirm, done in one go
+kind (moved pairs too, by known hashes), `Ctrl-I` asking AI about the selection's in the background, as the sort does, `Ctrl-A` setting what it suggests (or `a`, anything), then one plan to confirm, done in one go
 (treepicker's `--state` and `--tab`).
 
 This is the main repo (github.com/eliranle6/dirdelta). Its pickers and menus are `treepicker`, a C++ program

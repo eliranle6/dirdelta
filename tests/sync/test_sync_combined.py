@@ -1,12 +1,9 @@
 """The combined tree of a sync: its entries, the plan the user's states make, confirming it, and
 doing it"""
 import os
-import shutil
-import tempfile
 import unittest
 from unittest import mock
 
-import helpers
 from dirdelta.claude import aiplan
 from dirdelta.known import log_entries
 from dirdelta.matching import differing
@@ -16,8 +13,8 @@ from dirdelta.sync.combined import moved
 from dirdelta.sync.combined import plan as plans
 from dirdelta.sync.combined import screen
 from dirdelta.trees import dirtree
-from dirdelta.trees import localdiskdirtree
 from dirdelta.ui import picker
+from combined_support import ReplicasTest
 
 CHANGE = differing.Change(1, 2, None, None, differing.BY_SIZE)
 
@@ -60,29 +57,6 @@ class PlanTest(unittest.TestCase):
         self.assertEqual([entry.relpath for entry in entries], ['a1', 'b1', 'c', 'd/a2'])
         self.assertEqual(entries[1].state, plans.TO_A)
         self.assertEqual(entries[0].state, '')
-
-
-class ReplicasTest(unittest.TestCase):
-    """Two local replicas, A and B"""
-    def setUp(self):
-        self.tmpdir = os.path.realpath(tempfile.mkdtemp(prefix='dirdelta-combined-'))
-        self.addCleanup(shutil.rmtree, self.tmpdir)
-        self.path_a, self.path_b = os.path.join(self.tmpdir, 'A'), os.path.join(self.tmpdir, 'B')
-        helpers.make_files(self.path_a, ['new/a.txt', 'gone.txt', 'both.txt'])
-        helpers.make_files(self.path_b, ['b.txt', 'both.txt', 'old/b2.txt'])
-        with open(os.path.join(self.path_b, 'both.txt'), 'w') as f:
-            f.write("B's longer version")
-        self.trash = helpers.fake_trash(self)
-        for patcher in (mock.patch('dirdelta.ui.messages.print_line'), mock.patch('dirdelta.ui.messages.print_progress'),
-                        mock.patch('dirdelta.ui.messages.show')):
-            patcher.start()
-            self.addCleanup(patcher.stop)
-        self.replica_a = localdiskdirtree.LocalDiskDirTree(self.path_a, silent=True)
-        self.replica_b = localdiskdirtree.LocalDiskDirTree(self.path_b, silent=True)
-
-    def read(self, root, relpath):
-        with open(os.path.join(root, relpath)) as f:
-            return f.read()
 
 
 class AllowedTest(ReplicasTest):
@@ -241,11 +215,10 @@ class ScreenTest(ReplicasTest):
         self.assertIn("The AI set the arrows of 2 files", picker.unstyled(again.kwargs['footer']))
 
     def test_the_ai_cant_set_an_arrow_that_isnt_allowed(self):
-        sync = screen.CombinedSync(self.replica_a, self.replica_b, self.path_a, self.path_b, ['gone.txt'], [],
-                                   differing.Changes())
         with mock.patch('dirdelta.sync.replica_ops.is_writable', side_effect=lambda replica: replica is not self.replica_a):
-            allowed = plans.allowed(self.replica_a, self.replica_b)
-        task = sync._ai_task(allowed)
+            sync = screen.CombinedSync(self.replica_a, self.replica_b, self.path_a, self.path_b, ['gone.txt'], [],
+                                       differing.Changes())
+        task = sync._ai_task()
         checks = {action.name: action.check for action in task.actions}
         # A read-only: no removing from it
         self.assertIsNotNone(checks[plans.TO_A]('gone.txt', None))

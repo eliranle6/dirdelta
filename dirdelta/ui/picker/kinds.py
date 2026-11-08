@@ -14,6 +14,9 @@ Colored = collections.namedtuple('Colored', ['text', 'color'])
 # what's returned when it's picked (any hashable value), its label (its plain text, e.g. what it's
 # found by when searching), and how it's shown at first, if otherwise (a string, or one of the above)
 Option = collections.namedtuple('Option', ['id', 'label', 'shown'], defaults=(None,))
+# What shown_as shows a pick_states() file as (its text, a string) when it's put in a state too (its
+# name), once: again only when generation changes (e.g. each time the user asks for it)
+Stated = collections.namedtuple('Stated', ['text', 'state', 'generation'])
 # A line of a menu that isn't an option at all is a Skipped in pick_option()'s options, and this one a
 # blank line between its sections
 BLANK = Skipped('')

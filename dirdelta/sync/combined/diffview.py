@@ -1,12 +1,12 @@
 """What the combined tree's right column shows of a differing text file's two versions, in one of its
-views (v cycles them): side by side, as diff -u does, or either version, its changed lines colored"""
+views (Ctrl-T cycles them): side by side, as diff -u does, or either version, its changed lines colored"""
 import difflib
 import shutil
 
 from dirdelta.sync.combined import diffing
 from dirdelta.ui import picker
 
-KEY = 'v'
+KEY, KEY_NAME = '\x14', 'Ctrl-T'
 SIDE_BY_SIDE, UNIFIED, VERSION_A, VERSION_B = range(4)
 NR_VIEWS = 4
 # The biggest file read for it (the whole diff: d, in less), and the most lines shown
@@ -53,7 +53,7 @@ def lines_of(view, lines_a, lines_b, name_a, name_b, width):
     else:
         shown = _version(opcodes, lines_a if view == VERSION_A else lines_b, view == VERSION_A)
     if len(shown) > MAX_LINES:
-        shown = shown[:MAX_LINES] + ["(and %d more lines: d shows all of it)" % (len(shown) - MAX_LINES,)]
+        shown = shown[:MAX_LINES] + ["(and %d more lines: Ctrl-O shows all of it)" % (len(shown) - MAX_LINES,)]
     return shown
 
 

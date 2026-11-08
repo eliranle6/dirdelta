@@ -60,6 +60,8 @@ Like fzf: dirdelta starts `treepicker`, which draws on the terminal itself
   parts (`picker.pick_option(previews_below=...)`, `picker.segments()`), e.g. the inbox's action
   menu's destination path, and under it a bracket per part saying where it's from. And an
   `--updates` option may end with `color=NAME` (`picker.Colored`): the option's text color.
+  In `pick_states()`, one may end with `state=NAME` (`picker.Stated`): the file is put in that
+  state (its arrow set), once for each `generation` (the combined tree's Ctrl-A, as the AI suggests).
 - Styled parts (`picker.styled()`): an `--updates` text, or a preview column's line, may switch
   styles with `\x02STYLE\x02` (a text color, `grey`, `orange` and/or `bold`; empty: plain), e.g.
   the tags after a file's name (hashing's, Claude's in magenta, junk in yellow, downloads) and the

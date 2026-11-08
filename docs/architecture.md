@@ -186,15 +186,18 @@ The map (each module's docstring's first line; generated from the code):
     - `waiting.py`: Waiting for the hashing, and whether it's all right to quit meanwhile
 - `sync/`: Sync mode: the menu of a pair of replicas, its two ways, and what it does to the replicas
   - `combined/`: The combined tree of a sync (CombinedSync): everything that differs in one tree, each file in a state, one plan
-    - `ask_ai.py`: Asking AI what to do with the combined tree's files (Ctrl-I: the selection's, without asking the user; a: what they type): its plan's steps set their arrows, to review in the tree, its reasons in the right column
+    - `ai_showing.py`: What's shown of the AI's suggestions, as the sort shows Claude's: a tag after a file's name, the status, the recommendation in the right column (a file's, a dir's)
+    - `ask_ai.py`: Asking AI: a, what the user types, whose plan's steps set the arrows; Ctrl-I, the selection's files, in the background (suggestions.py); Ctrl-A, setting the arrows it suggests in the tree that's shown (picker.Stated, treepicker's state= update)
     - `diffpane.py`: The selected differing file's diff in the right column, below its preview (on_selection), in the view v chose
     - `diffview.py`: The diff's views: side by side, as diff -u, either version (difflib), colored, as wide as the column
     - `diffing.py`: d: the selected file's diff (A's version against B's, a Drive one downloaded), in less, if they're text
+    - `keys_help.py`: The keys row, and the ? help: what the marks, the keys and the tags mean
     - `doing.py`: Doing a combined tree's plan, on one progress screen: moves, copies, replacements, then removals
     - `moved.py`: The moved pairs: a file only in A and one only in B with the same contents, as far as is known
     - `plan.py`: The combined tree's entries (in groups), their states (skip, ⇒, ⇐), and the plan they make
     - `screen.py`: The combined tree's screen: the tree, the plan to confirm, doing it
-    - `showing.py`: What the combined tree shows: its header, tabs, footer, keys and help, tags and previews
+    - `showing.py`: What the combined tree shows: its header, tabs, footer, tags, and the previews, sent again as they change
+    - `suggestions.py`: What the AI suggests for the files (Suggestions), asked in the background a batch at a time on a worker thread, as the sort asks Claude
   - `comparing.py`: Comparing, on request, the files two replicas both have at the same paths, of the same size, whose hashes aren't both known
   - `dirsync_main.py`: Sync mode: the menu of a pair of replicas, until it goes back to the start menu
   - `options.py`: The sync menu's lines: whether the two are in sync, and each way's option
