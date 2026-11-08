@@ -5,6 +5,7 @@ from dirdelta.known import replicanames
 from dirdelta.sync import comparing
 from dirdelta.sync import replica_ops
 from dirdelta.sync.combined import ask_ai
+from dirdelta.sync.combined import diffing
 from dirdelta.sync.combined import doing
 from dirdelta.sync.combined import showing
 from dirdelta.sync.combined import plan as plans
@@ -53,14 +54,17 @@ class CombinedSync(showing.Showing, ask_ai.AskAI):
             picked = picker.pick_states(
                 "%s ⇄ %s" % (self.name_a, self.name_b), plans.entries(self.grouped, allowed, self.chosen),
                 plans.STATES, tabs=self._tabs(), header=self._header(), selected=self.selected,
-                shown_as=self._shown_as, previews=self._previews if self.changes or self.moved or self.ai_reasons else None,
+                shown_as=self._shown_as, previews=self._previews,
                 key_hints=self._key_hints(),
-                help_lines=self._help_lines(), footer=self._footer(), keys=ask_ai.KEY)
+                help_lines=self._help_lines(), footer=self._footer(), keys=ask_ai.KEY + ask_ai.SUGGEST_KEY + diffing.KEY)
             if picked is None:
                 return False
             self.chosen, self.selected = picked.states, picked.selected
-            if picked.key == ask_ai.KEY:
-                self._ask_ai(allowed)
+            if picked.key == diffing.KEY:
+                diffing.show(self, self.selected)
+                continue
+            if picked.key in (ask_ai.KEY, ask_ai.SUGGEST_KEY):
+                self._ask_ai(allowed, suggest=picked.key == ask_ai.SUGGEST_KEY)
                 continue
             plan = plans.plan_of(self.chosen, self.grouped, self.moved)
             if plans.is_empty(plan) or not self._is_confirmed(plan):

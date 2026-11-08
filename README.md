@@ -233,21 +233,23 @@ are known to be in B at another path (by the hashes known, or compared before: n
 one entry, a moved one, at A's path: "moved: in B at pics/2026/trip.jpg". Each starts skipped; you choose
 what to do with it, a dir's files at once:
 
-- `>` makes B like A: copies A's file to B (a green `→`), A's version replaces B's (a yellow `→`), or
+- `>` makes B like A: copies A's file to B (a green `⇒`), A's version replaces B's (a yellow `⇒`), or
   removes B's file, which A doesn't have (a red `x`).
-- `<` makes A like B, the same the other way (`←`).
+- `<` makes A like B, the same the other way (`⇐`).
 - For a moved file, `>` moves B's file to A's path, `<` moves A's to B's (cyan arrows).
 - `s` skips it; `Space` goes to the next of these; `Esc` puts them all back to skipped.
 
 A dir shows its files' mark, or `*` if they're marked differently. So `>` on the root makes B a mirror of
-A, and `>` on one dir and `<` on another syncs each its own way. Tabs above the tree (`Tab`, `Shift-Tab`)
-show only some of them: All, Only in A, Only in B, Differ, Moved (with their counts); what's marked in one is
+A, and `>` on one dir and `<` on another syncs each its own way. Tabs above the tree (`Ctrl-L`, `Ctrl-H`;
+`Tab`, `Shift-Tab` too) show only some of them: All, Only in A, Only in B, Differ, Moved (with their counts); what's marked in one is
 the same in the others, and `Space` or a key on a dir marks only what the tab shows. The stats line
 counts each mark. A replica that can't be changed (read-only) allows only the other arrow.
 
-`a` asks AI (as in the other pickers): say what you want ("sync the photos both ways, keep the newer
-notes"), and its plan sets those files' arrows in the tree, with its reasons in the preview column, for
-you to review and change before `Enter`.
+`Ctrl-I` asks the AI what to do with the selected file (a dir: its files), as `Ctrl-I` asks Claude where an
+inbox's files go: it sets their arrows, and the right column says what it suggests for each and why (or
+that it'd leave the file as it is). `a` asks AI anything (as in the other pickers): say what you want
+("sync the photos both ways, keep the newer notes"), and its plan sets those files' arrows the same way.
+Either way you review and change them before `Enter`.
 
 `Enter` shows the plan ("Move 1 file in B to where A has them", "Copy 2 files from A to B", "Replace A's versions of 1 file with B's", "Remove
 1 file from B", with the files) to confirm, twice if it removes files; No goes back to the tree, as you
@@ -328,7 +330,7 @@ of the same name, and for a big file, of its size with another name (found while
 how far it's got), the likeliest first: the same size, the same date taken (photos), the file's
 neighbours there too, the same modification time; for the selected file, the same-sized ones'
 contents are compared too (in the background), and one with the same contents is then the only one
-shown. One that's surely the file, moved or renamed, says so, highlighted in green (`p` hides the
+shown. One that's surely the file, moved or renamed, says so, highlighted in green (`Ctrl-P` hides the
 column). A Rename compares the contents of all the picked files first, so it moves only what's
 surely the file. `Enter` then asks what to do with the picked files, with
 "Nothing" selected first: copy them to B, remove them from A, or, for the ones whose match in B is

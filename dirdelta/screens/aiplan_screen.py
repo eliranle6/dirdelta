@@ -26,32 +26,36 @@ WAITING_INTERVAL = 1
 SCREEN_MARGIN = 6
 
 
-def ask(task, default='', label=None, review=True):
+def ask(task, default='', label=None, review=True, instruction=None):
     """Ask what's wanted of the task's files (default: how it starts, to edit), and the AI, showing what
     it answers: its answer to a question, or its plan to review. Returns (what they typed, the
     aiplan.Steps they approved), or (what they typed, None) if none are, and (default, None) if they
-    typed nothing. Without review, all the plan's steps, for the caller to show them for review."""
+    typed nothing. Without review, all the plan's steps, for the caller to show them for review. With
+    instruction, it's what the AI is asked, without asking the user (then default is returned as what
+    they typed)."""
     if aiplan.too_many(task):
         messages.show("Too many files for the AI", [
             "That's %s, and it can be told of %d at most: pick some of them, then ask again." %
             (text.files(len(task.files)), aiplan.MAX_FILES)], dryrun.label())
         return default, None
-    instruction = messages.ask(
-        "Ask AI about %s" % (text.files(len(task.files)),),
-        [task.place, "",
-         "What do you want? Ask it something, or say what should be done: that it answers with a plan,",
-         "for you to review. Nothing's done until you approve it.", _what_its_told(task),
-         "(Empty, or Ctrl-C, goes back.)"],
-        "> ", default, dryrun.label())
+    typed = default
     if instruction is None:
-        return default, None
+        instruction = typed = messages.ask(
+            "Ask AI about %s" % (text.files(len(task.files)),),
+            [task.place, "",
+             "What do you want? Ask it something, or say what should be done: that it answers with a plan,",
+             "for you to review. Nothing's done until you approve it.", _what_its_told(task),
+             "(Empty, or Ctrl-C, goes back.)"],
+            "> ", default, dryrun.label())
+        if instruction is None:
+            return default, None
     plan, error = None, None
     with messages.progress_screen("Asking AI: %s" % (instruction,), dryrun.label(), wait=False):
         plan, error = _waiting_for(lambda: aiplan.make(task, instruction))
     if error is not None:
         messages.show("Couldn't ask the AI", [str(error)], dryrun.label(), 'red')
     if plan is None:
-        return instruction, None
+        return typed, None
     if plan.answer:
         _show_answer(plan.answer)
     if plan.left_out:
@@ -61,8 +65,8 @@ def ask(task, default='', label=None, review=True):
     if not plan.steps:
         if not plan.answer:
             messages.show("The AI has no plan", [plan.summary or "It said nothing to do."], dryrun.label())
-        return instruction, None
-    return instruction, _review(task, plan, label) if review else plan.steps
+        return typed, None
+    return typed, _review(task, plan, label) if review else plan.steps
 
 
 def _what_its_told(task):

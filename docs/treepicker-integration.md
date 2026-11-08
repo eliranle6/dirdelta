@@ -91,7 +91,7 @@ Like fzf: dirdelta starts `treepicker`, which draws on the terminal itself
   one yet: how far it's got. A line starting with `\x01COLOR\x01` (`picker.highlighted()`)
   is shown bold on that color across the column ("surely this file, moved").
   treepicker shows it in a column on the right (2/5
-  of the width, on a screen 60 columns wide or more), which `p` hides or shows,
+  of the width, on a screen 60 columns wide or more), which `Ctrl-P` hides or shows,
   redrawn as previews come in.
 - `--footer TEXT` (`pick_files(footer=...)`): lines below the tree, above the status bar, plain or
   styled as the previews' (`picker.styled()`); the sync's pickers say there how many files of the

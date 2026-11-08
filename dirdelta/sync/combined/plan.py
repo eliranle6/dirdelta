@@ -17,10 +17,10 @@ SKIP_KEY, TO_B_KEY, TO_A_KEY = 's', '>', '<'
 # The arrows say which way the files go; a removal is a red x
 COPY_COLOR, REMOVE_MARK, REMOVE_COLOR, REPLACE_COLOR, MOVE_COLOR = 'green', 'x', 'red', 'yellow', 'cyan'
 STATES = [picker.State(SKIP, ' ', 'grey', SKIP_KEY),
-          picker.State(TO_B, '→', 'blue', TO_B_KEY, {ONLY_A: ('→', COPY_COLOR), ONLY_B: (REMOVE_MARK, REMOVE_COLOR),
-                                                     DIFFER: ('→', REPLACE_COLOR), MOVED: ('→', MOVE_COLOR)}),
-          picker.State(TO_A, '←', 'blue', TO_A_KEY, {ONLY_A: (REMOVE_MARK, REMOVE_COLOR), ONLY_B: ('←', COPY_COLOR),
-                                                     DIFFER: ('←', REPLACE_COLOR), MOVED: ('←', MOVE_COLOR)})]
+          picker.State(TO_B, '⇒', 'blue', TO_B_KEY, {ONLY_A: ('⇒', COPY_COLOR), ONLY_B: (REMOVE_MARK, REMOVE_COLOR),
+                                                     DIFFER: ('⇒', REPLACE_COLOR), MOVED: ('⇒', MOVE_COLOR)}),
+          picker.State(TO_A, '⇐', 'blue', TO_A_KEY, {ONLY_A: (REMOVE_MARK, REMOVE_COLOR), ONLY_B: ('⇐', COPY_COLOR),
+                                                     DIFFER: ('⇐', REPLACE_COLOR), MOVED: ('⇐', MOVE_COLOR)})]
 
 # What the states make: the relpaths of each of the things done (the moves: (relpath, new_relpath))
 Plan = collections.namedtuple('Plan', ['copy_to_b', 'copy_to_a', 'replace_b', 'replace_a', 'remove_from_a',

@@ -3,10 +3,12 @@ previews (CombinedSync's)"""
 import collections
 import os
 
+from dirdelta.inbox.formatting import grey_line, preview_title, wrapped
 from dirdelta.matching import differing
 from dirdelta.sync import comparing
 from dirdelta.sync import replica_ops
 from dirdelta.sync.combined import ask_ai
+from dirdelta.sync.combined import diffing
 from dirdelta.sync.combined import plan as plans
 from dirdelta.ui import picker
 
@@ -15,7 +17,7 @@ class Showing(object):
     """What the tree is shown with (CombinedSync's)"""
 
     def _header(self):
-        return "What differs. Mark each file: → makes %s like %s, ← makes %s like %s." % (
+        return "What differs. Mark each file: ⇒ makes %s like %s, ⇐ makes %s like %s." % (
             self.name_b, self.name_a, self.name_a, self.name_b)
 
     def _tabs(self):
@@ -36,20 +38,30 @@ class Showing(object):
         return '\n'.join(line for line in lines if line)
 
     def _key_hints(self):
-        return [(ask_ai.KEY, "ask AI"), (plans.TO_B_KEY, "→ %s" % (self.name_b,)), (plans.TO_A_KEY, "← %s" % (self.name_a,)),
-                (plans.SKIP_KEY, "skip")]
+        return [(ask_ai.SUGGEST_KEY_NAME, "AI suggests"), (ask_ai.KEY, "ask AI"), (plans.TO_B_KEY, "⇒ %s" % (self.name_b,)),
+                (plans.TO_A_KEY, "⇐ %s" % (self.name_a,)), (plans.SKIP_KEY, "skip: leave as is"),
+                (diffing.KEY, "diff")]
 
     def _help_lines(self):
         return ["What each mark does:",
-                "  →  green: copy %s's file to %s; yellow: %s's version replaces %s's" % (self.name_a, self.name_b,
+                "  (none)  skip: leave the file as it is, nothing's done with it (every file starts so; s, or "
+                "Space until it comes back)",
+                "  ⇒  green: copy %s's file to %s; yellow: %s's version replaces %s's" % (self.name_a, self.name_b,
                                                                                         self.name_a, self.name_b),
-                "  ←  green: copy %s's file to %s; yellow: %s's version replaces %s's" % (self.name_b, self.name_a,
+                "  ⇐  green: copy %s's file to %s; yellow: %s's version replaces %s's" % (self.name_b, self.name_a,
                                                                                         self.name_b, self.name_a),
                 "  x  red: remove the file (only one has it)",
-                "  → ← cyan: a moved file (the same contents at another path in %s): move %s's to where %s has "
+                "  ⇒ ⇐ cyan: a moved file (the same contents at another path in %s): move %s's to where %s has "
                 "it, or %s's to where %s has it" % (self.name_b, self.name_b, self.name_a, self.name_a, self.name_b),
                 "  *  a dir whose files are in different states",
-                "Esc puts them all back to skipped."]
+                "Esc puts them all back to skipped.",
+                "More on its keys:",
+                "  %-17s%s" % (ask_ai.SUGGEST_KEY_NAME, "the AI suggests what to do with the selected file (a dir: its "
+                               "files) and sets their arrows; the right column says what and why"),
+                "  %-17s%s" % (ask_ai.KEY, "ask AI anything about all the files, or say what to do: its plan sets "
+                               "the arrows"),
+                "  %-17s%s" % (diffing.KEY, "the selected file's diff, %s's version against %s's, in less (q: back); "
+                               "text files only" % (self.name_a, self.name_b))]
 
     def _shown_as(self):
         """Each file's name, and where it is: only in one, or in both, differing (its tag); worked out
@@ -78,7 +90,7 @@ class Showing(object):
             lines = [picker.styled([("%s Two versions" % (differing.mark(change),), 'bold,' + differing.style(change))])]
             lines += differing.versions_lines(change, (self.name_a + ":").ljust(width), (self.name_b + ":").ljust(width))
             lines.append("")
-            for arrow, src, dst in (("→", self.replica_a, self.replica_b), ("←", self.replica_b, self.replica_a)):
+            for arrow, src, dst in (("⇒", self.replica_a, self.replica_b), ("⇐", self.replica_b, self.replica_a)):
                 names = {self.replica_a: self.name_a, self.replica_b: self.name_b}
                 lines.append("%s %s's replaces %s's (%s)" % (
                     arrow, names[src], names[dst], "to the trash" if replica_ops.is_local(dst) else "Drive keeps it")
@@ -89,8 +101,24 @@ class Showing(object):
         for relpath, match in self.moved.items():
             lines_of[relpath] = [picker.styled([("↔ Moved", 'bold,' + plans.MOVE_COLOR)]),
                                  "The same contents are in %s at" % (self.name_b,), "  " + match, "",
-                                 "→ moves %s's there to here" % (self.name_b,), "← moves this one there"]
-        for relpath, reason in (self.ai_reasons or {}).items():
-            lines_of[relpath] = lines_of.get(relpath, [os.path.basename(relpath)]) + [
-                "", picker.styled([("Why (AI):", 'bold,magenta')]), "  " + (reason or "(it didn't say)")]
-        send(lines_of, default=[])
+                                 "⇒ moves %s's there to here" % (self.name_b,), "⇐ moves this one there"]
+        # Every file's: what the AI suggests for it, and why, as the sort's column shows Claude's
+        # recommendation (the files only one has: what they are first)
+        only = {plans.ONLY_A: self.name_a, plans.ONLY_B: self.name_b}
+        for relpath, group in self.grouped.items():
+            if relpath not in lines_of:
+                lines_of[relpath] = [picker.styled([(os.path.basename(relpath), 'bold')]),
+                                     "Only in %s" % (only.get(group, '?'),)]
+            lines_of[relpath] = lines_of[relpath] + self._recommendation_lines(relpath)
+        send(lines_of, default=["", picker.styled([("Recommendation:", 'bold')]),
+                                grey_line("  Ctrl-I asks AI about its files")])
+
+    def _recommendation_lines(self, relpath):
+        """What the AI suggests for the file, and why, or how to ask it"""
+        if relpath not in (self.ai_reasons or {}):
+            return ["", picker.styled([("Recommendation:", 'bold')]), grey_line("  Ctrl-I asks AI")]
+        state, reason = self.ai_reasons[relpath]
+        what = {plans.TO_B: "⇒ make %s like %s" % (self.name_b, self.name_a),
+                plans.TO_A: "⇐ make %s like %s" % (self.name_a, self.name_b)}.get(state, "skip: leave it as it is")
+        return (["", preview_title("Recommendation (ai):", 'magenta')] + wrapped(what, "  ") + [""] +
+                wrapped(reason or "(it didn't say why)", "  "))

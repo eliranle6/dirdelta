@@ -16,7 +16,7 @@ NOTHING = "Nothing: back to the files"
 IN_THE_PICKER = "These keys work in the file list itself:"
 # What only treepicker does, so can't be done from a menu
 PICKER_KEYS = [('V', 'pick a range'), ('/', 'search'), ('f', 'only the matches of a search, or all'),
-               ('p', 'show or hide the preview column'), ('?', 'all the keys')]
+               ('Ctrl-P', 'show or hide the preview column'), ('?', 'all the keys')]
 SIDE_KEY_NAME = 'Ctrl-W l'
 
 # An option: its key's name (None: it has none), what it does, and what's returned if it's chosen
