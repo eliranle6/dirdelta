@@ -187,6 +187,8 @@ The map (each module's docstring's first line; generated from the code):
 - `sync/`: Sync mode: the menu of a pair of replicas, its two ways, and what it does to the replicas
   - `combined/`: The combined tree of a sync (CombinedSync): everything that differs in one tree, each file in a state, one plan
     - `ask_ai.py`: Asking AI what to do with the combined tree's files (Ctrl-I: the selection's, without asking the user; a: what they type): its plan's steps set their arrows, to review in the tree, its reasons in the right column
+    - `diffpane.py`: The selected differing file's diff in the right column, below its preview (on_selection), in the view v chose
+    - `diffview.py`: The diff's views: side by side, as diff -u, either version (difflib), colored, as wide as the column
     - `diffing.py`: d: the selected file's diff (A's version against B's, a Drive one downloaded), in less, if they're text
     - `doing.py`: Doing a combined tree's plan, on one progress screen: moves, copies, replacements, then removals
     - `moved.py`: The moved pairs: a file only in A and one only in B with the same contents, as far as is known

@@ -9,6 +9,7 @@ from dirdelta.sync import comparing
 from dirdelta.sync import replica_ops
 from dirdelta.sync.combined import ask_ai
 from dirdelta.sync.combined import diffing
+from dirdelta.sync.combined import diffview
 from dirdelta.sync.combined import plan as plans
 from dirdelta.ui import picker
 
@@ -60,6 +61,9 @@ class Showing(object):
                                "files) and sets their arrows; the right column says what and why"),
                 "  %-17s%s" % (ask_ai.KEY, "ask AI anything about all the files, or say what to do: its plan sets "
                                "the arrows"),
+                "  %-17s%s" % (diffview.KEY, "the next view of the right column's diff of the selected differing text "
+                               "file: side by side, as diff -u, %s's version, %s's version (Ctrl-W l scrolls it, "
+                               "Ctrl-P hides the column)" % (self.name_a, self.name_b)),
                 "  %-17s%s" % (diffing.KEY, "the selected file's diff, %s's version against %s's, in less (q: back); "
                                "text files only" % (self.name_a, self.name_b))]
 
@@ -82,36 +86,37 @@ class Showing(object):
         return shown
 
     def _previews(self, send):
-        """The previews: a differing file's versions and what each arrow does with them, a moved one's
-        other path, and why the AI set an arrow"""
-        width = max(len(self.name_a), len(self.name_b)) + 2
-        lines_of = {}
-        for relpath, change in self.changes.items():
+        """Every file's preview (see _file_preview()); the selected differing one's with its diff
+        (_follow())"""
+        send({relpath: self._file_preview(relpath) for relpath in self.grouped},
+             default=["", picker.styled([("Recommendation:", 'bold')]), grey_line("  Ctrl-I asks AI about its files")])
+
+    def _file_preview(self, relpath):
+        """A file's preview: a differing file's versions and what each arrow does with them, a moved
+        one's other path, or which one has it; then what the AI suggests for it, and why, as the
+        sort's column shows Claude's recommendation"""
+        group = self.grouped[relpath]
+        if group == plans.DIFFER:
+            change = self.changes[relpath]
+            width = max(len(self.name_a), len(self.name_b)) + 2
             lines = [picker.styled([("%s Two versions" % (differing.mark(change),), 'bold,' + differing.style(change))])]
             lines += differing.versions_lines(change, (self.name_a + ":").ljust(width), (self.name_b + ":").ljust(width))
             lines.append("")
+            names = {self.replica_a: self.name_a, self.replica_b: self.name_b}
             for arrow, src, dst in (("⇒", self.replica_a, self.replica_b), ("⇐", self.replica_b, self.replica_a)):
-                names = {self.replica_a: self.name_a, self.replica_b: self.name_b}
                 lines.append("%s %s's replaces %s's (%s)" % (
                     arrow, names[src], names[dst], replica_ops.discarded_to(dst) if replica_ops.is_local(dst) else "Drive keeps it")
                     if replica_ops.can_copy(src, dst) else "%s can't be done: %s" % (
                         arrow, "%s is read-only" % (names[dst],) if not replica_ops.is_writable(dst)
                         else "dirdelta doesn't copy within Drive"))
-            lines_of[relpath] = lines
-        for relpath, match in self.moved.items():
-            lines_of[relpath] = [picker.styled([("↔ Moved", 'bold,' + plans.MOVE_COLOR)]),
-                                 "The same contents are in %s at" % (self.name_b,), "  " + match, "",
-                                 "⇒ moves %s's there to here" % (self.name_b,), "⇐ moves this one there"]
-        # Every file's: what the AI suggests for it, and why, as the sort's column shows Claude's
-        # recommendation (the files only one has: what they are first)
-        only = {plans.ONLY_A: self.name_a, plans.ONLY_B: self.name_b}
-        for relpath, group in self.grouped.items():
-            if relpath not in lines_of:
-                lines_of[relpath] = [picker.styled([(os.path.basename(relpath), 'bold')]),
-                                     "Only in %s" % (only.get(group, '?'),)]
-            lines_of[relpath] = lines_of[relpath] + self._recommendation_lines(relpath)
-        send(lines_of, default=["", picker.styled([("Recommendation:", 'bold')]),
-                                grey_line("  Ctrl-I asks AI about its files")])
+        elif group == plans.MOVED:
+            lines = [picker.styled([("↔ Moved", 'bold,' + plans.MOVE_COLOR)]),
+                     "The same contents are in %s at" % (self.name_b,), "  " + self.moved[relpath], "",
+                     "⇒ moves %s's there to here" % (self.name_b,), "⇐ moves this one there"]
+        else:
+            lines = [picker.styled([(os.path.basename(relpath), 'bold')]),
+                     "Only in %s" % (self.name_a if group == plans.ONLY_A else self.name_b,)]
+        return lines + self._recommendation_lines(relpath)
 
     def _recommendation_lines(self, relpath):
         """What the AI suggests for the file, and why, or how to ask it"""

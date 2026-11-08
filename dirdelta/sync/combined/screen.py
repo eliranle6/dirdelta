@@ -6,6 +6,8 @@ from dirdelta.sync import comparing
 from dirdelta.sync import replica_ops
 from dirdelta.sync.combined import ask_ai
 from dirdelta.sync.combined import diffing
+from dirdelta.sync.combined import diffpane
+from dirdelta.sync.combined import diffview
 from dirdelta.sync.combined import doing
 from dirdelta.sync.combined import showing
 from dirdelta.sync.combined import plan as plans
@@ -20,7 +22,7 @@ MAX_FILES_LISTED = 5
 CONFIRM_NO, CONFIRM_YES, CONFIRM_SURE = "No, back to the tree", "Yes, do it", "Yes, I'm sure"
 
 
-class CombinedSync(showing.Showing, ask_ai.AskAI):
+class CombinedSync(showing.Showing, ask_ai.AskAI, diffpane.DiffPane):
     """One tree of everything that differs between replica_a and replica_b (at their paths): the files
     only one has (only_a, only_b: relpaths) and the ones both have that differ (changes: a
     differing.Changes, A's way), and the moved pairs among them (moved: see moved.find()), each put by
@@ -56,7 +58,8 @@ class CombinedSync(showing.Showing, ask_ai.AskAI):
                 plans.STATES, tabs=self._tabs(), header=self._header(), selected=self.selected,
                 shown_as=self._shown_as, previews=self._previews,
                 key_hints=self._key_hints(),
-                help_lines=self._help_lines(), footer=self._footer(), keys=ask_ai.KEY + ask_ai.SUGGEST_KEY + diffing.KEY)
+                help_lines=self._help_lines(), footer=self._footer(), keys=ask_ai.KEY + ask_ai.SUGGEST_KEY + diffing.KEY,
+                on_selection=self._follow, notify_keys=diffview.KEY, on_notify=self._on_notify)
             if picked is None:
                 return False
             self.chosen, self.selected = picked.states, picked.selected

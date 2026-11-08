@@ -247,6 +247,11 @@ A, and `>` on one dir and `<` on another syncs each its own way. Tabs above the 
 the same in the others, and `Space` or a key on a dir marks only what the tab shows. The stats line
 counts each mark. A replica that can't be changed (read-only) allows only the other arrow.
 
+A differing text file's right column shows its diff below what it is: `v` switches the view (side by
+side, the changed lines marked `≠`, `<` or `>`; as `diff -u` shows it; A's version; B's version, their
+changed lines colored), `Ctrl-W l` moves into the column to scroll it (`Ctrl-W h` back), `Ctrl-P` hides
+the column. `d` shows the whole diff in `less` (`q` back), a Drive file downloaded for it.
+
 `Ctrl-I` asks the AI what to do with the selected file (a dir: its files), as `Ctrl-I` asks Claude where an
 inbox's files go: it sets their arrows, and the right column says what it suggests for each and why (or
 that it'd leave the file as it is). `a` asks AI anything (as in the other pickers): say what you want
