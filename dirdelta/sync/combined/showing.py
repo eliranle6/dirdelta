@@ -15,9 +15,8 @@ class Showing(object):
     """What the tree is shown with (CombinedSync's)"""
 
     def _header(self):
-        return ("Everything that differs between %s and %s: choose what to do with each (all skipped at first).\n"
-                "→ makes %s like %s, ← makes %s like %s: copying, replacing, moving or removing files." %
-                (self.name_a, self.name_b, self.name_b, self.name_a, self.name_a, self.name_b))
+        return "What differs. Mark each file: → makes %s like %s, ← makes %s like %s." % (
+            self.name_b, self.name_a, self.name_a, self.name_b)
 
     def _tabs(self):
         """All, then each group, if it has files"""
@@ -41,15 +40,14 @@ class Showing(object):
                 (plans.SKIP_KEY, "skip")]
 
     def _help_lines(self):
-        return ["",
-                "What each mark does:",
+        return ["What each mark does:",
                 "  →  green: copy %s's file to %s; yellow: %s's version replaces %s's" % (self.name_a, self.name_b,
                                                                                         self.name_a, self.name_b),
                 "  ←  green: copy %s's file to %s; yellow: %s's version replaces %s's" % (self.name_b, self.name_a,
                                                                                         self.name_b, self.name_a),
                 "  x  red: remove the file (only one has it)",
-                "  → ← cyan: a moved file (the same contents at another path in %s): move %s's to" % (self.name_b, self.name_b),
-                "      where %s has it, or %s's to where %s has it" % (self.name_a, self.name_a, self.name_b),
+                "  → ← cyan: a moved file (the same contents at another path in %s): move %s's to where %s has "
+                "it, or %s's to where %s has it" % (self.name_b, self.name_b, self.name_a, self.name_a, self.name_b),
                 "  *  a dir whose files are in different states",
                 "Esc puts them all back to skipped."]
 

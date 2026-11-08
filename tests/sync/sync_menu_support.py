@@ -49,7 +49,9 @@ class MainMenuTest(unittest.TestCase):
         def pick_option(options, shown_as, **_):
             while any('loading' in shown for shown in shown_as().values()):
                 time.sleep(0.01)
-            self.shown_options = [shown_as().get(option, option) for option in options[2:]]
+            self.shown_options = [shown_as().get(option, option) for option in options[2:]
+                                  if not isinstance(option, picker.Skipped)]
+            self.sections = options
             self.state_line = shown_as()[menu_options.STATE]
             return dirsync_main.BACK
         with mock.patch('dirdelta.ui.picker.pick_option', side_effect=pick_option):
@@ -62,7 +64,8 @@ class MainMenuTest(unittest.TestCase):
         options, = pick_option.call_args.args
         self.assertEqual(options[:2], [picker.Option(menu_options.STATE, menu_options.STATE, picker.Skipped(menu_options.STATE)),
                                        picker.BLANK])
-        return options[2:]
+        # The options, without the sections' headings and the blank lines between them
+        return [option for option in options[2:] if not isinstance(option, picker.Skipped)]
 
     def browse(self, answers, has_changed=False):
         """The main menu answering answers in turn, each way's browse() changing the replicas'

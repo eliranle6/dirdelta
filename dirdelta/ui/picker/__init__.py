@@ -8,7 +8,7 @@ Its parts are in the modules here; the names the rest of dirdelta uses are here 
 picker.pick_option() (say) is the same function as picker.menus.pick_option(), and patching it
 here patches what dirdelta calls.
 """
-from dirdelta.ui.picker.files import key_help_lines, pick_files, view_files  # noqa: F401
+from dirdelta.ui.picker.files import key_help_lines, key_help_sections, pick_files, view_files  # noqa: F401
 from dirdelta.ui.picker.kinds import BLANK, Colored, Disabled, Option, Picked, Side, SIDE_KEY, Skipped  # noqa: F401
 from dirdelta.ui.picker.menus import option_id, option_label, pick_option  # noqa: F401
 from dirdelta.ui.picker.places import place, trail  # noqa: F401

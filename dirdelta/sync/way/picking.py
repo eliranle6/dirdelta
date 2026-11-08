@@ -38,12 +38,16 @@ class Picking(object):
         keys = self.REFRESH_KEY + hashes_screen.KEY + aiplan_screen.KEY + contextmenu.KEY + archive_screen.KEY
         # The keys row has little room: the rest are in the menu (:), and ?
         key_hints = [('Enter', 'choose what to do'), contextmenu.KEY_HINT]
-        more_keys = ([aiplan_screen.KEY_HINT, archive_screen.KEY_HINT, opening.KEY_HINT, renaming.KEY_HINT,
-                      ('Ctrl-W l', 'move to %s, on the right (Ctrl-W h: back)' % (dst_name,)),
-                      (self.SIDE_REMOVE_KEY + ' there', 'remove what\'s selected there'),
-                      ('Enter, : there', 'choose what to do with it')] +
-                     [(self.REFRESH_KEY_NAME, 'read the folder anew from Drive' if clouds else 'see what changed outside dirdelta'),
-                      hashes_screen.KEY_HINT])
+        # The keys that aren't in the keys row, by what they're about, for ?
+        more_keys = [
+            ("The files", [aiplan_screen.KEY_HINT, archive_screen.KEY_HINT, opening.KEY_HINT, renaming.KEY_HINT]),
+            ("%s, on the right" % (dst_name,), [
+                ('Ctrl-W l', 'move to %s, on the right (Ctrl-W h: back)' % (dst_name,)),
+                (self.SIDE_REMOVE_KEY + ' there', 'remove what\'s selected there'),
+                ('Enter, : there', 'choose what to do with it')]),
+            ("Reading anew, hashing", [
+                (self.REFRESH_KEY_NAME, 'read the folder anew from Drive' if clouds else 'see what changed outside dirdelta'),
+                hashes_screen.KEY_HINT])]
         return types.SimpleNamespace(clouds=clouds, jobs=jobs, src_name=src_name, dst_name=dst_name, header=header,
                                      keys=keys, key_hints=key_hints, more_keys=more_keys)
 
@@ -91,7 +95,7 @@ class Picking(object):
                 none_picked_key_hints=[('Enter', 'Pick & choose what to do')],
                 # Ctrl-X opens the selected one (the picked ones: the menu's Open)
                 on_notify=lambda key, selected, picked: self._opener.press([selected], files),
-                help_lines=picker.key_help_lines(screen.more_keys) + (hashes_screen.HELP_LINES if screen.jobs else []),
+                help_lines=picker.key_help_sections(screen.more_keys) + (hashes_screen.HELP_LINES if screen.jobs else []),
                 previews=functools.partial(self._find_previews, only_missing, differs),
                 on_selection=functools.partial(elsewhere.check_contents, only_missing, self._src,
                                                self.src_index, self.dst_index, self.checked),

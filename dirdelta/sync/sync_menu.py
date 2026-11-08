@@ -24,6 +24,13 @@ from dirdelta.util import dryrun
 
 # The sync menu's last option: it doesn't quit dirdelta, the start menu shows again (as with q)
 BACK = "Back to the start menu"
+# The menu's sections' headings (in grey, skipped when moving), as the start menu's: the sync of all
+# the differences, a kind of them at a time, what makes the comparison up to date, and the pair's
+# own things
+SYNC_SECTION = '\u2500\u2500 Sync \u2500\u2500'
+KINDS_SECTION = '\u2500\u2500 Or one kind of difference at a time \u2500\u2500'
+UPDATE_SECTION = '\u2500\u2500 Bring the comparison up to date \u2500\u2500'
+PAIR_SECTION = '\u2500\u2500 This pair \u2500\u2500'
 
 
 class SyncMenu(object):
@@ -82,12 +89,18 @@ class SyncMenu(object):
             if self.known_replicas is not None:
                 is_favorite = self.known_replicas.is_favorite(self.replica_a_path, self.replica_b_path)
                 favorite_options = [self.REMOVE_FAVORITE if is_favorite else self.ADD_FAVORITE]
-            options = ([picker.Option(STATE, STATE, picker.Skipped(STATE)), picker.BLANK, SYNC_ALL] + list(self.actions) +
-                       [comparing.COMPARE] + list(self.rescans) + list(self.refreshes) + [self.DASHBOARD] + favorite_options +
-                       ([self.LABELS] if self.known_replicas is not None else []) + [BACK])
+            options = picker.grouped([
+                [picker.Option(STATE, STATE, picker.Skipped(STATE))],
+                [picker.Skipped(SYNC_SECTION), SYNC_ALL],
+                [picker.Skipped(KINDS_SECTION)] + list(self.actions),
+                [picker.Skipped(UPDATE_SECTION), comparing.COMPARE] + list(self.rescans) + list(self.refreshes),
+                [picker.Skipped(PAIR_SECTION), self.DASHBOARD] + favorite_options +
+                ([self.LABELS] if self.known_replicas is not None else []),
+                [BACK]])
             option = picker.pick_option(options,
                                         shown_as=self.shown_as, selected=SYNC_ALL,
-                                        help_lines=syncstate.help_lines())
+                                        help_lines=["The sync state's mark:"] +
+                                        ["  " + line for line in syncstate.help_lines()])
             self.note_compared()
             if option in (None, BACK):
                 # Back to the start menu (q too)

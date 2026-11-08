@@ -57,7 +57,7 @@ def pick_files(rootpath, relpaths, header='', picked=None, label=None, keys='', 
 
     Only the files are sent: treepicker adds their dirs, so no tree is built here."""
     if images is not None:
-        help_lines = list(help_lines) + key_help_lines([(IMAGES_KEY, "show or hide the files' pictures (and from now on)")])
+        help_lines = list(help_lines) + key_help_sections([("Pictures", [(IMAGES_KEY, "show or hide the files' pictures (and from now on)")])])
     args = (['--typed', '--root', rootpath, '-m', '--print-selection'] + header_args(header) +
             help_args(key_hints, help_lines))
     if footer:
@@ -117,6 +117,16 @@ def view_files(rootpath, relpaths, header='', previews=None, label=None, shown_a
         send_previews = lambda send: send(previews, default=[])
     return run_treepicker(args + ['-'], ('f ' + relpath for relpath in relpaths), shown_as=shown_as, label=label,
                 previews=send_previews, on_selection=on_selection) is not None
+
+
+def key_help_sections(sections):
+    """help_lines (see pick_files()) for keys in sections, [(heading, [(key, what it does here)])]:
+    each heading on a line of its own, ending with ':' (which treepicker's ? help shows as one)"""
+    lines = []
+    for heading, key_hints in sections:
+        if key_hints:
+            lines += [heading + ":"] + key_help_lines(key_hints)
+    return lines
 
 
 def key_help_lines(key_hints):

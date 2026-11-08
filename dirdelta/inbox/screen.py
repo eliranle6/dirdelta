@@ -63,12 +63,16 @@ class Screen(object):
         keys = self.REFRESH_KEY + hashes_screen.KEY + aiplan_screen.KEY + contextmenu.KEY + archive_screen.KEY
         # The keys row has little room: the rest are in the menu (:), and ?
         key_hints = [('Enter', 'choose what to do'), contextmenu.KEY_HINT]
-        more_keys = ([aiplan_screen.KEY_HINT, archive_screen.KEY_HINT, ('Ctrl-I', 'Claude: describe, and say where they go (a dir: as a whole)'),
-                      opening.KEY_HINT, renaming.KEY_HINT,
-                      ('Ctrl-W l', 'move to the sorted tree, on the right (Ctrl-W h: back)')] +
-                     [(self.REFRESH_KEY_NAME, 'read the folder anew from Drive' if self.inbox_is_cloud else 'see what changed outside dirdelta'),
-                      hashes_screen.KEY_HINT])
-        help_lines = (picker.key_help_lines(more_keys) + ["Tags after a file's name (/ searches them too):",
+        # The keys that aren't in the keys row, by what they're about, for ?
+        more_keys = [
+            ("The files", [aiplan_screen.KEY_HINT, archive_screen.KEY_HINT,
+                           ('Ctrl-I', 'Claude: describe, and say where they go (a dir: as a whole)'),
+                           opening.KEY_HINT, renaming.KEY_HINT]),
+            ("The sorted tree, on the right", [('Ctrl-W l', 'move to the sorted tree, on the right (Ctrl-W h: back)')]),
+            ("Reading anew, hashing", [
+                (self.REFRESH_KEY_NAME, 'read the folder anew from Drive' if self.inbox_is_cloud else 'see what changed outside dirdelta'),
+                hashes_screen.KEY_HINT])]
+        help_lines = (picker.key_help_sections(more_keys) + ["Tags after a file's name (/ searches them too):",
                        "  [claude: ...]            what Claude says it is",
                        "  [junk? ...]              it may be removed (by its name or size, or as Claude says)"] +
                       (hashes_screen.HELP_LINES[1:] if self._jobs() else []))

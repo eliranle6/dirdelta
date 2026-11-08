@@ -12,6 +12,7 @@ from dirdelta.sync import comparing
 from dirdelta.sync import dirsync_main
 from dirdelta.sync import options as menu_options
 from dirdelta.sync import replica_ops
+from dirdelta.sync import sync_menu
 from dirdelta.sync import ways
 from dirdelta.trees import dirtree
 from dirdelta.trees import localdiskdirtree
@@ -83,6 +84,18 @@ class OptionsTest(MainMenuTest):
         a = localdiskdirtree.LocalDiskDirTree('/a', silent=True)
         b = clouddirtree.CloudDirTree('cloud/b')
         self.assertEqual(self.options(a, b)[-3:], ['Refresh /b file list from Google Drive', 'Replicas dashboard', dirsync_main.BACK])
+
+    def test_options_are_in_sections_under_headings(self):
+        a = localdiskdirtree.LocalDiskDirTree('/a', silent=True)
+        b = dirtree.DirTree('cloud/b')
+        with mock.patch('dirdelta.ui.picker.pick_option', return_value=dirsync_main.BACK) as pick_option:
+            dirsync_main._sync(a, b, '/a', '/b')
+        options, = pick_option.call_args.args
+        self.assertEqual(options[2:], [
+            picker.Skipped(sync_menu.SYNC_SECTION), menu_options.SYNC_ALL, picker.BLANK,
+            picker.Skipped(sync_menu.KINDS_SECTION), 'Files only in /a', 'Files only in /b', ways.DIFFER, picker.BLANK,
+            picker.Skipped(sync_menu.UPDATE_SECTION), comparing.COMPARE, 'Rescan /a', picker.BLANK,
+            picker.Skipped(sync_menu.PAIR_SECTION), 'Replicas dashboard', picker.BLANK, dirsync_main.BACK])
 
     def test_read_only_replicas_are_said_to_be_before_the_menu(self):
         self.writable = set()
@@ -199,7 +212,7 @@ class OptionsTest(MainMenuTest):
         answers = ['Add to favorites', 'Remove from favorites', dirsync_main.BACK]
         menus, saved = [], []
         def pick_option(options, **_):
-            menus.append(options[-3:-2] + options[-1:])
+            menus.append([option for option in options if 'favorites' in str(option)] + options[-1:])
             return answers.pop(0)
         with mock.patch('dirdelta.ui.picker.pick_option', side_effect=pick_option), \
                 mock.patch('dirdelta.known.replicas.save',
