@@ -71,8 +71,10 @@ class InboxSortTest(unittest.TestCase):
     def exists(self, *parts):
         return os.path.exists(os.path.join(self.tmpdir, *parts))
 
+    @contextlib.contextmanager
     def fake_gio_trash(self):
-        """Patch subprocess.run so gio trash moves the file into self.trash (anything else runs)"""
+        """Patch subprocess.run so gio trash moves the file into self.trash (anything else runs), the
+        inbox's drive having a trash"""
         self.trash = os.path.join(self.tmpdir, 'trash')
         os.makedirs(self.trash)
         real_run = subprocess.run
@@ -82,7 +84,9 @@ class InboxSortTest(unittest.TestCase):
                 shutil.move(command[2], self.trash)
                 return subprocess.CompletedProcess(command, 0, stdout='')
             return real_run(command, *args, **kwargs)
-        return mock.patch('subprocess.run', side_effect=run)
+        with mock.patch('subprocess.run', side_effect=run), \
+                mock.patch('dirdelta.trees.localdiskdirtree.fs.has_trash', return_value=True):
+            yield
 
     def ask_ai(self, steps, picks, answers=()):
         """Sort, the inbox's picker answering picks, then the review keeping all, the AI answering steps"""

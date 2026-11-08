@@ -4,6 +4,7 @@ import contextlib
 import os
 
 from dirdelta.trees import dirtree
+from dirdelta.trees.localdiskdirtree import fs
 from dirdelta.trees.localdiskdirtree.copying import LocalCopying
 from dirdelta.trees.localdiskdirtree.local_info import LocalInfo
 from dirdelta.trees.localdiskdirtree.moving import LocalMoving
@@ -72,12 +73,17 @@ class LocalReplica(LocalInfo, LocalCopying, LocalRemoving, LocalMoving, dirtree.
                 if to.has_file(new_relpath):
                     self._tell_moved(dirpath + new_relpath[len(new_dirpath):], new_relpath, to)
 
+    def has_trash(self):
+        """Whether its files can go to the desktop's trash (see fs.has_trash()): else they're removed
+        for good"""
+        return fs.has_trash(self._rootpath)
+
     @contextlib.contextmanager
     def trashing(self):
         """Inside, removing a file moves it to the desktop's trash (gio trash), where it can be
         restored from, rather than removing it for good"""
         self._is_trashing = True
-        self.REMOVED_TO = " (to the trash)"
+        self.REMOVED_TO = " (to the trash)" if self.has_trash() else ", for good (its drive has no trash)"
         try:
             yield
         finally:

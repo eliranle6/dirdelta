@@ -163,8 +163,10 @@ them, with "Nothing" selected first:
   (`junk.py`). And as Claude says, when it's asked where files go: a clearly junk file it recommends
   removing, `[claude: junk? ...]`. Nothing is read for it (no images analysed). "Remove N of the M
   files that look like junk" lists each with why, asks twice, and sends a local file to the
-  desktop's trash (`gio trash`, so it can be restored; not on a tmpfs like `/tmp`, where it's
-  kept and said), a Drive one to Drive's trash.
+  desktop's trash (`gio trash`, so it can be restored), a Drive one to Drive's trash. A drive that
+  has no trash of the user's (another drive than the home's, e.g. a Windows one mounted, or a tmpfs,
+  without a `.Trash-UID` of the user's at its top) gets none made: its files are removed for good
+  at once, and the confirmations say so. So do a replaced file's old versions there.
 - Where "to..." goes: the sorted tree's recent dirs first (the last 10 that files were moved or copied
   to, kept in `replicas.json`), or "Pick a dir", where `n` makes a new dir in the selected one (its
   name typed next; `a/b` makes both), made when the files go there.

@@ -114,6 +114,8 @@ class Transfer(object):
         """Remove the inbox's files at relpaths, once the user confirms twice; listed: the lines that
         list them (else their relpaths). With to_trash, a local inbox's go to the desktop's trash
         (Drive's go to its trash anyway), rather than for good."""
+        # (A drive without a trash: for good, and the confirmation says so)
+        to_trash = to_trash and (self.inbox_is_cloud or self._inbox_tree.has_trash())
         lines = ["Remove %s from %s?" % (files_text(len(relpaths)), self.inbox_path)]
         listed = listed or ["  %s" % (relpath,) for relpath in relpaths]
         lines += text.listed(listed, filescreen.MAX_FILES_LISTED)

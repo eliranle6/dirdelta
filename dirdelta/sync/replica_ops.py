@@ -91,6 +91,14 @@ def refresh_replica(replica, relpath=''):
 is_local = localdiskdirtree.is_local
 
 
+def discarded_to(replica):
+    """Where the replica's files removed or replaced go: the trash, or nowhere (a drive without a
+    trash, see fs.has_trash()), or Drive's (a cloud one's)"""
+    if not is_local(replica):
+        return "to Drive's trash"
+    return "to the trash" if replica.has_trash() else "for good: its drive has no trash"
+
+
 def is_writable(replica):
     """Whether files can be copied into the replica, removed from it and moved in it: Drive, or a
     local dir with write permission (none on a read-only mount)"""

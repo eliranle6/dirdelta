@@ -135,7 +135,9 @@ def fake_trash(test):
 
     def trash(path):
         shutil.move(path, os.path.join(trash_dir, os.path.basename(path)))
-    patcher = mock.patch('dirdelta.trees.localdiskdirtree.fs.trash', side_effect=trash)
-    patcher.start()
-    test.addCleanup(patcher.stop)
+    # (Every drive has a trash: the tests' temp files may be on one that hasn't, e.g. /dev/shm)
+    for patcher in (mock.patch('dirdelta.trees.localdiskdirtree.fs.trash', side_effect=trash),
+                    mock.patch('dirdelta.trees.localdiskdirtree.fs.has_trash', return_value=True)):
+        patcher.start()
+        test.addCleanup(patcher.stop)
     return trash_dir

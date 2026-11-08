@@ -67,7 +67,7 @@ class Copying(object):
     def _replaced_note(self, replica, count):
         """A confirmation's line of what happens to the replica's count versions replaced"""
         if replica_ops.is_local(replica):
-            where = "to the trash"
+            where = replica_ops.discarded_to(replica)
         else:
             where = "kept by Drive as an older version"
         return "%s's versions of %s are replaced (%s)." % (replica.displayname(), "it" if count == 1 else "the " + replica_ops.files_text(count), where)
@@ -76,7 +76,8 @@ class Copying(object):
         """Copy the files at relpaths to dst, or remove them from src (action), once the user confirms.
         Returns the ones done (in a dry run, the ones it would have done), or None if the user didn't
         confirm. With to_trash, a local src's go to the desktop's trash, rather than for good."""
-        to_trash = to_trash and replica_ops.is_local(self._src)
+        # (A drive without a trash: for good, and the confirmation says so)
+        to_trash = to_trash and replica_ops.is_local(self._src) and self._src.has_trash()
         if not self._confirm(action, relpaths, to_trash):
             return None
         self._last_action = action

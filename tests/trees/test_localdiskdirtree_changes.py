@@ -60,6 +60,7 @@ class ChangesTest(LocalDiskDirTreeTest):
         with mock.patch('dirdelta.util.dryrun.DRYRUN', False), \
                 mock.patch('dirdelta.ui.messages.print_line') as print_line, \
                 mock.patch('dirdelta.trees.localdiskdirtree.fs.subprocess.run', side_effect=run), \
+                mock.patch('dirdelta.trees.localdiskdirtree.fs.has_trash', return_value=True), \
                 mock.patch('dirdelta.trees.localdiskdirtree.fs.os.unlink', wraps=os.unlink) as unlink:
             with tree.trashing():
                 tree.remove_files([tree.get_node('a.txt').data, tree.get_node('b.txt').data])
@@ -72,6 +73,18 @@ class ChangesTest(LocalDiskDirTreeTest):
         # Removing for good again, after
         self.assertFalse(tree._is_trashing)
         self.assertEqual(tree.REMOVED_TO, "")
+
+    def test_on_a_drive_without_a_trash_trashing_removes_for_good(self):
+        tree = self._scan(['a.txt'])
+        with mock.patch('dirdelta.util.dryrun.DRYRUN', False), \
+                mock.patch('dirdelta.ui.messages.print_line') as print_line, \
+                mock.patch('dirdelta.trees.localdiskdirtree.fs.subprocess.run') as run, \
+                mock.patch('dirdelta.trees.localdiskdirtree.fs.has_trash', return_value=False):
+            with tree.trashing():
+                tree.remove_files([tree.get_node('a.txt').data])
+        run.assert_not_called()
+        self.assertFalse(os.path.exists(os.path.join(self.src_root, 'a.txt')))
+        self.assertIn('for good (its drive has no trash)', print_line.call_args_list[-1].args[0])
 
     def test_removing_files_removes_the_dirs_left_empty(self):
         with mock.patch('dirdelta.util.dryrun.DRYRUN', False):

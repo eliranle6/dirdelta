@@ -93,7 +93,7 @@ class Showing(object):
             for arrow, src, dst in (("⇒", self.replica_a, self.replica_b), ("⇐", self.replica_b, self.replica_a)):
                 names = {self.replica_a: self.name_a, self.replica_b: self.name_b}
                 lines.append("%s %s's replaces %s's (%s)" % (
-                    arrow, names[src], names[dst], "to the trash" if replica_ops.is_local(dst) else "Drive keeps it")
+                    arrow, names[src], names[dst], replica_ops.discarded_to(dst) if replica_ops.is_local(dst) else "Drive keeps it")
                     if replica_ops.can_copy(src, dst) else "%s can't be done: %s" % (
                         arrow, "%s is read-only" % (names[dst],) if not replica_ops.is_writable(dst)
                         else "dirdelta doesn't copy within Drive"))

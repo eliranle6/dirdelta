@@ -81,8 +81,8 @@ class CombinedSync(showing.Showing, ask_ai.AskAI):
         for replica, name, relpaths in ((self.replica_b, self.name_b, plan.replace_b),
                                         (self.replica_a, self.name_a, plan.replace_a)):
             if relpaths:
-                lines.append("%s's versions replaced go %s." % (name, "to the trash" if replica_ops.is_local(replica)
-                                                                else "to Drive's older versions"))
+                lines.append("%s's versions replaced go %s." % (name, replica_ops.discarded_to(replica)
+                                                                if replica_ops.is_local(replica) else "to Drive's older versions"))
         if dryrun.DRYRUN:
             lines.append(dryrun.NOTE)
         label = ('SYNC', 'blue')
@@ -91,6 +91,8 @@ class CombinedSync(showing.Showing, ask_ai.AskAI):
         nr_removed = plans.removals(plan)
         if not nr_removed:
             return True
-        sure = "Are you sure? %s will be removed (a local replica's to the trash, Drive's to its trash)." % (
-            text.files(nr_removed),)
+        removed_from = [(replica, name) for replica, name, relpaths in (
+            (self.replica_a, self.name_a, plan.remove_from_a), (self.replica_b, self.name_b, plan.remove_from_b)) if relpaths]
+        sure = "Are you sure? %s will be removed (%s)." % (text.files(nr_removed), "; ".join(
+            "%s's %s" % (name, replica_ops.discarded_to(replica)) for replica, name in removed_from))
         return picker.pick_option([CONFIRM_NO, CONFIRM_SURE], header=sure, title="Sure?", label=label) == CONFIRM_SURE
