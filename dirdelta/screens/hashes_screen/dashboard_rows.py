@@ -9,7 +9,7 @@ from dirdelta.matching import syncstate
 from dirdelta.screens.hashes_screen.dashboard_actions import is_there, label_option
 from dirdelta.screens.hashes_screen.dashboard_lines import cache_age, drive_lines, job_of
 from dirdelta.screens.hashes_screen.names import (BAR, DRIVE, DRIVE_NOTE, FILES, HASH, HEADING,
-                                                  HEADING_TEXT, INFO, KNOWN, LABEL, PAIR, PAIR_STATE,
+                                                  HEADING_TEXT, INFO, KNOWN, LABEL, MEDIA, PAIR, PAIR_STATE,
                                                   RESCAN, STATE, TOGGLE, files_text)
 from dirdelta.trees import paths
 from dirdelta.ui import picker
@@ -53,7 +53,7 @@ def add_replica(item, options, shown, known, names):
         options.append((KNOWN, number, name))
         shown[options[-1]] = picker.Skipped(line)
     if job is not None:
-        options += [(BAR, name), (STATE, name), (TOGGLE, name), (FILES, name), (RESCAN, name)]
+        options += [(BAR, name), (STATE, name), (TOGGLE, name), (MEDIA, name), (FILES, name), (RESCAN, name)]
     elif isinstance(tree, clouddirtree.CloudDirTree):
         nr_files, size, first, note = drive_lines(tree)
         # When Drive's file list was read, in its freshness's color

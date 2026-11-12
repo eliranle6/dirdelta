@@ -1,5 +1,7 @@
 import os
 import shutil
+import stat
+import sys
 import tempfile
 import unittest
 from unittest import mock
@@ -82,6 +84,60 @@ class ImagesTest(unittest.TestCase):
     def test_without_pdftoppm_a_pdf_has_none(self):
         path = self.write('doc.pdf', Image.new('RGB', (10, 10)))
         with mock.patch('shutil.which', return_value=None):
+            self.assertIsNone(images.of_local_file(path, 30, 30))
+
+    def fake_ffmpeg(self, frame_from):
+        """An ffmpeg first on PATH that writes a green 20x10 PNG when asked for a frame from frame_from
+        seconds on (else nothing, as a real one does past a video's end), and notes its arguments"""
+        bin_dir = os.path.join(self.dir, 'bin')
+        os.mkdir(bin_dir)
+        self.ffmpeg_calls = os.path.join(self.dir, 'calls')
+        script = os.path.join(bin_dir, 'ffmpeg')
+        with open(script, 'w') as f:
+            f.write("#!%s\n"
+                    "import io, sys\n"
+                    "from PIL import Image\n"
+                    "args = sys.argv[1:]\n"
+                    "open(%r, 'a').write(' '.join(args) + '\\n')\n"
+                    "if args[args.index('-ss') + 1] == %r:\n"
+                    "    out = io.BytesIO()\n"
+                    "    Image.new('RGB', (20, 10), (0, 255, 0)).save(out, 'PNG')\n"
+                    "    sys.stdout.buffer.write(out.getvalue())\n" % (sys.executable, self.ffmpeg_calls, frame_from))
+        os.chmod(script, os.stat(script).st_mode | stat.S_IXUSR)
+        return mock.patch.dict(os.environ, {'PATH': bin_dir + os.pathsep + os.environ.get('PATH', '')})
+
+    def test_a_videos_frame_a_second_in_and_not_limited_by_its_size(self):
+        path = os.path.join(self.dir, 'clip.MP4')
+        with open(path, 'wb') as f:
+            f.write(b'x' * 100)
+        with self.fake_ffmpeg('1'), mock.patch.object(images, 'MAX_FILE_BYTES', 10):
+            self.assertTrue(images.has_picture(path))
+            width, height, pixels = decoded(images.of_local_file(path, 40, 40))
+        self.assertEqual((width, height, pixels[0]), (20, 10, (0, 255, 0)))
+        with open(self.ffmpeg_calls) as f:
+            calls = f.read().splitlines()
+        self.assertEqual(len(calls), 1)
+        self.assertIn('-i %s' % (path,), calls[0])
+
+    def test_a_video_shorter_than_a_second_has_its_first_frame(self):
+        path = os.path.join(self.dir, 'short.mov')
+        open(path, 'wb').close()
+        with self.fake_ffmpeg('0'):
+            self.assertEqual(decoded(images.of_local_file(path, 40, 40))[:2], (20, 10))
+        with open(self.ffmpeg_calls) as f:
+            self.assertEqual(len(f.read().splitlines()), 2)
+
+    def test_a_video_without_a_frame_has_none(self):
+        path = os.path.join(self.dir, 'broken.mkv')
+        open(path, 'wb').close()
+        with self.fake_ffmpeg('never'):
+            self.assertIsNone(images.of_local_file(path, 40, 40))
+
+    def test_without_ffmpeg_a_video_has_none(self):
+        path = os.path.join(self.dir, 'clip.mp4')
+        open(path, 'wb').close()
+        with mock.patch('shutil.which', return_value=None):
+            self.assertFalse(images.has_picture(path))
             self.assertIsNone(images.of_local_file(path, 30, 30))
 
     def test_of_data(self):

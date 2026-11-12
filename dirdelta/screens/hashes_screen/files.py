@@ -42,6 +42,8 @@ def _send_hash_previews(job, selection, send):
             lines.append("Being hashed now")
         elif relpath in job.failed():
             lines.append("Couldn't be hashed (unreadable, or changing while read)")
+        elif job.is_left_out(relpath):
+            lines.append("Not hashed: media files are left out (the dashboard hashes them too)")
         elif size is not None:
             lines.append("Not hashed yet" + ("" if job.is_started() else " (hashing is paused)"))
         send({relpath: lines}, default=[])

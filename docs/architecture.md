@@ -104,6 +104,7 @@ The map (each module's docstring's first line; generated from the code):
   - `hashing/`: Hashing local replicas' files in the background, all of them, so a file can be looked up by its contents (else...
     - `job.py`: A local replica's hashing job (Job): its files hashed in the background, by the pool's threads
     - `job_files.py`: What a job knows of its files, and who it tells as they're hashed
+    - `job_media.py`: A job's media files (images, audio, video, see media.py): hashed after its others, or left out
     - `job_scanning.py`: A job's scan: listing its replica's files, and telling which are hashed already
     - `pool.py`: The threads that hash the jobs' files, and how many there are
     - `reading.py`: Reading a file to hash it: at the lowest priority, without filling the page cache
@@ -269,6 +270,7 @@ The map (each module's docstring's first line; generated from the code):
   - `dryrun.py`: Whether dirdelta changes files. Unless DRYRUN=0 is set it's a dry run: actions that change files (copying, rem...
   - `programs.py`: dirdelta's C++ programs (treepicker, dirdiff), from the lib/treepicker submodule: finding them.
   - `text.py`: Small texts said everywhere, said one way: counts of files, lists cut short, sizes and durations
+  - `media.py`: Which files are media (images, audio, video), by their extensions: hashed last, or left out; a video's frame previewed
   - `exif/`: When a photo was taken, from its EXIF data (DateTimeOriginal), read from a JPEG's header, a HEIF (HEIC) file's...
     - `dates.py`: When a photo was taken, by its format
     - `formats.py`: The files read, by extension, how much of each, and the EXIF tags and markers looked for
@@ -528,7 +530,12 @@ label on the status bar.
 `hashing.Job(root)`: a local replica's hashing. `scan()` lists its files (one
 `find -type f -printf '%s %T@ %P'`) and takes the ones the hash cache has with
 the same size and mtime as hashed; `start()`/`pause()`; `first(relpaths)` puts
-files ahead (a sync's picker puts the files it shows). One `_Pool` of
+files ahead (a sync's picker puts the files it shows). Its media files (`util/media.py`: images,
+audio, video, by extension) are queued after the others (`_media`, each in find's order): the least
+likely to have changed and the biggest; `set_media(False)` leaves out the ones not hashed yet (the
+ones asked for first too), its `progress()` then counting only the rest (so it's `DONE` without them;
+`nr_left_out`, `size_left_out` say what's left out), and `set_media(True)` takes them up again;
+`left()` says how many of each kind are left, and their sizes. It's kept for the run, not saved. One `_Pool` of
 `nr_workers()` threads (physical cores − 1) serves all jobs in turn; a job on a
 spinning disk (`is_rotational()`) uses one at a time. Each worker lowers its
 own CPU (nice 19) and I/O (idle, `ioprio_set`) priority, reads a file in
@@ -539,18 +546,19 @@ the job's subscribers (`subscribe()`: `elsewhere.Index`, `hashes_screen.Marks`).
 `RATE_WINDOW`, failures). What's shown of it is `hashes_screen/status.py`'s
 (imported as `hash_status`): `percent()` (of bytes), `color()` (red < 34%,
 orange < 67%, yellow, green when done), `status_text()`, `tag()` (`[● hashed]`, `[◐ hashing now]`, `[○ not hashed yet]`,
-`[✕ couldn't be hashed]`, after a file's name in the pickers).
+`[○ media, left out]`, `[✕ couldn't be hashed]`, after a file's name in the pickers).
 Jobs are kept by root (`job()`, `job_for()`), for the whole run.
 
 `hashes_screen.prepare(replicas)` scans the local replicas' jobs; `offer(jobs)`
 asks whether to hash what's left (now and wait, `wait()`, a progress screen
-that Ctrl-C leaves while it goes on; in the background; or not now), and starts
+that Ctrl-C leaves while it goes on; in the background; or not now; and, when a replica has both
+media files and others left, the same two leaving the media out, with each kind's count and size), and starts
 the jobs all hashed already, so later files are hashed too. `dashboard(jobs,
 known, other_paths)`, the "Replicas dashboard" (the sync's menu, `#` in the
 file pickers, and the start menu's, of every known replica): a menu, live
 through `shown_as`, of each replica's files (how many, their size), what
 `replicas.json` knows of it, and its job's bar, state, current
-file, failures, Pause/Resume, its files (`view_files()`: a tree of them with
+file, failures, Pause/Resume, leaving out its media files or hashing them too, its files (`view_files()`: a tree of them with
 their tags, the selected one's hash beside it) and a new scan; and each cloud
 replica's Drive hashes (how many have SHA-1, SHA-256). `Marks`: a picker's
 `shown_as` that puts each file's tag after its name (only the changed ones
@@ -1114,7 +1122,9 @@ round-trip. Tests (`tests/test_picker.py`) run a fake treepicker script.
 The selected file's picture, below the preview column's text in the sync's and the inbox's file
 pickers (`images.of_replica()`, their `pick_files(images=...)`): a local image by Pillow (decoded at a
 fraction of its size with `draft()`, turned by its EXIF orientation, transparency on black), a PDF's
-first page by `pdftoppm`, a Drive file's thumbnail (`CloudDirTree.thumbnail()`: its `thumbnailLink`,
+first page by `pdftoppm`, a local video's frame by `ffmpeg` (a second in, seeking to it without
+decoding up to it, else its first, for a shorter one; whatever the video's size, as it's not read
+whole; `VIDEO_TIMEOUT`), a Drive file's thumbnail (`CloudDirTree.thumbnail()`: its `thumbnailLink`,
 asked for at the size wanted, got with the login by `driveapi.get_url()`). As big as the whole
 screen can show (`picker._image_box()`: the terminal's width and twice its rows, for treepicker's `z`,
 which shows it on the whole screen; it's made smaller for the column there), sent as hex RGB.

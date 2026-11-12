@@ -6,6 +6,7 @@ import time
 
 from dirdelta.hashes import hashcache
 from dirdelta.hashes.hashing.job_files import JobFiles
+from dirdelta.hashes.hashing.job_media import JobMedia
 from dirdelta.hashes.hashing.job_scanning import JobScanning
 from dirdelta.hashes.hashing.pool import pool, is_rotational
 from dirdelta.hashes.hashing.reading import Paused, hash_file
@@ -13,7 +14,7 @@ from dirdelta.hashes.hashing.states import (ALGORITHM, DONE, HASHING, NOT_SCANNE
                                             SCANNED, SCANNING)
 
 
-class Job(JobScanning, JobFiles):
+class Job(JobScanning, JobFiles, JobMedia):
 
     """Hashing a local replica's files (see the module's doc)"""
 
@@ -31,11 +32,16 @@ class Job(JobScanning, JobFiles):
         self._is_started = False
         self._was_started = False
         # {relpath: (size, mtime_ns)} of its files, as of the scan, and {relpath: hash} of the ones
-        # hashed; the ones left (find's order: a dir's files together), and the ones to hash first
+        # hashed; the ones left (find's order: a dir's files together), the media files left (after the
+        # others, see JobMedia), and the ones to hash first; which of its files are media, and whether
+        # they're hashed
         self._files = {}
         self._hashes = {}
         self._left = collections.deque()
+        self._media = collections.deque()
         self._first = collections.deque()
+        self._media_files = set()
+        self.with_media = True
         # The ones that couldn't be hashed (unreadable, or changing while read), and the ones being
         # hashed now
         self._failed = set()
@@ -78,9 +84,12 @@ class Job(JobScanning, JobFiles):
                 return None
             if self.max_workers is not None and self._nr_workers >= self.max_workers:
                 return None
-            for queue in (self._first, self._left):
+            for queue in (self._first, self._left) + ((self._media,) if self.with_media else ()):
                 while queue:
                     relpath = queue.popleft()
+                    if not self.with_media and relpath in self._media_files:
+                        # Left out (the ones asked for first too): it stays in _media, for later
+                        continue
                     if relpath in self._files and relpath not in self._hashes and relpath not in self._current:
                         self._current.add(relpath)
                         self._nr_workers += 1
@@ -134,7 +143,8 @@ class Job(JobScanning, JobFiles):
         """Its state (see NOT_SCANNED), with the lock held"""
         if not self._is_scanned:
             return SCANNING if self._is_scanning else NOT_SCANNED
-        if not self._current and len(self._hashes) + len(self._failed) >= len(self._files):
+        nr_left_out = len(self._left_out()) if not self.with_media else 0
+        if not self._current and len(self._hashes) + len(self._failed) >= len(self._files) - nr_left_out:
             return DONE
         return HASHING if self._is_started else SCANNED
 
@@ -148,8 +158,10 @@ class Job(JobScanning, JobFiles):
                 if elapsed > 0:
                     rate = sum(size for _, size in list(self._samples)[1:]) / elapsed
             state = self._state()
-            return Progress(state, len(self._files), len(self._hashes) + len(self._failed),
-                            sum(size for size, _ in self._files.values()), self._size_done,
+            left_out = self._left_out() if not self.with_media else ()
+            size_left_out = sum(self._files[relpath][0] for relpath in left_out)
+            return Progress(state, len(self._files) - len(left_out), len(self._hashes) + len(self._failed),
+                            sum(size for size, _ in self._files.values()) - size_left_out, self._size_done,
                             sorted(self._current), rate, len(self._failed),
                             self._was_started and not self._is_started and state == SCANNED,
-                            self._is_started)
+                            self._is_started, len(left_out), size_left_out)

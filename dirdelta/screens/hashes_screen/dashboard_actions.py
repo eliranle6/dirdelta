@@ -11,7 +11,7 @@ from dirdelta.matching import syncstate
 from dirdelta.screens import label_screen
 from dirdelta.screens.hashes_screen.dashboard_lines import jobs_by_name, jobs_shown
 from dirdelta.screens.hashes_screen.files import view_files
-from dirdelta.screens.hashes_screen.names import BACK, TITLE, FILES, HASH, LABEL, RESCAN, TOGGLE
+from dirdelta.screens.hashes_screen.names import BACK, TITLE, FILES, HASH, LABEL, MEDIA, RESCAN, TOGGLE
 from dirdelta.trees import localscan
 from dirdelta.trees import paths
 from dirdelta.ui import picker
@@ -81,6 +81,8 @@ def finish_dashboard(items, options, shown, names, jobs, known, selected=None):
                     job.pause()
                 else:
                     job.start()
+            elif option == (MEDIA, name):
+                job.set_media(not job.with_media)
             elif option == (FILES, name):
                 view_files(job)
             elif option == (RESCAN, name):

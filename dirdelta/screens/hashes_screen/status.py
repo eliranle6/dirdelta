@@ -5,13 +5,15 @@ from dirdelta.util import text
 
 
 # What a file is shown as in a picker, after its name (a search, e.g. /not hashed, finds them):
-# hashed, being hashed now, not yet, or couldn't be (unreadable, or changing while read)
+# hashed, being hashed now, not yet, left out (a media file, when they're left out), or couldn't be
+# (unreadable, or changing while read)
 HASHED_TAG = "[\u25cf hashed]"
 HASHING_TAG = "[\u25d0 hashing now]"
 NOT_HASHED_TAG = "[\u25cb not hashed yet]"
+LEFT_OUT_TAG = "[\u25cb media, left out]"
 FAILED_TAG = "[\u2715 couldn't be hashed]"
 # Each one's style (see picker.styled()): hashing in orange, as its status label
-TAG_STYLES = {HASHED_TAG: 'green', HASHING_TAG: 'orange', NOT_HASHED_TAG: 'grey', FAILED_TAG: 'red'}
+TAG_STYLES = {HASHED_TAG: 'green', HASHING_TAG: 'orange', NOT_HASHED_TAG: 'grey', LEFT_OUT_TAG: 'grey', FAILED_TAG: 'red'}
 
 
 def tag(job, relpath):
@@ -20,7 +22,9 @@ def tag(job, relpath):
         return HASHED_TAG
     if job.is_being_hashed(relpath):
         return HASHING_TAG
-    return FAILED_TAG if job.is_failed(relpath) else NOT_HASHED_TAG
+    if job.is_failed(relpath):
+        return FAILED_TAG
+    return LEFT_OUT_TAG if job.is_left_out(relpath) else NOT_HASHED_TAG
 
 
 def percent(progress):

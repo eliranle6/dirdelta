@@ -7,6 +7,7 @@ from dirdelta.hashes.hashing.pool import pool
 from dirdelta.hashes.hashing.reading import list_files
 from dirdelta.hashes.hashing.states import ALGORITHM
 from dirdelta.trees import paths
+from dirdelta.util import media
 
 
 class JobScanning(object):
@@ -50,6 +51,7 @@ class JobScanning(object):
         listed = {relpath: stamp for relpath, stamp in listed.items() if not paths.is_meta(relpath)}
         kept = hashcache.known_under(self.root)
         hashes, left, size_done = {}, [], 0
+        media_files = {relpath for relpath in listed if media.is_media(relpath)}
         for relpath, stamp in listed.items():
             known = kept.get(relpath)
             if known is not None and known[:2] == stamp and ALGORITHM in known[2]:
@@ -62,7 +64,10 @@ class JobScanning(object):
             self._files, self._hashes = listed, hashes
             # The ones that couldn't be hashed are tried again
             self._failed = set()
-            self._left = collections.deque(left)
+            # The media files after the others (see JobMedia), each in find's order
+            self._left = collections.deque(relpath for relpath in left if relpath not in media_files)
+            self._media = collections.deque(relpath for relpath in left if relpath in media_files)
+            self._media_files = media_files
             self._first = collections.deque(relpath for relpath in self._first if relpath in listed)
             self._size_done = size_done
             self.error = None

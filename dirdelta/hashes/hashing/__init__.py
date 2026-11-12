@@ -14,9 +14,13 @@ fewer than the machine's physical cores (hashlib and reading let go of the GIL),
 and I/O priority, and without filling the page cache with them; a job of a spinning disk's replica
 uses one of them at a time, since reading several files at once makes a disk seek between them.
 
+A replica's media files (images, audio, video: media.py) are hashed after its others, being the least
+likely to change and the biggest; or left out (Job.set_media()), its progress then counting only the
+others (so "done" still means all it's to hash is hashed).
+
 Its parts are in the modules here; the names the rest of dirdelta uses are here too."""
 from dirdelta.hashes.hashing.job import Job  # noqa: F401
 from dirdelta.hashes.hashing.registry import job, job_for, jobs  # noqa: F401
 from dirdelta.hashes.hashing.pool import is_rotational, nr_workers, physical_cores  # noqa: F401
 from dirdelta.hashes.hashing.states import (ALGORITHM, DONE, HASHING, NOT_SCANNED, SCANNED,  # noqa: F401
-                                            SCANNING, Progress)
+                                            Left, SCANNING, Progress)

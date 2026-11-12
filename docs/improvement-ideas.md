@@ -129,8 +129,9 @@ Ordered by how easy they are, easiest first (2026-10-30). Ideas 3, 2.1 and 6 hav
    4.2 A cheaper first step, in the terminal: done (2026-11-06, `images.py`): the preview column
        shows the selected file's picture below its text, with half blocks in 256 colors rather than
        a graphics protocol (sixel, kitty's), which curses can't keep from covering the other panes.
-       What's left: a video's frame (needs `ffmpeg`), and more rows for it when there's a side tree
-       (it gets what's left of the column's lower 2/5 now). A key to see it bigger is there
+       A local video's frame is there too (2026-11-13, by `ffmpeg`, when it's installed). What's
+       left: more rows for it when there's a side tree (it gets what's left of the column's lower 2/5
+       now), a treepicker change (the side tree would shrink while a picture's shown). A key to see it bigger is there
        (2026-11-07: treepicker's `z`, on the whole screen).
 
 5. **Bring the phone's new photos in, periodically.** The user connects the phone to the laptop
@@ -250,19 +251,12 @@ Ordered by how easy they are, easiest first (2026-10-30). Ideas 3, 2.1 and 6 hav
        laptop's (`/mnt/win` is the laptop's Windows drive), so the replicas it serves may
        differ.
 
-9. **Hash media last, and offer to leave it out** (2026-11-07). Today a replica's files are hashed in
-   find's order (a dir's files together), after the ones asked for first. Images, audio and video are
-   the least likely to change, and the most likely to be the same file when the name and size match,
-   so hashing them tells the least for the time it takes (they're also the biggest). So:
-   9.1 Order: the other files first, media last (by extension, as `images.py`'s lists, plus audio and
-       video's), each group in find's order as now.
-   9.2 The offer to hash (`hashes_screen/offering.py`'s "Hash unhashed files?") asks whether to hash
-       all, or all but the media, with the counts and sizes of each ("3,200 files, 4 GB; and 18,000
-       media files, 210 GB"); the dashboard can add the media later. A job then has a filter, and
-       its progress counts only what it's to hash (so "100% hashed" still means done).
-   9.3 What it costs: media files left unhashed are matched by name and size only (`elsewhere`),
-       and same-sized media at the same paths stay "not verified" (the sync pickers' warning).
-   Effort: small to medium (the job's order and filter, the offer's question, the dashboard, tests).
+9. **Hash media last, and offer to leave it out.** Done (2026-11-13, `util/media.py`,
+   `hashing/job_media.py`): a replica's images, audio and video are hashed after its other files; the
+   offer to hash asks whether to leave them out (with each kind's count and size), when there are
+   both; the dashboard leaves them out or hashes them too, per replica; a file left out is tagged
+   `[○ media, left out]`. Left out, they're matched by name and size only. What's left: the choice
+   is for the run (not kept with the replica), so the next run's offer asks again.
 
 10. **Suggested actions in the combined tree: a record of each sync, or policies** (2026-11-07, not
     sure it's needed yet). Plan C's combined tree starts every entry at skip. Two ways to start

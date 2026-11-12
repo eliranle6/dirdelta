@@ -56,6 +56,34 @@ class OfferTest(unittest.TestCase):
         self.assertEqual(job.started, 1)
         wait.assert_called_once_with([job])
 
+    def test_with_media_and_others_left_it_offers_leaving_the_media_out(self):
+        job = FakeJob('/photos', progress_of())
+        job.left = lambda: (hashing.Left(2, 2048), hashing.Left(3000, 3 * 1024 ** 3))
+        with helpers.answering_option_picker([hashes_screen.HASH_BUT_MEDIA_IN_BACKGROUND]) as pick, \
+                mock.patch('dirdelta.screens.hashes_screen.offering.wait') as wait:
+            self.assertTrue(hashes_screen.offer([job]))
+        self.assertEqual(pick.call_args.args[0][-2:], [hashes_screen.HASH_BUT_MEDIA_AND_WAIT,
+                                                       hashes_screen.HASH_BUT_MEDIA_IN_BACKGROUND])
+        self.assertIn("2 files unhashed in photos (2.0 KB), and 3,000 media files (3.0 GB).",
+                      pick.call_args.kwargs['header'])
+        self.assertEqual(job.started, 1)
+        self.assertFalse(job.with_media)
+        wait.assert_not_called()
+
+    def test_hashing_all_hashes_the_media_too(self):
+        job = FakeJob('/photos', progress_of())
+        job.with_media = False
+        with helpers.answering_option_picker([hashes_screen.HASH_IN_BACKGROUND]):
+            hashes_screen.offer([job])
+        self.assertTrue(job.with_media)
+
+    def test_without_both_kinds_left_theres_no_choice_of_media(self):
+        job = FakeJob('/photos', progress_of())
+        job.left = lambda: (hashing.Left(0, 0), hashing.Left(6, 100))
+        with helpers.answering_option_picker([hashes_screen.NOT_NOW]) as pick:
+            hashes_screen.offer([job])
+        self.assertNotIn(hashes_screen.HASH_BUT_MEDIA_AND_WAIT, pick.call_args.args[0])
+
     def test_ones_being_hashed_arent_asked_of(self):
         job = FakeJob('/photos', progress_of(state=hashing.HASHING, is_started=True))
         job._is_started = True

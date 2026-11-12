@@ -1,8 +1,8 @@
 """The dashboard's lines of each replica's hashing and Drive's hashes"""
 from dirdelta.hashes import hashing
 from dirdelta.known import replicainfo
-from dirdelta.screens.hashes_screen.names import (BAR, FILES, INFO, RESCAN, STATE, TOGGLE, files_text,
-                                                  is_local)
+from dirdelta.screens.hashes_screen.names import (BAR, FILES, INFO, MEDIA, RESCAN, STATE, TOGGLE, files_text,
+                                                  media_files_text, is_local)
 from dirdelta.screens.hashes_screen.waiting import progress_line
 from dirdelta.trees import paths
 from dirdelta.ui import picker
@@ -42,7 +42,11 @@ def jobs_shown(items, names):
                                      if len(progress.current) > 1 else "")
         if progress.nr_failed:
             state += "; %s couldn't be hashed (unreadable, or changing while read)" % (files_text(progress.nr_failed),)
+        if progress.nr_left_out:
+            state += "; %s left out (%s)" % (media_files_text(progress.nr_left_out),
+                                              text.format_size(progress.size_left_out))
         shown[(STATE, name)] = picker.Skipped("  " + state)
+        shown[(MEDIA, name)] = _media_option(job, progress)
         short = names.get(name, job.name())
         if progress.state == hashing.DONE:
             shown[(TOGGLE, name)] = picker.Disabled("  Pause hashing %s: it's all hashed" % (short,))
@@ -53,6 +57,21 @@ def jobs_shown(items, names):
         shown[(FILES, name)] = "  See its files: which are hashed, and which not yet"
         shown[(RESCAN, name)] = "  Look for new or changed files in it (after changes outside dirdelta)"
     return shown
+
+
+def _media_option(job, progress):
+    """How the option that leaves a replica's media files out of its hashing, or hashes them too, is
+    shown"""
+    if progress.state in (hashing.NOT_SCANNED, hashing.SCANNING):
+        return picker.Disabled("  Leave out its media files (images, audio, video): listing its files")
+    if not job.with_media:
+        return "  Hash its media files too (%s, %s, left out now)" % (
+            media_files_text(progress.nr_left_out), text.format_size(progress.size_left_out))
+    media_left = job.left()[1]
+    if not media_left.nr_files:
+        return picker.Disabled("  Leave out its media files (images, audio, video): none left to hash")
+    return "  Leave out its media files (images, audio, video): %s, %s, not hashed yet" % (
+        media_files_text(media_left.nr_files), text.format_size(media_left.size))
 
 
 def jobs_by_name(items):

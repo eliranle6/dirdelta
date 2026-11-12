@@ -1,6 +1,6 @@
 """The selected file's picture, in a file picker's preview column (picker.pick_files(images=...)): a
 photo or another image (by Pillow, if it's installed), a PDF's first page (by pdftoppm, if it's
-there), or a Drive file's thumbnail (Drive makes them for images, videos, PDFs and Google's files).
+there), a video's frame (by ffmpeg, if it's there), or a Drive file's thumbnail (Drive makes them for images, videos, PDFs and Google's files).
 treepicker draws it with half blocks, two pixels a character, in 256 colors, below the column's text
 (see its --preview's \\x03), so it's made here only as big as the column can show."""
 import io
@@ -14,11 +14,17 @@ try:
 except ImportError:  # Without Pillow, no pictures (the rest is the same)
     Image = ImageOps = None
 
+from dirdelta.util import media
+
 # Files bigger than this aren't read for their picture (it would take too long for a preview)
 MAX_FILE_BYTES = 200 * 1024 ** 2
 PDF_EXTENSIONS = ('.pdf',)
-# How long pdftoppm may take for a page, in seconds
+# How long pdftoppm may take for a page, and ffmpeg for a video's frame, in seconds
 PDF_TIMEOUT = 10
+VIDEO_TIMEOUT = 10
+# Where in a video its frame is taken from, in seconds (its very first is often black, a fade in),
+# or its first, if it's shorter
+VIDEO_FRAME_AT = 1
 # What Pillow opens, by extension (it reads others too, but these are the ones worth trying by name),
 # and HEIF's if pillow-heif is installed
 IMAGE_EXTENSIONS = ('.jpg', '.jpeg', '.jpe', '.png', '.gif', '.webp', '.bmp', '.tif', '.tiff', '.ico',
@@ -50,7 +56,8 @@ def has_picture(name):
     """Whether a file of this name may have a picture to show, by its extension"""
     extension = os.path.splitext(name)[1].lower()
     return (extension in IMAGE_EXTENSIONS or extension in PDF_EXTENSIONS or
-            (extension in HEIF_EXTENSIONS and _heif_opener()))
+            (extension in HEIF_EXTENSIONS and _heif_opener()) or
+            (extension in media.VIDEO_EXTENSIONS and shutil.which('ffmpeg') is not None))
 
 
 def encoded(image, max_width, max_height):
@@ -72,6 +79,9 @@ def of_local_file(path, max_width, max_height):
     if not is_available() or not has_picture(path):
         return None
     try:
+        if media.is_video(path):
+            # Not read whole: ffmpeg seeks to its frame
+            return _of_video(path, max_width, max_height)
         if os.path.getsize(path) > MAX_FILE_BYTES:
             return None
         if path.lower().endswith(PDF_EXTENSIONS):
@@ -100,6 +110,26 @@ def _of_pdf(path, max_width, max_height):
             return None
         with Image.open(prefix + '.png') as image:
             return encoded(image, max_width, max_height)
+
+
+def _of_video(path, max_width, max_height):
+    """The image of a video's frame (at VIDEO_FRAME_AT, or its first), by ffmpeg, or None"""
+    ffmpeg = shutil.which('ffmpeg')
+    if ffmpeg is None:
+        return None
+    for at in (VIDEO_FRAME_AT, 0):
+        try:
+            # Seeking before the input is to the nearest keyframe, without decoding up to it
+            done = subprocess.run([ffmpeg, '-nostdin', '-v', 'error', '-ss', str(at), '-i', path, '-frames:v', '1',
+                                   '-vf', 'scale=%d:%d:force_original_aspect_ratio=decrease' % (max_width, max_height),
+                                   '-f', 'image2pipe', '-c:v', 'png', '-'],
+                                  stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                                  timeout=VIDEO_TIMEOUT)
+        except (subprocess.SubprocessError, OSError):
+            return None
+        if done.stdout:
+            return of_data(done.stdout, max_width, max_height)
+    return None
 
 
 def of_data(data, max_width, max_height):

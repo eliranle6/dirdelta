@@ -19,6 +19,11 @@ DONE = 'done'
 # How far a job has got: how many files it has, how many are hashed (or couldn't be), and their
 # sizes; the files being hashed now; how fast it hashes (bytes a second, None if not known); how
 # many couldn't be hashed (unreadable, or changing while read), and whether it's paused (started,
-# then paused) or started at all
+# then paused) or started at all; and how many media files are left out, unhashed, and their size (not
+# counted in nr_files and size: it's done without them)
 Progress = collections.namedtuple('Progress', ['state', 'nr_files', 'nr_done', 'size', 'size_done',
-                                               'current', 'rate', 'nr_failed', 'is_paused', 'is_started'])
+                                               'current', 'rate', 'nr_failed', 'is_paused', 'is_started',
+                                               'nr_left_out', 'size_left_out'], defaults=(0, 0))
+
+# What's left to hash of one kind of files (Job.left()): how many, and their size
+Left = collections.namedtuple('Left', ['nr_files', 'size'])

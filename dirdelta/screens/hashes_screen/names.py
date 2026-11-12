@@ -13,6 +13,8 @@ HELP_LINES = ["Tags after a file's name (/ searches them too):",
               "  %-24s its contents' hash is known (any name, any size: it's found by it)" % (hash_status.HASHED_TAG,),
               "  %-24s being read now" % (hash_status.HASHING_TAG,),
               "  %-24s matched by its name and size only, for now" % (hash_status.NOT_HASHED_TAG,),
+              "  %-24s matched by its name and size only: media files aren't hashed (the dashboard, %s, "
+              "hashes them too)" % (hash_status.LEFT_OUT_TAG, KEY),
               "  %-24s unreadable, or it changed while it was read" % (hash_status.FAILED_TAG,)]
 
 
@@ -20,6 +22,9 @@ NOTHING = "Nothing: go back"
 NOT_NOW = "Not now (%s starts it later)" % (KEY,)
 HASH_AND_WAIT = "Hash now, and wait"
 HASH_IN_BACKGROUND = "Hash in the background, and go on"
+# The same, leaving out the media files (images, audio, video): offered when there are both kinds left
+HASH_BUT_MEDIA_AND_WAIT = "Hash all but the media files now, and wait"
+HASH_BUT_MEDIA_IN_BACKGROUND = "Hash all but the media files in the background, and go on"
 KEEP_HASHING = "Don't quit: keep hashing"
 QUIT_ANYWAY = "Quit"
 # How often the wait's progress line changes, in seconds
@@ -30,14 +35,19 @@ def files_text(count):
     return text.files(count, grouped=True)
 
 
+def media_files_text(count):
+    """'1 media file', or 'N media files' (grouped)"""
+    return files_text(count).replace("file", "media file", 1)
+
+
 is_local = localdiskdirtree.is_local
 
 
 # The dashboard's options: each (one of these, the replica's path), its text what shown_as says
 HEADING_TEXT = "\u2500\u2500 %s \u2500\u2500"
 HASH = 'hash'
-HEADING, INFO, KNOWN, BAR, STATE, TOGGLE, FILES, RESCAN, DRIVE, DRIVE_NOTE, LABEL = (
-    'heading', 'info', 'known', 'bar', 'state', 'toggle', 'files', 'rescan', 'drive', 'drive note', 'label')
+HEADING, INFO, KNOWN, BAR, STATE, TOGGLE, MEDIA, FILES, RESCAN, DRIVE, DRIVE_NOTE, LABEL = (
+    'heading', 'info', 'known', 'bar', 'state', 'toggle', 'media', 'files', 'rescan', 'drive', 'drive note', 'label')
 BACK = "Back"
 TITLE = "Replicas dashboard"
 

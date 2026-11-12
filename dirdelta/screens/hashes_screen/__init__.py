@@ -10,7 +10,8 @@ from dirdelta.screens.hashes_screen.files import view_files  # noqa: F401
 from dirdelta.screens.hashes_screen.marks import Marks, picker_status  # noqa: F401
 from dirdelta.screens.hashes_screen.names import (BACK, HELP_LINES, KEY, KEY_HINT, PAIRS_HEADING,  # noqa: F401
                                                   REPLICAS_HEADING, TITLE)
-from dirdelta.screens.hashes_screen.names import (HASH_AND_WAIT, HASH_IN_BACKGROUND, KEEP_HASHING, NOT_NOW,  # noqa: F401
-                                                  NOTHING, QUIT_ANYWAY)
+from dirdelta.screens.hashes_screen.names import (HASH_AND_WAIT, HASH_BUT_MEDIA_AND_WAIT,  # noqa: F401
+                                                  HASH_BUT_MEDIA_IN_BACKGROUND, HASH_IN_BACKGROUND,
+                                                  KEEP_HASHING, NOT_NOW, NOTHING, QUIT_ANYWAY)
 from dirdelta.screens.hashes_screen.offering import hashing_status, jobs_of, offer, prepare, scan_with_listing  # noqa: F401
 from dirdelta.screens.hashes_screen.waiting import is_ok_to_quit, wait  # noqa: F401

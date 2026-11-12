@@ -114,6 +114,25 @@ class DashboardTest(unittest.TestCase):
         self.assertEqual(shown[(hashes_screen.names.TOGGLE, '/photos')], "  Pause hashing photos")
         self.assertEqual(shown[''], picker.segments([("photos: 50% hashed (4/10)", 'orange')]))
 
+    def test_its_media_files_are_left_out_and_hashed_again_from_it(self):
+        job = FakeJob('/photos', progress_of(state=hashing.HASHING, is_started=True))
+        job.left = lambda: (hashing.Left(4, 100), hashing.Left(2, 2048))
+        media = (hashes_screen.names.MEDIA, '/photos')
+        self.dashboard(job, [media, hashes_screen.BACK])
+        self.assertFalse(job.with_media)
+        self.assertEqual(self.shown[media], "  Hash its media files too (0 media files, 0 B, left out now)")
+        job.progress_of = progress_of(nr_left_out=2, size_left_out=2048)
+        self.dashboard(job, [hashes_screen.BACK])
+        self.assertIn("2 media files left out (2.0 KB)", self.shown[(hashes_screen.names.STATE, '/photos')].text)
+        self.assertEqual(self.shown[media], "  Hash its media files too (2 media files, 2.0 KB, left out now)")
+        self.dashboard(job, [media, hashes_screen.BACK])
+        self.assertTrue(job.with_media)
+        self.assertEqual(self.shown[media], "  Leave out its media files (images, audio, video): 2 media files, "
+                                            "2.0 KB, not hashed yet")
+        job.left = lambda: (hashing.Left(4, 100), hashing.Left(0, 0))
+        self.dashboard(job, [hashes_screen.BACK])
+        self.assertIsInstance(self.shown[media], picker.Disabled)
+
     def test_a_done_one_cant_be_paused(self):
         job = FakeJob('/photos', progress_of(state=hashing.DONE))
         with mock.patch('dirdelta.hashes.hashing.registry._jobs', {'/photos': job}):

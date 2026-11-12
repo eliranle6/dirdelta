@@ -138,6 +138,56 @@ class JobTest(unittest.TestCase):
         self.assertEqual(self.job.failed(), {'z'})
 
 
+class MediaTest(unittest.TestCase):
+    """Media files (images, audio, video) hashed last, or left out"""
+    def setUp(self):
+        self.root = os.path.realpath(tempfile.mkdtemp(prefix='dirdelta-hashing-'))
+        self.addCleanup(shutil.rmtree, self.root)
+        helpers.make_files(self.root, ['a/IMG_1.JPG', 'a/notes.txt', 'b/clip.mp4', 'b/song.flac', 'z.pdf'])
+        self.job = hashing.Job(self.root)
+        self.addCleanup(self.job.pause)
+        self.job.scan()
+        # Taken by hand, rather than by the pool's workers
+        self.job._is_started = True
+
+    def taken(self):
+        found = []
+        while True:
+            relpath = self.job._next()
+            if relpath is None:
+                return found
+            found.append(relpath)
+            self.job._hash(relpath)
+
+    def test_the_others_first_then_the_media(self):
+        taken = self.taken()
+        self.assertEqual(sorted(taken[:2]), ['a/notes.txt', 'z.pdf'])
+        self.assertEqual(sorted(taken[2:]), ['a/IMG_1.JPG', 'b/clip.mp4', 'b/song.flac'])
+        self.assertEqual(self.job.progress().state, hashing.DONE)
+
+    def test_whats_left_of_each_kind(self):
+        self.assertEqual(self.job.left(), (hashing.Left(2, len('a/notes.txt') + len('z.pdf')),
+                                           hashing.Left(3, len('a/IMG_1.JPG') + len('b/clip.mp4') + len('b/song.flac'))))
+
+    def test_left_out_its_done_without_them_even_those_asked_for_first(self):
+        self.job.set_media(False)
+        self.job.first(['b/clip.mp4'])
+        self.assertEqual(sorted(self.taken()), ['a/notes.txt', 'z.pdf'])
+        progress = self.job.progress()
+        self.assertEqual((progress.state, progress.nr_files, progress.nr_done, progress.nr_left_out),
+                         (hashing.DONE, 2, 2, 3))
+        self.assertEqual(progress.size, len('a/notes.txt') + len('z.pdf'))
+        self.assertTrue(self.job.is_left_out('b/clip.mp4'))
+        self.assertFalse(self.job.is_left_out('z.pdf'))
+        # Then hashed too, when asked
+        self.job.set_media(True)
+        self.assertEqual(self.job.progress().state, hashing.HASHING)
+        self.assertEqual(sorted(self.taken()), ['a/IMG_1.JPG', 'b/clip.mp4', 'b/song.flac'])
+        progress = self.job.progress()
+        self.assertEqual((progress.state, progress.nr_files, progress.nr_left_out), (hashing.DONE, 5, 0))
+        self.assertFalse(self.job.is_left_out('b/clip.mp4'))
+
+
 class HashFileTest(unittest.TestCase):
     def setUp(self):
         self.root = tempfile.mkdtemp(prefix='dirdelta-hashing-')
