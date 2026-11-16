@@ -12,7 +12,7 @@ sizes and what Claude says, and each replica's last_update.txt (read, shown, and
 sync), 2026-10-30; hashing whole local replicas in the background, 2026-10-31; the 2026-10-31 peer review's, `docs/peer_review.md` until it was done) are in git history. treepicker's own are in `lib/treepicker/docs/improvement-ideas.md`.
 
 Ordered by how easy they are, easiest first (2026-10-30). Ideas 3, 2.1 and 6 have worked-out plans in
-`docs/plans.md` (2026-11-06).
+`docs/plans.md` (2026-11-06), all three done now.
 
 1. **Find moved files better.** What's there (2026-10-29, `elsewhere.py`): each direction's
    picker shows, beside the selected file, where the other replica may have it: its files of the
@@ -39,8 +39,12 @@ Ordered by how easy they are, easiest first (2026-10-30). Ideas 3, 2.1 and 6 hav
 
 2. **Sort an inbox: what's left.** Sorting an inbox into a sorted tree, with Claude's descriptions
    and recommendations, is there (2026-10-29: `inbox.py`, `ai.py`). What's left:
-   2.1 The other replicas: a file moved into the sorted tree (`cloud/eliran/...`) could be copied into
-       its other replicas too (e.g. `/mnt/win/Users/.../eliran/...`), in the same plan.
+   2.1 The other replicas: done (2026-11-14, `inbox/followers/`, plan B but picked at the start): as
+       a sort starts, the user picks which of the sorted tree's other replicas (the ones picked
+       before, then the other halves of its synced pairs, or another) get copies of what it moves or
+       copies into it; none unless picked. A file one has already is never overwritten (a different
+       one is listed). What's left of plan B: a queue for a replica not mounted then (it can't be
+       picked now), the start menu's "behind" line, and sending renames and removals too.
    2.2 Junk by image analysis. Keep as an idea, but don't implement (2026-10-30): it may take a lot
        of tokens. Junk by names, sizes and what Claude says of them is there (`junk.py`, 2026-10-30);
        this would add Haiku judging, while it reads a photo to describe it, whether it's a bad one (a
@@ -129,10 +133,10 @@ Ordered by how easy they are, easiest first (2026-10-30). Ideas 3, 2.1 and 6 hav
    4.2 A cheaper first step, in the terminal: done (2026-11-06, `images.py`): the preview column
        shows the selected file's picture below its text, with half blocks in 256 colors rather than
        a graphics protocol (sixel, kitty's), which curses can't keep from covering the other panes.
-       A local video's frame is there too (2026-11-13, by `ffmpeg`, when it's installed). What's
-       left: more rows for it when there's a side tree (it gets what's left of the column's lower 2/5
-       now), a treepicker change (the side tree would shrink while a picture's shown). A key to see it bigger is there
-       (2026-11-07: treepicker's `z`, on the whole screen).
+       A local video's frame is there too (2026-11-13, by `ffmpeg`, when it's installed). With a
+       side tree, the side tree shrinks while a picture's shown (2026-11-14, treepicker: to 3 rows at
+       least, the picture getting the rows it needs, until the side tree is moved into). A key to see
+       it bigger is there (2026-11-07: treepicker's `z`, on the whole screen).
 
 5. **Bring the phone's new photos in, periodically.** The user connects the phone to the laptop
    now and then, to copy its new pictures into the laptop's replica (photos are kept in Drive,
@@ -147,11 +151,14 @@ Ordered by how easy they are, easiest first (2026-10-30). Ideas 3, 2.1 and 6 hav
        replica is sorted into folders (by year, by event), so every photo looks missing. What's
        already copied is found by name and size anywhere in the destination (or by hash, idea 3),
        like idea 1's moved files, not by path.
-   5.3 Only what's new: remember, per phone (its serial, `adb get-serialno`, or the MTP device's),
-       the newest photo time imported last time, and list only what's newer (by the file's
-       mtime, or the date in its name: `IMG_20261027_...`, `PXL_20261027_...`). Then the flow is:
-       plug in, choose "Import from phone" (or a favorite pair, phone → destination), see the new
-       photos (idea 4's thumbnails help), Enter, done.
+   5.3 Every photo, every time: no memory of what was imported last time (e.g. the newest photo's
+       time, per phone), since a bug there, or a photo with an older date (a clock off, one sent
+       to the phone later), would leave photos behind without a word. Each run lists all of
+       `DCIM/Camera` and looks for each photo in the destination as 5.2 says; what isn't found is
+       new. That's cheap by name and size (the listing has both); where those are unsure, the
+       phone can hash its own files (`adb shell sha1sum`, toybox's), so nothing is pulled just to
+       compare. Then the flow is: plug in, choose "Import from phone" (or a favorite pair,
+       phone → destination), see the new photos (idea 4's thumbnails help), Enter, done.
    5.4 Where they go: into an inbox folder (e.g. `photos/unsorted`), to sort later with idea 2,
        or straight into a folder by date (`photos/2026/10`, from EXIF's DateTimeOriginal, or the
        name), set once per destination.
@@ -255,8 +262,7 @@ Ordered by how easy they are, easiest first (2026-10-30). Ideas 3, 2.1 and 6 hav
    `hashing/job_media.py`): a replica's images, audio and video are hashed after its other files; the
    offer to hash asks whether to leave them out (with each kind's count and size), when there are
    both; the dashboard leaves them out or hashes them too, per replica; a file left out is tagged
-   `[○ media, left out]`. Left out, they're matched by name and size only. What's left: the choice
-   is for the run (not kept with the replica), so the next run's offer asks again.
+   `[○ media, left out]`. Left out, they're matched by name and size only.
 
 10. **Suggested actions in the combined tree: a record of each sync, or policies** (2026-11-07, not
     sure it's needed yet). Plan C's combined tree starts every entry at skip. Two ways to start

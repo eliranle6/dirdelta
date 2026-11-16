@@ -1,4 +1,4 @@
-"""What's known of the replicas (Replicas): the pairs synced, the favorites, the sorts, each sorted tree's recent dirs, each replica's last entry and labels"""
+"""What's known of the replicas (Replicas): the pairs synced, the favorites, the sorts, each sorted tree's recent dirs and other replicas, each replica's last entry and labels"""
 from dirdelta.trees import paths
 
 
@@ -17,7 +17,7 @@ normalized = paths.normalized
 
 class Replicas(object):
     def __init__(self, history=None, favorites=None, sorts=None, recent_dirs=None, known=None, compared=None,
-                 labels=None):
+                 labels=None, followers=None):
         # Pairs (tuples of 2 normalized paths), the latest first
         self.history = list(history or [])
         # Pairs, in the order they were added
@@ -38,6 +38,9 @@ class Replicas(object):
         self.compared = [dict(item) for item in (compared or [])]
         # {what a label is of (replicanames.label_key()): the label the user gave it}
         self.labels = dict(labels or {})
+        # {a sorted tree's path (normalized): the other replicas of it that a sort was asked to copy
+        # its new files into (normalized), the latest first: offered at a sort's start, none picked}
+        self.followers = {root: list(found) for root, found in (followers or {}).items()}
 
     def set_label(self, key, label):
         """Label what key is of (None: it has no label now)"""
@@ -102,6 +105,20 @@ class Replicas(object):
     def dirs_of(self, root_path):
         """The sorted tree's recent dirs, the latest first"""
         return list(self.recent_dirs.get(normalized(root_path), []))
+
+    def record_followers(self, root_path, follower_paths):
+        """Note that a sort into root_path was asked to copy what it puts there into follower_paths
+        too: they go to the top of the sorted tree's other replicas (once each)"""
+        root = normalized(root_path)
+        picked = [normalized(path) for path in follower_paths]
+        self.followers[root] = list(dict.fromkeys(picked + self.followers.get(root, [])))
+
+    def followers_of(self, root_path):
+        """The replicas a sort into root_path may copy what it puts there into: the ones asked for
+        before, then the other halves of the pairs it was synced in (the favorites', the history's)"""
+        root = normalized(root_path)
+        paired = [path for pair in self.favorites + self.history if root in pair for path in pair if path != root]
+        return list(dict.fromkeys(self.followers.get(root, []) + paired))
 
     def record_sort(self, inbox_path, root_path):
         """Note that the inbox was just sorted into root_path: it goes to the top of the sorts (once;

@@ -98,8 +98,9 @@ class Transfer(object):
 
     def log_trees(self):
         """[(tree, path)] of the sorted tree, a tree of its own (as it is now: a Drive one from the
-        cache), to read and write its log (see replicalog.py); an inbox has none"""
-        return [(tree_of(self.root_path), self.root_path)]
+        cache), and of its other replicas picked (see followers.py), to read and write their logs (see
+        replicalog.py); an inbox has none"""
+        return [(tree_of(self.root_path), self.root_path)] + self._followers.trees()
 
     def _entries(self, relpaths):
         """The entries of the inbox's files at relpaths (in its tree), to remove them"""

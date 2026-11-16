@@ -60,6 +60,7 @@ class Approval(object):
                 "Uploaded to Google Drive" if self.root_is_cloud else "Downloaded from Google Drive",
                 "and removed" if action == self.MOVE_TO else "", "" if action == self.MOVE_TO else "kept in",
                 " (to Drive's trash)" if self.inbox_is_cloud and action == self.MOVE_TO else ""))
+        lines += self._followers.confirmation_lines()
         if dryrun.DRYRUN:
             lines.append(dryrun.NOTE)
         if not self._said_yes(lines, LABEL):
@@ -70,6 +71,9 @@ class Approval(object):
         keys = {relpath: (self._path_key(relpath, sizes[relpath]),
                           ai.path_key(posixpath.join(self.root_path, target), sizes[relpath]))
                 for relpath, target in plan}
+        # What the sorted tree's other replicas are given of each, to tell whether one has it already
+        followed = {relpath: (target, sizes[relpath], self._inbox_tree.known_hash(relpath, 'sha1'))
+                    for relpath, target in plan} if self._followers.paths else {}
         # Once it's done (or stopped), Enter goes back to the picker, so what was done can be read
         done = None
         with messages.progress_screen(summary + (" (a dry run)" if dryrun.DRYRUN else ""),
@@ -80,6 +84,7 @@ class Approval(object):
             else:
                 done = self._transfer(moves, action == self.MOVE_TO)
         if dryrun.DRYRUN:
+            self._followers.bring([followed[relpath] for relpath, _ in plan] if followed else [])
             return [relpath for relpath, _ in plan]
         if done is None:
             # Stopped (Ctrl-C) before it said: the ones in the sorted tree now (and, moved, out of
@@ -99,4 +104,6 @@ class Approval(object):
         not_done = [relpath for relpath, _ in plan if relpath not in set(done)]
         if not_done:
             self._say_not_done("moved" if action == self.MOVE_TO else "copied", not_done, len(plan))
+        if followed:
+            self._followers.bring([followed[relpath] for relpath in done])
         return done

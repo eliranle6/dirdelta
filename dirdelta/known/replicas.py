@@ -1,7 +1,8 @@
 """The pairs of replicas the user synced (history, the latest first) and the ones they made favorites,
 and the inboxes they sorted (each with its sorted tree, see inbox.py), kept in REPLICAS_FILE (JSON)
 for the menu that chooses what to sync or sort (see choose_replicas.py); the dirs of each sorted
-tree that its inboxes' files were moved or copied to last, offered first next time; and what's known
+tree that its inboxes' files were moved or copied to last, offered first next time, and its other
+replicas a sort was asked to copy them into too; and what's known
 of each replica synced (see replicalog.py), by its identity: the paths it was seen at, its log's
 last entry, and when dirdelta last saw it and changed it; and of each pair, what a sync last found
 each had that the other lacked (see syncstate.py).
@@ -32,7 +33,8 @@ def load():
         return Replicas(_pairs(content.get('history', [])), _pairs(content.get('favorites', [])),
                         _pairs(content.get('sorts', [])), _recent_dirs(content.get('recent_dirs', {})),
                         _known(content.get('known', {})), _compared(content.get('compared', [])),
-                        {str(key): str(label) for key, label in content.get('labels', {}).items()})
+                        {str(key): str(label) for key, label in content.get('labels', {}).items()},
+                        _followers(content.get('followers', {})))
     except FileNotFoundError:
         return Replicas()
     except (OSError, ValueError, AttributeError, TypeError) as error:
@@ -48,7 +50,8 @@ def save(replicas):
                'recent_dirs': replicas.recent_dirs,
                'known': replicas.known,
                'compared': replicas.compared,
-               'labels': replicas.labels}
+               'labels': replicas.labels,
+               'followers': replicas.followers}
     try:
         os.makedirs(os.path.dirname(REPLICAS_FILE), exist_ok=True)
         temp_path = REPLICAS_FILE + '.tmp'
@@ -76,6 +79,14 @@ def _recent_dirs(content):
             isinstance(dirs, list) and all(isinstance(relpath, str) for relpath in dirs) for dirs in content.values()):
         raise ValueError("not sorted trees' recent dirs: %r" % (content,))
     return {normalized(root): dirs for root, dirs in content.items()}
+
+
+def _followers(content):
+    """The sorted trees' other replicas read from the file: {a sorted tree's path: [paths]}"""
+    if not isinstance(content, dict) or not all(
+            isinstance(found, list) and all(isinstance(path, str) for path in found) for found in content.values()):
+        raise ValueError("not sorted trees' other replicas: %r" % (content,))
+    return {normalized(root): [normalized(path) for path in found] for root, found in content.items()}
 
 
 def _known(content):

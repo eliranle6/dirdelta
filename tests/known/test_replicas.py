@@ -95,6 +95,7 @@ class ReplicasFileTest(unittest.TestCase):
         known.toggle_favorite('/mnt/win', 'cloud/me')
         known.record_sort('cloud/unsorted', 'cloud/me')
         known.record_dir('cloud/me/', 'photos/2026')
+        known.record_followers('cloud/me', ['/mnt/win'])
         # Its dir is made
         replicas.save(known)
         loaded = replicas.load()
@@ -102,12 +103,14 @@ class ReplicasFileTest(unittest.TestCase):
         self.assertEqual(loaded.favorites, [('/mnt/win', 'cloud/me')])
         self.assertEqual(loaded.sorts, [('cloud/unsorted', 'cloud/me')])
         self.assertEqual(loaded.dirs_of('cloud/me'), ['photos/2026'])
+        self.assertEqual(loaded.followers, {'cloud/me': ['/mnt/win']})
         with open(self.path) as f:
             self.assertEqual(json.load(f), {'favorites': [['/mnt/win', 'cloud/me']],
                                             'history': [['/a', 'cloud/b']],
                                             'sorts': [['cloud/unsorted', 'cloud/me']],
                                             'recent_dirs': {'cloud/me': ['photos/2026']},
-                                            'known': {}, 'compared': [], 'labels': {}})
+                                            'known': {}, 'compared': [], 'labels': {},
+                                            'followers': {'cloud/me': ['/mnt/win']}})
 
     def test_a_pairs_comparison_loads_back_either_way_around(self):
         known = replicas.Replicas()
@@ -146,6 +149,16 @@ class ReplicasFileTest(unittest.TestCase):
         for number in range(replicas.MAX_RECENT_DIRS + 1):
             known.record_dir('/sorted', str(number))
         self.assertEqual(len(known.dirs_of('/sorted')), replicas.MAX_RECENT_DIRS)
+
+    def test_a_sorted_trees_other_replicas_the_picked_first_then_its_pairs(self):
+        known = replicas.Replicas()
+        known.record('cloud/me', '/mnt/win/me')
+        known.toggle_favorite('/backup/me', 'cloud/me')
+        known.record('/a', '/b')
+        self.assertEqual(known.followers_of('cloud/me/'), ['/backup/me', '/mnt/win/me'])
+        known.record_followers('cloud/me', ['/mnt/win/me', '/usb/me/'])
+        self.assertEqual(known.followers_of('cloud/me'), ['/mnt/win/me', '/usb/me', '/backup/me'])
+        self.assertEqual(known.followers_of('/a'), ['/b'])
 
     def test_sorts_are_kept_the_latest_first_and_by_their_way_around(self):
         known = replicas.Replicas()

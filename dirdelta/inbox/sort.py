@@ -12,6 +12,7 @@ from dirdelta.inbox.ai.claude import Claude
 from dirdelta.inbox.ai.claude_dirs import ClaudeDirs
 from dirdelta.inbox.ai.claude_files import ClaudeFiles
 from dirdelta.inbox.copies import Copies
+from dirdelta.inbox import followers
 from dirdelta.inbox.actions.destinations import Destinations
 from dirdelta.inbox.actions.dirs import Dirs
 from dirdelta.inbox.keys import Keys
@@ -86,7 +87,7 @@ class InboxSort(Listing, Screen, Keys, Side, Previews, Copies, Menu, Destination
     PICK_DIR = "Pick a dir (or make a new one: n, or o beside the selected one, in the picker)"
     RECENT_DIR = "Recent: %s/"
 
-    def __init__(self, inbox_path, root_path, known_replicas=None):
+    def __init__(self, inbox_path, root_path, known_replicas=None, follower_paths=()):
         self.inbox_is_cloud = paths.is_cloud_path(inbox_path)
         self.root_is_cloud = paths.is_cloud_path(root_path)
         self.inbox_path = normalized(inbox_path)
@@ -98,6 +99,9 @@ class InboxSort(Listing, Screen, Keys, Side, Previews, Copies, Menu, Destination
         self.changes = log_entries.Changes()
         self._check_paths()
         self._make_trees()
+        # The sorted tree's other replicas the user picked, which get copies of what goes into it
+        self._followers = followers.Followers(self.root_path, self._root_tree,
+                                              [normalized(path) for path in follower_paths], self.changes, tree_of)
         self._init_claude()
         # One at a time: what the describer and the opener download (they'd write the same .part, see
         # downloads.get()), and what the screen changes in the trees, which those read. It isn't for
@@ -154,15 +158,21 @@ def run(inbox_path, root_path, known_replicas=None):
     """Sort the inbox at inbox_path into root_path (see InboxSort), with known_replicas (a
     replicas.Replicas, saved) remembering them as a recent sort, and what's known of each (its log,
     see replicalog.py); once it's done, offer an entry for the sorted tree's log, if it changed
-    (an inbox has no log)"""
+    (an inbox has no log). First, the user picks which of the sorted tree's other replicas get copies of
+    what goes into it (see followers.py), if any are known."""
+    follower_paths = []
+    if known_replicas is not None:
+        follower_paths = followers.choose(known_replicas, inbox_path, root_path)
+        if follower_paths is None:
+            return
     # A Drive sorted tree's file list is kept in it too, as it changes (see drivemeta.py): the copy
-    # there is checked before its tree is made
-    with drivemeta.kept([(root_path, None)]):
-        _run(inbox_path, root_path, known_replicas)
+    # there is checked before its tree is made (a Drive replica it's copied into too)
+    with drivemeta.kept([(path, None) for path in [root_path] + follower_paths]):
+        _run(inbox_path, root_path, known_replicas, follower_paths)
 
 
-def _run(inbox_path, root_path, known_replicas):
-    sort = InboxSort(inbox_path, root_path, known_replicas)
+def _run(inbox_path, root_path, known_replicas, follower_paths=()):
+    sort = InboxSort(inbox_path, root_path, known_replicas, follower_paths)
     if known_replicas is not None:
         known_replicas.record_sort(sort.inbox_path, sort.root_path)
         log_entries.note_seen(sort.log_trees(), known_replicas)

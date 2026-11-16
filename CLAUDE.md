@@ -61,7 +61,8 @@ mount one that was mounted before and isn't now: `mounts.py`);
 `--sort INBOX ROOT` (or "Sort an inbox" in the no-path menu) → sorting an
 inbox into a sorted tree (`inbox.py`, with Claude's descriptions and
 recommendations from `ai.py`, through the Claude Agent SDK), kept in that
-file's `sorts`.
+file's `sorts`; as it starts, the user picks which of the sorted tree's other replicas (none unless
+picked) get copies of what goes into it (`inbox/followers/`).
 Before a sync or an inbox's sort, each local replica's files are listed and the
 ones not hashed yet are offered for hashing (`hashing.py`, `hashes_screen.py`):
 a pool of threads (one fewer than the physical cores) reads them in the
@@ -101,7 +102,7 @@ picker's `Ctrl-R`; with a `files.stale` next to it, listing the folders where a
 change dirdelta made to Drive was cut off before it was added to the cache, and a
 `files.times`, when each folder's list was last updated and uploaded to the replica's
 `meta/files.jsonl`, see `drivemeta.py`),
-`~/.config/dirdelta/replicas.json` (the history, favorites and sorts, each sorted tree's recent dirs, what's known of each replica: its `last_update.txt`'s last entry, and the labels),
+`~/.config/dirdelta/replicas.json` (the history, favorites and sorts, each sorted tree's recent dirs and the other replicas a sort copied into, what's known of each replica: its `last_update.txt`'s last entry, and the labels),
 `~/.config/dirdelta/mounts.json` (how the replicas' volumes were mounted),
 `~/.config/dirdelta/settings.json` (whether the file pickers show pictures),
 `~/.cache/dirdelta/ai.json` (what Claude said of files),
@@ -178,7 +179,7 @@ them by name. A big class's tests are split by topic into modules of their own, 
 prefix), which a test module imports by name: the runner puts its folder and the ones above it, up to
 `tests/` (helpers.py), on the path.
 
-Modules are tested where it's worth it, not for the sake of a test file each (845 tests, all passing as of 2026-11-13; 150 were removed on 2026-11-06 as redundant, white-box or pinning styling) except
+Modules are tested where it's worth it, not for the sake of a test file each (858 tests, all passing as of 2026-11-14; 150 were removed on 2026-11-06 as redundant, white-box or pinning styling) except
 the thin wiring in `main.py`/`dirsync_main.py`, covered only by running the
 app. A test is worth keeping if it says what the code does for whoever uses it: not one that sets
 or reads private state, counts calls to an inner function, restates a constant or a style (colors,

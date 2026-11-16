@@ -135,6 +135,9 @@ The map (each module's docstring's first line; generated from the code):
     - `claude_dirs.py`: Asking Claude about an inbox's dir as a whole
     - `claude_files.py`: Waiting for Claude, and the files it's given (downloaded from Drive, if they must be)
     - `knowledge.py`: What Claude said of an inbox's files and dirs, and what it's being asked now (ClaudeKnowledge): the sort's one...
+  - `followers/`: The sorted tree's other replicas (e.g. cloud/eliran's /mnt/win/.../eliran): the ones the user picks as a so...
+    - `choice.py`: Choosing, as a sort starts, which of the sorted tree's other replicas get its new files too: none
+    - `copying.py`: Copying what a sort put into the sorted tree into the other replicas of it the user picked (see
 - `known/`: What's known of the replicas: recent pairs and favorites, their logs, names, labels and mounts
   - `log_entries.py`: What a sync or a sort changed in each replica, and the entries offered for their logs once it's done
   - `replica_history.py`: What's known of the replicas (Replicas): the pairs synced, the favorites, the sorts, each sorted tree's recent...

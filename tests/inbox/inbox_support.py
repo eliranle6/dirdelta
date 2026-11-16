@@ -50,9 +50,10 @@ class InboxSortTest(unittest.TestCase):
             sorter.wait_for_claude()
         return mock.patch.object(Sort, 'ask_in_background', ask_and_wait)
 
-    def sort(self, picks, answers, dirs=(), view=True, is_dry_run=False, known=None):
+    def sort(self, picks, answers, dirs=(), view=True, is_dry_run=False, known=None, followers=()):
         """Sort, the inbox's picker answering picks in turn, the menus answers, the dir picker
-        dirs (paths), and the approval's view returning view"""
+        dirs (paths), and the approval's view returning view; copying what goes into the sorted
+        tree into followers (paths) too"""
         picks, dirs = list(picks), list(dirs)
         with helpers.scripted_files_picker(lambda relpaths: picks.pop(0)) as self.pick_files, \
                 helpers.answering_option_picker(answers) as self.pick_option, \
@@ -60,7 +61,7 @@ class InboxSortTest(unittest.TestCase):
                            side_effect=lambda *_, **__: self.picked_dir(dirs.pop(0))) as self.pick_under_dir, \
                 mock.patch('dirdelta.ui.picker.view_files', return_value=view) as self.view_files, \
                 mock.patch('dirdelta.util.dryrun.DRYRUN', is_dry_run), self.synchronously():
-            self.sorter = Sort(self.inbox, self.root, known)
+            self.sorter = Sort(self.inbox, self.root, known, followers)
             self.sorter.run()
 
     @staticmethod
