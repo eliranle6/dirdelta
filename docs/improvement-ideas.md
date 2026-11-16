@@ -43,8 +43,9 @@ Ordered by how easy they are, easiest first (2026-10-30). Ideas 3, 2.1 and 6 hav
        a sort starts, the user picks which of the sorted tree's other replicas (the ones picked
        before, then the other halves of its synced pairs, or another) get copies of what it moves or
        copies into it; none unless picked. A file one has already is never overwritten (a different
-       one is listed). What's left of plan B: a queue for a replica not mounted then (it can't be
-       picked now), the start menu's "behind" line, and sending renames and removals too.
+       one is listed). What's left of plan B: sending renames and removals too. Dropped (2026-11-16,
+       too centralized): a queue for a replica not mounted then (it can't be picked now), and with
+       it the start menu's "behind" line, which counted what was queued.
    2.2 Junk by image analysis. Keep as an idea, but don't implement (2026-10-30): it may take a lot
        of tokens. Junk by names, sizes and what Claude says of them is there (`junk.py`, 2026-10-30);
        this would add Haiku judging, while it reads a photo to describe it, whether it's a bad one (a

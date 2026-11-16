@@ -278,5 +278,5 @@ All three are done. B (2026-11-14, `inbox/followers/`) differs from the plan abo
 copy into are picked as a sort starts (none unless picked, from the ones picked before and the sorted
 tree's synced pairs), not set once per sorted tree and all copied into; the copies follow each move
 or copy into the sorted tree, on their own progress screen, rather than a summary screen to say yes
-to. Not done: the queue of a replica not mounted (`pending`), the start menu's "behind" line, and the
-dashboard's "Other replicas of this tree".
+to. Not done: the dashboard's "Other replicas of this tree". Dropped (2026-11-16, too centralized):
+the queue of a replica not mounted (`pending`), and the start menu's "behind" line, which counted it.
