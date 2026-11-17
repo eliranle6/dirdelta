@@ -69,7 +69,12 @@ a pool of threads (one fewer than the physical cores) reads them in the
 background, at the lowest priority, into the hash cache, so a file is found by
 its contents (SHA-1, as Drive's) whatever its name and size. `#` in the file
 pickers (and the "Replicas dashboard" in the sync's and the start menus) shows
-how far it got, pauses and resumes it. Every screen has the same layout (see
+how far it got, pauses and resumes it. `--serve` (`make serve`; `make service` installs it as a systemd user service) runs the daemon: the
+web version on the local network (the same flows, their pickers and messages in the browser, with the
+key in its link: `web/`, see docs/architecture.md, "The web version"), the phone import's page
+(`/import`, `phoneimport/`), and a watch that emails the user a link when a phone is plugged in or a known
+replica's drive is mounted.
+Every screen has the same layout (see
 docs/architecture.md, "The screens' layout"): what it is on top (breadcrumbs),
 a status bar and a keys row at the bottom; `q` goes back (quits only on the
 start menu), and a sync or sort returns to the start menu.
@@ -104,7 +109,9 @@ change dirdelta made to Drive was cut off before it was added to the cache, and 
 `meta/files.jsonl`, see `drivemeta.py`),
 `~/.config/dirdelta/replicas.json` (the history, favorites and sorts, each sorted tree's recent dirs and the other replicas a sort copied into, what's known of each replica: its `last_update.txt`'s last entry, and the labels),
 `~/.config/dirdelta/mounts.json` (how the replicas' volumes were mounted),
-`~/.config/dirdelta/settings.json` (whether the file pickers show pictures),
+`~/.config/dirdelta/settings.json` (whether the file pickers show pictures, and the address links are emailed to),
+`~/.config/dirdelta/web.json` (the web version's port and key),
+`~/.local/share/dirdelta/imports/` (the phone imports: their copied files and manifests),
 `~/.cache/dirdelta/ai.json` (what Claude said of files),
 `~/.cache/dirdelta/hashes.sqlite` (local files' hashes, those not kept in their replica's
 `meta/hashes.sqlite`, see `hashcache.py`),
@@ -179,7 +186,7 @@ them by name. A big class's tests are split by topic into modules of their own, 
 prefix), which a test module imports by name: the runner puts its folder and the ones above it, up to
 `tests/` (helpers.py), on the path.
 
-Modules are tested where it's worth it, not for the sake of a test file each (858 tests, all passing as of 2026-11-14; 150 were removed on 2026-11-06 as redundant, white-box or pinning styling) except
+Modules are tested where it's worth it, not for the sake of a test file each (902 tests, all passing as of 2026-11-18; 150 were removed on 2026-11-06 as redundant, white-box or pinning styling) except
 the thin wiring in `main.py`/`dirsync_main.py`, covered only by running the
 app. A test is worth keeping if it says what the code does for whoever uses it: not one that sets
 or reads private state, counts calls to an inner function, restates a constant or a style (colors,
@@ -210,6 +217,9 @@ another test, or another module's, already covers. Shared fakes:
 - Nothing is downloaded into the real `~/.cache/dirdelta/downloads`: `tests/helpers.py`
   points `downloads.DOWNLOADS_DIR` at a temp dir. `test_opening` patches `subprocess.Popen`
   for `Ctrl-X`'s `xdg-open` (the inbox's and the sync's tests patch `Opener.open_in_background`); a manual run can put a fake `xdg-open` first on `PATH`.
+- The web version's tests run its session in-process, the test as the browser (`tests/web/web_support.py`),
+  and its server on a port of its own with `access.WEB_FILE` in a temp dir; the import's patch
+  `store.IMPORTS_DIR` (`tests/phoneimport/import_support.py`).
 - The real `~/.config/dirdelta/settings.json` isn't read or written: `tests/helpers.py` (and
   `test_picker`) point `settings.SETTINGS_FILE` at a temp file.
 - Nothing is mounted, and the real `~/.config/dirdelta/mounts.json` isn't read or

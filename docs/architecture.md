@@ -169,6 +169,14 @@ The map (each module's docstring's first line; generated from the code):
     - `preview_lines.py`: The lines of a missing file's preview
     - `previews.py`: The previews of the missing files, sent to the picker as they're found
     - `sure.py`: The candidates that are surely the file
+- `phoneimport/`: Importing photos from a phone (or any dir) into a local replica, in the web version (web/importing.py): copied into an import of their own (store.py: resumable, since a phone's link may drop; copying.py), each tagged with where the replica and its synced ones have it already (known.py), grouped by day with where the replica's photos of that day are (suggest.py), then moved into the dirs chosen (applying.py)
+  - `applying.py`: Moving an import's copied files into the dirs chosen for them in its replica (apply()), on a thread of its own: never over a file there, each moved file's SHA-1 kept in the hash cache; a dry run only says what it would do
+  - `copying.py`: Copying an import's files from its source (copy()), on a thread of its own, each by a .part file, its SHA-1 worked out as it's read; if the source goes (the phone unplugged), it waits, and goes on where it was
+  - `known.py`: Whether replicas have a file already (Known): by its SHA-1 (a local replica's from the hash cache, a Drive one's from the Drive cache), or else by its name and size, wherever it is in them
+  - `sources.py`: Where an import's files come from: the phones plugged in (gvfs's MTP mounts), or any local dir; and a source's media files, wherever they are in it
+  - `store.py`: The imports kept (Import): each a folder of its own under IMPORTS_DIR, with the files copied and its manifest, saved at each change
+  - `suggest.py`: Where an imported photo may go, by its date only (Suggester): where the replica's photos of that day are, else of the nearest day before it
+  - `thumbs.py`: An imported file's thumbnail for the import's page (jpeg()), made by the pickers' pictures' code (ui/images.py)
 - `screens/`: Screens of their own: choosing replicas, the replicas dashboard, the AI's plan, zips and labels
   - `aiplan_screen.py`: The screens of asking AI about files (see aiplan.py): what's wanted, typed; waiting for it; then its answer, o...
   - `archive_screen.py`: Exploring an archive (see archives.py) in a picker, as a tree of what's in it, each file's size and date besid...
@@ -245,6 +253,7 @@ The map (each module's docstring's first line; generated from the code):
     - `replica.py`: A local dir as a replica (LocalReplica), its files asked of the disk; what it does with them are mixins, each ...
     - `scanned.py`: A local replica with a tree of its files too (LocalDiskDirTree), scanned
 - `ui/`: What dirdelta shows: its pickers (treepicker), messages, menus, previews and opening files
+  - `frontend.py`: Where dirdelta's screens are shown: the terminal (current is None), or the web version's session, set by the daemon
   - `contextmenu.py`: The file pickers' menu for when nothing's picked (:), of what can be done there with the selected file or dir,...
   - `filescreen.py`: What the two file screens have in common, the sync's (interactive_dir_sync.py) and the inbox's (inbox.py): a p...
   - `images.py`: The selected file's picture, in a file picker's preview column (picker.pick_files(images=...)): a photo or ano...
@@ -284,6 +293,21 @@ The map (each module's docstring's first line; generated from the code):
     - `isobmff.py`: A HEIF file's EXIF item, and a Canon CR3's CMT boxes: both ISO BMFF boxes
     - `jpeg.py`: A JPEG's EXIF segment, and a Fujifilm RAF's embedded JPEG's
     - `tiff.py`: The date in TIFF data's IFDs
+- `web/`: dirdelta's web version (dirdelta --serve, daemon.py): the same flows as the terminal's, their pickers and messages shown in the browser, so they can be used from a phone on the same network; the phone import's page; and the watch for a phone plugged in or a replica's drive mounted, emailing the user a link (see "The web version" below)
+  - `access.py`: Who may use the web version, and where it is: a key in its links (kept in WEB_FILE), checked on every request, and the computer's address on the local network
+  - `api.py`: The web version's API for the session's screens (routes()): what the page polls for, and what it does there
+  - `daemon.py`: dirdelta's daemon (run()): the web version, its pickers and messages in the browser, and the watcher, which emails a link when a phone or a known replica appears
+  - `importing.py`: The import page's API (routes()): the imports and the phones plugged in, starting one, an import's files by day with where the replicas have them, thumbnails, choosing dirs, moving them in
+  - `messages.py`: dirdelta's messages in the browser (MessagesScreen): lines under a title, Stop as Ctrl-C, Continue, or asking for a line
+  - `picker/`: treepicker in the browser: a picker's command (its arguments, its items, its pipes) done by the web page instead of the terminal program
+    - `items.py`: A web picker's items, as --updates shows them, each change numbered
+    - `keynames.py`: A picker's keys as the web page's buttons, named as its keys row names them
+    - `pipes.py`: The web picker's ends of the pipes dirdelta makes for treepicker
+    - `screen.py`: A picker shown in the browser (PickerScreen): selecting, picking, states, keys, and what treepicker would print
+    - `spec.py`: What a treepicker command asks for (Spec), read from its arguments
+  - `server.py`: The web version's HTTP server (serve()): the pages (static/), and the API's routes, each request checked for the key
+  - `session.py`: The web version's session (Session): dirdelta's flow on a thread of its own, its pickers and messages shown in the browser, each change numbered
+  - `watcher.py`: Watching for a phone being plugged in, or a known replica's dir appearing, to say so (Watcher), at most once every QUIET_SECONDS a path
 
 ### `main.py`
 Argparse: `dir_a_path`, `dir_b_path` (both optional), `-x/--execute`,
@@ -1141,6 +1165,34 @@ goes with them on a redraw or resize; and every 256-color terminal shows them. N
 A portrait one goes beside the text, on the column's right half; a landscape one below it. `i`
 switches them off and on (`picker._Images.toggle()`), kept in `~/.config/dirdelta/settings.json`
 (`settings.py`).
+
+## The web version: `web/`, `phoneimport/`
+
+`dirdelta --serve` (`make serve`, or `make service` for a systemd user service) runs the daemon: an HTTP
+server on the local network (port 8765, `~/.config/dirdelta/web.json` keeping the port and the key that
+every link carries, then a cookie), and a watcher.
+
+- The flows aren't rewritten for it: `ui/frontend.py`'s `current` is the daemon's `Session`, and then
+  `Command.run()` (`ui/picker/command.py`) hands treepicker's command (its arguments, its items, and its
+  pipes' fds) to `session.run_picker()` instead of running the program, and `messages` hands its screens
+  to the session. `web/picker/` reads the same arguments (`spec.py`) and pipes (`pipes.py`: --updates,
+  --preview, --selection, --notify-fd, --side-select) and prints what treepicker would, so every picker
+  (menus, file pickers, the combined tree's states and tabs, a dir's lazy listing, the side tree) and
+  every thread beside it (counts coming in, previews, pictures, AI's suggestions) work unchanged. The
+  server keeps each picker's selection, picks and states, so the laptop's browser and a phone's show the
+  same screen. Stop raises KeyboardInterrupt in the flow's thread, as Ctrl-C does.
+- The page (`web/static/app.js`) polls `/api/state` (a long poll: each change is numbered) and draws a
+  menu as a list, a tree with checkboxes or state marks, the preview column (pictures from treepicker's
+  pixels), the keys as buttons (named by the keys row, or the `?` help's lines), and messages screens.
+- The import (`/import`, `phoneimport/`): a phone's storage (gvfs's MTP mount) or any dir is copied into
+  an import of its own (`~/.local/share/dirdelta/imports/<id>/`, with its manifest), resumably; each
+  file's SHA-1 is worked out while it's copied, and looked up in the destination replica's hashes (the
+  hash cache, or its `meta/hashes.sqlite`) and its synced replicas' (Drive's own SHA-1s), else by name
+  and size; the photos are shown by day, with where that day's photos already are as suggestions; the
+  dirs chosen are kept at each click, and Move puts them in (a dry run says what it would do).
+- The watcher looks every 5 s for a phone's storage or a known local replica appearing, and emails the
+  user a link (`sharing/link.py`; the address is kept in `settings.json` after the first one), at most
+  once in 10 minutes a path.
 
 ## What replicas are called: `replicanames.py`, `label_screen.py`
 

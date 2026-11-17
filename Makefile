@@ -1,4 +1,4 @@
-.PHONY: build venv sources help test clean install deploy undeploy check_convention
+.PHONY: build venv sources help test clean install deploy undeploy serve service unservice check_convention
 
 # Nothing generated goes in the repo, so it can be copied as it is: this copy's programs, bytecode and
 # install's leftovers go in OUT, by its path, and the one venv of all the copies next to it
@@ -33,6 +33,9 @@ help:
 	@echo "make install    pip install dirdelta (and its C++ programs) into \$$PYTHON's environment"
 	@echo "make deploy     install a dirdelta command into ~/.local/bin via pipx; rerun to update"
 	@echo "make undeploy   remove the deployed command"
+	@echo "make serve      run the daemon from here: the web version, and the watch for phones and replicas"
+	@echo "make service    deploy, then run the deployed daemon as a systemd user service (started with the session)"
+	@echo "make unservice  stop that service and remove it"
 
 # The repo root makes the dirdelta package importable. treepicker runs its own tests.
 # Some tests run dirdiff, so the programs are built first. The modules run in parallel (tests/run.py),
@@ -64,6 +67,25 @@ deploy: build sources
 
 undeploy:
 	pipx uninstall dirdelta
+
+# The daemon (dirdelta --serve): its link is printed, and kept in ~/.config/dirdelta/web.json
+serve:
+	bin/python -m dirdelta --serve $(ARGS)
+
+# The deployed daemon as a systemd user service, with this copy's secrets/ (an installed copy has none of
+# its own); DRYRUN=0 in its unit (systemctl --user edit dirdelta) makes it change files
+SERVICE := $(HOME)/.config/systemd/user/dirdelta.service
+service: deploy
+	mkdir -p $(dir $(SERVICE))
+	printf '[Unit]\nDescription=dirdelta: the web version, and the watch for phones and replicas\nAfter=network-online.target\n\n[Service]\nExecStart=%s --serve\nEnvironment=DIRDELTA_SECRETS_DIR=%s\nRestart=on-failure\n\n[Install]\nWantedBy=default.target\n' \
+		"$(HOME)/.local/bin/dirdelta" "$(abspath secrets)" > $(SERVICE)
+	systemctl --user daemon-reload
+	systemctl --user enable --now dirdelta.service
+
+unservice:
+	-systemctl --user disable --now dirdelta.service
+	rm -f $(SERVICE)
+	systemctl --user daemon-reload
 
 check_convention:
 	pep8 dirdelta

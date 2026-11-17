@@ -4,6 +4,7 @@ import os
 import threading
 
 from dirdelta.known import settings
+from dirdelta.ui import frontend
 from dirdelta.ui.picker.selection import PickerClosed
 from dirdelta.ui.picker.updates import log_error
 
@@ -82,7 +83,10 @@ class Images(object):
 def _image_box():
     """The most pixels (width, height) a picture may take: the whole screen's, as treepicker's z shows
     it (the terminal's width, but its last column, and twice its rows, but the one with the name),
-    as the terminal is now; treepicker makes it smaller for the preview column"""
+    as the terminal is now; treepicker makes it smaller for the preview column (the web version's
+    pictures: its own size)"""
+    if frontend.current is not None:
+        return frontend.current.image_box
     try:
         with open('/dev/tty') as tty:
             columns, rows = os.get_terminal_size(tty.fileno())

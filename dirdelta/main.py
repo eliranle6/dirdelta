@@ -26,11 +26,19 @@ def parse_args():
     # With two paths: sort the first (an inbox) into the second (a sorted tree), see inbox.py
     parser.add_argument("-s", "--sort", action='store_true')
     parser.add_argument("-m", "--max-depth", type=int, default=localscan.DEFAULT_MAX_DEPTH)
+    # The daemon: the web version (on the network, at PORT), and the watch for replicas appearing
+    parser.add_argument("--serve", action='store_true')
+    parser.add_argument("--port", type=int, default=None)
     return parser.parse_args()
 
 
 def main():
     args = parse_args()
+    if args.serve:
+        # (Imported only here: the daemon's server, which the terminal's dirdelta doesn't need)
+        from dirdelta.web import daemon
+        daemon.run(args.port)
+        return
     # No curses here: the pickers (treepicker) take over the terminal while they run, and messages
     # are plain prints in between
     try:
@@ -51,20 +59,7 @@ def _run(args):
             dirsync_main.run(args)
         args = argparse.Namespace(**dict(vars(args), dir_a_path=None, dir_b_path=None))
     if args.dir_a_path is None:
-        # The start menu, again after a sync or a sort (or going back from one), until Quit
-        while True:
-            known_replicas = replicas.load()
-            chosen = choose_replicas.run(known_replicas)
-            if chosen is None:
-                return None
-            if isinstance(chosen, choose_replicas.Sort):
-                if _ready(chosen.inbox, chosen.root) and choose_replicas.are_there(chosen):
-                    inbox.run(chosen.inbox, chosen.root, known_replicas)
-                continue
-            # The chosen paths in a copy of args (args itself is left as it was parsed)
-            chosen_args = argparse.Namespace(**dict(vars(args), dir_a_path=chosen[0], dir_b_path=chosen[1]))
-            if _ready(*chosen) and choose_replicas.are_there(chosen):
-                dirsync_main.run(chosen_args)
+        return start_menu(args)
     elif args.sort:
         if args.dir_b_path is None:
             sys.exit('dirdelta: --sort takes two paths: the inbox, and the sorted tree')
@@ -72,6 +67,27 @@ def _run(args):
             inbox.run(args.dir_a_path, args.dir_b_path, replicas.load())
         return None
     return dirpick_main.run(args) if _ready(args.dir_a_path) else None
+
+
+def start_menu(args=None):
+    """The start menu, again after a sync or a sort (or going back from one), until Quit (args: as
+    parse_args()'s, without paths; the defaults if None)"""
+    if args is None:
+        args = argparse.Namespace(dir_a_path=None, dir_b_path=None, execute=None, sort=False,
+                                  max_depth=localscan.DEFAULT_MAX_DEPTH)
+    while True:
+        known_replicas = replicas.load()
+        chosen = choose_replicas.run(known_replicas)
+        if chosen is None:
+            return None
+        if isinstance(chosen, choose_replicas.Sort):
+            if _ready(chosen.inbox, chosen.root) and choose_replicas.are_there(chosen):
+                inbox.run(chosen.inbox, chosen.root, known_replicas)
+            continue
+        # The chosen paths in a copy of args (args itself is left as it was parsed)
+        chosen_args = argparse.Namespace(**dict(vars(args), dir_a_path=chosen[0], dir_b_path=chosen[1]))
+        if _ready(*chosen) and choose_replicas.are_there(chosen):
+            dirsync_main.run(chosen_args)
 
 
 def _ready(*replica_paths):

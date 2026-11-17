@@ -139,7 +139,11 @@ Ordered by how easy they are, easiest first (2026-10-30). Ideas 3, 2.1 and 6 hav
        least, the picture getting the rows it needs, until the side tree is moved into). A key to see
        it bigger is there (2026-11-07: treepicker's `z`, on the whole screen).
 
-5. **Bring the phone's new photos in, periodically.** The user connects the phone to the laptop
+5. **Bring the phone's new photos in, periodically.** A first version is done (2026-11-18, `phoneimport/`,
+   the web version's `/import`, as 5.10 says): a phone's storage (gvfs's MTP mount, not `adb`) or any dir,
+   every media file copied each time (none left out by a date), tagged with where the replica and its
+   synced ones have it, by day with suggestions, then moved. Not done: removing them from the phone, and
+   suggestions by what's in the photos. The user connects the phone to the laptop
    now and then, to copy its new pictures into the laptop's replica (photos are kept in Drive,
    not Google Photos). Today that's a plain sync of two dirs, which doesn't fit well:
    5.1 Reaching the phone: plugged in by USB, an Android phone is MTP, not a disk. GNOME's gvfs
@@ -256,9 +260,10 @@ Ordered by how easy they are, easiest first (2026-10-30). Ideas 3, 2.1 and 6 hav
        built in; or a local web app (dirdelta serving a page, opened in the browser), which is
        also the way to idea 8's phone app. Both reuse the same frontend interface.
 
-8. **A dirdelta server, used from a phone.** Wanted (2026-11-17): the whole sync from a phone's
-   browser, for any pair of replicas, with dirdelta's status (hashing, refreshing, an action's
-   progress), not only the import's photo page (5.10), which would be its first page. A daemon on an always-on machine that holds the
+8. **A dirdelta server, used from a phone.** Done on the laptop itself (2026-11-18, `web/`, `dirdelta
+   --serve`): every flow in the browser, through the same pickers (a web stand-in for treepicker's
+   command), with 8.5's watch. What's below about an always-on machine elsewhere, its own replicas and a
+   VPN is still open: the daemon serves the local network only, with a key in its links. A daemon on an always-on machine that holds the
    replicas' state (the Drive cache, scans of local dirs it can reach) and runs the actions
    (Copy, Remove, idea 2's sorting), with an API that a phone app (or the browser) connects to:
    the same choices, made remotely, e.g. sorting `cloud/unsorted` from the phone.
@@ -277,7 +282,7 @@ Ordered by how easy they are, easiest first (2026-10-30). Ideas 3, 2.1 and 6 hav
        token stays on the server. Which local dirs it can reach is the server's, not the
        laptop's (`/mnt/win` is the laptop's Windows drive), so the replicas it serves may
        differ.
-   8.5 Wanted (2026-11-17): the daemon on the laptop itself, serving the web version, and watching
+   8.5 Done (2026-11-18, `web/watcher.py`): the daemon on the laptop itself, serving the web version, and watching
        for a known replica to appear (a phone's MTP path under gvfs, or an `adb` device; a disk's
        mount, by `known/mounts`' names): then it emails the user (`sharing/gmail.py`) a link to that
        replica's page (e.g. the phone's import), once per appearance, not again while it stays.

@@ -6,6 +6,7 @@ import tempfile
 import unittest
 from unittest import mock
 
+import helpers  # noqa: F401 (the real hash cache left alone)
 from dirdelta.hashes import hashing
 from dirdelta.matching import elsewhere
 from dirdelta.trees import dirtree

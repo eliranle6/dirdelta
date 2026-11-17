@@ -6,6 +6,7 @@ import subprocess
 import tempfile
 import threading
 
+from dirdelta.ui import frontend
 from dirdelta.ui.picker.kinds import SIDE_KEY
 from dirdelta.ui.picker.pictures import IMAGES_KEY, Images
 from dirdelta.ui.picker.places import places_entered
@@ -28,7 +29,8 @@ class Command(object):
     --selection): treepicker's ends, and ours; and the jobs serving them, each run on a thread of
     its own while treepicker runs"""
     def __init__(self, args, label):
-        self.args = [_find_program(), '-0']
+        # (The web version does treepicker's commands itself: it needs no program)
+        self.args = [_find_program() if frontend.current is None else PROGRAM_NAME, '-0']
         for text, color in [dryrun.label()] + ([label] if label else []):
             self.args += ['--label', text, '--label-color', color]
         if not any(args[i:i + 2] == ['--key', 'q'] for i in range(len(args))):
@@ -111,6 +113,8 @@ class Command(object):
         """Run treepicker with input_items (or None) on its stdin, the jobs on their threads meanwhile;
         returns (the process, what it printed)"""
         threads = [threading.Thread(target=logging_errors, args=(job,), daemon=True) for job in self.jobs]
+        if frontend.current is not None:
+            return self._run_on(frontend.current, input_items, threads)
         try:
             # From a file, rather than written to a pipe by communicate(): with a sender busy on its
             # thread (holding the GIL), writing a big input would be slow to get the GIL back each time
@@ -144,6 +148,40 @@ class Command(object):
             if self.side_file is not None:
                 self.side_file.close()
         return process, stdout
+
+    def _run_on(self, session, input_items, threads):
+        """run(), done by the web version's session (see ui/frontend.py) rather than the program: it
+        gets the same args and input, and owns treepicker's ends of the pipes (closing them as it would)"""
+        try:
+            for thread in threads:
+                thread.start()
+            input_data = null_terminated(input_items) if input_items is not None else None
+            try:
+                returncode, stdout = session.run_picker(self.args[1:], input_data)
+            except Exception:
+                # It didn't get to them: closed here, so the threads reading ours end
+                for child_fd in self.child_fds:
+                    try:
+                        os.close(child_fd)
+                    except OSError:
+                        pass
+                raise
+        finally:
+            self.is_done.set()
+            for thread in threads:
+                if thread.is_alive():
+                    thread.join()
+            for our_fd in self.our_fds:
+                os.close(our_fd)
+            if self.side_file is not None:
+                self.side_file.close()
+        return _Finished(returncode), stdout
+
+
+class _Finished(object):
+    """What run() returns of a picker the web version did, as of a process"""
+    def __init__(self, returncode):
+        self.returncode = returncode
 
 
 def _find_program():

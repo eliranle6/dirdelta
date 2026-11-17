@@ -4,6 +4,7 @@ from googleapiclient.errors import HttpError
 from google.auth.exceptions import GoogleAuthError
 
 from dirdelta.drive import driveapi
+from dirdelta.known import settings
 from dirdelta.sharing import gmail
 from dirdelta.sharing import qr
 from dirdelta.ui import messages
@@ -22,12 +23,13 @@ def share(url, what, label=None):
 
 
 def email(url, what):
-    """Email url to the user, saying it's for what. Returns what to say of it: where it went, or why
-    it wasn't sent."""
+    """Email url to the user (the address it was sent to before, else Drive's login's, kept for next
+    time), saying it's for what. Returns what to say of it: where it went, or why it wasn't sent."""
     messages.print_line("Emailing the address to you...")
     try:
-        to = driveapi.user_email()
+        to = settings.email_address() or driveapi.user_email()
         gmail.send(to, "dirdelta: %s" % (what,), BODY % (what, url))
+        settings.set_email_address(to)
     except gmail.MailError as error:
         return "Not emailed: %s" % (error,)
     except (HttpError, GoogleAuthError, OSError) as error:

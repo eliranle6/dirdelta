@@ -8,6 +8,8 @@ setup(
     ],
     pbr=True,
     packages=find_packages(include=['dirdelta', 'dirdelta.*']),
+    # The web version's pages
+    package_data={'dirdelta.web': ['static/*']},
     entry_points={
         'console_scripts': ['dirdelta=dirdelta.main:main']
     }

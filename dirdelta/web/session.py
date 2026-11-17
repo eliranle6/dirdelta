@@ -1,0 +1,163 @@
+"""The web version's session (Session): dirdelta's flow (the start menu, a sync, a sort) run on a thread
+of its own, its pickers and messages shown in the browser (ui/frontend.py points the terminal's at it),
+and what's shown now, each change numbered so the browsers (the laptop's, a phone's) wait for the next"""
+import contextlib
+import ctypes
+import itertools
+import threading
+
+from dirdelta.web import messages as web_messages
+from dirdelta.web import picker as web_picker
+
+# How many lines printed between screens are kept (the first ones go)
+MAX_LOG = 200
+# How big a picture of a picker's preview is sent, at most (the page scales it to fit)
+IMAGE_BOX = (480, 480)
+
+
+class Session(object):
+    image_box = IMAGE_BOX
+
+    def __init__(self):
+        self._condition = threading.Condition()
+        self._version = 0
+        self._ids = itertools.count(1)
+        # The screens shown, the last on top (a picker may be shown on a progress screen)
+        self._screens = []
+        self.log = []
+        self._flow = None
+
+    # Changes, and waiting for them
+
+    def bump(self):
+        """A change: its version (and the browsers waiting are woken)"""
+        with self._condition:
+            self._version += 1
+            self._condition.notify_all()
+            return self._version
+
+    @property
+    def version(self):
+        return self._version
+
+    def wait(self, since, timeout):
+        """Wait until something changes after the version since (or timeout seconds pass)"""
+        with self._condition:
+            self._condition.wait_for(lambda: self._version > since, timeout)
+            return self._version
+
+    def screen(self, screen_id=None):
+        """The screen on top (or the one of screen_id, if it's still shown), or None"""
+        with self._condition:
+            if screen_id is None:
+                return self._screens[-1] if self._screens else None
+            return next((screen for screen in self._screens if screen.id == screen_id), None)
+
+    @contextlib.contextmanager
+    def _shown(self, screen):
+        with self._condition:
+            self._screens.append(screen)
+        self.bump()
+        try:
+            yield screen
+        finally:
+            with self._condition:
+                self._screens.remove(screen)
+            self.bump()
+
+    # The flow
+
+    @property
+    def is_running(self):
+        return self._flow is not None and self._flow.is_alive()
+
+    def start(self, flow):
+        """Run flow() on a thread of its own, unless one is running. Returns whether it started."""
+        if self.is_running:
+            return False
+        self.log = []
+        self._flow = threading.Thread(target=self._run, args=(flow,), daemon=True)
+        self._flow.start()
+        self.bump()
+        return True
+
+    def _run(self, flow):
+        try:
+            flow()
+        except KeyboardInterrupt:
+            self.print_line("Stopped.")
+        except SystemExit as error:
+            if error.code not in (None, 0):
+                self.print_line(str(error.code), 'red')
+        except Exception as error:
+            self.print_line("Something went wrong: %s" % (error,), 'red')
+            raise
+        finally:
+            self.bump()
+
+    def stop(self):
+        """Stop what the flow is doing, as Ctrl-C would: a KeyboardInterrupt in its thread"""
+        if self.is_running:
+            ctypes.pythonapi.PyThreadState_SetAsyncExc(ctypes.c_ulong(self._flow.ident),
+                                                       ctypes.py_object(KeyboardInterrupt))
+
+    def cancel(self):
+        """End what's shown (as if quit), e.g. as the daemon stops"""
+        for screen in list(self._screens):
+            screen.cancel()
+
+    # What dirdelta's picker calls (ui/picker/command.py)
+
+    def run_picker(self, args, input_data):
+        """treepicker's command with args (after its name) and input_data on its stdin (or None), done
+        in the browser: (exit code, what it printed)"""
+        spec = web_picker.parse(args)
+        records = None
+        if input_data is not None:
+            records = [record.decode('utf-8', 'surrogateescape') for record in input_data.split(b'\0')[:-1]]
+        with self._shown(web_picker.PickerScreen(next(self._ids), spec, records, self.bump)) as screen:
+            return screen.run()
+
+    # What dirdelta's messages call (ui/messages.py)
+
+    def print_line(self, line, color=None):
+        screen = self._messages_screen()
+        if screen is not None:
+            screen.print_line(line, color)
+            return
+        self.log.append((line, color))
+        del self.log[:-MAX_LOG]
+        self.bump()
+
+    def print_progress(self, line):
+        screen = self._messages_screen()
+        if screen is not None:
+            screen.print_progress(line)
+        else:
+            self.print_line(line)
+
+    def _messages_screen(self):
+        screen = self.screen()
+        return screen if isinstance(screen, web_messages.MessagesScreen) else None
+
+    @contextlib.contextmanager
+    def progress_screen(self, title, label, is_stoppable, wait, on_stop):
+        """As messages.progress_screen(): the lines printed inside on a screen of their own; on_stop()
+        is called if the action was stopped (as its Ctrl-C would be)"""
+        labels = [label] if label else []
+        with self._shown(web_messages.MessagesScreen(next(self._ids), title, labels, is_stoppable, self.bump)) as screen:
+            is_stopped = False
+            try:
+                yield
+            except KeyboardInterrupt:
+                is_stopped = True
+                on_stop()
+            if wait or is_stopped:
+                screen.wait_continue(("Stopped" if is_stopped else "Done") if is_stoppable else "")
+
+    def ask(self, title, lines, prompt, default, label):
+        labels = [label] if label else []
+        with self._shown(web_messages.MessagesScreen(next(self._ids), title, labels, False, self.bump)) as screen:
+            for line in lines:
+                screen.print_line(line)
+            return screen.ask(prompt, default)

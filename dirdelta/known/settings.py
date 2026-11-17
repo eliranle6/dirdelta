@@ -1,5 +1,6 @@
 """The user's choices that last from one run to the next (SETTINGS_FILE): whether the file pickers
-show the selected file's picture (images.py; `i` in a picker switches it)."""
+show the selected file's picture (images.py; `i` in a picker switches it), and the address links are
+emailed to (sharing/link.py)."""
 import json
 import os
 import threading
@@ -17,6 +18,19 @@ def set_images_shown(is_shown):
     with _lock:
         settings = _load()
         settings['images'] = bool(is_shown)
+        _save(settings)
+
+
+def email_address():
+    """The address links are emailed to, or None if none's known yet"""
+    address = _load().get('email')
+    return address if isinstance(address, str) and address else None
+
+
+def set_email_address(address):
+    with _lock:
+        settings = _load()
+        settings['email'] = address
         _save(settings)
 
 

@@ -130,6 +130,13 @@ the build dir (see `bin/builddir`, `<it>/treepicker/treepicker`); `make install`
 next to the environment's python. dirdelta runs the first of: that build
 (`bin/python` and make say where), treepicker next to the running python, treepicker on `PATH`.
 
+## In the browser: `dirdelta/web/picker/`
+
+The daemon (`dirdelta --serve`) does treepicker's commands itself: `Command.run()` hands the same
+arguments, items and pipes to the web version's session (see `ui/frontend.py`), which shows the picker in
+the browser and answers on the pipes and stdout as treepicker would. So a change to this protocol is made
+in `web/picker/` too (`spec.py` lists the options it reads).
+
 ## Plan and status
 
 treepicker, each a commit:

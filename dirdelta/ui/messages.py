@@ -9,6 +9,8 @@ import sys
 
 import termcolor
 
+from dirdelta.ui import frontend
+
 # Whether the action on the progress screen was stopped (Ctrl-C)
 _is_stopped = False
 # Whether the last line printed is print_progress()'s, so it hasn't ended
@@ -18,6 +20,9 @@ _is_progress_shown = False
 def print_line(line, color=None):
     """Print line (in color, a termcolor name like 'red', if given)."""
     global _is_progress_shown
+    if frontend.current is not None:
+        frontend.current.print_line(line, color)
+        return
     if color is not None:
         line = termcolor.colored(line, color)
     if _is_progress_shown:
@@ -32,6 +37,9 @@ def print_progress(line):
     """Print line over the one print_progress() printed last, if it's the last line printed, for
     progress that changes often (e.g. a count). Only on a terminal: elsewhere it would be a line per
     change."""
+    if frontend.current is not None:
+        frontend.current.print_progress(line)
+        return
     global _is_progress_shown
     if not sys.stdout.isatty():
         return
@@ -64,6 +72,8 @@ def show(title, lines, label=None, color=None):
 def ask(title, lines, prompt, default='', label=None):
     """Ask for a line of text on a screen under title, below lines, starting as default (to edit).
     Returns it (stripped), or None if the user gave none (empty, or Ctrl-C or Ctrl-D)."""
+    if frontend.current is not None:
+        return (frontend.current.ask(title, lines, prompt, default, label) or '').strip() or None
     readline.set_startup_hook(lambda: readline.insert_text(default))
     try:
         with progress_screen(title, label, is_stoppable=False, wait=False,
@@ -105,6 +115,10 @@ def progress_screen(title, label=None, is_stoppable=True, wait=True, keys=None):
     """
     global _is_stopped
     _is_stopped = False
+    if frontend.current is not None:
+        with frontend.current.progress_screen(title, label, is_stoppable, wait, note_stopped):
+            yield
+        return
     is_terminal = sys.stdout.isatty() and sys.stdin.isatty()
     if not is_terminal:
         print_line(title if label is None else "%s: %s" % (label[0], title))
