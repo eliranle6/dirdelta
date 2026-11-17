@@ -5,3 +5,4 @@ termcolor
 treelib
 claude-agent-sdk
 pillow
+segno

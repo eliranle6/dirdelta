@@ -169,6 +169,23 @@ Ordered by how easy they are, easiest first (2026-10-30). Ideas 3, 2.1 and 6 hav
    5.6 Then to Drive: the laptop's replica goes to `cloud/...` as today, by a sync, or the
        import could copy to both at once.
 
+   5.10 Worked out on 2026-11-17 (a prototype, not in dirdelta yet): the import in three stages, each
+       resumable, since the USB link may drop: (1) copy the phone's media dirs (all of them, the
+       layout differing between phones) into an inbox folder of the import's own, with a manifest
+       (each file's name, size, date and the phone's own SHA-1), a `.part` file renamed once checked;
+       (2) choose each photo's folder in a browser, on the laptop or on another phone over Wi-Fi: a
+       grid of thumbnails by day, a suggestion per day, each choice saved on the laptop at once;
+       (3) move them, as the inbox's sort does (its followers too). Measured on the 300 newest Pixel
+       photos of `/mnt/win`: their thumbnails in 12 s (1.3 GB, 7 threads), the page and all its
+       thumbnails served in under 3 s. A suggestion by the date in the name alone (where the tree's
+       photos of the nearest earlier day are) was right first for 65% of 1,309 of them, their own day
+       hidden (93% with it known), in the top 3 for 72%: it fits a running folder
+       (`Family/Erez/2025`), not a new trip's. Wanted on the page: each photo tagged with whether the
+       local replica (`/mnt/win`) and Drive have it already, and where (by name and size, or the
+       phone's hash), so what's been imported before is seen at once. The page's address (with a key
+       in it, so others on the Wi-Fi see nothing) is handed over by `sharing.share()` (2026-11-17): a
+       QR code on the screen and an email to the user, through Gmail.
+
    Straight from the phone into Drive, with no laptop and no dirdelta server (idea 8):
    5.7 Before writing an app: apps that already do this exist, e.g. Autosync for Google Drive
        (MetaCtrl) or FolderSync, which keep a phone folder synced (one way, upload only, on
@@ -239,7 +256,9 @@ Ordered by how easy they are, easiest first (2026-10-30). Ideas 3, 2.1 and 6 hav
        built in; or a local web app (dirdelta serving a page, opened in the browser), which is
        also the way to idea 8's phone app. Both reuse the same frontend interface.
 
-8. **A dirdelta server, used from a phone.** A daemon on an always-on machine that holds the
+8. **A dirdelta server, used from a phone.** Wanted (2026-11-17): the whole sync from a phone's
+   browser, for any pair of replicas, with dirdelta's status (hashing, refreshing, an action's
+   progress), not only the import's photo page (5.10), which would be its first page. A daemon on an always-on machine that holds the
    replicas' state (the Drive cache, scans of local dirs it can reach) and runs the actions
    (Copy, Remove, idea 2's sorting), with an API that a phone app (or the browser) connects to:
    the same choices, made remotely, e.g. sorting `cloud/unsorted` from the phone.
@@ -258,6 +277,14 @@ Ordered by how easy they are, easiest first (2026-10-30). Ideas 3, 2.1 and 6 hav
        token stays on the server. Which local dirs it can reach is the server's, not the
        laptop's (`/mnt/win` is the laptop's Windows drive), so the replicas it serves may
        differ.
+   8.5 Wanted (2026-11-17): the daemon on the laptop itself, serving the web version, and watching
+       for a known replica to appear (a phone's MTP path under gvfs, or an `adb` device; a disk's
+       mount, by `known/mounts`' names): then it emails the user (`sharing/gmail.py`) a link to that
+       replica's page (e.g. the phone's import), once per appearance, not again while it stays.
+       Watching: gio's mount monitor or udev, else a poll every few seconds of the known paths. Run
+       as a systemd user service (`make deploy` could install it), so it starts with the session.
+       The link's key and the page's state live with the daemon, so a USB link that drops and comes
+       back resumes the same import.
 
 9. **Hash media last, and offer to leave it out.** Done (2026-11-13, `util/media.py`,
    `hashing/job_media.py`): a replica's images, audio and video are hashed after its other files; the

@@ -142,7 +142,7 @@ fast-forwarding, then committing the new pin here. Push only when asked; a push 
 `credentials.json` and `token.json` live in `secrets/` (gitignored), loaded
 via a path computed in `driveapi.py` from `__file__` rather than
 the process's CWD. These are Google Drive OAuth client secret / access-token
-files. Never read their contents into a response, log them, or
+files; `gmail_token.json` beside them is Gmail's (allowed only to send, `sharing/gmail.py`). Never read their contents into a response, log them, or
 commit-adjacent-copy them anywhere.
 
 ## Tests

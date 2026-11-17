@@ -188,6 +188,10 @@ The map (each module's docstring's first line; generated from the code):
     - `offering.py`: Whether to hash a replica's files when it's opened
     - `status.py`: What's shown of the hashing jobs (hashing.py): each file's tag, and how far each job got
     - `waiting.py`: Waiting for the hashing, and whether it's all right to quit meanwhile
+- `sharing/`: Handing the user a page dirdelta serves (e.g. sorting a phone's photos in the browser), to open on their phone: its address as a QR code on the screen (qr.py) and in an email to them, through Gmail (gmail.py); link.share() does both
+  - `gmail.py`: Sending mail from the user's Gmail (send()), through the Gmail API with dirdelta's Google client (driveapi's CREDENTIALS_PATH). Its login is apart from Drive's: TOKEN_PATH, allowed only to send (gmail.send: it can't read the user's mail), approved in the browser the first time.
+  - `link.py`: Handing the user a page's address, to open on their phone: on a screen as a QR code to scan, and in an email to them (share())
+  - `qr.py`: A QR code drawn in the terminal (lines()), to scan from the screen with a phone's camera: in half blocks, two of its rows a line, so it's about square
 - `sync/`: Sync mode: the menu of a pair of replicas, its two ways, and what it does to the replicas
   - `combined/`: The combined tree of a sync (CombinedSync): everything that differs in one tree, each file in a state, one plan
     - `ai_showing.py`: What's shown of the AI's suggestions, as the sort shows Claude's: a tag after a file's name, the status, the recommendation in the right column (a file's, a dir's)

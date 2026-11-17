@@ -39,6 +39,11 @@ def user_name():
     return (user.get('emailAddress') or '').split('@')[0] or user.get('displayName')
 
 
+def user_email():
+    """The email address of the account logged in to"""
+    return service().about().get(fields='user(emailAddress)').execute(num_retries=3)['user']['emailAddress']
+
+
 def service():
     """The Drive API (v3) service of this thread, logging in first if needed (once, for all threads:
     in the browser, unless there's a saved login with SCOPES)"""
