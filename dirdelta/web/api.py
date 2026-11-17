@@ -11,7 +11,9 @@ def routes(session, start_flow):
     """{(method, path): handler(query, body) -> JSON}: start_flow() starts dirdelta's start menu"""
     def state(query, body):
         since = int(query.get('since', 0))
-        session.wait(since, POLL_WAIT)
+        if since > 0:
+            # (A page's first ask is answered at once: nothing may change for a while)
+            session.wait(since, POLL_WAIT)
         screen = session.screen()
         found = {'version': session.version, 'running': session.is_running,
                  'log': [list(line) for line in session.log], 'screen': None}

@@ -3,6 +3,7 @@ import time
 import unittest
 
 from dirdelta.ui import messages
+from dirdelta.web import api
 from web_support import WebTest
 
 
@@ -50,6 +51,17 @@ class MessagesTest(WebTest):
         self.assertEqual({'prompt': 'New name: ', 'default': 'x.jpg'}, screen.asking)
         screen.answer(' y.jpg ')
         self.assertEqual('y.jpg', self.result())
+
+    def test_a_pages_first_ask_is_answered_at_once_and_later_ones_wait_for_a_change(self):
+        state = api.routes(self.session, lambda: None)[('GET', '/api/state')]
+        started = time.monotonic()
+        found = state({'since': '0'}, {})
+        self.assertLess(time.monotonic() - started, 1)
+        self.assertIsNone(found['screen'])
+        screen = self.start(lambda: messages.show('Done', ['x']))
+        self.assertEqual(screen.id, state({'since': str(found['version'])}, {})['screen']['id'])
+        screen.answer()
+        self.result()
 
     def test_lines_printed_between_screens_are_kept_for_the_page(self):
         messages.print_line('Scanning...')

@@ -20,7 +20,8 @@ class Session(object):
 
     def __init__(self):
         self._condition = threading.Condition()
-        self._version = 0
+        # (From 1: a page's first ask, since 0, is answered at once, and the ones after it wait)
+        self._version = 1
         self._ids = itertools.count(1)
         # The screens shown, the last on top (a picker may be shown on a progress screen)
         self._screens = []
