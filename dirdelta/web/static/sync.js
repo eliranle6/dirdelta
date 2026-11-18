@@ -1,5 +1,5 @@
-// The Sync page (web/home.py): the favorite pairs, the recent ones and the inbox sorts, each started with
-// a tap (its screens then on /run); or the start menu, to choose other replicas.
+// The Sync page (web/home.py): the favorite pairs and the recent ones, each synced with a tap (its screens
+// then on /run); or the start menu, to choose two other replicas. (Inboxes are sorted under Unsorted import.)
 'use strict';
 
 async function api(method, path, body) {
@@ -48,11 +48,7 @@ async function load() {
     pairs.map(pair => row([pair.favorite ? '★' : '', replicaLabel(pair.a, pair.nameA), '⇄', replicaLabel(pair.b, pair.nameB)], compared(pair),
       () => start({kind: 'pair', a: pair.a, b: pair.b}), busy)),
     row('Two other replicas…', 'Choose any two: folders on disks or in Drive', () => start({}), busy)));
-  // Sorting an inbox into a sorted tree
-  parts.push(el('div', {class: 'section-title'}, 'Sort an inbox'), el('div', {class: 'list'},
-    data.sorts.map(sort => row([replicaLabel(sort.inbox, sort.nameInbox, true), '→', replicaLabel(sort.root, sort.nameRoot)], 'Move its files into ' + sort.nameRoot + "'s folders",
-      () => start({kind: 'sort', inbox: sort.inbox, root: sort.root}), busy)),
-    row('Another inbox…', 'Choose an inbox and the tree to sort it into', () => start({}), busy)));
+  parts.push(el('p', {class: 'note'}, 'To sort an inbox into its tree, see Unsorted import.'));
   document.getElementById('main').replaceChildren(...parts);
   setTimeout(load, 8000);
 }

@@ -121,6 +121,25 @@ function summary(data) {
     drive ? tile(listed.tone, 'Drive file lists', 'Read ' + listed.text, listed.tone === 'ok' ? 'Fresh' : 'A sync reads them again', '/replicas') : '');
 }
 
+// What's connected now: the phones plugged in, each disk replica (mounted, or not plugged in), and Drive
+// (signed in, or not)
+function pluggedIn(data) {
+  const row = (kind, title, sub, state, action) => el('div', {class: 'item'}, icon(kind),
+    el('span', {class: 'what'}, el('b', {}, title), sub ? el('span', {class: 'note'}, sub) : ''), state, action || '');
+  const rows = data.phones.map(phone => row('phone', phone.name, 'Phone · ' + phone.inner, chip('ok', 'Plugged in'),
+    el('a', {class: 'button small primary', href: '/import'}, 'Import photos')));
+  for (const replica of data.replicas.filter(replica => replica.kind === 'local')) {
+    rows.push(row(replica.device, replica.fullName, replica.place === 'this computer' ? 'This computer\'s disk' : 'Disk',
+      replica.there ? chip('ok', 'Mounted') : chip('bad', 'Not plugged in')));
+  }
+  if (data.replicas.some(replica => replica.kind === 'drive')) {
+    rows.push(row('drive', 'Google Drive', data.replicas.filter(replica => replica.kind === 'drive').map(replica => replica.fullName).join(', '),
+      data.drive.connected ? chip('ok', 'Connected') : chip('bad', 'Not connected')));
+  }
+  if (!data.phones.length) rows.unshift(row('phone', 'No phone', 'Plug one in by USB, with "File transfer" on', chip('none', 'Not plugged in')));
+  return el('div', {class: 'list'}, rows);
+}
+
 function homePage(data) {
   const parts = [summary(data)];
   if (data.running) {
@@ -128,14 +147,7 @@ function homePage(data) {
       data.running.title ? el('div', {class: 'note'}, data.running.title) : ''),
       el('a', {class: 'button primary', href: '/run'}, 'Open it')));
   }
-  if (data.phones.length) {
-    parts.push(el('div', {class: 'section-title'}, 'Plugged in'));
-    for (const phone of data.phones) {
-      parts.push(el('div', {class: 'card banner'}, el('div', {class: 'head'}, icon('phone'),
-        el('div', {}, el('b', {}, phone.name), el('div', {class: 'note'}, 'Phone · ' + phone.inner))),
-        el('a', {class: 'button primary', href: '/import'}, 'Sort its photos')));
-    }
-  }
+  parts.push(el('div', {class: 'section-title'}, 'Plugged in'), pluggedIn(data));
   parts.push(el('div', {class: 'section-title'}, 'Sync status'));
   parts.push(data.pairs.length ? el('div', {class: 'list'}, data.pairs.map(pair => pairRow(pair, !!data.running))) :
     el('p', {class: 'note'}, 'No pairs synced yet: start one from Sync.'));
@@ -144,7 +156,7 @@ function homePage(data) {
       el('div', {class: 'item stacked'}, el('span', {class: 'what'}, el('b', {class: 'pairline'}, replicaLabel(sort.inbox, sort.nameInbox, true), '→',
         replicaLabel(sort.root, sort.nameRoot)),
         el('span', {class: 'note'}, 'Photos: by day, with previews. All files: any kind, folder by folder.')),
-        el('div', {class: 'row2'}, el('a', {class: 'button small', href: '/import'}, 'Sort photos'),
+        el('div', {class: 'row2'}, el('a', {class: 'button small', href: '/unsorted'}, 'Sort photos'),
           el('button', {class: 'small', disabled: !!data.running, onclick: () => start({kind: 'sort', inbox: sort.inbox, root: sort.root})}, 'Sort all files'))))));
   }
   return parts;

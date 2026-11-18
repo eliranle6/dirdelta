@@ -6,7 +6,9 @@ Drive one again (see phoneimport/, and checks.py)"""
 import os
 
 from dirdelta.phoneimport import applying, copying, sources, store, thumbs
+from dirdelta.known import replicas
 from dirdelta.trees import paths
+from dirdelta.web import naming
 from dirdelta.util import dryrun
 from dirdelta.web.importing import checks as checking
 from dirdelta.web.importing.state import import_state, summary
@@ -22,6 +24,8 @@ def routes():
         return {'imports': [summary(found) for found in store.all_imports()],
                 'phones': [source(name, path) for name, path in sources.phones()],
                 'drive': [source(name, path) for name, path in sources.drive_inboxes()],
+                'sorts': [{'inbox': inbox, 'root': root, 'nameInbox': naming.name(inbox), 'nameRoot': naming.name(root)}
+                          for inbox, root in replicas.load().sorts],
                 'dests': checking.destinations(), 'label': list(dryrun.label())}
 
     def new(query, body):

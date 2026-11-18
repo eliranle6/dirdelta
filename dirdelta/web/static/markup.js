@@ -112,26 +112,40 @@ function pathLine(full, before) {
   return el('div', {class: 'where'}, before ? el('span', {}, before) : '', shown);
 }
 
-// The pages' tabs, the one shown marked (active: 'home', 'photos', 'sync', 'run'), and Running while a
-// flow runs (a sync, a sort, the start menu: its screens are on /run), checked every few seconds
-const TABS = [['home', '/', 'Home'], ['replicas', '/replicas', 'Replicas'], ['photos', '/import', 'Photos'], ['sync', '/sync', 'Sync & sort']];
+// The pages' tabs, the one shown marked (active: 'home', 'replicas', 'sync', 'photos', 'unsorted',
+// 'run'): the two kinds of inbox (a phone's photos, an unsorted folder's) together under 'Inboxes'; and
+// Running while a flow runs (a sync, a sort, the start menu: its screens are on /run), checked every few
+// seconds. They share the screen's width, a long name on two lines.
+const TABS = [['home', '/', 'Home'], ['replicas', '/replicas', 'Replicas'], ['sync', '/sync', 'Sync']];
+const INBOX_TABS = [['photos', '/import', 'Photos import'], ['unsorted', '/unsorted', 'Unsorted import']];
+
+// (Called again, it marks another tab: a page may know which only once it's loaded)
+let shownTab = null, isRunning = false;
 
 function tabBar(active) {
   const nav = document.getElementById('tabs');
   if (!nav) return;
-  const draw = running => nav.replaceChildren(...TABS.map(([key, href, text]) =>
-    el('a', {href, class: key === active ? 'on' : ''}, text)),
-    running || active === 'run' ? el('a', {href: '/run', class: (running ? 'running' : 'idle') + (active === 'run' ? ' on' : '')},
-      running ? el('span', {class: 'dot'}) : '', 'Running') : '');
+  const isFirst = shownTab === null;
+  shownTab = active;
+  if (!isFirst) return drawTabs(nav);
+  drawTabs(nav);
   const check = async () => {
     try {
-      const answer = await (await fetch('/api/running')).json();
-      draw(answer.running);
+      isRunning = (await (await fetch('/api/running')).json()).running;
+      drawTabs(nav);
     } catch (error) { /* (the next check) */ }
     setTimeout(check, 5000);
   };
-  draw(false);
   check();
+}
+
+function drawTabs(nav) {
+  const active = shownTab, running = isRunning;
+  const tab = ([key, href, text]) => el('a', {href, class: 'tab' + (key === active ? ' on' : '')}, text);
+  nav.replaceChildren(...TABS.map(tab),
+    el('div', {class: 'tabgroup'}, el('span', {class: 'grouplabel'}, 'Inboxes'), el('div', {class: 'grouptabs'}, INBOX_TABS.map(tab))),
+    running || active === 'run' ? el('a', {href: '/run', class: 'tab ' + (running ? 'running' : 'idle') + (active === 'run' ? ' on' : '')},
+      running ? el('span', {class: 'dot'}) : '', 'Running') : '');
 }
 
 // Small icons of what a replica or source is on (static SVG, drawn in the text's color)

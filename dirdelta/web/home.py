@@ -4,6 +4,7 @@ Drive inboxes there are to sort photos from, what's running; the pairs to sync a
 started as a flow (see daemon.flow()); and hashing a replica, or pausing it"""
 import os
 
+from dirdelta.drive import driveapi
 from dirdelta.hashes import hashcache
 from dirdelta.hashes import hashing
 from dirdelta.known import mounts
@@ -102,6 +103,8 @@ def routes(session):
         pairs = list(dict.fromkeys(known_replicas.favorites + known_replicas.history))
         return {'label': list(dryrun.label()),
                 'running': {'title': _title(screen)} if session.is_running else None,
+                # (Signed in to Drive: its login is kept; whether it's still good is known when it's used)
+                'drive': {'connected': os.path.exists(driveapi.TOKEN_PATH)},
                 'phones': [dict(sources.describe(path), name=name, path=path) for name, path in sources.phones()],
                 'replicas': [replica_info(path, known_replicas) for path in all_paths],
                 'pairs': [pair_info(a, b, names, known_replicas) for a, b in pairs],

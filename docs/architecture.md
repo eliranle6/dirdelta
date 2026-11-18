@@ -1185,7 +1185,12 @@ every link carries, then a cookie), and a watcher.
   every thread beside it (counts coming in, previews, pictures, AI's suggestions) work unchanged. The
   server keeps each picker's selection, picks and states, so the laptop's browser and a phone's show the
   same screen. Stop raises KeyboardInterrupt in the flow's thread, as Ctrl-C does.
-- The pages, each with the same tabs (`markup.js`'s tabBar()): Home (`/`, `home.js`: the whole picture:
+- The pages, each with the same tabs (`markup.js`'s tabBar(): Home, Replicas, Sync, then the two kinds of
+  inbox grouped under "Inboxes": Photos import (`/import`: a phone's or a folder's photos) and Unsorted
+  import (`/unsorted`: the sorts' inboxes, each sorted by its photos, an import, or all its files, the
+  sort's own screens; the same page script, `import.js`, an import shown under its kind's tab); sharing
+  the screen's width): Home (`/`, `home.js`: the whole picture; what's plugged in: the phones, each disk
+  replica mounted or not, and Drive signed in or not;
   tiles of the replicas there, the last sync, the hashing and Drive's oldest list, what's running, the
   phones plugged in, each pair's sync status (`syncstate`'s mark, ≡ » « ≠ ?; how much was in step, the files
   both had of all either had, by the totals a sync notes with its comparison since 2026-11-18; and how

@@ -43,7 +43,14 @@ async function load() {
 
 // The imports, and starting one (one for each source and replica: the one there is is opened)
 
-function importLink(id) { return '/import?id=' + encodeURIComponent(id); }
+// Which tab this is: a phone's or a folder's photos (/import), or an unsorted inbox's (/unsorted)
+const MODE = location.pathname.startsWith('/unsorted') ? 'unsorted' : 'photos';
+const MODE_TITLES = {photos: 'Photos import', unsorted: 'Unsorted import'};
+
+// An import's page, under its tab (an inbox's under Unsorted)
+function importLink(id, isInbox) {
+  return (isInbox === undefined ? location.pathname : isInbox ? '/unsorted' : '/import') + '?id=' + encodeURIComponent(id);
+}
 
 // What a source is called: the phone's name, or a local dir's
 function sourceName(source) {
@@ -63,7 +70,7 @@ async function loadList() {
   const start = async (source, dest) => {
     const answer = await api('POST', '/api/imports/new', {source, dest});
     if (answer.error) document.getElementById('status').textContent = answer.error;
-    else location.href = importLink(answer.id);
+    else location.href = importLink(answer.id, MODE === 'unsorted');
   };
   // A source's card: which replica its photos go into, and Start (or Open, if it has an import there)
   const sourceCard = (kind, title, sub, full, source, dests, extra) => {
@@ -71,7 +78,7 @@ async function loadList() {
     if (!dests.length) return el('div', {class: 'card'}, el('h2', {}, title), el('p', {class: 'note'}, 'No replica it can go into.'));
     const select = el('select', {}, dests.map(dest => el('option', {value: dest.path}, destText(dest))));
     const open = () => data.imports.find(found => found.source.full === source() && found.dest === select.value && !found.otherDisk);
-    const button = el('button', {class: 'primary', onclick: () => open() ? location.href = importLink(open().id) : start(source(), select.value)});
+    const button = el('button', {class: 'primary', onclick: () => open() ? location.href = importLink(open().id, open().isInbox) : start(source(), select.value)});
     const named = () => {
       const found = open();
       button.textContent = found ? 'Continue import' : 'Start import';
@@ -83,14 +90,15 @@ async function loadList() {
       el('div', {class: 'row2'}, el('span', {class: 'note'}, 'into'), select, button));
   };
   const parts = [];
-  // What's started: each import's progress (decided of all)
-  if (data.imports.length) {
-    parts.push(el('div', {class: 'section-title'}, 'Ongoing imports'), el('div', {class: 'list'}, data.imports.map(found => {
+  // What's started under this tab: each import's progress (sorted of all)
+  const ongoing = data.imports.filter(found => found.isInbox === (MODE === 'unsorted'));
+  if (ongoing.length) {
+    parts.push(el('div', {class: 'section-title'}, 'Ongoing imports'), el('div', {class: 'list'}, ongoing.map(found => {
       const counts = found.counts, total = counts.pending + counts.copied + counts.moved + counts.skipped;
       const decided = counts.moved + counts.skipped;
-      return el('a', {class: 'item', href: importLink(found.id)},
+      return el('a', {class: 'item', href: importLink(found.id, found.isInbox)},
         el('span', {class: 'what'}, el('b', {class: 'pairline'}, el('span', {class: 'rname'},
-          icon(found.source.device ? 'phone' : found.source.drive ? 'inbox' : 'folder'), sourceName(found.source)), '→',
+          icon(found.source.device ? 'phone' : found.isInbox ? 'inbox' : 'folder'), sourceName(found.source)), '→',
           replicaLabel(found.dest, found.destName)),
           el('span', {class: 'note'}, found.otherDisk ? 'Its replica\'s disk isn\'t the one there now' :
             decided + ' of ' + total + ' sorted'),
@@ -98,20 +106,47 @@ async function loadList() {
         el('span', {class: 'go'}, '›'));
     })));
   }
-  parts.push(el('div', {class: 'section-title'}, 'Phones plugged in'));
-  parts.push(...(data.phones.length ? data.phones.map(phone => sourceCard('phone', 'Photos on ' + phone.name, phone.inner, phone.full, () => phone.path, phone.dests)) :
-    [el('p', {class: 'note'}, 'None. Plug a phone in by USB and choose "File transfer" on it; it shows here within a few seconds.')]));
-  if (data.drive.length) {
-    parts.push(el('div', {class: 'section-title'}, 'Drive inboxes'));
-    parts.push(...data.drive.map(folder => sourceCard('inbox', 'Photos in the inbox “' + folder.name + '”', 'Google Drive', folder.path,
-      () => folder.path, folder.dests)));
+  if (MODE === 'unsorted') parts.push(...inboxCards(data, start));
+  else {
+    parts.push(el('div', {class: 'section-title'}, 'Phones plugged in'));
+    parts.push(...(data.phones.length ? data.phones.map(phone => sourceCard('phone', 'Photos on ' + phone.name, phone.inner, phone.full, () => phone.path, phone.dests)) :
+      [el('p', {class: 'note'}, 'None. Plug a phone in by USB and choose "File transfer" on it; it shows here within a few seconds.')]));
+    parts.push(el('div', {class: 'section-title'}, 'A folder on this computer'));
+    const folder = el('input', {type: 'text', placeholder: '/path/to/a/folder'});
+    parts.push(sourceCard('folder', 'Photos in a folder', '', '', () => folder.value, data.dests, folder));
   }
-  parts.push(el('div', {class: 'section-title'}, 'A folder on this computer'));
-  const folder = el('input', {type: 'text', placeholder: '/path/to/a/folder'});
-  parts.push(sourceCard('folder', 'Photos in a folder', '', '', () => folder.value, data.dests, folder));
   const main = document.getElementById('main');
   if (!main.contains(document.activeElement)) main.replaceChildren(...parts);
   later(4);
+}
+
+// The inboxes (the sorts' unsorted folders, in Drive or on a disk), each sorted two ways: its photos by
+// day (an import, here), or all its files folder by folder (the sort's own screens, on /run)
+function inboxCards(data, start) {
+  const parts = [el('div', {class: 'section-title'}, 'Inboxes')];
+  if (!data.sorts.length) parts.push(el('p', {class: 'note'}, 'No inbox yet: choose one with "Another inbox…".'));
+  for (const sort of data.sorts) {
+    const open = data.imports.find(found => found.source.full === sort.inbox && found.dest === sort.root && !found.otherDisk);
+    parts.push(el('div', {class: 'card'},
+      el('h2', {class: 'pairline'}, replicaLabel(sort.inbox, sort.nameInbox, true), '→', replicaLabel(sort.root, sort.nameRoot)),
+      el('p', {class: 'note'}, 'Sort photos: photos and videos by day, with previews and what\'s there already. ' +
+        'Sort all files: any kind of file, folder by folder.'),
+      el('div', {class: 'row2'},
+        el('button', {class: 'primary', onclick: () => open ? location.href = importLink(open.id, true) : start(sort.inbox, sort.root)},
+          open ? 'Continue sorting photos' : 'Sort photos'),
+        el('button', {onclick: () => startFlow({kind: 'sort', inbox: sort.inbox, root: sort.root})}, 'Sort all files'))));
+  }
+  parts.push(el('div', {class: 'list'}, el('a', {class: 'item', href: '#', onclick: event => { event.preventDefault(); startFlow({}); }},
+    el('span', {class: 'what'}, el('b', {}, 'Another inbox…'), el('span', {class: 'note'}, 'Choose an inbox and the tree to sort it into')),
+    el('span', {class: 'go'}, '›'))));
+  return parts;
+}
+
+// Start a flow (the sort's own screens, or the start menu), shown on /run
+async function startFlow(body) {
+  const answer = await api('POST', '/api/start', body);
+  if (answer.ok) location.href = '/run';
+  else document.getElementById('status').textContent = 'Something is running already: see Running.';
 }
 
 // How many files are in each state (source: where they come from, said of the ones not copied yet)
@@ -129,6 +164,12 @@ async function loadImport() {
   if (data.error) throw new Error(data.error);
   if (view() !== shown) return;
   page.data = data;
+  // (An inbox's import is under Unsorted import, whichever link led here)
+  const tab = data.isInbox ? 'unsorted' : 'photos';
+  tabBar(tab);
+  const crumb = document.getElementById('crumbs').firstElementChild;
+  crumb.textContent = MODE_TITLES[tab];
+  crumb.setAttribute('href', tab === 'unsorted' ? '/unsorted' : '/import');
   const title = sourceName(data.source) + ' → ' + data.destName;
   document.getElementById('where').replaceChildren(' > ', shown === 'overview' ? title :
     el('a', {href: '#'}, title), shown === 'overview' ? '' : ' > ' + filterText());
@@ -524,5 +565,8 @@ function renderFooter() {
     })}, busy ? waiting('Moving') : 'Move ' + over.chosen + ' into ' + data.destName) : '');
 }
 
-tabBar('photos');
+tabBar(MODE);
+document.getElementById('crumbs').firstElementChild.textContent = MODE_TITLES[MODE];
+document.getElementById('crumbs').firstElementChild.setAttribute('href', location.pathname);
+document.title = MODE_TITLES[MODE];
 load();
