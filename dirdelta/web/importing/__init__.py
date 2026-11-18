@@ -15,18 +15,33 @@ from dirdelta.web.importing.state import import_state, summary
 from dirdelta.web.server import FileReply, Reply
 
 
+def inboxes():
+    """[{'path', 'name', 'kind' (phone, drive, folder), 'there', 'added' (one of the user's, not a phone
+    plugged in: it can be forgotten), 'source' (sources.describe()), 'dests' (the replicas its files
+    may go into, the likeliest first), 'imports' (its imports' summaries)}]: the user's inboxes, the
+    phones plugged in first, and any other source an import of theirs has (e.g. a phone unplugged)"""
+    added = replicas.load().inbox_paths()
+    found = {path: ('phone', name, True) for name, path in sources.phones()}
+    for path in added:
+        found.setdefault(path, ('drive' if paths.is_cloud_path(path) else 'folder', naming.name(path),
+                                paths.is_cloud_path(path) or os.path.isdir(path)))
+    imports = store.all_imports()
+    for one in imports:
+        described = sources.describe(one.source)
+        found.setdefault(one.source, ('phone' if described['device'] else 'drive' if described['drive'] else 'folder',
+                                      described['device'] or naming.name(one.source),
+                                      paths.is_cloud_path(one.source) or os.path.isdir(one.source)))
+    return [{'path': path, 'kind': kind, 'name': name, 'there': there, 'added': path in added,
+             'source': sources.describe(path), 'dests': checking.destinations(path),
+             'imports': [summary(one) for one in imports if one.source == path]}
+            for path, (kind, name, there) in found.items()]
+
+
 def routes():
     checks = checking.Checks()
 
     def listing(query, body):
-        def source(name, path):
-            return dict(sources.describe(path), name=name, path=path, dests=checking.destinations(path))
-        return {'imports': [summary(found) for found in store.all_imports()],
-                'phones': [source(name, path) for name, path in sources.phones()],
-                'drive': [source(name, path) for name, path in sources.drive_inboxes()],
-                'sorts': [{'inbox': inbox, 'root': root, 'nameInbox': naming.name(inbox), 'nameRoot': naming.name(root)}
-                          for inbox, root in replicas.load().sorts],
-                'dests': checking.destinations(), 'label': list(dryrun.label())}
+        return {'inboxes': inboxes(), 'label': list(dryrun.label())}
 
     def new(query, body):
         source, dest = body.get('source', ''), body.get('dest', '')

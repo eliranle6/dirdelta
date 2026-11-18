@@ -38,7 +38,7 @@ function hashChip(replica) {
 // Each replica's status chips: there, synced, hashed (a local one), its list read (a Drive one)
 function statusChips(replica) {
   const synced = age(replica.seen);
-  const verb = replica.inboxOf.length ? 'Sorted' : 'Synced';
+  const verb = 'Synced';
   return el('div', {class: 'chips-row'},
     replica.there ? chip('ok', replica.kind === 'drive' ? 'In Drive' : 'Mounted') : chip('bad', replica.why),
     chip(replica.seen ? synced.tone : 'none', replica.seen ? verb + ' ' + synced.text : 'Never ' + verb.toLowerCase()),
@@ -54,12 +54,11 @@ function replicaCard(replica) {
     actions.push(el('button', {class: 'small', onclick: act(!!(job && job.started))},
       job && job.started ? 'Pause' : job && job.state ? 'Resume hashing' : 'Hash its files'));
   }
+  actions.push(forgetButton(replica.path, 'replica'));
   const entry = replica.lastEntry ? (replica.lastEntry.date ? replica.lastEntry.date + ': ' : '') + replica.lastEntry.text : '';
   return el('div', {class: 'card replica' + (replica.there ? '' : ' away')},
-    el('div', {class: 'head'}, icon(replica.inboxOf.length ? 'inbox' : replica.device), el('b', {}, replica.fullName),
-      replica.inboxOf.length ? el('span', {class: 'badge-role'}, 'Inbox') : ''),
-    el('div', {class: 'note'}, replica.inboxOf.length ? 'Inbox: its files are sorted into ' + replica.inboxOf.join(', ') :
-      replica.kind === 'drive' ? 'In Google Drive' : 'On ' + replica.place),
+    el('div', {class: 'head'}, icon(replica.device), el('b', {}, replica.fullName)),
+    el('div', {class: 'note'}, replica.kind === 'drive' ? 'In Google Drive' : 'On ' + replica.place),
     pathLine(replica.path),
     statusChips(replica),
     entry ? el('div', {class: 'entry'}, el('span', {class: 'entry-label'}, 'Last log entry: '), entry) : '',
@@ -103,8 +102,7 @@ function pairRow(pair, isRunning) {
 
 // The whole picture: one tile each for the replicas, the syncs, the hashing and Drive's lists
 function summary(data) {
-  // (Replicas only: an inbox isn't one, its files are sorted into one)
-  const kept = data.replicas.filter(replica => !replica.inboxOf.length);
+  const kept = data.replicas;
   const disks = kept.filter(replica => replica.kind === 'local'), inDrive = kept.filter(replica => replica.kind === 'drive');
   const mounted = disks.filter(replica => replica.there).length;
   const there = mounted + (data.drive.connected ? inDrive.length : 0);
@@ -122,7 +120,7 @@ function summary(data) {
   return el('div', {class: 'tiles'},
     tile(!kept.length ? 'none' : there === kept.length ? 'ok' : 'bad', 'Replicas available', there + ' of ' + kept.length,
       !kept.length ? 'None yet' : where, '/replicas'),
-    tile(lastSync ? synced.tone : 'none', 'Last sync', lastSync ? synced.text : 'never', 'Sync status is below'),
+    tile(lastSync ? synced.tone : 'none', 'Last sync', lastSync ? synced.text : 'never', 'Sync status is below', '/replicas'),
     tile(hashing ? 'warn' : jobs.length && jobs.every(replica => replica.hashing.state === 'done') ? 'ok' : 'none', 'File hashes',
       hashing ? waiting(hashing.name) : jobs.length ? 'Up to date' : 'Not computed yet', 'They find moved and renamed files', '/replicas'),
     drive ? tile(listed.tone, 'Drive file lists', 'Read ' + listed.text, listed.tone === 'ok' ? 'Fresh' : 'A sync reads them again', '/replicas') : '');
@@ -131,14 +129,6 @@ function summary(data) {
 function connectionRow(kind, title, sub, state, action) {
   return el('div', {class: 'item'}, icon(kind),
     el('span', {class: 'what'}, el('b', {}, title), sub ? el('span', {class: 'note'}, sub) : ''), state, action || '');
-}
-
-// The phones plugged in (or that none is), each with its photos' import
-function phonesPluggedIn(data) {
-  const rows = data.phones.map(phone => connectionRow('phone', phone.name, 'Phone · its ' + phone.inner + ' folder', chip('ok', 'Plugged in'),
-    el('a', {class: 'button small primary', href: '/import'}, 'Import its photos')));
-  if (!rows.length) rows.push(connectionRow('phone', 'No phone plugged in', 'Plug one in by USB and choose "File transfer" on it', chip('none', 'None')));
-  return el('div', {class: 'list'}, rows);
 }
 
 // Which replicas can be reached now: each disk replica (mounted, or not plugged in), and Drive (signed in,
@@ -151,7 +141,8 @@ function pluggedIn(data) {
       replica.there ? chip('ok', 'Mounted') : chip('bad', 'Not plugged in')));
   }
   const inDrive = data.replicas.filter(replica => replica.kind === 'drive');
-  const held = inDrive.map(replica => replica.inboxOf.length ? 'the inbox ' + replica.fullName : replica.fullName);
+  const held = inDrive.map(replica => replica.fullName).concat(
+    data.inboxes.filter(inbox => inbox.kind === 'drive').map(inbox => 'the inbox ' + inbox.name));
   rows.push(row('drive', 'Google Drive', inDrive.length ? 'Holds ' + held.join(' and ') : 'Holds no replica of ' + data.user + "'s yet",
     data.drive.connected ? chip('ok', 'Connected') : chip('bad', 'Not connected')));
   return el('div', {class: 'list'}, rows);
@@ -162,38 +153,50 @@ function homePage(data) {
   if (!data.replicas.length) {
     // (A new user's: nothing of theirs yet)
     parts.push(el('div', {class: 'card banner'}, el('div', {}, el('b', {}, data.user + ' has no replicas yet'),
-      el('div', {class: 'note'}, 'Choose two copies of the same files to keep in step, e.g. a folder on this computer and one in Google Drive. ' +
-        'They\'re then ' + data.user + '\'s replicas, shown here and on Replicas, Sync and the imports.')),
-      el('a', {class: 'button primary', href: '/replicas#add'}, 'Add a replica pair')));
+      el('div', {class: 'note'}, 'A replica is a copy of ' + data.user + '\'s files: a folder on this computer, on a disk or in Google Drive. ' +
+        'Add two, and they\'re kept in step.')),
+      el('a', {class: 'button primary', href: '/replicas#add'}, 'Add a replica')));
   }
   if (data.running) {
     parts.push(el('div', {class: 'card banner running'}, el('div', {}, el('b', {}, 'Running now' + (data.running.user && data.running.user !== data.user ? ' (for ' + data.running.user + ')' : '')),
       data.running.title ? el('div', {class: 'note'}, data.running.title) : ''),
       el('a', {class: 'button primary', href: '/run'}, 'Open it')));
   }
-  parts.push(el('div', {class: 'section-title'}, 'Replicas plugged in'), pluggedIn(data),
-    el('div', {class: 'section-title'}, 'Phones plugged in'), phonesPluggedIn(data));
+  parts.push(el('div', {class: 'section-title'}, 'Replicas plugged in'), pluggedIn(data));
   parts.push(el('div', {class: 'section-title'}, 'Sync status of each replica pair'));
   parts.push(data.pairs.length ? el('div', {class: 'list'}, data.pairs.map(pair => pairRow(pair, !!data.running))) :
-    el('p', {class: 'note'}, 'No pairs synced yet: start one from Sync.'));
-  if (data.sorts.length) {
-    parts.push(el('div', {class: 'section-title'}, 'Inboxes waiting to be sorted'), el('div', {class: 'list'}, data.sorts.map(sort =>
-      el('div', {class: 'item stacked'}, el('span', {class: 'what'}, el('b', {class: 'pairline'}, replicaLabel(sort.inbox, sort.nameInbox, true), '→',
-        replicaLabel(sort.root, sort.nameRoot)),
-        el('span', {class: 'note'}, 'Photos: by day, with previews. All files: any kind, folder by folder.')),
-        el('div', {class: 'row2'}, el('a', {class: 'button small', href: '/unsorted'}, 'Sort photos'),
-          el('button', {class: 'small', disabled: !!data.running, onclick: () => start({kind: 'sort', inbox: sort.inbox, root: sort.root})}, 'Sort all files'))))));
+    el('p', {class: 'note'}, 'Any two replicas are a pair: add them on Replicas.'));
+  // The inboxes (a phone's while it's plugged in, or while it's being sorted), each one's sorting so far
+  const inboxes = data.inboxes.filter(inbox => inbox.kind !== 'phone' || inbox.there || inbox.imports.length);
+  const rows = inboxes.map(inbox => {
+    const progress = inboxProgress(inbox);
+    return el('a', {class: 'item', href: '/inboxes'}, icon(inbox.kind === 'phone' ? 'phone' : inbox.kind === 'drive' ? 'inbox' : 'folder'),
+      el('span', {class: 'what'}, el('b', {}, inbox.kind === 'phone' ? 'Photos on ' + inbox.name : inbox.name), el('span', {class: 'note'}, progress.text),
+        progress.share !== null ? el('span', {class: 'meter'}, el('span', {style: 'width:' + progress.share + '%'})) : ''),
+      inbox.kind === 'phone' ? chip(inbox.there ? 'ok' : 'none', inbox.there ? 'Plugged in' : 'Not plugged in') : '',
+      el('span', {class: 'go'}, '›'));
+  });
+  if (!data.inboxes.some(inbox => inbox.kind === 'phone' && inbox.there)) {
+    rows.push(connectionRow('phone', 'No phone plugged in', 'Plug one in by USB and choose "File transfer" on it', chip('none', 'None')));
   }
+  parts.push(el('div', {class: 'section-title'}, 'Inboxes'), el('div', {class: 'list'}, rows));
   return parts;
 }
 
+// The user's replicas: each one's status, adding one; and every two of them, a pair, its sync status and Sync
 function replicasPage(data) {
   const local = data.replicas.filter(replica => replica.kind === 'local');
   const drive = data.replicas.filter(replica => replica.kind === 'drive');
-  const parts = [pairAdder()];
-  if (local.length) parts.push(el('div', {class: 'section-title'}, 'Replicas on local disks'), el('div', {class: 'grid'}, local.map(replicaCard)));
+  const parts = [el('p', {class: 'note'}, 'Replicas are copies of ' + data.user + '\'s files, kept in step by syncing any two of them.'),
+    folderAdder('replica')];
+  if (local.length) parts.push(el('div', {class: 'section-title'}, 'Replicas on disks'), el('div', {class: 'grid'}, local.map(replicaCard)));
   if (drive.length) parts.push(el('div', {class: 'section-title'}, 'Replicas in Google Drive'), el('div', {class: 'grid'}, drive.map(replicaCard)));
-  if (!data.replicas.length) parts.push(el('p', {class: 'note'}, 'No replicas yet: add a pair above.'));
+  parts.push(el('div', {class: 'section-title'}, 'Sync status of each pair'));
+  parts.push(data.pairs.length ? el('div', {class: 'list'}, data.pairs.map(pair => pairRow(pair, !!data.running))) :
+    el('p', {class: 'note'}, data.replicas.length ? 'Add another replica: any two are a pair to sync.' : 'Add two replicas: any two are a pair to sync.'));
+  parts.push(el('div', {class: 'list'}, el('a', {class: 'item', href: '#', onclick: event => { event.preventDefault(); start({}); }},
+    el('span', {class: 'what'}, el('b', {}, 'Sync two other folders once…'), el('span', {class: 'note'}, 'Any two, chosen on the terminal\'s screens')),
+    el('span', {class: 'go'}, '›'))));
   return parts;
 }
 

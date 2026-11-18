@@ -32,17 +32,18 @@ class HomeTest(WebTest):
 
     def test_the_dashboard_has_each_replica_once_and_says_which_arent_there(self):
         found = {replica['path']: replica for replica in self.call('GET', '/api/home')['replicas']}
-        self.assertEqual({self.local, 'cloud/photos', self.gone, 'cloud/unsorted'}, set(found))
+        self.assertEqual({self.local, 'cloud/photos', self.gone}, set(found))
         self.assertTrue(found[self.local]['there'])
         self.assertEqual(('local', 'drive'), (found[self.local]['kind'], found['cloud/photos']['kind']))
         self.assertFalse(found[self.gone]['there'])
         self.assertEqual('not there', found[self.gone]['why'])
 
-    def test_the_sync_page_has_the_favorites_the_other_recent_pairs_and_the_sorts(self):
-        found = self.call('GET', '/api/sync')
-        self.assertEqual([(self.local, 'cloud/photos')], [(pair['a'], pair['b']) for pair in found['favorites']])
-        self.assertEqual([(self.gone, self.local)], [(pair['a'], pair['b']) for pair in found['recent']])
-        self.assertEqual([('cloud/unsorted', self.local)], [(sort['inbox'], sort['root']) for sort in found['sorts']])
+    def test_every_two_replicas_are_a_pair_and_the_inboxes_are_apart(self):
+        found = self.call('GET', '/api/home')
+        self.assertEqual({frozenset((self.local, 'cloud/photos')), frozenset((self.gone, self.local)), frozenset((self.gone, 'cloud/photos'))},
+                         {frozenset((pair['a'], pair['b'])) for pair in found['pairs']})
+        inbox = next(inbox for inbox in found['inboxes'] if inbox['path'] == 'cloud/unsorted')
+        self.assertEqual(('drive', self.local), (inbox['kind'], inbox['dests'][0]['path']))
 
     def test_a_pairs_status_says_how_much_was_in_step_and_whether_its_changed_since(self):
         known = replicas.load()

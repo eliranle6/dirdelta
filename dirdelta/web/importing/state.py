@@ -5,9 +5,7 @@ import datetime
 import time
 
 from dirdelta.known import replicanames
-from dirdelta.known import replicas
 from dirdelta.phoneimport import applying, copying, overview, sources, suggest
-from dirdelta.trees import paths
 from dirdelta.util import dryrun
 from dirdelta.web import naming
 from dirdelta.web.importing import checks as checking
@@ -17,9 +15,7 @@ def summary(found):
     return {'id': found.id, 'source': sources.describe(found.source), 'dest': found.dest, 'destName': naming.name(found.dest),
             'destDisk': replicanames.disk_name(found.dest),
             'otherDisk': found.dest_id is not None and found.dest_id != checking.identity(found.dest),
-            'created': found.created, 'counts': found.counts(),
-            # (An inbox's (a sort's, or any Drive folder's) imports are under Unsorted, a phone's or a folder's under Photos)
-            'isInbox': paths.is_cloud_path(found.source) or any(inbox == found.source for inbox, _ in replicas.load().sorts)}
+            'created': found.created, 'counts': found.counts()}
 
 
 def import_state(found, check, with_files=True):

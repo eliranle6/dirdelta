@@ -14,7 +14,9 @@ from dirdelta.web import access
 
 STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static')
 # The pages, by path (the rest of static/ is served by its name)
-PAGES = {'/': 'home.html', '/replicas': 'replicas.html', '/sync': 'sync.html', '/run': 'app.html', '/import': 'import.html', '/unsorted': 'import.html'}
+# (/sync, /import and /unsorted: the tabs' old addresses, in links kept)
+PAGES = {'/': 'home.html', '/replicas': 'replicas.html', '/inboxes': 'import.html', '/run': 'app.html',
+         '/sync': 'replicas.html', '/import': 'import.html', '/unsorted': 'import.html'}
 
 
 class Reply(object):

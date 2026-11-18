@@ -1,6 +1,6 @@
-"""Adding a pair of replicas from the web version (routes()): its folders browsed (this computer's, or
-Google Drive's, as the Drive cache has them), then the pair kept as a favorite of the user's, so it's on
-Home, Replicas and Sync, synced when they choose (at once, or later)"""
+"""Adding a replica or an inbox of the user's from the web version (routes()): its folder browsed (this
+computer's, or Google Drive's, as the Drive cache has them), not in another one or holding one; and
+forgetting one (see replica_lists.py)"""
 import os
 
 from dirdelta.drive import drivecache
@@ -56,25 +56,29 @@ def browse(path):
         parent = path.rsplit('/', 1)[0]
     elif not is_drive and path != '/':
         parent = os.path.dirname(path)
-    known = {replica for pair in _pairs() for replica in pair}
+    known = set(_known_paths())
     return {'path': path, 'parent': parent, 'dirs': dirs, 'name': naming.name(path) if path not in ('/', 'cloud') else path,
-            'known': path in known}
+            'known': path in known}  # (one of the user's replicas or inboxes already)
 
 
-def _pairs():
+def _known_paths():
+    """The user's replicas and inboxes"""
     known_replicas = replicas.load()
-    return known_replicas.favorites + known_replicas.history + known_replicas.sorts
+    return known_replicas.replica_paths() + known_replicas.inbox_paths()
 
 
-def problem(path_a, path_b):
-    """Why path_a and path_b can't be a pair, or None"""
-    for path in (path_a, path_b):
-        if not path or path in ('/', 'cloud'):
-            return "Choose a folder for each replica (not all of this computer or all of Drive)."
-        if not paths.is_cloud_path(path) and not os.path.isdir(path):
-            return "%s isn't a folder on this computer." % (path,)
-    if paths.is_at_or_under(path_a, path_b) or paths.is_at_or_under(path_b, path_a):
-        return "One is inside the other: a replica pair is two separate copies."
+def problem(path, known_replicas):
+    """Why the folder at path can't be one of the user's replicas or inboxes, or None"""
+    if not path or path in ('/', 'cloud'):
+        return "Choose a folder (not all of this computer or all of Drive)."
+    if not paths.is_cloud_path(path) and not os.path.isdir(path):
+        return "%s isn't a folder on this computer." % (path,)
+    for other in known_replicas.replica_paths() + known_replicas.inbox_paths():
+        if other == path:
+            continue
+        if paths.is_at_or_under(path, other) or paths.is_at_or_under(other, path):
+            return "It's %s %s: choose a folder that isn't in another replica or inbox, or holds one." % (
+                'in' if paths.is_at_or_under(path, other) else 'around', naming.name(other))
     return None
 
 
@@ -85,15 +89,21 @@ def routes():
         return {'shortcuts': shortcuts()}
 
     def add(query, body):
-        path_a, path_b = (body.get(name) or '' for name in ('a', 'b'))
-        path_a, path_b = (paths.normalized(path) if path else '' for path in (path_a, path_b))
-        why = problem(path_a, path_b)
+        """Add the folder body['path'] as one of the user's replicas, or (body['as'] == 'inbox') inboxes"""
+        path, as_inbox = paths.normalized(body.get('path') or '/'), body.get('as') == 'inbox'
+        known_replicas = replicas.load()
+        why = problem(path, known_replicas)
         if why:
             return {'ok': False, 'error': why}
-        known_replicas = replicas.load()
-        if not known_replicas.is_favorite(path_a, path_b):
-            known_replicas.toggle_favorite(path_a, path_b)
-            replicas.save(known_replicas)
-        return {'ok': True, 'a': path_a, 'b': path_b}
+        (known_replicas.add_inbox if as_inbox else known_replicas.add_replica)(path)
+        replicas.save(known_replicas)
+        return {'ok': True, 'path': path}
 
-    return {('GET', '/api/browse'): browse_route, ('POST', '/api/pairs/add'): add}
+    def forget(query, body):
+        """Not one of the user's replicas or inboxes any more (nothing in it is touched)"""
+        known_replicas = replicas.load()
+        known_replicas.forget(body.get('path') or '')
+        replicas.save(known_replicas)
+        return {'ok': True}
+
+    return {('GET', '/api/browse'): browse_route, ('POST', '/api/add'): add, ('POST', '/api/forget'): forget}

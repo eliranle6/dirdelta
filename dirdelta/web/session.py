@@ -28,8 +28,9 @@ class Session(object):
         self._screens = []
         self.log = []
         self._flow = None
-        # Who the flow running (or the last) is for: the user who started it
+        # Who the flow running (or the last) is for: the user who started it; and its tab
         self.user = None
+        self.tab = None
 
     # Changes, and waiting for them
 
@@ -75,11 +76,13 @@ class Session(object):
     def is_running(self):
         return self._flow is not None and self._flow.is_alive()
 
-    def start(self, flow):
-        """Run flow() on a thread of its own, unless one is running. Returns whether it started."""
+    def start(self, flow, tab=None):
+        """Run flow() on a thread of its own, unless one is running (tab: the page's tab it's under).
+        Returns whether it started."""
         if self.is_running:
             return False
         self.log = []
+        self.tab = tab
         self.user = users.current()
         self._flow = threading.Thread(target=self._run, args=(flow,), daemon=True)
         self._flow.start()

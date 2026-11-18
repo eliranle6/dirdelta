@@ -96,6 +96,8 @@ class ReplicasFileTest(unittest.TestCase):
         known.record_sort('cloud/unsorted', 'cloud/me')
         known.record_dir('cloud/me/', 'photos/2026')
         known.record_followers('cloud/me', ['/mnt/win'])
+        known.add_replica('/disk/me/')
+        known.add_inbox('cloud/phone')
         # Its dir is made
         replicas.save(known)
         loaded = replicas.load()
@@ -104,13 +106,15 @@ class ReplicasFileTest(unittest.TestCase):
         self.assertEqual(loaded.sorts, [('cloud/unsorted', 'cloud/me')])
         self.assertEqual(loaded.dirs_of('cloud/me'), ['photos/2026'])
         self.assertEqual(loaded.followers, {'cloud/me': ['/mnt/win']})
+        self.assertEqual((['/disk/me'], ['cloud/phone']), (loaded.added_replicas, loaded.added_inboxes))
         with open(self.path) as f:
             self.assertEqual(json.load(f), {'favorites': [['/mnt/win', 'cloud/me']],
                                             'history': [['/a', 'cloud/b']],
                                             'sorts': [['cloud/unsorted', 'cloud/me']],
                                             'recent_dirs': {'cloud/me': ['photos/2026']},
                                             'known': {}, 'compared': [], 'labels': {},
-                                            'followers': {'cloud/me': ['/mnt/win']}})
+                                            'followers': {'cloud/me': ['/mnt/win']},
+                                            'replicas': ['/disk/me'], 'inboxes': ['cloud/phone']})
 
     def test_a_pairs_comparison_loads_back_either_way_around(self):
         known = replicas.Replicas()

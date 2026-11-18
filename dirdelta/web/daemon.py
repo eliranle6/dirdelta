@@ -58,7 +58,7 @@ def _say(kind, name, key, port, whose):
     page, or the start menu"""
     for user in whose:
         if kind == PHONE:
-            url, what = access.link(key, port, '/import', u=user), "Import the photos of %s" % (name,)
+            url, what = access.link(key, port, '/inboxes', u=user), "Import the photos of %s" % (name,)
         else:
             url, what = access.link(key, port, u=user), "Sync %s (it's there now)" % (name,)
 

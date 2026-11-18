@@ -144,7 +144,8 @@ class ImportPageTest(ImportTest):
         self.write(self.dest, 'media/Trip/PXL_20260224_1.jpg', 'old one')
         self.write(self.source, 'PXL_20260224_1.jpg', 'old one')
         self.write(self.source, 'PXL_20260225_2.jpg', 'new one')
-        self.assertEqual(self.dest, self.call('GET', '/api/imports')['dests'][0]['path'])
+        inbox = next(found for found in self.call('GET', '/api/imports')['inboxes'] if found['path'] == 'cloud/x')
+        self.assertEqual(('drive', self.dest), (inbox['kind'], inbox['dests'][0]['path']))
         import_id = self.call('POST', '/api/imports/new', body={'source': self.source, 'dest': self.dest})['id']
         self.wait_until(lambda: self.done(import_id))
         state = self.call('GET', '/api/import', {'id': import_id})
@@ -171,7 +172,7 @@ class ImportPageTest(ImportTest):
         self.assertEqual({'pending': 0, 'copied': 0, 'moved': 1, 'skipped': 1},
                          self.call('GET', '/api/import', {'id': import_id})['counts'])
         self.assertTrue(self.call('POST', '/api/import/end', body={'id': import_id})['ok'])
-        self.assertEqual([], self.call('GET', '/api/imports')['imports'])
+        self.assertEqual([], [found for inbox in self.call('GET', '/api/imports')['inboxes'] for found in inbox['imports']])
 
     def test_starting_the_same_source_into_the_same_replica_again_opens_its_import_listed_again(self):
         self.write(self.source, 'a.jpg', 'a')

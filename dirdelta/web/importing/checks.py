@@ -154,21 +154,18 @@ def hash_state(root):
 
 
 def synced_with(path):
-    """The replicas the replica at path was synced with (the favorites', the history's)"""
+    """The user's other replicas than the one at path (copies of one tree, see replica_lists.py)"""
     path = paths.normalized(path)
-    known_replicas = replicas.load()
-    return list(dict.fromkeys(other for pair in known_replicas.favorites + known_replicas.history if path in pair
-                              for other in pair if other != path))
+    return [other for other in replicas.load().replica_paths() if other != path]
 
 
 def destinations(source=None):
-    """[{'path', 'name', 'disk', 'kind'}] of the replicas an import of source may go into, the likeliest
-    first: local ones (the sorted trees first); for a Drive folder (a sort's inbox), its sorts' sorted
-    trees first, and Drive ones too"""
+    """[{'path', 'name', 'disk', 'kind'}] of the user's replicas an import of source may go into (any:
+    they're copies of one tree), the likeliest first: the one it was last sorted into, then local ones
+    that are there (a disk's); for a Drive folder, Drive ones too, after them"""
     known_replicas = replicas.load()
     candidates = [root for inbox, root in known_replicas.sorts if inbox == source] + \
-        [root for _, root in known_replicas.sorts] + \
-        [path for pair in known_replicas.favorites + known_replicas.history for path in pair]
+        [path for path in known_replicas.replica_paths() if not paths.is_cloud_path(path)] + known_replicas.replica_paths()
     is_drive = source is not None and paths.is_cloud_path(source)
     found = [path for path in dict.fromkeys(candidates) if path != source and
              (os.path.isdir(path) if not paths.is_cloud_path(path) else is_drive)]

@@ -53,8 +53,8 @@ def _is_serial(word):
 
 
 def drive_inboxes():
-    """[(name, path)] of the Drive folders photos are sorted from: the sorts' inboxes in Drive"""
-    found = dict.fromkeys(inbox for inbox, _ in replicas.load().sorts if paths.is_cloud_path(inbox))
+    """[(name, path)] of the Drive folders photos are sorted from: the user's inboxes in Drive"""
+    found = [inbox for inbox in replicas.load().inbox_paths() if paths.is_cloud_path(inbox)]
     return [(os.path.basename(path.rstrip('/')), path) for path in found]
 
 

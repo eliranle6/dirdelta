@@ -70,9 +70,9 @@ background, at the lowest priority, into the hash cache, so a file is found by
 its contents (SHA-1, as Drive's) whatever its name and size. `#` in the file
 pickers (and the "Replicas dashboard" in the sync's and the start menus) shows
 how far it got, pauses and resumes it. `--serve` (`make serve`; `make service` installs it as a systemd user service) runs the daemon: the
-web version on the local network (tabs: Home, the whole picture, what's plugged in and each pair's sync status; Replicas, each one's status; Sync; and the inboxes: Photos import and Unsorted import, a phone's or a Drive inbox's photos
-sorted into a replica: `/import`, `phoneimport/`; Sync, the pairs and sorts started with a tap, the same
-flows, their pickers and messages in the browser; with the key in its link: `web/`, see
+web version on the local network (tabs: Home, the whole picture; Replicas, the user's copies of their tree, added there, each one's status
+and every two a pair to sync; Inboxes, where new files come in (a phone, a Drive folder), added there, each sorted into the tree: its photos by
+day, `phoneimport/`, or all its files; the syncs and sorts the same flows, their pickers and messages in the browser; with the key in its link: `web/`, see
 docs/architecture.md, "The web version"), and a watch that emails the user a link when a phone is plugged in or a known
 replica's drive is mounted.
 Every screen has the same layout (see
@@ -188,7 +188,7 @@ them by name. A big class's tests are split by topic into modules of their own, 
 prefix), which a test module imports by name: the runner puts its folder and the ones above it, up to
 `tests/` (helpers.py), on the path.
 
-Modules are tested where it's worth it, not for the sake of a test file each (931 tests, all passing as of 2026-11-18; 150 were removed on 2026-11-06 as redundant, white-box or pinning styling) except
+Modules are tested where it's worth it, not for the sake of a test file each (935 tests, all passing as of 2026-11-18; 150 were removed on 2026-11-06 as redundant, white-box or pinning styling) except
 the thin wiring in `main.py`/`dirsync_main.py`, covered only by running the
 app. A test is worth keeping if it says what the code does for whoever uses it: not one that sets
 or reads private state, counts calls to an inner function, restates a constant or a style (colors,

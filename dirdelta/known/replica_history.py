@@ -1,4 +1,5 @@
 """What's known of the replicas (Replicas): the pairs synced, the favorites, the sorts, each sorted tree's recent dirs and other replicas, each replica's last entry and labels"""
+from dirdelta.known.replica_lists import ReplicaLists
 from dirdelta.trees import paths
 
 
@@ -15,9 +16,9 @@ MAX_PATHS_KEPT = 5
 normalized = paths.normalized
 
 
-class Replicas(object):
+class Replicas(ReplicaLists):
     def __init__(self, history=None, favorites=None, sorts=None, recent_dirs=None, known=None, compared=None,
-                 labels=None, followers=None):
+                 labels=None, followers=None, added_replicas=None, added_inboxes=None):
         # Pairs (tuples of 2 normalized paths), the latest first
         self.history = list(history or [])
         # Pairs, in the order they were added
@@ -41,6 +42,9 @@ class Replicas(object):
         # {a sorted tree's path (normalized): the other replicas of it that a sort was asked to copy
         # its new files into (normalized), the latest first: offered at a sort's start, none picked}
         self.followers = {root: list(found) for root, found in (followers or {}).items()}
+        # The replicas and inboxes the user added (normalized), in the order they were (see replica_lists.py)
+        self.added_replicas = list(added_replicas or [])
+        self.added_inboxes = list(added_inboxes or [])
 
     def set_label(self, key, label):
         """Label what key is of (None: it has no label now)"""

@@ -140,6 +140,7 @@ The map (each module's docstring's first line; generated from the code):
     - `copying.py`: Copying what a sort put into the sorted tree into the other replicas of it the user picked (see
 - `known/`: What's known of the replicas: recent pairs and favorites, their logs, names, labels and mounts
   - `log_entries.py`: What a sync or a sort changed in each replica, and the entries offered for their logs once it's done
+  - `replica_lists.py`: A user's replicas (copies of one tree, any two a pair) and inboxes (sorted into it): the ones added, or used by a sync or a sort
   - `replica_history.py`: What's known of the replicas (Replicas): the pairs synced, the favorites, the sorts, each sorted tree's recent...
   - `replicainfo.py`: What's known of a replica, as the screens say it: when it was last synced and changed, its log's last entry, t...
   - `replicalog.py`: Each replica's log of changes, LOG_NAME at its root, which the user keeps, newest last:
@@ -298,7 +299,7 @@ The map (each module's docstring's first line; generated from the code):
     - `tiff.py`: The date in TIFF data's IFDs
 - `web/`: dirdelta's web version (dirdelta --serve, daemon.py): the same flows as the terminal's, their pickers and messages shown in the browser, so they can be used from a phone on the same network; the phone import's page; and the watch for a phone plugged in or a replica's drive mounted, emailing the user a link (see "The web version" below)
   - `access.py`: Who may use the web version, and where it is: a key in its links (kept in WEB_FILE), checked on every request, and the computer's address on the local network
-  - `adding.py`: Adding a replica pair from the web version: its folders browsed (this computer's, or Drive's as the cache has them), the pair kept as a favorite
+  - `adding.py`: Adding a replica or an inbox from the web version: its folder browsed (this computer's, or Drive's as the cache has them); forgetting one
   - `api.py`: The web version's API for the session's screens (routes()): what the page polls for, and what it does there
   - `daemon.py`: dirdelta's daemon (run()): the web version, its pickers and messages in the browser, the flows it starts (flow(): the start menu, a pair's sync, an inbox's sort), and the watcher, which emails a link when a phone or a known replica appears
   - `naming.py`: What the web version calls a replica: its name and where it is, 'eliran (Drive)', 'eliran (disk OS)', so two of one name are told apart
@@ -1187,20 +1188,27 @@ every link carries, then a cookie), and a watcher.
   every thread beside it (counts coming in, previews, pictures, AI's suggestions) work unchanged. The
   server keeps each picker's selection, picks and states, so the laptop's browser and a phone's show the
   same screen. Stop raises KeyboardInterrupt in the flow's thread, as Ctrl-C does.
-- The pages, each with the same tabs (`markup.js`'s tabBar(): Home, Replicas, Sync, then the two kinds of
-  inbox grouped under "Inboxes": Photos import (`/import`: a phone's or a folder's photos) and Unsorted
-  import (`/unsorted`: the sorts' inboxes, each sorted by its photos, an import, or all its files, the
-  sort's own screens; the same page script, `import.js`, an import shown under its kind's tab); sharing
-  the screen's width): Home (`/`, `home.js`: the whole picture; what's plugged in: the phones, each disk
-  replica mounted or not, and Drive signed in or not;
-  tiles of the replicas there, the last sync, the hashing and Drive's oldest list, what's running, the
-  phones plugged in, each pair's sync status (`syncstate`'s mark, ≡ » « ≠ ?; how much was in step, the files
-  both had of all either had, by the totals a sync notes with its comparison since 2026-11-18; and how
-  stale that is: when it was compared, and which replica changed since) with Sync, and the inboxes), Replicas (`/replicas`, the same script: each replica's icon, disk, role
-  (an inbox), status chips (mounted, synced, hashed, its list read), log entry and hashing to start or
-  pause), Photos (`/import`, below), Sync (`/sync`, `sync.js`: the favorite
-  pairs, the recent ones and the inbox sorts, each started with a tap: `daemon.flow()`, `main.run_pair()`,
-  `main.run_sort()`; or the start menu, for any other), and the running flow's page (`/run`, under Sync, whose tab has a pulsing dot while a flow runs, and leads there). The
+- The pages, each with the same three tabs (`markup.js`'s tabBar(), 2026-11-18), one for each kind of thing a
+  user has, with its action: a user's replicas are copies of their one tree (any two a pair, synced), and
+  their inboxes are where new files come in (sorted into that tree: into any replica, then synced to the
+  others). See `known/replica_lists.py`: the replicas and inboxes added, or used by a sync or a sort.
+  Home (`/`, `home.js`): the whole picture: tiles (the replicas there, the last sync, the hashing, Drive's
+  oldest list), the replicas plugged in (each disk replica mounted or not; Drive signed in or not, and
+  what of the user's it holds), each pair's sync status (`syncstate`'s mark, ≡ » « ≠ ?; how much was in
+  step, the files both had of all either had, by the totals a sync notes with its comparison since
+  2026-11-18; and how stale that is: when it was compared, and which replica changed since) with Sync,
+  and the inboxes (phones too) with how far each one's sorting is. Replicas (`/replicas`, the same
+  script; `/sync`, the old tab's address, too): "+ Add a replica" (`web/adding.py`), each replica's card
+  (icon, disk, status chips: mounted, synced, hashed, its list read; log entry; hashing to start or pause;
+  Forget), every pair's sync status with Sync (`daemon.flow()`, `main.run_pair()`), and the start menu
+  for any other two folders. Inboxes (`/inboxes`, `import.js`; `/import` and `/unsorted`, the old tabs'
+  addresses, too): "+ Add an inbox", then a card for each: the phones plugged in, the user's inboxes,
+  and any other source an import of theirs has (a phone unplugged), each with its sorting's progress,
+  the replica it's sorted into (the one its import has, else the likeliest: `checks.destinations()`; a
+  choice only if there are several), "Sort photos" (its import, below) and, for a folder, "Sort all
+  files" (the sort's own screens: `main.run_sort()`), and Forget. The running flow's page (`/run`)
+  is under its tab (a sync's Replicas', a sort's Inboxes': `Session.tab`), which has a pulsing dot while
+  it runs, and "Running" in the top bar leads there. The
   Running page (`web/static/app.js`) polls `/api/state` (a long poll: each change is numbered) and draws
   a menu as a list, a tree with checkboxes or state marks, the preview column (pictures from
   treepicker's pixels), the keys as buttons (named by the keys row, or the `?` help's lines), and
@@ -1245,11 +1253,12 @@ every link carries, then a cookie), and a watcher.
   cookie, else the owner); a flow runs as whoever started it, and so do the threads it starts (the
   run's user while it runs). The top bar (`markup.js`'s userBar()) changes the user, adds one, or sets
   the address links are emailed to them (`/api/users`, `/api/users/add`, `/api/users/email`); a new
-  user's Home offers to add their first replica pair.
-- Adding a replica pair (`web/adding.py`, `markup.js`'s pairAdder(), on Replicas and Sync, `/replicas#add`
-  opening it): each of the two folders browsed on this computer (from home and the mounted disks) or in
-  Google Drive (its folders as the Drive cache has them), not one inside the other; kept as a favorite
-  pair of the user's (so it's a replica on Home and Replicas, and on Sync), synced at once or later.
+  user's Home offers to add their first replica.
+- Adding a replica or an inbox (`web/adding.py`, `markup.js`'s folderAdder(), on Replicas and Inboxes,
+  `#add` opening it): its folder browsed on this computer (from home and the mounted disks) or in Google
+  Drive (its folders as the Drive cache has them), not in another replica or inbox or holding one; kept
+  in the user's `replicas.json` (`replicas`, `inboxes`). Forgetting one (`/api/forget`) drops it, and the
+  pairs and sorts it's in, keeping the others; nothing in it is touched.
 
 ## What replicas are called: `replicanames.py`, `label_screen.py`
 

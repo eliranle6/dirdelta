@@ -175,3 +175,22 @@ nav#tabs .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--g
 .pairadder .dir:last-child { border-bottom: 0; }
 .pairadder .dir.up { color: var(--accent); font-weight: 600; }
 .pairadder .note.bad { color: var(--red); }
+
+#runningpill { margin-left: auto; margin-right: 8px; display: inline-flex; align-items: center; gap: 6px; color: var(--green); font-weight: 700;
+  text-decoration: none; font-size: 13px; }
+#runningpill[hidden] { display: none; }
+#runningpill .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); animation: pulse 1.4s ease-in-out infinite; }
+.forget { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+button.quiet { background: transparent; color: var(--muted); }
+button.danger { background: var(--red); border-color: var(--red); color: #fff; }
+
+/* A row that's a link (Home's, Replicas'), as import.css has it */
+.list a.item { display: flex; align-items: center; gap: 10px; padding: 11px 14px; color: var(--fg); text-decoration: none; }
+.list a.item + a.item, .list a.item + .item, .list .item + a.item { border-top: 1px solid var(--line); }
+.list a.item .what { flex: 1; display: flex; flex-direction: column; gap: 4px; min-width: 0; overflow-wrap: anywhere; }
+.list a.item .go { color: var(--muted); font-size: 20px; }
+.meter { display: block; height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; }
+.meter > span { display: block; height: 100%; background: var(--accent); }
+.card.inbox { display: flex; flex-direction: column; gap: 8px; }
+.card.inbox .head, .card.replica .head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.card.inbox .into { display: flex; align-items: center; gap: 6px; }

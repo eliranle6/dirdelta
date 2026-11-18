@@ -42,7 +42,8 @@ def load():
                         _pairs(content.get('sorts', [])), _recent_dirs(content.get('recent_dirs', {})),
                         _known(content.get('known', {})), _compared(content.get('compared', [])),
                         {str(key): str(label) for key, label in content.get('labels', {}).items()},
-                        _followers(content.get('followers', {})))
+                        _followers(content.get('followers', {})), _paths(content.get('replicas', [])),
+                        _paths(content.get('inboxes', [])))
     except FileNotFoundError:
         return Replicas()
     except (OSError, ValueError, AttributeError, TypeError) as error:
@@ -60,7 +61,9 @@ def save(replicas):
                'known': replicas.known,
                'compared': replicas.compared,
                'labels': replicas.labels,
-               'followers': replicas.followers}
+               'followers': replicas.followers,
+               'replicas': replicas.added_replicas,
+               'inboxes': replicas.added_inboxes}
     try:
         os.makedirs(os.path.dirname(path), exist_ok=True)
         temp_path = path + '.tmp'
@@ -70,6 +73,13 @@ def save(replicas):
         os.replace(temp_path, path)
     except OSError as error:
         raise ReplicasError("Cannot write %s: %s" % (path, error))
+
+
+def _paths(items):
+    """A list of paths read from the file"""
+    if not (isinstance(items, list) and all(isinstance(path, str) for path in items)):
+        raise ValueError("not a list of paths: %r" % (items,))
+    return list(items)
 
 
 def _pairs(items):

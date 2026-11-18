@@ -112,15 +112,14 @@ function pathLine(full, before) {
   return el('div', {class: 'where'}, before ? el('span', {}, before) : '', shown);
 }
 
-// The pages' tabs, the one shown marked (active: 'home', 'replicas', 'sync', 'photos', 'unsorted',
-// 'run'): the two kinds of inbox (a phone's photos, an unsorted folder's) together under 'Inboxes'; and
-// Running while a flow runs (a sync, a sort, the start menu: its screens are on /run), checked every few
-// seconds. They share the screen's width, a long name on two lines.
-const TABS = [['home', '/', 'Home'], ['replicas', '/replicas', 'Replicas'], ['sync', '/sync', 'Sync']];
-const INBOX_TABS = [['photos', '/import', 'Photos import'], ['unsorted', '/unsorted', 'Unsorted import']];
+// The pages' tabs, the one shown marked (active: 'home', 'replicas', 'inboxes', 'run'): what the user
+// has, at a glance; their replicas (synced); their inboxes (sorted into them). A flow running (a sync, a
+// sort, the start menu: its screens are on /run) is checked every few seconds: a dot on its tab, and
+// "Running" in the top bar leading to it.
+const TABS = [['home', '/', 'Home'], ['replicas', '/replicas', 'Replicas'], ['inboxes', '/inboxes', 'Inboxes']];
 
 // (Called again, it marks another tab: a page may know which only once it's loaded)
-let shownTab = null, isRunning = false, runningFor = null;
+let shownTab = null, isRunning = false, runningFor = null, runningTab = 'replicas';
 
 function tabBar(active) {
   const nav = document.getElementById('tabs');
@@ -135,6 +134,7 @@ function tabBar(active) {
       const found = await (await fetch('/api/running')).json();
       isRunning = found.running;
       runningFor = found.user;
+      runningTab = found.tab || 'replicas';
       drawTabs(nav);
     } catch (error) { /* (the next check) */ }
     setTimeout(check, 5000);
@@ -143,13 +143,17 @@ function tabBar(active) {
 }
 
 function drawTabs(nav) {
-  const active = shownTab, running = isRunning;
-  // (What's running is part of Sync: its tab has a dot then, and the running flow's page is under it)
-  const tab = ([key, href, text]) => el('a', {href: key === 'sync' && running ? '/run' : href,
-    class: 'tab' + (key === active || (key === 'sync' && active === 'run') ? ' on' : '')},
-    key === 'sync' && running ? el('span', {class: 'dot', title: 'Running now' + (runningFor ? ' (for ' + runningFor + ')' : '')}) : '', text);
-  nav.replaceChildren(...TABS.map(tab),
-    el('div', {class: 'tabgroup'}, el('span', {class: 'grouplabel'}, 'Inboxes'), el('div', {class: 'grouptabs'}, INBOX_TABS.map(tab))));
+  const active = shownTab === 'run' ? runningTab : shownTab, running = isRunning;
+  // (What's running is under its tab (a sync Replicas', a sort Inboxes'): a dot on it then; the top bar
+  // leads to it)
+  const tab = ([key, href, text]) => el('a', {href, class: 'tab' + (key === active ? ' on' : '')},
+    running && key === runningTab ? el('span', {class: 'dot', title: 'Running now'}) : '', text);
+  nav.replaceChildren(...TABS.map(tab));
+  const pill = document.getElementById('runningpill');
+  if (pill) {
+    pill.hidden = !running || shownTab === 'run';
+    pill.title = runningFor ? 'Running for ' + runningFor : 'Running';
+  }
 }
 
 // The top bar: whose dirdelta this is (each user's replicas, pairs, sorts and imports are their own),
@@ -178,6 +182,7 @@ async function userBar() {
       el('option', {value: '+email'}, found.email ? 'Email for links…' : 'Set the email for links…'),
       el('option', {value: '+add'}, 'Add a user…')));
   bar.replaceChildren(el('span', {class: 'brand'}, 'dirdelta'),
+    el('a', {id: 'runningpill', href: '/run', hidden: !isRunning || shownTab === 'run'}, el('span', {class: 'dot'}), 'Running'),
     el('label', {class: 'userpick'}, icon('person'), el('span', {class: 'whose'}, 'Replicas of'), pick));
 
   function showForm(kind) {
@@ -200,34 +205,29 @@ async function userBar() {
   }
 }
 
-// Adding a replica pair: two folders, each browsed on this computer or in Google Drive, kept as a
-// favorite pair (then on Home, Replicas and Sync), synced now or later. One element for the page, kept
-// across its redraws (so what's chosen stays); open at once on a link to #add.
-let pairAdderShown = null;
+// Adding a replica or an inbox (as: 'replica' or 'inbox'): its folder browsed on this computer or in
+// Google Drive. One element for each page, kept across its redraws (so what's browsed stays); open at
+// once on a link to #add.
+const adders = {};
 
-function pairAdder() {
-  if (pairAdderShown) return pairAdderShown;
+function folderAdder(as) {
+  if (adders[as]) return adders[as];
   const box = el('div', {class: 'pairadder'});
-  const chosen = {a: null, b: null};
+  const what = as === 'inbox' ? 'an inbox' : 'a replica';
   let browsing = null, isOpen = location.hash === '#add', note = '';
-  const post = async (path, body) => (await fetch(path, {method: 'POST', headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify(body)})).json();
 
-  async function go(slot, path) {
-    browsing = {slot, path, loading: true};
+  async function go(path) {
+    browsing = {path, loading: true};
     draw();
     const found = await (await fetch('/api/browse?path=' + encodeURIComponent(path || ''))).json();
-    if (browsing && browsing.slot === slot) browsing = Object.assign({slot, path}, found);
+    if (browsing) browsing = Object.assign({path}, found);
     draw();
   }
 
-  async function add(isSyncing) {
-    const answer = await post('/api/pairs/add', {a: chosen.a, b: chosen.b});
+  async function add(path) {
+    const answer = await (await fetch('/api/add', {method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({path, as})})).json();
     if (!answer.ok) { note = answer.error; return draw(); }
-    if (isSyncing) {
-      const started = await post('/api/start', {kind: 'pair', a: answer.a, b: answer.b});
-      if (started.ok) return void (location.href = '/run');
-    }
     location.href = location.pathname;
   }
 
@@ -236,59 +236,74 @@ function pairAdder() {
     if (b.loading) return el('div', {class: 'browser'}, el('p', {class: 'note'}, 'Reading', el('span', {class: 'dots'})));
     if (b.shortcuts) {
       return el('div', {class: 'browser'}, el('div', {class: 'note'}, 'Start from:'),
-        el('div', {class: 'dirs'}, b.shortcuts.map(place => el('button', {class: 'dir', onclick: () => go(b.slot, place.path)},
+        el('div', {class: 'dirs'}, b.shortcuts.map(place => el('button', {class: 'dir', onclick: () => go(place.path)},
           icon(place.path.startsWith('/mnt') || place.path.startsWith('/media') ? 'disk' : 'laptop'), place.name)),
-          el('button', {class: 'dir', onclick: () => go(b.slot, '/')}, icon('folder'), '/ (everything)')));
+          el('button', {class: 'dir', onclick: () => go('/')}, icon('folder'), '/ (everything)')));
     }
     const rows = [];
-    if (b.parent !== null && b.parent !== undefined) rows.push(el('button', {class: 'dir up', onclick: () => go(b.slot, b.parent)}, '↑ Up'));
+    if (b.parent !== null && b.parent !== undefined) rows.push(el('button', {class: 'dir up', onclick: () => go(b.parent)}, '↑ Up'));
     for (const name of b.dirs || []) {
-      rows.push(el('button', {class: 'dir', onclick: () => go(b.slot, b.path === '/' ? '/' + name : b.path + '/' + name)}, icon('folder'), name));
+      rows.push(el('button', {class: 'dir', onclick: () => go(b.path === '/' ? '/' + name : b.path + '/' + name)}, icon('folder'), name));
     }
     if (b.dirs && !b.dirs.length) rows.push(el('div', {class: 'note'}, 'No folders in it.'));
     const isRoot = b.path === '/' || b.path === 'cloud';
     return el('div', {class: 'browser'},
       el('div', {class: 'browsing'}, icon(b.path.startsWith('cloud') ? 'drive' : 'folder'), el('b', {}, b.path === 'cloud' ? 'Google Drive' : b.path),
-        b.known ? chip('ok', 'Already a replica') : ''),
+        b.known ? chip('ok', 'Already yours') : ''),
       b.error ? el('div', {class: 'note bad'}, b.error) : '',
       el('div', {class: 'dirs'}, rows),
-      el('div', {class: 'row2'}, el('button', {class: 'primary', disabled: isRoot || !!b.error, onclick: () => {
-        chosen[b.slot] = b.path; browsing = null; note = ''; draw();
-      }}, isRoot ? 'Open a folder to choose it' : 'Use this folder'),
-        el('button', {onclick: () => { browsing = null; draw(); }}, 'Cancel')));
-  }
-
-  function slot(key, title) {
-    const path = chosen[key];
-    return el('div', {class: 'slot'}, el('div', {class: 'slot-title'}, title),
-      path ? el('div', {class: 'slot-chosen'}, icon(path.startsWith('cloud') ? 'drive' : 'folder'), el('b', {}, path)) :
-        el('div', {class: 'note'}, 'Not chosen yet'),
-      el('div', {class: 'row2'},
-        el('button', {class: 'small', onclick: () => go(key, '')}, icon('laptop'), 'On this computer'),
-        el('button', {class: 'small', onclick: () => go(key, 'cloud')}, icon('drive'), 'In Google Drive')),
-      browsing && browsing.slot === key ? browser() : '');
+      note ? el('div', {class: 'note bad'}, note) : '',
+      el('div', {class: 'row2'}, el('button', {class: 'primary', disabled: isRoot || !!b.error || b.known, onclick: () => add(b.path)},
+        isRoot ? 'Open a folder to choose it' : 'Add this folder as ' + what),
+        el('button', {onclick: () => { browsing = null; note = ''; draw(); }}, 'Back')));
   }
 
   function draw() {
     if (!isOpen) {
-      box.replaceChildren(el('button', {class: 'addbutton', onclick: () => { isOpen = true; draw(); }}, '+ Add a replica pair'));
+      box.replaceChildren(el('button', {class: 'addbutton', onclick: () => { isOpen = true; draw(); }}, '+ Add ' + what));
       return;
     }
     box.replaceChildren(el('div', {class: 'card'},
-      el('div', {class: 'section-title'}, 'Add a replica pair'),
-      el('p', {class: 'note'}, 'Two copies of the same files, to keep in step: e.g. a folder on this computer and one in Google Drive. ' +
-        'They\'re kept as a favorite pair, synced when you choose.'),
-      slot('a', 'First replica'), slot('b', 'Second replica'),
-      note ? el('div', {class: 'note bad'}, note) : '',
-      el('div', {class: 'row2'},
-        el('button', {class: 'primary', disabled: !(chosen.a && chosen.b), onclick: () => add(true)}, 'Add and sync now'),
-        el('button', {disabled: !(chosen.a && chosen.b), onclick: () => add(false)}, 'Add, sync later'),
-        el('button', {onclick: () => { isOpen = false; browsing = null; draw(); }}, 'Cancel'))));
+      el('div', {class: 'section-title'}, 'Add ' + what),
+      el('p', {class: 'note'}, as === 'inbox' ?
+        'A folder new files come into, to be sorted into your replicas: e.g. unsorted in Google Drive. (A phone is one while it\'s plugged in.)' :
+        'A copy of your files: a folder on this computer, on a disk, or in Google Drive.'),
+      browsing ? browser() : el('div', {class: 'row2'},
+        el('button', {onclick: () => go('')}, icon('laptop'), 'On this computer'),
+        el('button', {onclick: () => go('cloud')}, icon('drive'), 'In Google Drive'),
+        el('button', {onclick: () => { isOpen = false; draw(); }}, 'Cancel'))));
   }
 
   draw();
-  pairAdderShown = box;
+  adders[as] = box;
   return box;
+}
+
+// Forget a replica or inbox (what: 'replica' or 'inbox'): not the user's any more, nothing in it changed.
+// Asked again on the button itself (no dialog).
+function forgetButton(path, what) {
+  const box = el('span', {class: 'forget'});
+  const ask = () => box.replaceChildren(el('span', {class: 'note'}, 'Forget this ' + what + '? Nothing in it is changed.'),
+    el('button', {class: 'small danger', onclick: async () => {
+      await fetch('/api/forget', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({path})});
+      location.href = location.pathname;
+    }}, 'Forget'), el('button', {class: 'small', onclick: idle}, 'Keep'));
+  const idle = () => box.replaceChildren(el('button', {class: 'small quiet', onclick: ask}, 'Forget…'));
+  idle();
+  return box;
+}
+
+// How far an inbox's sorting is: {text, share (0-100, or null if nothing's started)}
+function inboxProgress(inbox) {
+  if (!inbox.imports.length) return {text: inbox.there ? 'Not sorted yet' : 'Not plugged in', share: null};
+  let decided = 0, total = 0;
+  for (const found of inbox.imports) {
+    const counts = found.counts;
+    decided += counts.moved + counts.skipped;
+    total += counts.pending + counts.copied + counts.moved + counts.skipped;
+  }
+  const share = total ? Math.floor(100 * decided / total) : 0;
+  return {text: total ? decided.toLocaleString() + ' of ' + total.toLocaleString() + ' sorted (' + share + '%)' : 'Listing its files', share};
 }
 
 // Small icons of what a replica or source is on (static SVG, drawn in the text's color)
