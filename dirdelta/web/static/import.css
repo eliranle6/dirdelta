@@ -89,3 +89,5 @@ h2.head { display: flex; align-items: center; gap: 8px; }
 .kindhead > .icon svg { width: 26px; height: 26px; }
 .kindhead h2 { margin: 0; font-size: 18px; color: var(--kind); }
 .kindhead p { margin: 2px 0 0; color: var(--muted); font-size: 14px; }
+.kindjump .jumptext { display: flex; flex-direction: column; gap: 1px; }
+.kindjump .jumptext .note { font-weight: 400; font-size: 13px; }

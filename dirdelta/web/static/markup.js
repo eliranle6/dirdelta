@@ -293,6 +293,12 @@ function forgetButton(path, what) {
   return box;
 }
 
+// How many inboxes of a kind are there now, out of how many the user has (a phone: plugged in, of the
+// ones known: plugged in, or with an import): 'N out of M'
+function thereOutOf(inboxes) {
+  return inboxes.filter(inbox => inbox.there).length + ' out of ' + inboxes.length;
+}
+
 // How far an inbox's sorting is: {text, share (0-100, or null if nothing's started)}
 function inboxProgress(inbox) {
   if (!inbox.imports.length) return {text: inbox.there ? 'Not sorted yet' : 'Not plugged in', share: null};

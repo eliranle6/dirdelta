@@ -130,8 +130,9 @@ function summary(data) {
 // The inboxes there now, of each kind (unsorted folders, phones plugged in), and how many of their files
 // are left to sort (of the ones started)
 function inboxesTile(data, tile) {
-  const folders = data.inboxes.filter(inbox => inbox.kind !== 'phone' && inbox.there).length;
-  const phones = data.inboxes.filter(inbox => inbox.kind === 'phone' && inbox.there).length;
+  const folders = data.inboxes.filter(inbox => inbox.kind !== 'phone');
+  const phones = data.inboxes.filter(inbox => inbox.kind === 'phone');
+  const there = folders.concat(phones).filter(inbox => inbox.there).length;
   let left = 0, started = 0;
   for (const inbox of data.inboxes) {
     for (const found of inbox.imports) {
@@ -140,9 +141,11 @@ function inboxesTile(data, tile) {
       started += 1;
     }
   }
-  const value = folders + ' unsorted · ' + phones + ' phone' + (phones === 1 ? '' : 's');
-  const hint = left ? left.toLocaleString() + ' files left to sort' : started ? 'All sorted' : folders + phones ? 'Not sorted yet' : 'None plugged in or added';
-  return tile(left ? 'warn' : started ? 'ok' : 'none', 'Inboxes available', value, hint, '/inboxes');
+  const value = el('span', {class: 'tile-lines'}, el('span', {}, thereOutOf(folders) + ' unsorted folders'), el('span', {}, thereOutOf(phones) + ' phones'));
+  const hint = left ? left.toLocaleString() + ' files left to sort' : started ? 'All sorted' : there ? 'Not sorted yet' : 'None plugged in or added';
+  const found = tile(left ? 'warn' : started ? 'ok' : 'none', 'Inboxes available', value, hint, '/inboxes');
+  found.classList.add('wide');
+  return found;
 }
 
 function connectionRow(kind, title, sub, state, action) {
@@ -207,8 +210,8 @@ function homePage(data) {
     phoneRows.push(connectionRow('phone', 'No phone plugged in', 'Plug one in by USB and choose "File transfer" on it', chip('none', 'None')));
   }
   parts.push(el('div', {class: 'section-title'}, 'Inboxes'),
-    el('div', {class: 'kindlist kind-unsorted'}, el('div', {class: 'kindlabel'}, 'Unsorted folders · ' + folders.length), el('div', {class: 'list'}, folderRows)),
-    el('div', {class: 'kindlist kind-phones'}, el('div', {class: 'kindlabel'}, 'Phones\' photos · ' + phones.filter(inbox => inbox.there).length + ' plugged in'),
+    el('div', {class: 'kindlist kind-unsorted'}, el('div', {class: 'kindlabel'}, 'Unsorted folders · ' + thereOutOf(folders) + ' there'), el('div', {class: 'list'}, folderRows)),
+    el('div', {class: 'kindlist kind-phones'}, el('div', {class: 'kindlabel'}, 'Phones\' photos · ' + thereOutOf(phones) + ' plugged in'),
       el('div', {class: 'list'}, phoneRows)));
   return parts;
 }

@@ -103,11 +103,11 @@ async function loadList() {
   const jump = (id, iconName, title, count) => el('a', {class: 'kindjump kind-' + id, href: '#' + id, onclick: event => {
     event.preventDefault();
     document.getElementById(id).scrollIntoView({behavior: 'smooth'});
-  }}, icon(iconName), el('span', {}, title), el('b', {class: 'count'}, count));
+  }}, icon(iconName), el('span', {class: 'jumptext'}, el('span', {}, title), el('span', {class: 'note'}, count)));
   const block = (id, iconName, title, text, cards, extra) => el('section', {class: 'kind kind-' + id, id},
     el('div', {class: 'kindhead'}, icon(iconName), el('div', {}, el('h2', {}, title), el('p', {}, text))), cards, extra || '');
   const parts = [el('p', {class: 'note'}, 'Inboxes are where new files come in, to be sorted into your replicas. There are two kinds:'),
-    el('div', {class: 'kindjumps'}, jump('unsorted', 'inbox', 'Unsorted folders', folders.length), jump('phones', 'phone', 'Phones\' photos', phones.length)),
+    el('div', {class: 'kindjumps'}, jump('unsorted', 'inbox', 'Unsorted folders', thereOutOf(folders) + ' there'), jump('phones', 'phone', 'Phones\' photos', thereOutOf(phones) + ' plugged in')),
     block('unsorted', 'inbox', 'Unsorted folders',
       'Folders new files land in, e.g. unsorted in Google Drive. Sort their photos by day, with previews, or all their files, folder by folder.',
       folders.length ? folders.map(inboxCard) : el('p', {class: 'note'}, 'None yet: add one below.'), folderAdder('inbox')),

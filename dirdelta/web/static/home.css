@@ -38,3 +38,5 @@ button.item { border: 0; border-radius: 0; background: none; }
 .kind-unsorted { --kind: var(--blue); } .kind-phones { --kind: var(--magenta); }
 .kindlist .kindlabel { font-size: 13px; font-weight: 700; color: var(--kind); margin: 2px 2px 0; }
 .kindlist .list { border-left: 4px solid var(--kind); }
+.tile .tile-lines { display: flex; flex-direction: column; }
+.tiles .tile.wide { grid-column: 1 / -1; }
