@@ -28,11 +28,11 @@ function waiting(text) {
 function hashChip(replica) {
   const job = replica.hashing;
   if (!replica.there) return '';
-  if (!job || !job.state) return chip('none', replica.hashesKept.toLocaleString() + ' fingerprints kept');
+  if (!job || !job.state) return chip('none', replica.hashesKept.toLocaleString() + ' hashes kept');
   if (job.state === 'not scanned' || job.state === 'scanning') return chip('warn', waiting('Listing its files'));
-  if (job.state === 'done') return chip('ok', 'All fingerprinted');
+  if (job.state === 'done') return chip('ok', 'All hashed');
   const share = job.files ? Math.floor(100 * job.done / job.files) : 0;
-  return chip('warn', job.started ? waiting('Fingerprinting ' + share + '%') : share + '% fingerprinted (paused)');
+  return chip('warn', job.started ? waiting('Hashing ' + share + '%') : share + '% hashed (paused)');
 }
 
 // Each replica's status chips: there, synced, hashed (a local one), its list read (a Drive one)
@@ -52,7 +52,7 @@ function replicaCard(replica) {
   const actions = [];
   if (replica.kind === 'local' && replica.there && !(job && job.state === 'done')) {
     actions.push(el('button', {class: 'small', onclick: act(!!(job && job.started))},
-      job && job.started ? 'Pause' : job && job.state ? 'Resume fingerprinting' : 'Fingerprint its files'));
+      job && job.started ? 'Pause' : job && job.state ? 'Resume hashing' : 'Hash its files'));
   }
   const entry = replica.lastEntry ? (replica.lastEntry.date ? replica.lastEntry.date + ': ' : '') + replica.lastEntry.text : '';
   return el('div', {class: 'card replica' + (replica.there ? '' : ' away')},
@@ -116,7 +116,7 @@ function summary(data) {
     tile(there === data.replicas.length ? 'ok' : 'bad', 'Replicas available', there + ' of ' + data.replicas.length,
       there === data.replicas.length ? 'Every disk is mounted' : 'A disk isn\'t mounted', '/replicas'),
     tile(lastSync ? synced.tone : 'none', 'Last sync', lastSync ? synced.text : 'never', 'Sync status is below'),
-    tile(hashing ? 'warn' : jobs.length && jobs.every(replica => replica.hashing.state === 'done') ? 'ok' : 'none', 'File fingerprints',
+    tile(hashing ? 'warn' : jobs.length && jobs.every(replica => replica.hashing.state === 'done') ? 'ok' : 'none', 'File hashes',
       hashing ? waiting(hashing.name) : jobs.length ? 'Up to date' : 'Not computed yet', 'They find moved and renamed files', '/replicas'),
     drive ? tile(listed.tone, 'Drive file lists', 'Read ' + listed.text, listed.tone === 'ok' ? 'Fresh' : 'A sync reads them again', '/replicas') : '');
 }

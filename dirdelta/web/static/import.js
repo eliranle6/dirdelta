@@ -236,7 +236,7 @@ function renderOverview() {
   const thing = data.source.device ? 'phone' : drive ? 'Drive folder' : 'folder';
   const listing = reading && reading.phase === 'listing';
   const [tone, toneText] = !over.total ? ['red', listing ? waiting('Reading the ' + thing) : 'Not read yet'] :
-    over.unhashed.files ? ['yellow', reading && reading.phase === 'copying' ? waiting('Fingerprinting') : 'Matched by name & size'] : ['green', 'Fingerprinted'];
+    over.unhashed.files ? ['yellow', reading && reading.phase === 'copying' ? waiting('Hashing') : 'Matched by name & size'] : ['green', 'Hashed'];
   const source = el('div', {class: 'card tone-' + tone},
     el('h2', {}, data.source.device ? 'Photos on ' + data.source.device : drive ? 'Photos in the inbox “' + bareName(data.source) + '”' :
       'Photos in ' + bareName(data.source),
@@ -245,19 +245,19 @@ function renderOverview() {
   if (listing && !over.total) source.append(el('p', {}, waiting('Listing its files')));
   else {
     source.append(link(over.total, plural(over.total, 'photo or video', 'photos and videos') + (listing ? ' (listing again)' : ''), 'all'));
-    source.append(el('div', {class: 'stat'}, el('b', {}, over.hashed), el('span', {}, drive ? 'fingerprinted (by Drive)' : 'fingerprinted (copied to this computer)')),
+    source.append(el('div', {class: 'stat'}, el('b', {}, over.hashed), el('span', {}, drive ? 'hashed (by Drive)' : 'hashed (copied to this computer)')),
       el('div', {class: 'meter'}, el('div', {style: 'width:' + percent(over.hashed, over.total)})));
     if (reading && reading.phase === 'copying') {
-      source.append(el('p', {}, waiting((drive ? 'Downloading' : 'Copying') + ' and fingerprinting: ' + reading.copied + ' of ' + reading.asked)));
+      source.append(el('p', {}, waiting((drive ? 'Downloading' : 'Copying') + ' and hashing: ' + reading.copied + ' of ' + reading.asked)));
     } else if (over.unhashed.files) {
       source.append(el('p', {class: 'note'}, (over.hashed ? 'The rest are matched by name and size only: ' : 'Matched by name and size only: ') +
-        'usually right, not certain. Fingerprinting ' + (drive ? 'downloads' : 'copies') + ' them to this computer (sorting needs that anyway) and compares their contents.'));
+        'usually right, not certain. Hashing ' + (drive ? 'downloads' : 'copies') + ' them to this computer (sorting needs that anyway) and compares their contents.'));
       const buttons = el('div', {class: 'row2'});
       if (over.nameOnly.files && over.nameOnly.files < over.unhashed.files) {
-        buttons.append(button((drive ? 'Download' : 'Copy') + ' & fingerprint the ' + over.nameOnly.files + ' matched by name (' + size(over.nameOnly.size) + ')',
+        buttons.append(button((drive ? 'Download' : 'Copy') + ' & hash the ' + over.nameOnly.files + ' matched by name (' + size(over.nameOnly.size) + ')',
           () => act('/api/import/read', {which: 'nameOnly'})));
       }
-      buttons.append(button((drive ? 'Download' : 'Copy') + ' & fingerprint all ' + over.unhashed.files + ' (' + size(over.unhashed.size) + ')',
+      buttons.append(button((drive ? 'Download' : 'Copy') + ' & hash all ' + over.unhashed.files + ' (' + size(over.unhashed.size) + ')',
         () => act('/api/import/read', {which: 'all'})));
       source.append(buttons);
     }
@@ -288,9 +288,9 @@ function renderOverview() {
       card.append(el('div', {class: 'stat'}, el('b', {}, counted.have + ' of ' + over.total), el('span', {}, 'are there already')),
         el('div', {class: 'meter'}, el('div', {class: 'sure', style: 'width:' + percent(counted.contents, over.total)}),
           el('div', {class: 'unsure', style: 'width:' + percent(counted.have - counted.contents, over.total)})));
-      if (counted.contents) card.append(link(counted.contents, 'the same contents (fingerprints match)', 'contents', replica.path, 'sure'));
-      if (counted.namePhoneUnhashed) card.append(link(counted.namePhoneUnhashed, 'same name and size (not fingerprinted here yet)', 'name', replica.path, 'unsure'));
-      if (counted.nameReplicaUnhashed) card.append(link(counted.nameReplicaUnhashed, 'same name and size (its copy isn\'t fingerprinted)', 'name', replica.path, 'unsure'));
+      if (counted.contents) card.append(link(counted.contents, 'the same contents (hashes match)', 'contents', replica.path, 'sure'));
+      if (counted.namePhoneUnhashed) card.append(link(counted.namePhoneUnhashed, 'same name and size (not hashed here yet)', 'name', replica.path, 'unsure'));
+      if (counted.nameReplicaUnhashed) card.append(link(counted.nameReplicaUnhashed, 'same name and size (its copy isn\'t hashed)', 'name', replica.path, 'unsure'));
       card.append(link(counted.missing, 'not there', 'missing', replica.path, 'missing', 'Nothing missing'));
       card.append(el('p', {class: 'note'}, checked()));
     }
@@ -302,9 +302,9 @@ function renderOverview() {
       if (!data.checking.busy) buttons.append(button('Check names and sizes again', () => act('/api/import/recheck', {})));
       const job = replica.hashing;
       if (job && job.started && job.state !== 'done') {
-        buttons.append(el('span', {class: 'note'}, waiting('Fingerprinting its files: ' + job.done + ' of ' + job.files)));
+        buttons.append(el('span', {class: 'note'}, waiting('Hashing its files: ' + job.done + ' of ' + job.files)));
       } else if (replica.unhashed) {
-        buttons.append(button('Fingerprint its ' + replica.unhashed + ' remaining files',
+        buttons.append(button('Hash its ' + replica.unhashed + ' remaining files',
           () => act('/api/import/recheck', {replica: replica.path, how: 'hash'})));
       }
     }
@@ -351,7 +351,7 @@ function renderOverview() {
 }
 
 // Where the replicas have the file, in short: each folder (or path, if the name there is another) once,
-// after the replicas it's in, and '≈' where it's by name and size only (not fingerprints)
+// after the replicas it's in, and '≈' where it's by name and size only (not hashes)
 function have(file) {
   const name = file.rel.split('/').pop();
   const where = new Map();
@@ -370,12 +370,12 @@ const FILTERS = {
   'chosen': ['Folder chosen', file => !!file.target && file.state !== 'moved' && file.state !== 'skipped'],
   'moved': ['Moved', file => file.state === 'moved'],
   'skipped': ['Skipped', file => file.state === 'skipped'],
-  'unhashed': ['Not fingerprinted', file => !file.sha1],
+  'unhashed': ['Not hashed', file => !file.sha1],
   'have': ['Already in a replica', file => (file.have || []).length > 0],
   'none': ['In no replica', file => file.have !== null && !file.have.length],
   'all-in': ['In every replica', file => new Set((file.have || []).map(found => found.replica)).size === page.data.checked.length],
   'in': [name => 'In ' + name, (file, replica) => haveIn(file, replica).length > 0],
-  'contents': [name => 'In ' + name + ' (fingerprints match)', (file, replica) => haveIn(file, replica).some(found => found.how === 'contents')],
+  'contents': [name => 'In ' + name + ' (hashes match)', (file, replica) => haveIn(file, replica).some(found => found.how === 'contents')],
   'name': [name => 'In ' + name + ' (name & size)', (file, replica) => haveIn(file, replica).length > 0 && !haveIn(file, replica).some(found => found.how === 'contents')],
   'missing': [name => 'Not in ' + name, (file, replica) => file.have !== null && !haveIn(file, replica).length],
 };
