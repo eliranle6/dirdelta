@@ -87,3 +87,6 @@ input[type=search], input[type=text] { font: inherit; width: 100%; padding: 8px 
 .b-orange { background: #c2410c; } .b-grey, .b-white { background: #6b7078; }
 .bold { font-weight: 700; }
 .seg + .seg { margin-left: .9em; }
+/* Something waited for: dots that go on (. .. ...) */
+.dots::after { content: ''; display: inline-block; width: 1.2em; text-align: left; animation: dots 1.6s steps(1) infinite; }
+@keyframes dots { 0% { content: ''; } 25% { content: '.'; } 50% { content: '..'; } 75% { content: '...'; } }

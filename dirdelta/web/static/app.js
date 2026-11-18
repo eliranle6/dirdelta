@@ -404,7 +404,7 @@ function renderHome() {
     el('div', {class: 'card'}, el('h2', {}, 'Sync and sort'),
       el('p', {}, 'The start menu: choose two replicas to sync, or an inbox to sort.'),
       el('button', {class: 'primary', disabled: view.running, onclick: () => api('POST', '/api/start')},
-        view.running ? 'Starting…' : 'Open the start menu')),
+        view.running ? el('span', {}, 'Starting', el('span', {class: 'dots'})) : 'Open the start menu')),
     el('div', {class: 'card'}, el('h2', {}, 'Import photos'),
       el('p', {}, 'Copy a phone’s photos (or any folder’s), see which you have already, and choose a folder for each.'),
       el('button', {onclick: () => { location.href = '/import'; }}, 'Imports')),

@@ -128,6 +128,11 @@ function replicaName(path) {
   return parts[0] === 'cloud' ? 'Drive: ' + (parts.slice(1).pop() || 'all') : parts.pop() || path;
 }
 
+// A text that's waiting for something, with dots that go on (in step across the page's redraws)
+function waiting(text) {
+  return el('span', {}, text, el('span', {class: 'dots', style: 'animation-delay:-' + (Date.now() % 1600) + 'ms'}));
+}
+
 function percent(part, whole) { return whole ? Math.floor(100 * part / whole) + '%' : ''; }
 
 function size(bytes) {
@@ -157,18 +162,24 @@ function renderOverview() {
   const button = (text, onclick, cls) => el('button', {class: cls || '', onclick}, text);
   const cards = [];
 
-  const source = el('div', {class: 'card'}, el('h2', {}, data.source.device ? 'Photos on ' + data.source.device : 'Photos in ' + sourceName(data.source)),
+  const thing = data.source.device ? 'phone' : 'folder';
+  const listing = reading && reading.phase === 'listing';
+  const [tone, toneText] = !over.total ? ['red', listing ? waiting('Reading the ' + thing) : 'Not read yet'] :
+    over.unhashed.files ? ['yellow', reading && reading.phase === 'copying' ? waiting('Hashing') : 'Name + size only'] : ['green', 'Hashed'];
+  const source = el('div', {class: 'card tone-' + tone},
+    el('h2', {}, data.source.device ? 'Photos on ' + data.source.device : 'Photos in ' + sourceName(data.source),
+      el('span', {class: 'pill'}, toneText)),
     pathLine(data.source.device ? data.source.inner : '', data.source.full));
-  if (reading && reading.phase === 'listing') source.append(el('p', {}, 'Listing its files…'));
+  if (listing && !over.total) source.append(el('p', {}, waiting('Listing its files')));
   else {
-    source.append(link(over.total, 'files', 'all'));
-    source.append(el('div', {class: 'stat'}, el('b', {}, over.hashed), el('span', {}, 'copied here and hashed')),
+    source.append(link(over.total, 'files' + (listing ? ' (listing again)' : ''), 'all'));
+    source.append(el('div', {class: 'stat'}, el('b', {}, over.hashed), el('span', {}, 'hashed (copied to this computer)')),
       el('div', {class: 'meter'}, el('div', {style: 'width:' + percent(over.hashed, over.total)})));
     if (reading && reading.phase === 'copying') {
-      source.append(el('p', {}, 'Copying and hashing: ' + reading.copied + ' of ' + reading.asked + '…'));
+      source.append(el('p', {}, waiting('Copying and hashing: ' + reading.copied + ' of ' + reading.asked)));
     } else if (over.unhashed.files) {
-      source.append(el('p', {class: 'note'}, over.hashed ? 'The rest are compared by name and size only.' :
-        'Compared by name and size only. Copying them here (a temporary copy, used to sort them too) hashes them, to compare by contents:'));
+      source.append(el('p', {class: 'note'}, over.hashed ? 'The rest are matched by name and size only.' :
+        'Matched by name and size only: usually right, not certain. Hashing copies them to this computer (needed to sort them anyway) to compare by contents:'));
       const buttons = el('div', {class: 'row2'});
       if (over.nameOnly.files && over.nameOnly.files < over.unhashed.files) {
         buttons.append(button('Hash the ' + over.nameOnly.files + ' matched by name (' + size(over.nameOnly.size) + ')',
@@ -180,12 +191,12 @@ function renderOverview() {
   }
   if (reading && reading.message) source.append(el('p', {class: 'c-orange'}, reading.message));
   if (!reading || reading.phase === 'done' || reading.phase === 'waiting') {
-    source.append(el('div', {class: 'row2'}, button(data.source.device ? 'Look at the phone again' : 'Look at the folder again',
+    source.append(el('div', {class: 'row2'}, button(data.source.device ? "List the phone's files again" : "List the folder's files again",
       () => act('/api/import/read', {which: 'list'}))));
   }
   cards.push(source);
 
-  const checked = data.checking.busy ? (over.checked ? 'Checking again…' : 'Checking what they have…') :
+  const checked = data.checking.busy ? waiting(over.checked ? 'Checking again' : 'Checking what they have') :
     'Checked ' + ago(data.checking.ago) + '.';
   for (const replica of data.replicas) {
     const counted = over.replicas.find(found => found.path === replica.path);
@@ -205,13 +216,13 @@ function renderOverview() {
     }
     const buttons = el('div', {class: 'row2'});
     if (replica.kind === 'drive') {
-      buttons.append(replica.reading ? el('span', {class: 'note'}, 'Reading it from Drive…') :
+      buttons.append(replica.reading ? el('span', {class: 'note'}, waiting('Reading it from Drive')) :
         button('Read it from Drive again', () => act('/api/import/recheck', {replica: replica.path, how: 'drive'})));
     } else {
       if (!data.checking.busy) buttons.append(button('Check names and sizes again', () => act('/api/import/recheck', {})));
       const job = replica.hashing;
       if (job && job.started && job.state !== 'done') {
-        buttons.append(el('span', {class: 'note'}, 'Hashing its files: ' + job.done + ' of ' + job.files + '…'));
+        buttons.append(el('span', {class: 'note'}, waiting('Hashing its files: ' + job.done + ' of ' + job.files)));
       } else if (replica.unhashed) {
         buttons.append(button('Hash its ' + replica.unhashed + ' unhashed files (slower, surer)',
           () => act('/api/import/recheck', {replica: replica.path, how: 'hash'})));
@@ -298,7 +309,7 @@ function renderImport() {
   const focused = document.activeElement && document.activeElement.id === 'target';
   const parts = [];
   parts.push(el('div', {class: 'note'}, sourceName(data.source) + ' → ' + data.dest + '. Checked against: ' + data.checked.map(replicaName).join(', ') +
-    (data.indexed ? '' : ' (checking them…)') + (data.errors.length ? '. ' + data.errors.join('; ') : '')));
+    '', data.indexed ? '' : [' (', waiting('checking them'), ')'], data.errors.length ? '. ' + data.errors.join('; ') : ''));
   if (!focused) {
     const input = el('input', {type: 'text', id: 'target', list: 'folders', placeholder: 'A folder in ' + data.dest.split('/').pop() + ' (type to find one, or a new one)',
       value: page.target, oninput: event => { page.target = event.target.value; }});
@@ -326,7 +337,7 @@ function renderImport() {
     parts.push(el('div', {class: 'day'}, header, el('div', {class: 'grid'}, files.map(photo))));
   }
   if (data.days.length && !data.days.some(day => day.files.some(passes))) parts.push(el('p', {class: 'note'}, 'None.'));
-  if (!data.days.length) parts.push(el('p', {class: 'note'}, data.reading && data.reading.phase === 'listing' ? 'Listing the source…' : 'No media files.'));
+  if (!data.days.length) parts.push(el('p', {class: 'note'}, data.reading && data.reading.phase === 'listing' ? waiting('Listing the files') : 'No media files.'));
   if (data.applying) parts.push(el('div', {class: 'lines'}, data.applying.lines.map(([text, color]) => el('div', {class: color ? 'c-' + color : ''}, text))));
   main.replaceChildren(...parts);
   renderFooter();

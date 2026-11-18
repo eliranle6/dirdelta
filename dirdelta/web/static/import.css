@@ -35,12 +35,18 @@ a.stat { border-top: 1px solid var(--line); }
 .stat b { min-width: 3.5em; text-align: right; font-variant-numeric: tabular-nums; }
 .stat span:nth-of-type(1) { flex: 1; }
 .stat .go { color: var(--muted); font-size: 18px; line-height: 1; }
-.stat.sure b { color: var(--green); } .stat.unsure b { color: var(--orange); } .stat.missing b { color: var(--red); }
+.stat.sure b { color: var(--green); } .stat.unsure b { color: var(--yellow); } .stat.missing b { color: var(--red); }
 .meter { display: flex; height: 8px; border-radius: 4px; background: var(--line); overflow: hidden; }
-.meter div { background: var(--accent); } .meter .sure { background: var(--green); } .meter .unsure { background: var(--orange); }
+.meter div { background: var(--accent); } .meter .sure { background: var(--green); } .meter .unsure { background: var(--yellow); }
 .photo .play { color: var(--accent); text-decoration: none; font-weight: 600; }
 .where { display: flex; gap: 6px; align-items: baseline; flex-wrap: wrap; color: var(--muted); font-size: 13px; margin: 0; }
 .where .fullpath { flex-basis: 100%; overflow-wrap: anywhere; }
 button.tiny { font-size: 11px; padding: 1px 7px; border-radius: 10px; color: var(--muted); }
 .card .kind { margin-top: -6px; }
 button.danger { color: var(--red); } button.danger.sure { background: var(--red); border-color: var(--red); color: #fff; }
+/* The phone's card: red (nothing listed yet), yellow (by name and size only), green (hashed) */
+.card.tone-red { border-left: 5px solid var(--red); } .card.tone-yellow { border-left: 5px solid var(--yellow); }
+.card.tone-green { border-left: 5px solid var(--green); }
+.pill { margin-left: auto; font-size: 12px; font-weight: 600; padding: 2px 9px; border-radius: 10px; color: #fff; white-space: nowrap; }
+.card h2 { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.tone-red .pill { background: var(--red); } .tone-yellow .pill { background: var(--yellow); } .tone-green .pill { background: var(--green); }
