@@ -200,6 +200,97 @@ async function userBar() {
   }
 }
 
+// Adding a replica pair: two folders, each browsed on this computer or in Google Drive, kept as a
+// favorite pair (then on Home, Replicas and Sync), synced now or later. One element for the page, kept
+// across its redraws (so what's chosen stays); open at once on a link to #add.
+let pairAdderShown = null;
+
+function pairAdder() {
+  if (pairAdderShown) return pairAdderShown;
+  const box = el('div', {class: 'pairadder'});
+  const chosen = {a: null, b: null};
+  let browsing = null, isOpen = location.hash === '#add', note = '';
+  const post = async (path, body) => (await fetch(path, {method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(body)})).json();
+
+  async function go(slot, path) {
+    browsing = {slot, path, loading: true};
+    draw();
+    const found = await (await fetch('/api/browse?path=' + encodeURIComponent(path || ''))).json();
+    if (browsing && browsing.slot === slot) browsing = Object.assign({slot, path}, found);
+    draw();
+  }
+
+  async function add(isSyncing) {
+    const answer = await post('/api/pairs/add', {a: chosen.a, b: chosen.b});
+    if (!answer.ok) { note = answer.error; return draw(); }
+    if (isSyncing) {
+      const started = await post('/api/start', {kind: 'pair', a: answer.a, b: answer.b});
+      if (started.ok) return void (location.href = '/run');
+    }
+    location.href = location.pathname;
+  }
+
+  function browser() {
+    const b = browsing;
+    if (b.loading) return el('div', {class: 'browser'}, el('p', {class: 'note'}, 'Reading', el('span', {class: 'dots'})));
+    if (b.shortcuts) {
+      return el('div', {class: 'browser'}, el('div', {class: 'note'}, 'Start from:'),
+        el('div', {class: 'dirs'}, b.shortcuts.map(place => el('button', {class: 'dir', onclick: () => go(b.slot, place.path)},
+          icon(place.path.startsWith('/mnt') || place.path.startsWith('/media') ? 'disk' : 'laptop'), place.name)),
+          el('button', {class: 'dir', onclick: () => go(b.slot, '/')}, icon('folder'), '/ (everything)')));
+    }
+    const rows = [];
+    if (b.parent !== null && b.parent !== undefined) rows.push(el('button', {class: 'dir up', onclick: () => go(b.slot, b.parent)}, '↑ Up'));
+    for (const name of b.dirs || []) {
+      rows.push(el('button', {class: 'dir', onclick: () => go(b.slot, b.path === '/' ? '/' + name : b.path + '/' + name)}, icon('folder'), name));
+    }
+    if (b.dirs && !b.dirs.length) rows.push(el('div', {class: 'note'}, 'No folders in it.'));
+    const isRoot = b.path === '/' || b.path === 'cloud';
+    return el('div', {class: 'browser'},
+      el('div', {class: 'browsing'}, icon(b.path.startsWith('cloud') ? 'drive' : 'folder'), el('b', {}, b.path === 'cloud' ? 'Google Drive' : b.path),
+        b.known ? chip('ok', 'Already a replica') : ''),
+      b.error ? el('div', {class: 'note bad'}, b.error) : '',
+      el('div', {class: 'dirs'}, rows),
+      el('div', {class: 'row2'}, el('button', {class: 'primary', disabled: isRoot || !!b.error, onclick: () => {
+        chosen[b.slot] = b.path; browsing = null; note = ''; draw();
+      }}, isRoot ? 'Open a folder to choose it' : 'Use this folder'),
+        el('button', {onclick: () => { browsing = null; draw(); }}, 'Cancel')));
+  }
+
+  function slot(key, title) {
+    const path = chosen[key];
+    return el('div', {class: 'slot'}, el('div', {class: 'slot-title'}, title),
+      path ? el('div', {class: 'slot-chosen'}, icon(path.startsWith('cloud') ? 'drive' : 'folder'), el('b', {}, path)) :
+        el('div', {class: 'note'}, 'Not chosen yet'),
+      el('div', {class: 'row2'},
+        el('button', {class: 'small', onclick: () => go(key, '')}, icon('laptop'), 'On this computer'),
+        el('button', {class: 'small', onclick: () => go(key, 'cloud')}, icon('drive'), 'In Google Drive')),
+      browsing && browsing.slot === key ? browser() : '');
+  }
+
+  function draw() {
+    if (!isOpen) {
+      box.replaceChildren(el('button', {class: 'addbutton', onclick: () => { isOpen = true; draw(); }}, '+ Add a replica pair'));
+      return;
+    }
+    box.replaceChildren(el('div', {class: 'card'},
+      el('div', {class: 'section-title'}, 'Add a replica pair'),
+      el('p', {class: 'note'}, 'Two copies of the same files, to keep in step: e.g. a folder on this computer and one in Google Drive. ' +
+        'They\'re kept as a favorite pair, synced when you choose.'),
+      slot('a', 'First replica'), slot('b', 'Second replica'),
+      note ? el('div', {class: 'note bad'}, note) : '',
+      el('div', {class: 'row2'},
+        el('button', {class: 'primary', disabled: !(chosen.a && chosen.b), onclick: () => add(true)}, 'Add and sync now'),
+        el('button', {disabled: !(chosen.a && chosen.b), onclick: () => add(false)}, 'Add, sync later'),
+        el('button', {onclick: () => { isOpen = false; browsing = null; draw(); }}, 'Cancel'))));
+  }
+
+  draw();
+  pairAdderShown = box;
+  return box;
+}
+
 // Small icons of what a replica or source is on (static SVG, drawn in the text's color)
 const ICONS = {
   laptop: '<rect x="4" y="5" width="16" height="11" rx="1.5"/><path d="M2 19h20"/>',

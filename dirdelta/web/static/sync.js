@@ -48,7 +48,7 @@ async function load() {
     pairs.map(pair => row([pair.favorite ? '★' : '', replicaLabel(pair.a, pair.nameA), '⇄', replicaLabel(pair.b, pair.nameB)], compared(pair),
       () => start({kind: 'pair', a: pair.a, b: pair.b}), busy)),
     row('Two other replicas…', 'Choose any two: folders on disks or in Drive', () => start({}), busy)));
-  parts.push(el('p', {class: 'note'}, 'To sort an inbox into its tree, see Unsorted import.'));
+  parts.push(pairAdder(), el('p', {class: 'note'}, 'To sort an inbox into its tree, see Unsorted import.'));
   document.getElementById('main').replaceChildren(...parts);
   setTimeout(load, 8000);
 }

@@ -298,6 +298,7 @@ The map (each module's docstring's first line; generated from the code):
     - `tiff.py`: The date in TIFF data's IFDs
 - `web/`: dirdelta's web version (dirdelta --serve, daemon.py): the same flows as the terminal's, their pickers and messages shown in the browser, so they can be used from a phone on the same network; the phone import's page; and the watch for a phone plugged in or a replica's drive mounted, emailing the user a link (see "The web version" below)
   - `access.py`: Who may use the web version, and where it is: a key in its links (kept in WEB_FILE), checked on every request, and the computer's address on the local network
+  - `adding.py`: Adding a replica pair from the web version: its folders browsed (this computer's, or Drive's as the cache has them), the pair kept as a favorite
   - `api.py`: The web version's API for the session's screens (routes()): what the page polls for, and what it does there
   - `daemon.py`: dirdelta's daemon (run()): the web version, its pickers and messages in the browser, the flows it starts (flow(): the start menu, a pair's sync, an inbox's sort), and the watcher, which emails a link when a phone or a known replica appears
   - `naming.py`: What the web version calls a replica: its name and where it is, 'eliran (Drive)', 'eliran (disk OS)', so two of one name are told apart
@@ -1244,7 +1245,11 @@ every link carries, then a cookie), and a watcher.
   cookie, else the owner); a flow runs as whoever started it, and so do the threads it starts (the
   run's user while it runs). The top bar (`markup.js`'s userBar()) changes the user, adds one, or sets
   the address links are emailed to them (`/api/users`, `/api/users/add`, `/api/users/email`); a new
-  user's Home offers to choose their first two replicas.
+  user's Home offers to add their first replica pair.
+- Adding a replica pair (`web/adding.py`, `markup.js`'s pairAdder(), on Replicas and Sync, `/replicas#add`
+  opening it): each of the two folders browsed on this computer (from home and the mounted disks) or in
+  Google Drive (its folders as the Drive cache has them), not one inside the other; kept as a favorite
+  pair of the user's (so it's a replica on Home and Replicas, and on Sync), synced at once or later.
 
 ## What replicas are called: `replicanames.py`, `label_screen.py`
 

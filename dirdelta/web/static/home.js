@@ -164,7 +164,7 @@ function homePage(data) {
     parts.push(el('div', {class: 'card banner'}, el('div', {}, el('b', {}, data.user + ' has no replicas yet'),
       el('div', {class: 'note'}, 'Choose two copies of the same files to keep in step, e.g. a folder on this computer and one in Google Drive. ' +
         'They\'re then ' + data.user + '\'s replicas, shown here and on Replicas, Sync and the imports.')),
-      el('button', {class: 'primary', disabled: !!data.running, onclick: () => start({})}, 'Choose two replicas to sync')));
+      el('a', {class: 'button primary', href: '/replicas#add'}, 'Add a replica pair')));
   }
   if (data.running) {
     parts.push(el('div', {class: 'card banner running'}, el('div', {}, el('b', {}, 'Running now' + (data.running.user && data.running.user !== data.user ? ' (for ' + data.running.user + ')' : '')),
@@ -190,10 +190,10 @@ function homePage(data) {
 function replicasPage(data) {
   const local = data.replicas.filter(replica => replica.kind === 'local');
   const drive = data.replicas.filter(replica => replica.kind === 'drive');
-  const parts = [];
+  const parts = [pairAdder()];
   if (local.length) parts.push(el('div', {class: 'section-title'}, 'Replicas on local disks'), el('div', {class: 'grid'}, local.map(replicaCard)));
   if (drive.length) parts.push(el('div', {class: 'section-title'}, 'Replicas in Google Drive'), el('div', {class: 'grid'}, drive.map(replicaCard)));
-  if (!data.replicas.length) parts.push(el('p', {class: 'note'}, 'No replicas yet: sync two folders first (Sync).'));
+  if (!data.replicas.length) parts.push(el('p', {class: 'note'}, 'No replicas yet: add a pair above.'));
   return parts;
 }
 
