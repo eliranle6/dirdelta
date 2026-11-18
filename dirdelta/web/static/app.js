@@ -404,7 +404,7 @@ function renderHome() {
     el('h2', {}, view.running ? 'Starting' : 'Nothing is running'),
     el('p', {class: 'note'}, view.running ? waitingDots() : 'Start a sync or a sort from Sync.'),
     view.running ? '' : el('div', {class: 'row2'}, el('a', {class: 'button primary', href: '/sync'}, 'Go to Sync'))),
-    log.length ? el('div', {class: 'lines'}, el('div', {class: 'section-title'}, 'Last run'), log) : '');
+    log.length ? el('div', {class: 'lines'}, el('div', {class: 'section-title'}, 'What the last run printed'), log) : '');
   document.getElementById('status').replaceChildren();
   document.getElementById('actions').replaceChildren();
 }

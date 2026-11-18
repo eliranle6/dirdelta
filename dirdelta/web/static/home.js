@@ -121,22 +121,32 @@ function summary(data) {
     drive ? tile(listed.tone, 'Drive file lists', 'Read ' + listed.text, listed.tone === 'ok' ? 'Fresh' : 'A sync reads them again', '/replicas') : '');
 }
 
-// What's connected now: the phones plugged in, each disk replica (mounted, or not plugged in), and Drive
-// (signed in, or not)
-function pluggedIn(data) {
-  const row = (kind, title, sub, state, action) => el('div', {class: 'item'}, icon(kind),
+function connectionRow(kind, title, sub, state, action) {
+  return el('div', {class: 'item'}, icon(kind),
     el('span', {class: 'what'}, el('b', {}, title), sub ? el('span', {class: 'note'}, sub) : ''), state, action || '');
-  const rows = data.phones.map(phone => row('phone', phone.name, 'Phone · ' + phone.inner, chip('ok', 'Plugged in'),
-    el('a', {class: 'button small primary', href: '/import'}, 'Import photos')));
+}
+
+// The phones plugged in (or that none is), each with its photos' import
+function phonesPluggedIn(data) {
+  const rows = data.phones.map(phone => connectionRow('phone', phone.name, 'Phone · its ' + phone.inner + ' folder', chip('ok', 'Plugged in'),
+    el('a', {class: 'button small primary', href: '/import'}, 'Import its photos')));
+  if (!rows.length) rows.push(connectionRow('phone', 'No phone plugged in', 'Plug one in by USB and choose "File transfer" on it', chip('none', 'None')));
+  return el('div', {class: 'list'}, rows);
+}
+
+// Which replicas can be reached now: each disk replica (mounted, or not plugged in), and Drive (signed in,
+// or not)
+function pluggedIn(data) {
+  const row = connectionRow;
+  const rows = [];
   for (const replica of data.replicas.filter(replica => replica.kind === 'local')) {
-    rows.push(row(replica.device, replica.fullName, replica.place === 'this computer' ? 'This computer\'s disk' : 'Disk',
+    rows.push(row(replica.device, replica.fullName, replica.place === 'this computer' ? 'On this computer\'s own disk' : 'On a separate disk',
       replica.there ? chip('ok', 'Mounted') : chip('bad', 'Not plugged in')));
   }
   if (data.replicas.some(replica => replica.kind === 'drive')) {
-    rows.push(row('drive', 'Google Drive', data.replicas.filter(replica => replica.kind === 'drive').map(replica => replica.fullName).join(', '),
+    rows.push(row('drive', 'Google Drive', 'Holds ' + data.replicas.filter(replica => replica.kind === 'drive').map(replica => replica.fullName).join(', '),
       data.drive.connected ? chip('ok', 'Connected') : chip('bad', 'Not connected')));
   }
-  if (!data.phones.length) rows.unshift(row('phone', 'No phone', 'Plug one in by USB, with "File transfer" on', chip('none', 'Not plugged in')));
   return el('div', {class: 'list'}, rows);
 }
 
@@ -147,12 +157,13 @@ function homePage(data) {
       data.running.title ? el('div', {class: 'note'}, data.running.title) : ''),
       el('a', {class: 'button primary', href: '/run'}, 'Open it')));
   }
-  parts.push(el('div', {class: 'section-title'}, 'Plugged in'), pluggedIn(data));
-  parts.push(el('div', {class: 'section-title'}, 'Sync status'));
+  parts.push(el('div', {class: 'section-title'}, 'Replicas plugged in'), pluggedIn(data),
+    el('div', {class: 'section-title'}, 'Phones plugged in'), phonesPluggedIn(data));
+  parts.push(el('div', {class: 'section-title'}, 'Sync status of each replica pair'));
   parts.push(data.pairs.length ? el('div', {class: 'list'}, data.pairs.map(pair => pairRow(pair, !!data.running))) :
     el('p', {class: 'note'}, 'No pairs synced yet: start one from Sync.'));
   if (data.sorts.length) {
-    parts.push(el('div', {class: 'section-title'}, 'Inboxes to sort'), el('div', {class: 'list'}, data.sorts.map(sort =>
+    parts.push(el('div', {class: 'section-title'}, 'Inboxes waiting to be sorted'), el('div', {class: 'list'}, data.sorts.map(sort =>
       el('div', {class: 'item stacked'}, el('span', {class: 'what'}, el('b', {class: 'pairline'}, replicaLabel(sort.inbox, sort.nameInbox, true), '→',
         replicaLabel(sort.root, sort.nameRoot)),
         el('span', {class: 'note'}, 'Photos: by day, with previews. All files: any kind, folder by folder.')),
@@ -166,8 +177,8 @@ function replicasPage(data) {
   const local = data.replicas.filter(replica => replica.kind === 'local');
   const drive = data.replicas.filter(replica => replica.kind === 'drive');
   const parts = [];
-  if (local.length) parts.push(el('div', {class: 'section-title'}, 'On disks'), el('div', {class: 'grid'}, local.map(replicaCard)));
-  if (drive.length) parts.push(el('div', {class: 'section-title'}, 'In Google Drive'), el('div', {class: 'grid'}, drive.map(replicaCard)));
+  if (local.length) parts.push(el('div', {class: 'section-title'}, 'Replicas on local disks'), el('div', {class: 'grid'}, local.map(replicaCard)));
+  if (drive.length) parts.push(el('div', {class: 'section-title'}, 'Replicas in Google Drive'), el('div', {class: 'grid'}, drive.map(replicaCard)));
   if (!data.replicas.length) parts.push(el('p', {class: 'note'}, 'No replicas yet: sync two folders first (Sync).'));
   return parts;
 }

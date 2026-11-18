@@ -44,7 +44,7 @@ async function load() {
   if (busy) parts.push(el('div', {class: 'card banner running'}, el('b', {}, 'Running now'), el('a', {class: 'button primary', href: '/run'}, 'Open it')));
   // Syncing two replicas
   const pairs = data.favorites.map(pair => Object.assign({favorite: true}, pair)).concat(data.recent);
-  parts.push(el('div', {class: 'section-title'}, 'Sync two replicas'), el('div', {class: 'list'},
+  parts.push(el('div', {class: 'section-title'}, 'Replica pairs to sync'), el('div', {class: 'list'},
     pairs.map(pair => row([pair.favorite ? '★' : '', replicaLabel(pair.a, pair.nameA), '⇄', replicaLabel(pair.b, pair.nameB)], compared(pair),
       () => start({kind: 'pair', a: pair.a, b: pair.b}), busy)),
     row('Two other replicas…', 'Choose any two: folders on disks or in Drive', () => start({}), busy)));

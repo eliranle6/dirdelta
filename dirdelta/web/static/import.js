@@ -93,7 +93,7 @@ async function loadList() {
   // What's started under this tab: each import's progress (sorted of all)
   const ongoing = data.imports.filter(found => found.isInbox === (MODE === 'unsorted'));
   if (ongoing.length) {
-    parts.push(el('div', {class: 'section-title'}, 'Ongoing imports'), el('div', {class: 'list'}, ongoing.map(found => {
+    parts.push(el('div', {class: 'section-title'}, MODE === 'unsorted' ? 'Inbox imports in progress' : 'Photo imports in progress'), el('div', {class: 'list'}, ongoing.map(found => {
       const counts = found.counts, total = counts.pending + counts.copied + counts.moved + counts.skipped;
       const decided = counts.moved + counts.skipped;
       return el('a', {class: 'item', href: importLink(found.id, found.isInbox)},
@@ -111,7 +111,7 @@ async function loadList() {
     parts.push(el('div', {class: 'section-title'}, 'Phones plugged in'));
     parts.push(...(data.phones.length ? data.phones.map(phone => sourceCard('phone', 'Photos on ' + phone.name, phone.inner, phone.full, () => phone.path, phone.dests)) :
       [el('p', {class: 'note'}, 'None. Plug a phone in by USB and choose "File transfer" on it; it shows here within a few seconds.')]));
-    parts.push(el('div', {class: 'section-title'}, 'A folder on this computer'));
+    parts.push(el('div', {class: 'section-title'}, 'Photos from a folder on this computer'));
     const folder = el('input', {type: 'text', placeholder: '/path/to/a/folder'});
     parts.push(sourceCard('folder', 'Photos in a folder', '', '', () => folder.value, data.dests, folder));
   }
@@ -123,7 +123,7 @@ async function loadList() {
 // The inboxes (the sorts' unsorted folders, in Drive or on a disk), each sorted two ways: its photos by
 // day (an import, here), or all its files folder by folder (the sort's own screens, on /run)
 function inboxCards(data, start) {
-  const parts = [el('div', {class: 'section-title'}, 'Inboxes')];
+  const parts = [el('div', {class: 'section-title'}, 'Inboxes and the trees they\'re sorted into')];
   if (!data.sorts.length) parts.push(el('p', {class: 'note'}, 'No inbox yet: choose one with "Another inbox…".'));
   for (const sort of data.sorts) {
     const open = data.imports.find(found => found.source.full === sort.inbox && found.dest === sort.root && !found.otherDisk);
@@ -269,7 +269,7 @@ function renderOverview() {
         () => act('/api/import/read', {which: 'list'}))));
   }
   if (data.otherDisk) {
-    cards.push(el('div', {class: 'card tone-red'}, el('h2', {}, 'Another disk is there'),
+    cards.push(el('div', {class: 'card tone-red'}, el('h2', {}, 'A different disk is mounted there now'),
       el('p', {}, 'The disk mounted at ' + data.dest + ' now (' + data.destDisk + ') isn\'t the one this import was started with. ' +
         'Nothing is moved until that disk is back; start a new import to sort into this one.')));
   }
@@ -312,7 +312,7 @@ function renderOverview() {
     cards.push(card);
   }
   if (over.checked && over.replicas.length > 1) {
-    cards.push(el('div', {class: 'card'}, el('h2', {}, 'All together'),
+    cards.push(el('div', {class: 'card'}, el('h2', {}, 'Across all the replicas'),
       link(over.inNone, 'in no replica', 'none', '', 'missing', 'Each is in at least one replica'),
       link(over.inAll, 'in every replica', 'all-in')));
   }
@@ -335,7 +335,7 @@ function renderOverview() {
     const answer = await api('POST', '/api/import/end', {id: page.id});
     if (answer.ok) location.href = '/import'; else document.getElementById('status').textContent = answer.error || "Couldn't end it.";
   }}, 'End this import');
-  cards.push(el('div', {class: 'card'}, el('h2', {}, 'Sorting into ' + data.destName),
+  cards.push(el('div', {class: 'card'}, el('h2', {}, 'Sorting the photos into ' + data.destName),
     link(open, 'with no folder yet', 'open', '', '', 'All decided'), link(over.chosen, 'with a folder chosen, to move', 'chosen'),
     counts.moved ? link(counts.moved, 'moved', 'moved') : '', counts.skipped ? link(counts.skipped, 'skipped', 'skipped') : '',
     el('div', {class: 'row2'}, el('a', {class: 'button primary', href: photosLink(over.checked && over.inNone ? 'none' : 'open')},
