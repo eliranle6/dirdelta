@@ -141,11 +141,12 @@ function tabBar(active) {
 
 function drawTabs(nav) {
   const active = shownTab, running = isRunning;
-  const tab = ([key, href, text]) => el('a', {href, class: 'tab' + (key === active ? ' on' : '')}, text);
+  // (What's running is part of Sync: its tab has a dot then, and the running flow's page is under it)
+  const tab = ([key, href, text]) => el('a', {href: key === 'sync' && running ? '/run' : href,
+    class: 'tab' + (key === active || (key === 'sync' && active === 'run') ? ' on' : '')},
+    key === 'sync' && running ? el('span', {class: 'dot', title: 'Running now'}) : '', text);
   nav.replaceChildren(...TABS.map(tab),
-    el('div', {class: 'tabgroup'}, el('span', {class: 'grouplabel'}, 'Inboxes'), el('div', {class: 'grouptabs'}, INBOX_TABS.map(tab))),
-    running || active === 'run' ? el('a', {href: '/run', class: 'tab ' + (running ? 'running' : 'idle') + (active === 'run' ? ' on' : '')},
-      running ? el('span', {class: 'dot'}) : '', 'Running') : '');
+    el('div', {class: 'tabgroup'}, el('span', {class: 'grouplabel'}, 'Inboxes'), el('div', {class: 'grouptabs'}, INBOX_TABS.map(tab))));
 }
 
 // Small icons of what a replica or source is on (static SVG, drawn in the text's color)

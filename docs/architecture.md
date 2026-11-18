@@ -1198,7 +1198,7 @@ every link carries, then a cookie), and a watcher.
   (an inbox), status chips (mounted, synced, hashed, its list read), log entry and hashing to start or
   pause), Photos (`/import`, below), Sync (`/sync`, `sync.js`: the favorite
   pairs, the recent ones and the inbox sorts, each started with a tap: `daemon.flow()`, `main.run_pair()`,
-  `main.run_sort()`; or the start menu, for any other), and Running (`/run`, while a flow runs). The
+  `main.run_sort()`; or the start menu, for any other), and the running flow's page (`/run`, under Sync, whose tab has a pulsing dot while a flow runs, and leads there). The
   Running page (`web/static/app.js`) polls `/api/state` (a long poll: each change is numbered) and draws
   a menu as a list, a tree with checkboxes or state marks, the preview column (pictures from
   treepicker's pixels), the keys as buttons (named by the keys row, or the `?` help's lines), and

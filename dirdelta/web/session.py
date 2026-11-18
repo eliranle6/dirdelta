@@ -85,11 +85,13 @@ class Session(object):
     def _run(self, flow):
         try:
             flow()
+            # (So a run that ended, e.g. gone back from, says so: the page shows nothing running then)
+            self.print_line("The run ended.", 'grey')
         except KeyboardInterrupt:
             self.print_line("Stopped.")
         except SystemExit as error:
-            if error.code not in (None, 0):
-                self.print_line(str(error.code), 'red')
+            self.print_line(str(error.code) if error.code not in (None, 0) else "The run ended.",
+                            'red' if error.code not in (None, 0) else 'grey')
         except Exception as error:
             self.print_line("Something went wrong: %s" % (error,), 'red')
             raise

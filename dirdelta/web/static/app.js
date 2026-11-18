@@ -398,13 +398,14 @@ function renderMessages(screen, isNew) {
 // Nothing shown: a flow ended (what it printed last), or none ran
 
 function renderHome() {
-  setTop('Running', []);
+  setTop('Sync > Running', []);
   const log = view.log.map(([text, color]) => el('div', {class: color ? 'c-' + color : ''}, segmentsSpan(text)));
   document.getElementById('main').replaceChildren(el('div', {class: 'card'},
     el('h2', {}, view.running ? 'Starting' : 'Nothing is running'),
-    el('p', {class: 'note'}, view.running ? waitingDots() : 'Start a sync or a sort from Sync.'),
-    view.running ? '' : el('div', {class: 'row2'}, el('a', {class: 'button primary', href: '/sync'}, 'Go to Sync'))),
-    log.length ? el('div', {class: 'lines'}, el('div', {class: 'section-title'}, 'What the last run printed'), log) : '');
+    el('p', {class: 'note'}, view.running ? waitingDots() : 'Start a sync from Sync, or an inbox\'s sort from Unsorted import.'),
+    view.running ? '' : el('div', {class: 'row2'}, el('a', {class: 'button primary', href: '/sync'}, 'Go to Sync'),
+      el('a', {class: 'button', href: '/unsorted'}, 'Go to Unsorted import'))),
+    log.length ? el('div', {class: 'section-title'}, 'What the last run printed') : '', log.length ? el('div', {class: 'lines'}, log) : '');
   document.getElementById('status').replaceChildren();
   document.getElementById('actions').replaceChildren();
 }

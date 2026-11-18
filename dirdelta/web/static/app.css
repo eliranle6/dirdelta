@@ -141,3 +141,6 @@ nav#tabs a.tab { flex: 1 1 auto; overflow-wrap: normal; word-break: normal; font
 nav#tabs .tabgroup { flex: 2 1 auto; }
 nav#tabs a.tab { flex: 1 1 0; font-size: clamp(10.5px, 3.2vw, 14px); }
 nav#tabs .tabgroup { flex: 2 1 0; }
+/* The tabs always on a row of their own, under the title */
+nav#tabs { flex: 0 0 auto; width: calc(100% + 32px); max-width: none; order: 3; }
+nav#tabs .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); animation: pulse 1.4s ease-in-out infinite; flex: none; }
