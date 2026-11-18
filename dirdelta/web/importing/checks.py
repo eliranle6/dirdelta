@@ -14,14 +14,34 @@ from dirdelta.trees import paths
 from dirdelta.ui.picker import updates
 
 RECHECK_AFTER = 600
+# How long a replica's identity (its disk's, by findmnt) is taken as known, in seconds
+IDENTITY_FOR = 5
+
+# {path: (when, its identity)}
+_identities = {}
+_identities_lock = threading.Lock()
+
+
+def identity(path):
+    """The identity of the replica at path now (replicanames.identity(): by its disk's UUID and the
+    path in it, so another disk mounted there is another replica), found again after IDENTITY_FOR"""
+    now = time.monotonic()
+    with _identities_lock:
+        found = _identities.get(path)
+    if found is not None and now - found[0] < IDENTITY_FOR:
+        return found[1]
+    found = replicanames.identity(path)
+    with _identities_lock:
+        _identities[path] = (now, found)
+    return found
 
 
 class Check(object):
     """A destination's check: known (the last one done, or None), its suggester, when it was done, and
     whether one is being done"""
 
-    def __init__(self, dest):
-        self.dest = dest
+    def __init__(self, dest, dest_id):
+        self.dest, self.dest_id = dest, dest_id
         self.known = self.suggester = None
         self.checked_at = None
         self.is_checking = False
@@ -39,10 +59,15 @@ class Checks(object):
     def __init__(self):
         self._checks, self._lock = {}, threading.Lock()
 
+    def _of(self, dest):
+        """The Check of the replica at dest now (by its identity: another disk there has its own)"""
+        dest_id = identity(dest)
+        return self._checks.setdefault((dest, dest_id), Check(dest, dest_id))
+
     def get(self, dest):
         """dest's Check, a new one started if it's due"""
         with self._lock:
-            check = self._checks.setdefault(dest, Check(dest))
+            check = self._of(dest)
             if not check.is_checking and (check.known is None or time.time() - check.checked_at > RECHECK_AFTER
                                           or self._hashing_done(check)):
                 self._start(check)
@@ -50,13 +75,13 @@ class Checks(object):
 
     def recheck(self, dest):
         with self._lock:
-            check = self._checks.setdefault(dest, Check(dest))
+            check = self._of(dest)
             if not check.is_checking:
                 self._start(check)
 
     @staticmethod
     def _hashing_done(check):
-        done = {root for root in check.hashing if _hash_state(root)['state'] == hashing.DONE}
+        done = {root for root in check.hashing if hash_state(root)['state'] == hashing.DONE}
         check.hashing -= done
         return bool(done)
 
@@ -83,7 +108,7 @@ class Checks(object):
         that's done"""
         from dirdelta.screens.hashes_screen import dashboard_actions
         with self._lock:
-            check = self._checks.setdefault(dest, Check(dest))
+            check = self._of(dest)
             check.hashing.add(root)
         dashboard_actions.start_hashing(root)
 
@@ -91,7 +116,7 @@ class Checks(object):
         """Read the Drive replica at replica_path anew from Drive into the cache, then check again"""
         from dirdelta.drive.clouddirtree import refresh
         with self._lock:
-            check = self._checks.setdefault(dest, Check(dest))
+            check = self._of(dest)
             if replica_path in check.reading:
                 return
             check.reading.add(replica_path)
@@ -112,14 +137,14 @@ def replica_state(check, root):
     """What the page says of a replica of check: its name, kind, and what's being done to it"""
     is_cloud = paths.is_cloud_path(root)
     found = {'path': root, 'name': replicanames.label(root) or os.path.basename(root.rstrip('/')) or root,
-             'kind': 'drive' if is_cloud else 'local', 'reading': root in check.reading,
+             'kind': 'drive' if is_cloud else 'local', 'disk': replicanames.disk_name(root), 'reading': root in check.reading,
              'unhashed': check.known.unhashed.get(root, 0) if check.known is not None and not is_cloud else 0}
     if not is_cloud:
-        found['hashing'] = _hash_state(root)
+        found['hashing'] = hash_state(root)
     return found
 
 
-def _hash_state(root):
+def hash_state(root):
     job = hashing.job_for(root)
     if job is None:
         return {'state': None}
@@ -135,10 +160,17 @@ def synced_with(path):
                               for other in pair if other != path))
 
 
-def destinations():
-    """The local replicas an import may go into (the sorted trees first), and the default one"""
+def destinations(source=None):
+    """[{'path', 'name', 'disk', 'kind'}] of the replicas an import of source may go into, the likeliest
+    first: local ones (the sorted trees first); for a Drive folder (a sort's inbox), its sorts' sorted
+    trees first, and Drive ones too"""
     known_replicas = replicas.load()
-    candidates = [root for _, root in known_replicas.sorts] + [path for pair in known_replicas.favorites +
-                                                               known_replicas.history for path in pair]
-    local = [path for path in dict.fromkeys(candidates) if not paths.is_cloud_path(path) and os.path.isdir(path)]
-    return local, local[0] if local else None
+    candidates = [root for inbox, root in known_replicas.sorts if inbox == source] + \
+        [root for _, root in known_replicas.sorts] + \
+        [path for pair in known_replicas.favorites + known_replicas.history for path in pair]
+    is_drive = source is not None and paths.is_cloud_path(source)
+    found = [path for path in dict.fromkeys(candidates) if path != source and
+             (os.path.isdir(path) if not paths.is_cloud_path(path) else is_drive)]
+    return [{'path': path, 'name': replicanames.label(path) or os.path.basename(path.rstrip('/')) or path,
+             'disk': replicanames.disk_name(path), 'kind': 'drive' if paths.is_cloud_path(path) else 'local'}
+            for path in found]

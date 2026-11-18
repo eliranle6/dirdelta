@@ -1,0 +1,91 @@
+"""The web version's dashboard and Sync page's API (routes()): the replicas dirdelta knows (each one's
+disk, whether it's there, its hashing, its log's last entry, when it was last synced), the phones and
+Drive inboxes there are to sort photos from, what's running; the pairs to sync and the sorts, each
+started as a flow (see daemon.flow()); and hashing a replica, or pausing it"""
+import os
+
+from dirdelta.hashes import hashing
+from dirdelta.known import mounts
+from dirdelta.known import replicanames
+from dirdelta.known import replicas
+from dirdelta.phoneimport import sources
+from dirdelta.trees import paths
+from dirdelta.util import dryrun
+from dirdelta.web.importing import checks
+
+
+def replica_info(path, known_replicas):
+    """What the dashboard says of the replica at path"""
+    is_cloud = paths.is_cloud_path(path)
+    found = {'path': path, 'name': replicanames.label(path) or os.path.basename(path.rstrip('/')) or path,
+             'kind': 'drive' if is_cloud else 'local', 'disk': replicanames.disk_name(path)}
+    if is_cloud:
+        found['there'], found['why'] = True, ''
+    else:
+        unmounted = mounts.unmounted(path)
+        found['there'] = unmounted is None and os.path.isdir(path)
+        found['why'] = ("its disk isn't mounted" if unmounted is not None else
+                        "not there" if not found['there'] else '')
+        found['hashing'] = checks.hash_state(path)
+    info = known_replicas.info_at(path) or {}
+    found.update(lastEntry=info.get('last_entry'), seen=info.get('seen'), changed=info.get('changed'))
+    return found
+
+
+def _title(screen):
+    """What the screen shown is called (its breadcrumbs' last part), or ''"""
+    if screen is None:
+        return ''
+    meta = screen.meta()
+    title = meta.get('title') or meta.get('crumbs') or ''
+    return title.replace('\x01', ' ').split(' > ')[-1].strip() if isinstance(title, str) else ''
+
+
+def routes(session):
+    def home(query, body):
+        known_replicas = replicas.load()
+        all_paths = dict.fromkeys([path for pair in known_replicas.favorites + known_replicas.history for path in pair] +
+                                  [path for sort in known_replicas.sorts for path in sort])
+        screen = session.screen()
+        return {'label': list(dryrun.label()),
+                'running': {'title': _title(screen)} if session.is_running else None,
+                'phones': [dict(sources.describe(path), name=name, path=path) for name, path in sources.phones()],
+                'replicas': [replica_info(path, known_replicas) for path in all_paths]}
+
+    def sync(query, body):
+        known_replicas = replicas.load()
+        recent = [pair for pair in known_replicas.history if pair not in known_replicas.favorites]
+        names = replicanames.short_names(list(dict.fromkeys(
+            [path for pair in known_replicas.favorites + recent for path in pair] +
+            [path for sort in known_replicas.sorts for path in sort])))
+
+        def pair_info(pair):
+            compared = known_replicas.comparison(*pair)
+            return {'a': pair[0], 'b': pair[1], 'nameA': names.get(pair[0], pair[0]), 'nameB': names.get(pair[1], pair[1]),
+                    'compared': compared}
+        return {'label': list(dryrun.label()), 'running': session.is_running,
+                'favorites': [pair_info(pair) for pair in known_replicas.favorites],
+                'recent': [pair_info(pair) for pair in recent],
+                'sorts': [{'inbox': inbox, 'root': root, 'nameInbox': names.get(inbox, inbox), 'nameRoot': names.get(root, root)}
+                          for inbox, root in known_replicas.sorts]}
+
+    def hash_replica(query, body):
+        """Hash the local replica body['path'] asks for (as the replicas dashboard does), or pause it"""
+        path = body.get('path', '')
+        known_replicas = replicas.load()
+        known_paths = {known for pair in known_replicas.favorites + known_replicas.history + known_replicas.sorts for known in pair}
+        if path not in known_paths or paths.is_cloud_path(path) or not os.path.isdir(path):
+            return {'ok': False}
+        job = hashing.job_for(path)
+        if body.get('pause') and job is not None:
+            job.pause()
+        else:
+            from dirdelta.screens.hashes_screen import dashboard_actions
+            dashboard_actions.start_hashing(path)
+        return {'ok': True}
+
+    def running(query, body):
+        return {'running': session.is_running}
+
+    return {('GET', '/api/home'): home, ('GET', '/api/sync'): sync, ('POST', '/api/home/hash'): hash_replica,
+            ('GET', '/api/running'): running}

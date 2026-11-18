@@ -17,16 +17,22 @@ def routes():
     checks = checking.Checks()
 
     def listing(query, body):
-        dests, default = checking.destinations()
+        def source(name, path):
+            return dict(sources.describe(path), name=name, path=path, dests=checking.destinations(path))
         return {'imports': [summary(found) for found in store.all_imports()],
-                'phones': [dict(sources.describe(path), name=name, path=path) for name, path in sources.phones()],
-                'dests': dests, 'defaultDest': default, 'label': list(dryrun.label())}
+                'phones': [source(name, path) for name, path in sources.phones()],
+                'drive': [source(name, path) for name, path in sources.drive_inboxes()],
+                'dests': checking.destinations(), 'label': list(dryrun.label())}
 
     def new(query, body):
         source, dest = body.get('source', ''), body.get('dest', '')
-        if not os.path.isdir(source) or not os.path.isdir(dest):
-            return {'error': "Not a dir: %s" % (source if not os.path.isdir(source) else dest,)}
-        found = store.create(os.path.abspath(source), os.path.abspath(dest))
+        if not paths.is_cloud_path(source):
+            source = os.path.abspath(source) if source else ''
+            if not os.path.isdir(source):
+                return {'error': "Not a folder: %s" % (source,)}
+        if dest not in [found['path'] for found in checking.destinations(source)]:
+            return {'error': "Not a replica it can go into: %s" % (dest,)}
+        found = store.create(source, dest, checking.identity(dest))
         copying.read(found.source)
         checks.get(found.dest)
         return {'id': found.id}
@@ -65,7 +71,7 @@ def routes():
         which = body.get('which')
         files = found.files()
         if which == 'list':
-            copying.read(found.source)
+            copying.read(found.source, from_drive=True)
             return {'ok': True}
         relpaths = [relpath for relpath, info in files.items() if not info['sha1'] and info['state'] != store.MOVED]
         if which == 'nameOnly':
@@ -77,9 +83,12 @@ def routes():
 
     def apply(query, body):
         found = store.load(body.get('id'))
-        if found is not None:
-            applying.apply(found)
-        return {'ok': found is not None}
+        if found is None:
+            return {'ok': False}
+        if found.dest_id is not None and found.dest_id != checking.identity(found.dest):
+            return {'ok': False, 'error': "Another disk is at %s now: not this import's replica." % (found.dest,)}
+        applying.apply(found)
+        return {'ok': True}
 
     def end(query, body):
         found = store.load(body.get('id'))

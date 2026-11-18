@@ -1,5 +1,15 @@
 #crumbs a { color: inherit; }
-.bar { position: sticky; top: 49px; z-index: 2; background: var(--bg); padding: 6px 0; display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.sticky { position: sticky; top: var(--head, 90px); z-index: 2; background: var(--bg); padding: 6px 0; display: flex; flex-direction: column; gap: 6px;
+  border-bottom: 1px solid var(--line); }
+.bar { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.day { scroll-margin-top: calc(var(--head, 90px) + 150px); }
+.sortmeter { display: flex; flex-direction: column; gap: 5px; }
+.sortmeter .big { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.sortmeter .big b { font-size: 22px; }
+.sortmeter .big button:first-of-type { margin-left: auto; }
+.sortmeter #position { font-size: 12px; margin-top: -2px; }
+.meter.thick { height: 12px; border-radius: 6px; }
+.sortmeter button { padding: 4px 10px; font-size: 13px; }
 .bar input { flex: 1 1 220px; }
 .chips { display: flex; gap: 6px; flex-wrap: wrap; }
 .chips button.on { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
@@ -50,3 +60,9 @@ button.danger { color: var(--red); } button.danger.sure { background: var(--red)
 .pill { margin-left: auto; font-size: 12px; font-weight: 600; padding: 2px 9px; border-radius: 10px; color: #fff; white-space: nowrap; }
 .card h2 { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .tone-red .pill { background: var(--red); } .tone-yellow .pill { background: var(--yellow); } .tone-green .pill { background: var(--green); }
+.list { display: flex; flex-direction: column; background: var(--card); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+a.item { display: flex; align-items: center; gap: 10px; padding: 11px 14px; color: var(--fg); text-decoration: none; }
+a.item + a.item { border-top: 1px solid var(--line); }
+a.item .what { flex: 1; display: flex; flex-direction: column; gap: 4px; min-width: 0; overflow-wrap: anywhere; }
+a.item .go { color: var(--muted); font-size: 20px; }
+span.meter { display: flex; } span.meter span { background: var(--green); }

@@ -1,5 +1,6 @@
 """Moving an import's files into the replica (phoneimport/applying.py), and the import through the web
 version's API (web/importing/)"""
+import hashlib
 import os
 import unittest
 from unittest import mock
@@ -8,6 +9,7 @@ from dirdelta.hashes import hashcache
 from dirdelta.known import replicas
 from dirdelta.phoneimport import applying, copying, store
 from dirdelta.web import importing
+from dirdelta.web.importing import checks as checking
 from import_support import ImportTest
 
 
@@ -15,7 +17,7 @@ class ApplyingTest(ImportTest):
     def listed(self, files, copied=True):
         for relpath, contents in files.items():
             self.write(self.source, relpath, contents)
-        found = store.create(self.source, self.dest)
+        found = store.create(self.source, self.dest, 'disk-1')
         self.wait_for(copying.read(self.source, relpaths=list(files) if copied else []).thread)
         return found
 
@@ -65,6 +67,64 @@ class ApplyingTest(ImportTest):
         self.assertEqual({'Camera/a.jpg': store.MOVED}, self.states(found))
 
 
+class FakeDriveTree(object):
+    """A Drive folder's tree: its files' contents, downloaded, trashed, or moved into another"""
+
+    def __init__(self, files):
+        self.files, self.trashed, self.moved = dict(files), [], []
+
+    def fullpath(self):
+        return '/unsorted'
+
+    def get_node(self, relpath):
+        return None
+
+    def fetch_file(self, relpath, local_path):
+        with open(local_path, 'w') as fetched:
+            fetched.write(self.files[relpath])
+
+    def remove_files(self, file_entries):
+        self.trashed.extend(entry.relpath for entry in file_entries)
+
+    def has_file(self, relpath):
+        return relpath in self.files
+
+    def known_hash(self, relpath, algorithm):
+        return hashlib.sha1(self.files[relpath].encode()).hexdigest() if relpath in self.files else None
+
+    def move_files(self, moves, to=None):
+        self.moved.extend(moves)
+        return moves
+
+
+class DriveApplyingTest(ImportTest):
+    def drive_import(self, dest, files):
+        found = store.create('cloud/unsorted', dest, 'disk-1')
+        found.pool.add({relpath: (len(text), 1, hashlib.sha1(text.encode()).hexdigest()) for relpath, text in files.items()})
+        return found
+
+    def test_a_drive_file_is_downloaded_into_its_dir_then_moved_to_drives_trash(self):
+        found = self.drive_import(self.dest, {'a.jpg': 'a', 'b.jpg': 'b'})
+        tree = FakeDriveTree({'a.jpg': 'a', 'b.jpg': 'b'})
+        found.choose(['a.jpg'], 'media/Trip')
+        with mock.patch.object(type(found.pool), 'tree', lambda pool: tree), mock.patch('dirdelta.util.dryrun.DRYRUN', False):
+            self.wait_for(applying.apply(found).thread)
+        with open(os.path.join(self.dest, 'media/Trip/a.jpg')) as moved:
+            self.assertEqual('a', moved.read())
+        self.assertEqual(['a.jpg'], tree.trashed)
+        self.assertEqual({'a.jpg': store.MOVED, 'b.jpg': store.PENDING}, {relpath: info['state'] for relpath, info in found.files().items()})
+
+    def test_into_a_drive_replica_its_moved_in_drive_and_one_there_already_trashed(self):
+        found = self.drive_import('cloud/photos', {'a.jpg': 'a', 'b.jpg': 'b'})
+        source, dest = FakeDriveTree({'a.jpg': 'a', 'b.jpg': 'b'}), FakeDriveTree({'Trip/b.jpg': 'b'})
+        found.choose(['a.jpg', 'b.jpg'], 'Trip')
+        with mock.patch.object(type(found.pool), 'tree', lambda pool: source), \
+                mock.patch('dirdelta.drive.clouddirtree.tree.factory', return_value=dest), mock.patch('dirdelta.util.dryrun.DRYRUN', False):
+            self.wait_for(applying.apply(found).thread)
+        self.assertEqual([('a.jpg', 'Trip/a.jpg')], source.moved)
+        self.assertEqual(['b.jpg'], source.trashed)
+
+
 class ImportPageTest(ImportTest):
     def setUp(self):
         super().setUp()
@@ -84,7 +144,7 @@ class ImportPageTest(ImportTest):
         self.write(self.dest, 'media/Trip/PXL_20260224_1.jpg', 'old one')
         self.write(self.source, 'PXL_20260224_1.jpg', 'old one')
         self.write(self.source, 'PXL_20260225_2.jpg', 'new one')
-        self.assertEqual(self.dest, self.call('GET', '/api/imports')['defaultDest'])
+        self.assertEqual(self.dest, self.call('GET', '/api/imports')['dests'][0]['path'])
         import_id = self.call('POST', '/api/imports/new', body={'source': self.source, 'dest': self.dest})['id']
         self.wait_until(lambda: self.done(import_id))
         state = self.call('GET', '/api/import', {'id': import_id})
@@ -122,6 +182,27 @@ class ImportPageTest(ImportTest):
         self.assertEqual(import_id, self.call('POST', '/api/imports/new', body=body)['id'])
         self.wait_until(lambda: self.done(import_id))
         self.assertEqual({'a.jpg', 'b.jpg'}, set(store.load(import_id).files()))
+
+    def test_another_disk_at_the_replicas_path_is_another_replica(self):
+        self.write(self.source, 'a.jpg', 'a')
+        body = {'source': self.source, 'dest': self.dest}
+        with mock.patch('dirdelta.known.replicanames.identity', return_value='uuid:ONE:/'):
+            import_id = self.call('POST', '/api/imports/new', body=body)['id']
+            self.wait_until(lambda: self.done(import_id))
+        checking._identities.clear()
+        with mock.patch('dirdelta.known.replicanames.identity', return_value='uuid:TWO:/'):
+            self.assertTrue(self.call('GET', '/api/import', {'id': import_id, 'files': '0'})['otherDisk'])
+            self.assertFalse(self.call('POST', '/api/import/apply', body={'id': import_id})['ok'])
+            self.assertNotEqual(import_id, self.call('POST', '/api/imports/new', body=body)['id'])
+
+    def test_the_files_without_a_date_come_after_the_days(self):
+        self.write(self.source, 'IMG_20250101_1.jpg', 'a')
+        os.utime(self.write(self.source, 'x.jpg', 'b'), (0, 0))
+        import_id = self.call('POST', '/api/imports/new', body={'source': self.source, 'dest': self.dest})['id']
+        self.wait_until(lambda: self.done(import_id))
+        days = self.call('GET', '/api/import', {'id': import_id})['days']
+        self.assertEqual('2025-01-01', days[0]['day'])
+        self.assertEqual(2, len(days))
 
     def test_a_dir_outside_the_replica_cant_be_chosen(self):
         self.write(self.source, 'a.jpg', 'a')

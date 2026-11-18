@@ -298,8 +298,9 @@ The map (each module's docstring's first line; generated from the code):
 - `web/`: dirdelta's web version (dirdelta --serve, daemon.py): the same flows as the terminal's, their pickers and messages shown in the browser, so they can be used from a phone on the same network; the phone import's page; and the watch for a phone plugged in or a replica's drive mounted, emailing the user a link (see "The web version" below)
   - `access.py`: Who may use the web version, and where it is: a key in its links (kept in WEB_FILE), checked on every request, and the computer's address on the local network
   - `api.py`: The web version's API for the session's screens (routes()): what the page polls for, and what it does there
-  - `daemon.py`: dirdelta's daemon (run()): the web version, its pickers and messages in the browser, and the watcher, which emails a link when a phone or a known replica appears
-  - `importing/`: The import page's API (routes()): the imports and the phones plugged in, starting one, an import's overview and files by day, thumbnails and files, copying and hashing, choosing dirs, moving them in, ending it; checks.py: what the replicas have (checked again when asked or old), hashing a replica or reading a Drive one again; state.py: what the page is sent
+  - `daemon.py`: dirdelta's daemon (run()): the web version, its pickers and messages in the browser, the flows it starts (flow(): the start menu, a pair's sync, an inbox's sort), and the watcher, which emails a link when a phone or a known replica appears
+  - `home.py`: The dashboard's and the Sync page's API (routes()): the replicas (disk, there or not, hashing, last log entry, last synced), the phones, what's running; the pairs and sorts to start; hashing a replica
+  - `importing/`: The import page's API (routes()): the imports and the phones plugged in and Drive inboxes, starting one, an import's overview and files by day, thumbnails and files, copying and hashing, choosing dirs, moving them in, ending it; checks.py: what the replicas have (checked again when asked or old), hashing a replica or reading a Drive one again; state.py: what the page is sent
   - `messages.py`: dirdelta's messages in the browser (MessagesScreen): lines under a title, Stop as Ctrl-C, Continue, or asking for a line
   - `picker/`: treepicker in the browser: a picker's command (its arguments, its items, its pipes) done by the web page instead of the terminal program
     - `items.py`: A web picker's items, as --updates shows them, each change numbered
@@ -1183,12 +1184,22 @@ every link carries, then a cookie), and a watcher.
   every thread beside it (counts coming in, previews, pictures, AI's suggestions) work unchanged. The
   server keeps each picker's selection, picks and states, so the laptop's browser and a phone's show the
   same screen. Stop raises KeyboardInterrupt in the flow's thread, as Ctrl-C does.
-- The page (`web/static/app.js`) polls `/api/state` (a long poll: each change is numbered) and draws a
-  menu as a list, a tree with checkboxes or state marks, the preview column (pictures from treepicker's
-  pixels), the keys as buttons (named by the keys row, or the `?` help's lines), and messages screens.
+- The pages, each with the same tabs (`markup.js`'s tabBar()): Home (`/`, `home.js`: the dashboard: what's
+  plugged in, each replica's disk, whether it's there, its hashing (to start or pause), its log's last
+  entry and when it was synced), Photos (`/import`, below), Sync (`/sync`, `sync.js`: the favorite
+  pairs, the recent ones and the inbox sorts, each started with a tap: `daemon.flow()`, `main.run_pair()`,
+  `main.run_sort()`; or the start menu, for any other), and Running (`/run`, while a flow runs). The
+  Running page (`web/static/app.js`) polls `/api/state` (a long poll: each change is numbered) and draws
+  a menu as a list, a tree with checkboxes or state marks, the preview column (pictures from
+  treepicker's pixels), the keys as buttons (named by the keys row, or the `?` help's lines), and
+  messages screens.
 - The import (`/import`, `phoneimport/`): from a phone's DCIM (gvfs's MTP mount; `sources.PHONE_DIRS`, the
-  phone called by its model: "Pixel 8") or any dir, into a local replica; one import for each source and
-  replica (`~/.local/share/dirdelta/imports/<id>/`: its choices), and one pool for each source
+  phone called by its model: "Pixel 8"), a Drive inbox (a sort's inbox in Drive: listed from the Drive
+  cache, hashed by Drive, its thumbnails Drive's, downloaded into a local replica and then moved to
+  Drive's trash, or moved within Drive into a Drive one) or any dir, into a replica; one import for each
+  source and replica, the replica known by its disk's identity (`replicanames.identity()`: another disk
+  mounted at its path is another replica, and nothing is moved into it)
+  (`~/.local/share/dirdelta/imports/<id>/`: its choices), and one pool for each source
   (`imports/sources/<key>/`, `pool.py`: the files listed, their copies, SHA-1s and thumbnails), shared by
   its imports, so nothing is read from a phone, or kept, twice. Starting an import only lists the
   source: its files are compared by name and size first (looked up in the destination replica and its
@@ -1203,7 +1214,8 @@ every link carries, then a cookie), and a watcher.
   made on the server, from the copy or else the phone's file (a video's frame needs ffmpeg), else a
   video is drawn by the browser from the file (`/api/import/file`, served by ranges:
   `server.FileReply`), with a Play link; the photos are shown by day, with where that day's photos
-  already are as suggestions; the dirs chosen are kept at each click, and Move puts them in (a file not
+  already are as suggestions, under a sticky meter (how many are decided, the day shown, a jump to the
+  next day with any left); the dirs chosen are kept at each click, and Move puts them in (a file not
   copied yet copied first; a dry run says what it would do). Starting the same source into the same
   replica opens its import (listed again); "End this import" removes it, and the source's pool if no
   other import has that source.

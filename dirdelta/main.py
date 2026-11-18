@@ -69,25 +69,38 @@ def _run(args):
     return dirpick_main.run(args) if _ready(args.dir_a_path) else None
 
 
+def _default_args():
+    return argparse.Namespace(dir_a_path=None, dir_b_path=None, execute=None, sort=False,
+                              max_depth=localscan.DEFAULT_MAX_DEPTH)
+
+
 def start_menu(args=None):
     """The start menu, again after a sync or a sort (or going back from one), until Quit (args: as
     parse_args()'s, without paths; the defaults if None)"""
-    if args is None:
-        args = argparse.Namespace(dir_a_path=None, dir_b_path=None, execute=None, sort=False,
-                                  max_depth=localscan.DEFAULT_MAX_DEPTH)
+    args = args or _default_args()
     while True:
-        known_replicas = replicas.load()
-        chosen = choose_replicas.run(known_replicas)
+        chosen = choose_replicas.run(replicas.load())
         if chosen is None:
             return None
         if isinstance(chosen, choose_replicas.Sort):
-            if _ready(chosen.inbox, chosen.root) and choose_replicas.are_there(chosen):
-                inbox.run(chosen.inbox, chosen.root, known_replicas)
-            continue
-        # The chosen paths in a copy of args (args itself is left as it was parsed)
-        chosen_args = argparse.Namespace(**dict(vars(args), dir_a_path=chosen[0], dir_b_path=chosen[1]))
-        if _ready(*chosen) and choose_replicas.are_there(chosen):
-            dirsync_main.run(chosen_args)
+            run_sort(chosen.inbox, chosen.root)
+        else:
+            run_pair(chosen[0], chosen[1], args)
+
+
+def run_pair(path_a, path_b, args=None):
+    """Sync the replicas at path_a and path_b, once their volumes are mounted and they're there (args:
+    as parse_args()'s, whose paths are ignored; the defaults if None)"""
+    # The paths in a copy of args (args itself is left as it was parsed)
+    chosen_args = argparse.Namespace(**dict(vars(args or _default_args()), dir_a_path=path_a, dir_b_path=path_b))
+    if _ready(path_a, path_b) and choose_replicas.are_there((path_a, path_b)):
+        dirsync_main.run(chosen_args)
+
+
+def run_sort(inbox_path, root_path):
+    """Sort the inbox at inbox_path into the sorted tree at root_path, once they're there"""
+    if _ready(inbox_path, root_path) and choose_replicas.are_there((inbox_path, root_path)):
+        inbox.run(inbox_path, root_path, replicas.load())
 
 
 def _ready(*replica_paths):

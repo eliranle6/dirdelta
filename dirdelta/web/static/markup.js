@@ -84,3 +84,25 @@ function pictureCanvas(encoded) {
 function labelChip([text, color]) {
   return el('span', {class: 'label b-' + (COLORS.includes(color) ? color : 'grey')}, text);
 }
+
+// The pages' tabs, the one shown marked (active: 'home', 'photos', 'sync', 'run'), and Running while a
+// flow runs (a sync, a sort, the start menu: its screens are on /run), checked every few seconds
+const TABS = [['home', '/', 'Home'], ['photos', '/import', 'Photos'], ['sync', '/sync', 'Sync']];
+
+function tabBar(active) {
+  const nav = document.getElementById('tabs');
+  if (!nav) return;
+  const draw = running => nav.replaceChildren(...TABS.map(([key, href, text]) =>
+    el('a', {href, class: key === active ? 'on' : ''}, text)),
+    running || active === 'run' ? el('a', {href: '/run', class: (running ? 'running' : 'idle') + (active === 'run' ? ' on' : '')},
+      running ? el('span', {class: 'dot'}) : '', 'Running') : '');
+  const check = async () => {
+    try {
+      const answer = await (await fetch('/api/running')).json();
+      draw(answer.running);
+    } catch (error) { /* (the next check) */ }
+    setTimeout(check, 5000);
+  };
+  draw(false);
+  check();
+}

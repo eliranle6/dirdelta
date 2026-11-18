@@ -9,6 +9,7 @@ import shutil
 import threading
 
 from dirdelta.phoneimport import store
+from dirdelta.trees import paths
 
 SOURCES_DIR = 'sources'
 MANIFEST = 'pool.json'
@@ -28,6 +29,7 @@ class Pool(object):
         self.source = source
         self.files = files or {}
         self.lock = threading.RLock()
+        self._tree = None
 
     @property
     def folder(self):
@@ -41,25 +43,45 @@ class Pool(object):
         return os.path.join(self.folder, THUMBS_DIR, relpath + '.jpg')
 
     def readable_path(self, relpath):
-        """The file at relpath: its copy, or else the source's (read from the phone), or None"""
+        """The file at relpath: its copy, or else the source's (read from the phone), or None (a Drive
+        file not downloaded)"""
         with self.lock:
             info = self.files.get(relpath)
-        if info is None:
+        if info is None or (self.is_drive and not info['copied']):
             return None
         return self.local_path(relpath) if info['copied'] else os.path.join(self.source, relpath)
 
-    def add(self, listed):
-        """The files listed ({relpath: (size, mtime)}) as they are now: a new one added, a changed one
-        read again (its copy and hash dropped); the ones not listed are kept (a copy may be needed)"""
+    @property
+    def is_drive(self):
+        return paths.is_cloud_path(self.source)
+
+    def tree(self):
+        """A Drive source's tree (from the Drive cache, read once), for its thumbnails and downloads"""
         with self.lock:
-            for relpath, (size, mtime) in listed.items():
+            if self._tree is None:
+                from dirdelta.drive.clouddirtree import tree
+                self._tree = tree.factory(self.source)
+            return self._tree
+
+    def add(self, listed, is_whole=False):
+        """The files listed ({relpath: (size, mtime) or (size, mtime, sha1): a Drive source's know
+        theirs}) as they are now: a new one added, a changed one read again (its copy and hash
+        dropped); the ones not listed are kept (a copy may be needed), unless is_whole (a Drive
+        folder's list: what's not in it was moved or removed) and they aren't copied"""
+        with self.lock:
+            for relpath, listing in listed.items():
+                size, mtime, sha1 = (tuple(listing) + (None,))[:3]
                 found = self.files.get(relpath)
                 if found is not None and (found['size'], found['mtime']) == (size, mtime):
                     continue
                 if found is not None and found['copied']:
                     _remove(self.local_path(relpath))
                     _remove(self.thumb_path(relpath))
-                self.files[relpath] = {'size': size, 'mtime': mtime, 'sha1': None, 'copied': False}
+                self.files[relpath] = {'size': size, 'mtime': mtime, 'sha1': sha1, 'copied': False}
+            if is_whole:
+                for relpath in [relpath for relpath, info in self.files.items() if relpath not in listed and not info['copied']]:
+                    del self.files[relpath]
+            self._tree = None
             self.save()
 
     def copied(self, relpath, sha1):

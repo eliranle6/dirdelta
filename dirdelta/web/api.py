@@ -8,7 +8,8 @@ POLL_WAIT = 20
 
 
 def routes(session, start_flow):
-    """{(method, path): handler(query, body) -> JSON}: start_flow() starts dirdelta's start menu"""
+    """{(method, path): handler(query, body) -> JSON}: start_flow(body) runs the flow asked for (see
+    daemon.flow(): the start menu, a pair's sync, or an inbox's sort)"""
     def state(query, body):
         since = int(query.get('since', 0))
         if since > 0:
@@ -46,7 +47,7 @@ def routes(session, start_flow):
         return {'ok': True}
 
     def start(query, body):
-        return {'ok': session.start(start_flow)}
+        return {'ok': session.start(lambda: start_flow(body))}
 
     return {('GET', '/api/state'): state, ('GET', '/api/preview'): preview, ('GET', '/api/children'): children,
             ('POST', '/api/act'): act, ('POST', '/api/start'): start}

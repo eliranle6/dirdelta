@@ -13,7 +13,7 @@ from dirdelta.web import access
 
 STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static')
 # The pages, by path (the rest of static/ is served by its name)
-PAGES = {'/': 'app.html', '/import': 'import.html'}
+PAGES = {'/': 'home.html', '/sync': 'sync.html', '/run': 'app.html', '/import': 'import.html'}
 
 
 class Reply(object):

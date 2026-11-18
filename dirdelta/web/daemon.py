@@ -8,7 +8,7 @@ import threading
 from dirdelta.sharing import link as sharing
 from dirdelta.ui import frontend
 from dirdelta.util import dryrun
-from dirdelta.web import access, api, importing, server
+from dirdelta.web import access, api, home, importing, server
 from dirdelta.web.session import Session
 from dirdelta.web.watcher import PHONE, Watcher
 
@@ -17,14 +17,14 @@ HOST = '0.0.0.0'
 
 
 def run(port=None):
-    from dirdelta import main
     found = access.settings()
     port = port or found['port']
     key = found['key']
     session = Session()
     frontend.current = session
-    routes = dict(api.routes(session, main.start_menu))
+    routes = dict(api.routes(session, flow))
     routes.update(importing.routes())
+    routes.update(home.routes(session))
     web_server = server.serve(routes, key, HOST, port)
     watcher = Watcher(lambda kind, name, path: _say(kind, name, key, port))
     watcher.start()
@@ -37,6 +37,18 @@ def run(port=None):
         watcher.stop()
         session.cancel()
         web_server.server_close()
+
+
+def flow(body):
+    """Run the flow body asks for: {'kind': 'pair', 'a', 'b'} a sync, {'kind': 'sort', 'inbox', 'root'}
+    an inbox's sort, else the start menu"""
+    from dirdelta import main
+    kind = body.get('kind')
+    if kind == 'pair':
+        return main.run_pair(body['a'], body['b'])
+    if kind == 'sort':
+        return main.run_sort(body['inbox'], body['root'])
+    return main.start_menu()
 
 
 def _say(kind, name, key, port):

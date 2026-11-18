@@ -395,23 +395,21 @@ function renderMessages(screen, isNew) {
   if (!screen.asking) window.scrollTo(0, document.body.scrollHeight);
 }
 
-// Home: nothing shown
+// Nothing shown: a flow ended (what it printed last), or none ran
 
 function renderHome() {
-  setTop('dirdelta', []);
+  setTop('Running', []);
   const log = view.log.map(([text, color]) => el('div', {class: color ? 'c-' + color : ''}, segmentsSpan(text)));
-  document.getElementById('main').replaceChildren(el('div', {class: 'home'},
-    el('div', {class: 'card'}, el('h2', {}, 'Sync and sort'),
-      el('p', {}, 'The start menu: choose two replicas to sync, or an inbox to sort.'),
-      el('button', {class: 'primary', disabled: view.running, onclick: () => api('POST', '/api/start')},
-        view.running ? el('span', {}, 'Starting', el('span', {class: 'dots'})) : 'Open the start menu')),
-    el('div', {class: 'card'}, el('h2', {}, 'Import photos'),
-      el('p', {}, 'Copy a phone’s photos (or any folder’s), see which you have already, and choose a folder for each.'),
-      el('button', {onclick: () => { location.href = '/import'; }}, 'Imports')),
-    log.length ? el('div', {class: 'lines'}, log) : ''));
+  document.getElementById('main').replaceChildren(el('div', {class: 'card'},
+    el('h2', {}, view.running ? 'Starting' : 'Nothing is running'),
+    el('p', {class: 'note'}, view.running ? waitingDots() : 'Start a sync or a sort from Sync.'),
+    view.running ? '' : el('div', {class: 'row2'}, el('a', {class: 'button primary', href: '/sync'}, 'Go to Sync'))),
+    log.length ? el('div', {class: 'lines'}, el('div', {class: 'section-title'}, 'Last run'), log) : '');
   document.getElementById('status').replaceChildren();
   document.getElementById('actions').replaceChildren();
 }
+
+function waitingDots() { return el('span', {class: 'dots', style: 'animation-delay:-' + (Date.now() % 1600) + 'ms'}); }
 
 function setTop(title, labels) {
   document.getElementById('crumbs').replaceChildren(segmentsSpan(title || ''));
@@ -419,4 +417,5 @@ function setTop(title, labels) {
   document.title = (title || 'dirdelta').split(' > ').pop();
 }
 
+tabBar('run');
 poll();

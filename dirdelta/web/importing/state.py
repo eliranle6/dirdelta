@@ -4,14 +4,17 @@ the replicas, moving), and its files by day, each with where the replicas have i
 import datetime
 import time
 
+from dirdelta.known import replicanames
 from dirdelta.phoneimport import applying, copying, overview, sources, suggest
 from dirdelta.util import dryrun
 from dirdelta.web.importing import checks as checking
 
 
 def summary(found):
-    return {'id': found.id, 'source': sources.describe(found.source), 'dest': found.dest, 'created': found.created,
-            'counts': found.counts()}
+    return {'id': found.id, 'source': sources.describe(found.source), 'dest': found.dest,
+            'destDisk': replicanames.disk_name(found.dest),
+            'otherDisk': found.dest_id is not None and found.dest_id != checking.identity(found.dest),
+            'created': found.created, 'counts': found.counts()}
 
 
 def import_state(found, check, with_files=True):
@@ -42,7 +45,11 @@ def _days(files, haves, suggester):
     """The files by day (each with where the replicas have it, and how sure that is), and the dirs
     suggested for each day"""
     days = {}
-    for relpath, info in sorted(files.items(), key=lambda item: (suggest.date_of(item[0], item[1]['mtime']) or 0, item[0])):
+    def by_day(item):
+        # (The files without a date last)
+        day = suggest.date_of(item[0], item[1]['mtime'])
+        return day is None, day or datetime.date.min, item[0]
+    for relpath, info in sorted(files.items(), key=by_day):
         have = [{'replica': replica, 'relpath': where, 'how': overview.match(info, how)}
                 for replica, where, how in haves[relpath]] if haves is not None else None
         days.setdefault(str(suggest.date_of(relpath, info['mtime'])), []).append(dict(info, rel=relpath, have=have))

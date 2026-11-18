@@ -1,9 +1,13 @@
 """Where an import's files come from: the phones plugged in (phones(): Android's MTP, mounted by GNOME's
-gvfs under GVFS_DIR), or any local dir; and a source's media files (media_files()), wherever they are in
-it, since phones keep them differently (DCIM/Camera, Pictures/, WhatsApp's dirs...)"""
+gvfs under GVFS_DIR), a Drive folder (an inbox of the sorts, e.g. one the phone backs up to:
+drive_inboxes()), or any local dir; and a source's media files (media_files()), wherever they are in it,
+since phones keep them differently (DCIM/Camera, Pictures/, WhatsApp's dirs...)"""
 import glob
 import os
 
+from dirdelta.drive import drivecache
+from dirdelta.known import replicas
+from dirdelta.trees import paths
 from dirdelta.util import media
 
 GVFS_DIR = '/run/user/%d/gvfs' % (os.getuid(),)
@@ -48,15 +52,38 @@ def _is_serial(word):
     return len(word) >= 6 and word.isalnum() and any(char.isdigit() for char in word)
 
 
+def drive_inboxes():
+    """[(name, path)] of the Drive folders photos are sorted from: the sorts' inboxes in Drive"""
+    found = dict.fromkeys(inbox for inbox, _ in replicas.load().sorts if paths.is_cloud_path(inbox))
+    return [(os.path.basename(path.rstrip('/')), path) for path in found]
+
+
 def describe(source):
-    """{'device': the phone's name (or None, for a local dir), 'inner': the path in it (in its storage:
-    'DCIM'; a local dir's whole path), 'full': source}"""
+    """{'device': the phone's name (or None, for a dir), 'drive': whether it's a Drive folder, 'inner':
+    the path in it (in a phone's storage: 'DCIM'; a dir's whole path), 'full': source}"""
+    if paths.is_cloud_path(source):
+        return {'device': None, 'drive': True, 'inner': source, 'full': source}
     parts = source.split(os.sep)
     mount = next((index for index, part in enumerate(parts) if part.startswith(MTP_PREFIX)), None)
     if mount is None or not source.startswith(GVFS_DIR):
-        return {'device': None, 'inner': source, 'full': source}
+        return {'device': None, 'drive': False, 'inner': source, 'full': source}
     inner = parts[mount + 2:] or parts[mount + 1:]
-    return {'device': device_name(parts[mount]), 'inner': '/'.join(inner), 'full': source}
+    return {'device': device_name(parts[mount]), 'drive': False, 'inner': '/'.join(inner), 'full': source}
+
+
+def drive_media_files(source):
+    """{relpath: (size, mtime, sha1)} of the media files under the Drive folder source, as the Drive
+    cache has them (Drive's own SHA-1s: nothing to hash). Raises OSError if the cache has no such folder."""
+    found = {}
+    try:
+        for entry in drivecache.entries(paths.path_in_cloud(source)):
+            name = os.path.basename(entry.relpath)
+            if entry.is_dir or entry.size is None or not media.is_media(name) or name.startswith('.'):
+                continue
+            found[entry.relpath] = (entry.size, int(entry.modified or 0), entry.hashes.get('sha1'))
+    except drivecache.DriveCacheError as error:
+        raise OSError(str(error))
+    return found
 
 
 def media_files(source, is_stopped=lambda: False):

@@ -90,3 +90,19 @@ input[type=search], input[type=text] { font: inherit; width: 100%; padding: 8px 
 /* Something waited for: dots that go on (. .. ...) */
 .dots::after { content: ''; display: inline-block; width: 1.2em; text-align: left; animation: dots 1.6s steps(1) infinite; }
 @keyframes dots { 0% { content: ''; } 25% { content: '.'; } 50% { content: '..'; } 75% { content: '...'; } }
+/* The pages' tabs */
+nav#tabs { display: flex; gap: 4px; flex-basis: 100%; overflow-x: auto; margin: 2px -4px -9px; }
+nav#tabs a { padding: 7px 12px 8px; color: var(--muted); text-decoration: none; font-weight: 600; border-bottom: 3px solid transparent; white-space: nowrap; }
+nav#tabs a.on { color: var(--fg); border-bottom-color: var(--accent); }
+nav#tabs a.running { color: var(--green); margin-left: auto; display: flex; align-items: center; gap: 6px; }
+nav#tabs .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); animation: pulse 1.4s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: .25; } }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; }
+.card h2 { margin: 0; font-size: 16px; }
+.section-title { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 8px 2px -2px; }
+a.button { font: inherit; border: 1px solid var(--line); background: var(--card); color: var(--fg); border-radius: 8px;
+  padding: 7px 12px; text-decoration: none; display: inline-block; }
+a.button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); }
+.row2 { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.note { color: var(--muted); font-size: 13px; overflow-wrap: anywhere; }
+nav#tabs a.idle { margin-left: auto; }

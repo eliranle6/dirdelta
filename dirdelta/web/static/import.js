@@ -59,47 +59,63 @@ function pathLine(inner, full) {
   return el('p', {class: 'where'}, inner ? el('span', {}, inner) : '', toggle, whole);
 }
 
+// A replica to choose, by its name and disk
+function destText(dest) { return dest.name + ' · ' + (dest.kind === 'drive' ? 'Drive' : dest.disk); }
+
 async function loadList() {
   const data = await api('GET', '/api/imports');
   document.getElementById('labels').replaceChildren(labelChip(data.label));
-  const destSelect = () => el('select', {class: 'dest'}, data.dests.map(dest =>
-    el('option', {value: dest, selected: dest === data.defaultDest}, dest)));
-  const start = async (source, select) => {
-    const answer = await api('POST', '/api/imports/new', {source, dest: select.value});
+  const start = async (source, dest) => {
+    const answer = await api('POST', '/api/imports/new', {source, dest});
     if (answer.error) document.getElementById('status').textContent = answer.error;
     else location.href = importLink(answer.id);
   };
-  // A source's row: into which replica, and Start (or Open, if there's an import of it into that one)
-  const row = (label, source, select) => {
-    const open = () => data.imports.find(found => found.source.full === source() && found.dest === select.value);
-    const button = el('button', {class: 'primary', onclick: () => open() ? location.href = importLink(open().id) : start(source(), select)});
-    const named = () => { button.textContent = open() ? 'Open its import' : 'Start'; };
+  // A source's card: which replica its photos go into, and Start (or Open, if it has an import there)
+  const sourceCard = (title, sub, full, source, dests, extra) => {
+    if (!dests.length) return el('div', {class: 'card'}, el('h2', {}, title), el('p', {class: 'note'}, 'No replica it can go into.'));
+    const select = el('select', {}, dests.map(dest => el('option', {value: dest.path}, destText(dest))));
+    const open = () => data.imports.find(found => found.source.full === source() && found.dest === select.value && !found.otherDisk);
+    const button = el('button', {class: 'primary', onclick: () => open() ? location.href = importLink(open().id) : start(source(), select.value)});
+    const named = () => { button.textContent = open() ? 'Open' : 'Start'; };
     select.addEventListener('change', named);
-    if (label) label.addEventListener('input', named);
+    if (extra) extra.addEventListener('input', named);
     named();
-    return el('div', {class: 'row2'}, label || '', el('span', {class: 'note'}, 'into'), select, button);
+    return el('div', {class: 'card'}, el('h2', {}, title), sub || full ? pathLine(sub, full) : '', extra || '',
+      el('div', {class: 'row2'}, el('span', {class: 'note'}, 'into'), select, button));
   };
-  const cards = [];
-  if (!data.dests.length) cards.push(el('div', {class: 'card'}, el('p', {}, 'No local replica is known yet: sync one first.')));
-  cards.push(el('div', {class: 'card'}, el('h2', {}, 'Phones plugged in'),
-    data.phones.length ? data.phones.map(phone => el('div', {},
-      el('b', {}, phone.name), pathLine(phone.inner, phone.full), row(null, () => phone.path, destSelect()))) :
-      el('p', {}, 'None. Plug the phone in by USB and choose "File transfer" on it; it shows here (this page checks again every few seconds).')));
-  const folder = el('input', {type: 'text', placeholder: '/path/to/a/folder'});
-  cards.push(el('div', {class: 'card'}, el('h2', {}, 'Import from a folder'), row(folder, () => folder.value, destSelect())));
+  const parts = [];
+  // What's started: each import's progress (decided of all)
   if (data.imports.length) {
-    cards.push(el('div', {class: 'card'}, el('h2', {}, 'Imports'), data.imports.map(found => el('div', {class: 'row2'},
-      el('a', {href: importLink(found.id)}, sourceName(found.source) + (found.source.device ? ' › ' + found.source.inner : '') +
-        ' → ' + replicaName(found.dest)),
-      el('span', {class: 'note'}, countsText(found.counts))))));
+    parts.push(el('div', {class: 'section-title'}, 'In progress'), el('div', {class: 'list'}, data.imports.map(found => {
+      const counts = found.counts, total = counts.pending + counts.copied + counts.moved + counts.skipped;
+      const decided = counts.moved + counts.skipped;
+      return el('a', {class: 'item', href: importLink(found.id)},
+        el('span', {class: 'what'}, el('b', {}, sourceName(found.source) + ' → ' + replicaName(found.dest)),
+          el('span', {class: 'note'}, found.otherDisk ? 'Its replica\'s disk isn\'t the one there now' :
+            decided + ' of ' + total + ' done · ' + countsText(counts, found.source)),
+          el('span', {class: 'meter'}, el('span', {style: 'width:' + percent(decided, total)}))),
+        el('span', {class: 'go'}, '›'));
+    })));
   }
+  parts.push(el('div', {class: 'section-title'}, 'Phones plugged in'));
+  parts.push(...(data.phones.length ? data.phones.map(phone => sourceCard('Photos on ' + phone.name, phone.inner, phone.full, () => phone.path, phone.dests)) :
+    [el('p', {class: 'note'}, 'None. Plug a phone in by USB and choose "File transfer" on it; it shows here within a few seconds.')]));
+  if (data.drive.length) {
+    parts.push(el('div', {class: 'section-title'}, 'In Drive'));
+    parts.push(...data.drive.map(folder => sourceCard('Photos in Drive: ' + folder.name, '', folder.path, () => folder.path, folder.dests)));
+  }
+  parts.push(el('div', {class: 'section-title'}, 'From a folder'));
+  const folder = el('input', {type: 'text', placeholder: '/path/to/a/folder'});
+  parts.push(sourceCard('A folder on this computer', '', '', () => folder.value, data.dests, folder));
   const main = document.getElementById('main');
-  if (!main.contains(document.activeElement)) main.replaceChildren(...cards);
+  if (!main.contains(document.activeElement)) main.replaceChildren(...parts);
   later(4);
 }
 
-function countsText(counts) {
-  return [['pending', 'on the phone only'], ['copied', 'copied'], ['moved', 'moved'], ['skipped', 'skipped']]
+// How many files are in each state (source: where they come from, said of the ones not copied yet)
+function countsText(counts, source) {
+  const only = source && source.drive ? 'in Drive only' : source && !source.device ? 'not copied' : 'on the phone only';
+  return [['pending', only], ['copied', 'copied'], ['moved', 'moved'], ['skipped', 'skipped']]
     .filter(([key]) => counts[key]).map(([key, text]) => counts[key] + ' ' + text).join(', ') || 'nothing yet';
 }
 
@@ -162,18 +178,19 @@ function renderOverview() {
   const button = (text, onclick, cls) => el('button', {class: cls || '', onclick}, text);
   const cards = [];
 
-  const thing = data.source.device ? 'phone' : 'folder';
+  const drive = data.source.drive;
+  const thing = data.source.device ? 'phone' : drive ? 'Drive folder' : 'folder';
   const listing = reading && reading.phase === 'listing';
   const [tone, toneText] = !over.total ? ['red', listing ? waiting('Reading the ' + thing) : 'Not read yet'] :
     over.unhashed.files ? ['yellow', reading && reading.phase === 'copying' ? waiting('Hashing') : 'Name + size only'] : ['green', 'Hashed'];
   const source = el('div', {class: 'card tone-' + tone},
-    el('h2', {}, data.source.device ? 'Photos on ' + data.source.device : 'Photos in ' + sourceName(data.source),
+    el('h2', {}, data.source.device ? 'Photos on ' + data.source.device : 'Photos in ' + (drive ? 'Drive: ' : '') + sourceName(data.source),
       el('span', {class: 'pill'}, toneText)),
     pathLine(data.source.device ? data.source.inner : '', data.source.full));
   if (listing && !over.total) source.append(el('p', {}, waiting('Listing its files')));
   else {
     source.append(link(over.total, 'files' + (listing ? ' (listing again)' : ''), 'all'));
-    source.append(el('div', {class: 'stat'}, el('b', {}, over.hashed), el('span', {}, 'hashed (copied to this computer)')),
+    source.append(el('div', {class: 'stat'}, el('b', {}, over.hashed), el('span', {}, drive ? 'hashed (by Drive)' : 'hashed (copied to this computer)')),
       el('div', {class: 'meter'}, el('div', {style: 'width:' + percent(over.hashed, over.total)})));
     if (reading && reading.phase === 'copying') {
       source.append(el('p', {}, waiting('Copying and hashing: ' + reading.copied + ' of ' + reading.asked)));
@@ -191,8 +208,13 @@ function renderOverview() {
   }
   if (reading && reading.message) source.append(el('p', {class: 'c-orange'}, reading.message));
   if (!reading || reading.phase === 'done' || reading.phase === 'waiting') {
-    source.append(el('div', {class: 'row2'}, button(data.source.device ? "List the phone's files again" : "List the folder's files again",
+    source.append(el('div', {class: 'row2'}, button(data.source.device ? "List the phone's files again" : drive ? 'Read it from Drive again' : "List the folder's files again",
       () => act('/api/import/read', {which: 'list'}))));
+  }
+  if (data.otherDisk) {
+    cards.push(el('div', {class: 'card tone-red'}, el('h2', {}, 'Another disk is there'),
+      el('p', {}, 'The disk mounted at ' + data.dest + ' now (' + data.destDisk + ') isn\'t the one this import was started with. ' +
+        'Nothing is moved until that disk is back; start a new import to sort into this one.')));
   }
   cards.push(source);
 
@@ -201,7 +223,7 @@ function renderOverview() {
   for (const replica of data.replicas) {
     const counted = over.replicas.find(found => found.path === replica.path);
     const card = el('div', {class: 'card'}, el('h2', {}, 'Already in “' + replica.name + '”'),
-      el('p', {class: 'kind'}, replica.kind === 'drive' ? 'Google Drive replica' : 'Local disk replica'),
+      el('p', {class: 'kind'}, replica.kind === 'drive' ? 'Google Drive replica' : 'Local disk replica · ' + replica.disk),
       pathLine('', replica.path));
     if (!over.checked) card.append(el('p', {}, checked));
     else {
@@ -310,38 +332,91 @@ function renderImport() {
   const parts = [];
   parts.push(el('div', {class: 'note'}, sourceName(data.source) + ' → ' + data.dest + '. Checked against: ' + data.checked.map(replicaName).join(', ') +
     '', data.indexed ? '' : [' (', waiting('checking them'), ')'], data.errors.length ? '. ' + data.errors.join('; ') : ''));
+  const meter = sortMeter();
   if (!focused) {
     const input = el('input', {type: 'text', id: 'target', list: 'folders', placeholder: 'A folder in ' + data.dest.split('/').pop() + ' (type to find one, or a new one)',
       value: page.target, oninput: event => { page.target = event.target.value; }});
-    parts.push(el('div', {class: 'bar'}, input, el('datalist', {id: 'folders'}, data.folders.map(dir => el('option', {value: dir}))),
+    parts.push(el('div', {class: 'sticky'}, meter, el('div', {class: 'bar'}, input, el('datalist', {id: 'folders'}, data.folders.map(dir => el('option', {value: dir}))),
       el('button', {class: 'primary', onclick: () => assign([...page.selected], page.target)}, 'Selected here'),
       el('button', {onclick: () => assign([...page.selected], null, true)}, 'Skip selected'),
-      el('button', {onclick: () => { page.selected.clear(); renderImport(); }}, 'Unselect')));
+      el('button', {onclick: () => { page.selected.clear(); renderImport(); }}, 'Unselect'))));
     const filters = [['all', 'All'], ['open', 'Not chosen'], ['none', 'In no replica'], ['have', 'Have already'], ['chosen', 'Chosen']];
     if (!filters.some(([key]) => key === page.filter.kind)) filters.unshift([page.filter.kind, filterText()]);
     parts.push(el('div', {class: 'chips'}, el('a', {class: 'button', href: '#'}, '‹ Overview'),
       filters.map(([key, text]) => el('a', {class: 'button' + (page.filter.kind === key ? ' on' : ''),
         href: key === page.filter.kind ? location.hash : photosLink(key)}, text))));
   } else {
-    parts.push(document.querySelector('.bar'), document.querySelector('.chips'));
+    const sticky = document.querySelector('.sticky');
+    sticky.firstChild.replaceWith(meter);
+    parts.push(sticky, document.querySelector('.chips'));
   }
   for (const day of data.days) {
     const files = day.files.filter(passes);
     if (!files.length) continue;
+    const undecided = files.filter(isUndecided).length;
     const open = day.files.filter(file => file.state !== 'moved').map(file => file.rel);
     const header = el('h2', {}, day.day === 'None' ? 'No date' : day.day, el('small', {}, day.files.length + ' files'),
       el('button', {onclick: () => { open.forEach(rel => page.selected.add(rel)); renderImport(); }}, 'Select the day'),
       day.suggested.map(dir => el('button', {onclick: () => assign(open, dir)}, 'All to ' + dir)),
       open.length && day.files.every(file => file.state === 'moved' || (file.have || []).length) ?
         el('button', {onclick: () => assign(open, null, true)}, 'Skip the day: all there already') : '');
-    parts.push(el('div', {class: 'day'}, header, el('div', {class: 'grid'}, files.map(photo))));
+    parts.push(el('div', {class: 'day', 'data-day': day.day === 'None' ? 'No date' : day.day, 'data-undecided': undecided},
+      header, el('div', {class: 'grid'}, files.map(photo))));
   }
   if (data.days.length && !data.days.some(day => day.files.some(passes))) parts.push(el('p', {class: 'note'}, 'None.'));
   if (!data.days.length) parts.push(el('p', {class: 'note'}, data.reading && data.reading.phase === 'listing' ? waiting('Listing the files') : 'No media files.'));
   if (data.applying) parts.push(el('div', {class: 'lines'}, data.applying.lines.map(([text, color]) => el('div', {class: color ? 'c-' + color : ''}, text))));
   main.replaceChildren(...parts);
   renderFooter();
+  fitHeader();
+  showPosition();
 }
+
+function isUndecided(file) { return file.state !== 'moved' && file.state !== 'skipped' && !file.target; }
+
+// How far the sorting is: the files decided (a folder chosen, skipped or moved) of all, a bar, where the
+// page is (which day of the ones shown), and a jump to the next day with files left to decide
+function sortMeter() {
+  const files = page.data.days.flatMap(day => day.files);
+  const decided = files.filter(file => !isUndecided(file)).length;
+  const share = files.length ? Math.floor(100 * decided / files.length) : 0;
+  return el('div', {class: 'sortmeter'},
+    el('div', {class: 'big'}, el('b', {}, share + '%'), el('span', {}, decided + ' of ' + files.length + ' decided'),
+      el('button', {onclick: () => window.scrollTo({top: 0, behavior: 'smooth'})}, 'Top'),
+      el('button', {onclick: nextUndecided}, 'Next undecided ›')),
+    el('div', {class: 'meter thick'}, el('div', {class: 'sure', style: 'width:' + share + '%'})),
+    el('div', {id: 'position', class: 'note'}));
+}
+
+// The day at the top of what's shown (under the sticky bar), and its number among the days shown
+function currentDay() {
+  const days = [...document.querySelectorAll('#main .day')];
+  const under = (document.querySelector('.sticky') || {getBoundingClientRect: () => ({bottom: 0})}).getBoundingClientRect().bottom;
+  let at = 0;
+  days.forEach((day, index) => { if (day.getBoundingClientRect().top <= under + 20) at = index; });
+  return {days, at};
+}
+
+function showPosition() {
+  const shown = document.getElementById('position');
+  if (!shown) return;
+  const {days, at} = currentDay();
+  shown.textContent = days.length ? 'Day ' + (at + 1) + ' of ' + days.length + ' · ' + days[at].dataset.day : '';
+}
+
+function nextUndecided() {
+  const {days, at} = currentDay();
+  const next = days.slice(at + 1).concat(days.slice(0, at + 1)).find(day => +day.dataset.undecided > 0);
+  if (next) next.scrollIntoView({behavior: 'smooth'});
+}
+
+// The sticky bar sits under the header, whatever its height (the tabs may wrap)
+function fitHeader() {
+  document.documentElement.style.setProperty('--head', document.getElementById('top').offsetHeight + 'px');
+}
+
+window.addEventListener('scroll', () => requestAnimationFrame(showPosition), {passive: true});
+window.addEventListener('resize', fitHeader);
 
 const VIDEO = /\.(mp4|m4v|mov|3gp|webm|mkv)$/i;
 // Each file's picture, kept across the redraws (a video isn't loaded again at each)
@@ -405,7 +480,7 @@ async function assign(rels, target, skip) {
 function renderFooter() {
   const data = page.data;
   const chosen = data.overview.chosen;
-  const status = [countsText(data.counts)];
+  const status = [countsText(data.counts, data.source)];
   if (page.selected.size) status.push(page.selected.size + ' selected');
   document.getElementById('status').textContent = status.join(' · ');
   const buttons = [];
@@ -415,4 +490,5 @@ function renderFooter() {
   document.getElementById('actions').replaceChildren(...buttons);
 }
 
+tabBar('photos');
 load();

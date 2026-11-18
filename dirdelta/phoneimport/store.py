@@ -21,13 +21,15 @@ _lock = threading.Lock()
 
 class Import(object):
     """An import: its id (its folder's name), source (the dir its files come from: a phone's DCIM, or
-    any), dest (the local replica they're moved into), and choices: {relpath: {'target' (the dir in
+    any), dest (the replica they're moved into) and dest_id (that replica's identity, replicanames':
+    its disk's, so another disk mounted at its path is another replica), and choices: {relpath: {'target' (the dir in
     dest chosen for it, or None), 'state' (MOVED, SKIPPED, or None)}}"""
 
-    def __init__(self, import_id, source, dest, choices=None, created=None):
+    def __init__(self, import_id, source, dest, dest_id=None, choices=None, created=None):
         self.id = import_id
         self.source = source
         self.dest = dest
+        self.dest_id = dest_id
         self.choices = choices or {}
         self.created = created or time.time()
         self.lock = threading.RLock()
@@ -81,7 +83,7 @@ class Import(object):
             os.makedirs(self.folder, exist_ok=True)
             temp_path = os.path.join(self.folder, MANIFEST + '.tmp')
             with open(temp_path, 'w') as manifest:
-                json.dump({'source': self.source, 'dest': self.dest, 'created': self.created,
+                json.dump({'source': self.source, 'dest': self.dest, 'destId': self.dest_id, 'created': self.created,
                            'choices': self.choices}, manifest)
             os.replace(temp_path, os.path.join(self.folder, MANIFEST))
 
@@ -96,15 +98,22 @@ class Import(object):
             source_pool.remove()
 
 
-def find(source, dest):
-    """The import of source into dest, or None"""
-    return next((found for found in all_imports() if (found.source, found.dest) == (source, dest)), None)
+def find(source, dest, dest_id):
+    """The import of source into the replica dest_id (at dest), or None (one made before imports kept
+    their replica's identity is taken as that one's, and keeps it from now on)"""
+    for found in all_imports():
+        if (found.source, found.dest) == (source, dest) and found.dest_id in (None, dest_id):
+            if found.dest_id is None:
+                found.dest_id = dest_id
+                found.save()
+            return found
+    return None
 
 
-def create(source, dest):
-    """The import of source into dest: the one there is, or a new one, saved (its id: when it
-    started, and a number if that's taken)"""
-    found = find(source, dest)
+def create(source, dest, dest_id):
+    """The import of source into the replica dest_id (at dest): the one there is, or a new one, saved
+    (its id: when it started, and a number if that's taken)"""
+    found = find(source, dest, dest_id)
     if found is not None:
         return found
     base = time.strftime('%Y-%m-%d-%H%M%S')
@@ -112,7 +121,7 @@ def create(source, dest):
     while os.path.exists(os.path.join(IMPORTS_DIR, import_id)):
         number += 1
         import_id = '%s-%d' % (base, number)
-    found = Import(import_id, source, dest)
+    found = Import(import_id, source, dest, dest_id)
     found.save()
     with _lock:
         _loaded[(IMPORTS_DIR, import_id)] = found
@@ -132,7 +141,8 @@ def load(import_id):
             content = json.load(manifest)
     except (OSError, ValueError):
         return None
-    found = Import(import_id, content['source'], content['dest'], content.get('choices', {}), content.get('created'))
+    found = Import(import_id, content['source'], content['dest'], content.get('destId'), content.get('choices', {}),
+                   content.get('created'))
     with _lock:
         return _loaded.setdefault((IMPORTS_DIR, import_id), found)
 
