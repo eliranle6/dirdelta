@@ -74,3 +74,18 @@ span.meter { display: flex; } span.meter span { background: var(--green); }
 .bar input { flex: 1 1 160px; min-width: 0; }
 .card.quiet { background: transparent; }
 h2.head { display: flex; align-items: center; gap: 8px; }
+
+/* The Inboxes tab's two kinds, each a block of its own, with a jump to each at the top */
+.kindjumps { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.kindjump { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-radius: 10px; text-decoration: none; color: var(--fg);
+  background: var(--card); border: 1px solid var(--line); border-top: 4px solid var(--kind); font-weight: 600; }
+.kindjump .count { margin-left: auto; font-size: 18px; color: var(--kind); }
+.kind { display: flex; flex-direction: column; gap: 10px; padding: 12px; border-radius: 14px; border: 2px solid var(--kind);
+  background: color-mix(in srgb, var(--kind) 7%, var(--bg)); scroll-margin-top: calc(var(--head, 120px) + 8px); }
+.kind-unsorted { --kind: var(--blue); }
+.kind-phones { --kind: var(--magenta); }
+.kindhead { display: flex; gap: 10px; align-items: flex-start; }
+.kindhead > .icon { color: var(--kind); margin-top: 2px; }
+.kindhead > .icon svg { width: 26px; height: 26px; }
+.kindhead h2 { margin: 0; font-size: 18px; color: var(--kind); }
+.kindhead p { margin: 2px 0 0; color: var(--muted); font-size: 14px; }

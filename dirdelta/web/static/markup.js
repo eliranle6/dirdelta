@@ -254,19 +254,19 @@ function folderAdder(as) {
       el('div', {class: 'dirs'}, rows),
       note ? el('div', {class: 'note bad'}, note) : '',
       el('div', {class: 'row2'}, el('button', {class: 'primary', disabled: isRoot || !!b.error || b.known, onclick: () => add(b.path)},
-        isRoot ? 'Open a folder to choose it' : 'Add this folder as ' + what),
+        isRoot ? 'Open a folder to choose it' : as === 'inbox' ? 'Add this unsorted folder' : 'Add this folder as ' + what),
         el('button', {onclick: () => { browsing = null; note = ''; draw(); }}, 'Back')));
   }
 
   function draw() {
     if (!isOpen) {
-      box.replaceChildren(el('button', {class: 'addbutton', onclick: () => { isOpen = true; draw(); }}, '+ Add ' + what));
+      box.replaceChildren(el('button', {class: 'addbutton', onclick: () => { isOpen = true; draw(); }}, '+ Add ' + (as === 'inbox' ? 'an unsorted folder' : what)));
       return;
     }
     box.replaceChildren(el('div', {class: 'card'},
-      el('div', {class: 'section-title'}, 'Add ' + what),
+      el('div', {class: 'section-title'}, 'Add ' + (as === 'inbox' ? 'an unsorted folder' : what)),
       el('p', {class: 'note'}, as === 'inbox' ?
-        'A folder new files come into, to be sorted into your replicas: e.g. unsorted in Google Drive. (A phone is one while it\'s plugged in.)' :
+        'A folder new files come into, to be sorted into your replicas: e.g. unsorted in Google Drive. (A phone needs no adding: it\'s here while it\'s plugged in.)' :
         'A copy of your files: a folder on this computer, on a disk, or in Google Drive.'),
       browsing ? browser() : el('div', {class: 'row2'},
         el('button', {onclick: () => go('')}, icon('laptop'), 'On this computer'),

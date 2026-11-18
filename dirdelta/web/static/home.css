@@ -32,3 +32,9 @@ button.item { border: 0; border-radius: 0; background: none; }
 .statename { font-size: 12px; font-weight: 700; }
 .entry-label { font-style: normal; font-weight: 600; }
 .list .item.stacked { flex-direction: column; align-items: stretch; }
+
+/* Home's inboxes, of each kind, in the Inboxes tab's colors */
+.kindlist { display: flex; flex-direction: column; gap: 4px; }
+.kind-unsorted { --kind: var(--blue); } .kind-phones { --kind: var(--magenta); }
+.kindlist .kindlabel { font-size: 13px; font-weight: 700; color: var(--kind); margin: 2px 2px 0; }
+.kindlist .list { border-left: 4px solid var(--kind); }

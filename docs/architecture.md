@@ -1193,17 +1193,19 @@ every link carries, then a cookie), and a watcher.
   their inboxes are where new files come in (sorted into that tree: into any replica, then synced to the
   others). See `known/replica_lists.py`: the replicas and inboxes added, or used by a sync or a sort.
   Home (`/`, `home.js`): the whole picture: tiles (the replicas there, the last sync, the hashing, Drive's
-  oldest list), the replicas plugged in (each disk replica mounted or not; Drive signed in or not, and
+  oldest list, the inboxes there of each kind and how many files are left to sort), the replicas plugged in (each disk replica mounted or not; Drive signed in or not, and
   what of the user's it holds), each pair's sync status (`syncstate`'s mark, ≡ » « ≠ ?; how much was in
   step, the files both had of all either had, by the totals a sync notes with its comparison since
   2026-11-18; and how stale that is: when it was compared, and which replica changed since) with Sync,
-  and the inboxes (phones too) with how far each one's sorting is. Replicas (`/replicas`, the same
+  and the inboxes of each kind (as Inboxes has them) with how far each one's sorting is. Replicas (`/replicas`, the same
   script; `/sync`, the old tab's address, too): "+ Add a replica" (`web/adding.py`), each replica's card
   (icon, disk, status chips: mounted, synced, hashed, its list read; log entry; hashing to start or pause;
   Forget), every pair's sync status with Sync (`daemon.flow()`, `main.run_pair()`), and the start menu
   for any other two folders. Inboxes (`/inboxes`, `import.js`; `/import` and `/unsorted`, the old tabs'
-  addresses, too): "+ Add an inbox", then a card for each: the phones plugged in, the user's inboxes,
-  and any other source an import of theirs has (a phone unplugged), each with its sorting's progress,
+  addresses, too): its two kinds each in a block of its own, in a color of its own, with a jump to each on
+  top (so neither is missed): Unsorted folders (the user's inboxes, "+ Add an unsorted folder") and
+  Phones' photos (the phones plugged in, and any other source an import of theirs has: a phone
+  unplugged); a card for each inbox, each with its sorting's progress,
   the replica it's sorted into (the one its import has, else the likeliest: `checks.destinations()`; a
   choice only if there are several), "Sort photos" (its import, below) and, for a folder, "Sort all
   files" (the sort's own screens: `main.run_sort()`), and Forget. The running flow's page (`/run`)

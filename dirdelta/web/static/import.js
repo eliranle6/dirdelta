@@ -98,15 +98,29 @@ function inboxCard(inbox) {
 async function loadList() {
   const data = await api('GET', '/api/imports');
   document.getElementById('labels').replaceChildren(labelChip(data.label));
-  const parts = [el('p', {class: 'note'}, 'Inboxes are where new files come in, to be sorted into your replicas: ' +
-    'photos by day, with previews and where they are already; or all files, folder by folder.'), folderAdder('inbox')];
-  if (!data.inboxes.some(inbox => inbox.kind === 'phone')) {
-    parts.push(el('div', {class: 'card quiet'}, el('div', {class: 'head'}, icon('phone'), el('b', {}, 'No phone plugged in')),
-      el('div', {class: 'note'}, 'Plug one in by USB and choose "File transfer" on it: it shows here within a few seconds.')));
-  }
-  parts.push(...data.inboxes.map(inboxCard));
+  // Two kinds, each in a block of its own (so neither is missed): unsorted folders, and phones' photos
+  const folders = data.inboxes.filter(inbox => inbox.kind !== 'phone'), phones = data.inboxes.filter(inbox => inbox.kind === 'phone');
+  const jump = (id, iconName, title, count) => el('a', {class: 'kindjump kind-' + id, href: '#' + id, onclick: event => {
+    event.preventDefault();
+    document.getElementById(id).scrollIntoView({behavior: 'smooth'});
+  }}, icon(iconName), el('span', {}, title), el('b', {class: 'count'}, count));
+  const block = (id, iconName, title, text, cards, extra) => el('section', {class: 'kind kind-' + id, id},
+    el('div', {class: 'kindhead'}, icon(iconName), el('div', {}, el('h2', {}, title), el('p', {}, text))), cards, extra || '');
+  const parts = [el('p', {class: 'note'}, 'Inboxes are where new files come in, to be sorted into your replicas. There are two kinds:'),
+    el('div', {class: 'kindjumps'}, jump('unsorted', 'inbox', 'Unsorted folders', folders.length), jump('phones', 'phone', 'Phones\' photos', phones.length)),
+    block('unsorted', 'inbox', 'Unsorted folders',
+      'Folders new files land in, e.g. unsorted in Google Drive. Sort their photos by day, with previews, or all their files, folder by folder.',
+      folders.length ? folders.map(inboxCard) : el('p', {class: 'note'}, 'None yet: add one below.'), folderAdder('inbox')),
+    block('phones', 'phone', 'Phones\' photos',
+      'A phone plugged in by USB: its camera\'s photos and videos, sorted by day, with previews and where they are already.',
+      phones.length ? phones.map(inboxCard) : el('div', {class: 'card quiet'}, el('div', {class: 'head'}, icon('phone'), el('b', {}, 'No phone plugged in')),
+        el('div', {class: 'note'}, 'Plug one in by USB and choose "File transfer" on it: it shows here within a few seconds.')))];
   const main = document.getElementById('main');
   if (!main.contains(document.activeElement) || document.activeElement === document.body) main.replaceChildren(...parts);
+  // (A link to a kind, e.g. Home's to #phones, goes to it once it's drawn: once)
+  const kind = !page.scrolled && ['unsorted', 'phones', 'add'].includes(location.hash.slice(1)) ? location.hash.slice(1) : null;
+  page.scrolled = true;
+  if (kind) document.getElementById(kind === 'add' ? 'unsorted' : kind).scrollIntoView();
   later(5);
 }
 
