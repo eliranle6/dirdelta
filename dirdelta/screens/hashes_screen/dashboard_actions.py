@@ -22,7 +22,7 @@ def is_there(name):
     return mounts.unmounted(name) is None and os.path.isdir(name)
 
 
-def _start_hashing(name):
+def start_hashing(name):
     """Hash the local replica named name in the background, its files listed first (as a sync's are,
     but without keeping the dashboard waiting), its hashes kept in it (see hashcache.use_replica())"""
     hashcache.use_replica(name)
@@ -72,7 +72,7 @@ def finish_dashboard(items, options, shown, names, jobs, known, selected=None):
             label_screen.run(known, [option[1]])
             return option
         if option[0] == HASH:
-            _start_hashing(option[1])
+            start_hashing(option[1])
             # Shown anew, as its job's: it can be paused now
             return (TOGGLE, option[1])
         for name, job in jobs_by_name(items).items():

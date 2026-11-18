@@ -41,7 +41,23 @@ async function load() {
   }
 }
 
-// The imports, and starting one
+// The imports, and starting one (one for each source and replica: the one there is is opened)
+
+function importLink(id) { return '/import?id=' + encodeURIComponent(id); }
+
+// What a source is called: the phone's name, or a local dir's
+function sourceName(source) { return source.device || source.full.split('/').filter(Boolean).pop() || source.full; }
+
+// The dir in the source (DCIM), and a small button showing its whole path
+function pathLine(inner, full) {
+  const whole = el('span', {class: 'fullpath', hidden: true}, full);
+  const toggle = el('button', {class: 'tiny', onclick: event => {
+    event.preventDefault();
+    whole.hidden = !whole.hidden;
+    toggle.textContent = whole.hidden ? 'path' : 'hide';
+  }}, 'path');
+  return el('p', {class: 'where'}, inner ? el('span', {}, inner) : '', toggle, whole);
+}
 
 async function loadList() {
   const data = await api('GET', '/api/imports');
@@ -50,28 +66,32 @@ async function loadList() {
     el('option', {value: dest, selected: dest === data.defaultDest}, dest)));
   const start = async (source, select) => {
     const answer = await api('POST', '/api/imports/new', {source, dest: select.value});
-    if (answer.error) alert(answer.error); else location.href = '/import?id=' + encodeURIComponent(answer.id);
+    if (answer.error) document.getElementById('status').textContent = answer.error;
+    else location.href = importLink(answer.id);
+  };
+  // A source's row: into which replica, and Start (or Open, if there's an import of it into that one)
+  const row = (label, source, select) => {
+    const open = () => data.imports.find(found => found.source.full === source() && found.dest === select.value);
+    const button = el('button', {class: 'primary', onclick: () => open() ? location.href = importLink(open().id) : start(source(), select)});
+    const named = () => { button.textContent = open() ? 'Open its import' : 'Start'; };
+    select.addEventListener('change', named);
+    if (label) label.addEventListener('input', named);
+    named();
+    return el('div', {class: 'row2'}, label || '', el('span', {class: 'note'}, 'into'), select, button);
   };
   const cards = [];
   if (!data.dests.length) cards.push(el('div', {class: 'card'}, el('p', {}, 'No local replica is known yet: sync one first.')));
   cards.push(el('div', {class: 'card'}, el('h2', {}, 'Phones plugged in'),
-    data.phones.length ? data.phones.map(phone => {
-      const select = destSelect();
-      const earlier = () => data.imports.find(found => found.source === phone.path && found.dest === select.value);
-      const button = el('button', {class: 'primary', onclick: () => start(phone.path, select)});
-      const label = () => { button.textContent = earlier() ? 'Go on with ' + earlier().id : 'Import'; };
-      select.addEventListener('change', label);
-      label();
-      return el('div', {class: 'row2'}, el('span', {}, phone.name), '→', select, button);
-    }) : el('p', {}, 'None. Plug the phone in by USB and choose "File transfer" on it; it shows here (this page checks again every few seconds).')));
+    data.phones.length ? data.phones.map(phone => el('div', {},
+      el('b', {}, phone.name), pathLine(phone.inner, phone.full), row(null, () => phone.path, destSelect()))) :
+      el('p', {}, 'None. Plug the phone in by USB and choose "File transfer" on it; it shows here (this page checks again every few seconds).')));
   const folder = el('input', {type: 'text', placeholder: '/path/to/a/folder'});
-  const folderDest = destSelect();
-  cards.push(el('div', {class: 'card'}, el('h2', {}, 'Import from a folder'),
-    el('div', {class: 'row2'}, folder, '→', folderDest, el('button', {onclick: () => start(folder.value, folderDest)}, 'Import'))));
+  cards.push(el('div', {class: 'card'}, el('h2', {}, 'Import from a folder'), row(folder, () => folder.value, destSelect())));
   if (data.imports.length) {
     cards.push(el('div', {class: 'card'}, el('h2', {}, 'Imports'), data.imports.map(found => el('div', {class: 'row2'},
-      el('a', {href: '/import?id=' + encodeURIComponent(found.id)}, found.id),
-      el('span', {class: 'note'}, found.source + ' → ' + found.dest + ': ' + countsText(found.counts))))));
+      el('a', {href: importLink(found.id)}, sourceName(found.source) + (found.source.device ? ' › ' + found.source.inner : '') +
+        ' → ' + replicaName(found.dest)),
+      el('span', {class: 'note'}, countsText(found.counts))))));
   }
   const main = document.getElementById('main');
   if (!main.contains(document.activeElement)) main.replaceChildren(...cards);
@@ -79,7 +99,7 @@ async function loadList() {
 }
 
 function countsText(counts) {
-  return [['pending', 'to copy'], ['copied', 'copied'], ['moved', 'moved'], ['skipped', 'skipped']]
+  return [['pending', 'on the phone only'], ['copied', 'copied'], ['moved', 'moved'], ['skipped', 'skipped']]
     .filter(([key]) => counts[key]).map(([key, text]) => counts[key] + ' ' + text).join(', ') || 'nothing yet';
 }
 
@@ -91,12 +111,14 @@ async function loadImport() {
   if (data.error) throw new Error(data.error);
   if (view() !== shown) return;
   page.data = data;
-  document.getElementById('where').replaceChildren(' > ', shown === 'overview' ? data.id :
-    el('a', {href: '#'}, data.id), shown === 'overview' ? '' : ' > ' + filterText());
+  const title = sourceName(data.source) + ' → ' + replicaName(data.dest);
+  document.getElementById('where').replaceChildren(' > ', shown === 'overview' ? title :
+    el('a', {href: '#'}, title), shown === 'overview' ? '' : ' > ' + filterText());
   document.getElementById('labels').replaceChildren(labelChip(data.label));
   if (shown === 'overview') renderOverview(); else renderImport();
-  const busy = (data.copying && data.copying.phase !== 'done' && data.copying.phase !== 'waiting') ||
-    (data.applying && !data.applying.done) || !data.indexed || data.counts.pending;
+  const reading = data.reading && (data.reading.phase === 'listing' || data.reading.phase === 'copying');
+  const hashing = data.replicas.some(replica => replica.reading || (replica.hashing && replica.hashing.started && replica.hashing.state !== 'done'));
+  const busy = reading || hashing || (data.applying && !data.applying.done) || data.checking.busy;
   later(busy ? 2 : 10);
 }
 
@@ -108,62 +130,127 @@ function replicaName(path) {
 
 function percent(part, whole) { return whole ? Math.floor(100 * part / whole) + '%' : ''; }
 
-// The overview: the source's files and their hashing, what each replica has, and the choices made
+function size(bytes) {
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  let at = 0;
+  while (bytes >= 1024 && at < units.length - 1) { bytes /= 1024; at++; }
+  return (at ? bytes.toFixed(bytes < 10 ? 1 : 0) : bytes) + ' ' + units[at];
+}
+
+function ago(seconds) {
+  if (seconds === null) return '';
+  return seconds < 60 ? 'just now' : seconds < 3600 ? Math.floor(seconds / 60) + ' min ago' : Math.floor(seconds / 3600) + ' h ago';
+}
+
+async function act(path, body) {
+  const answer = await api('POST', path, Object.assign({id: page.id}, body));
+  if (answer.error) document.getElementById('status').textContent = answer.error;
+  await load();
+}
+
+// The overview: the source's files (by name and size, and hashed once copied), what each replica has
+// and how sure that is (with what makes it surer), and the choices made
 function renderOverview() {
-  const data = page.data, over = data.overview;
+  const data = page.data, over = data.overview, reading = data.reading;
   const link = (count, text, kind, replica, cls) => el('a', {class: 'stat' + (cls ? ' ' + cls : ''), href: photosLink(kind, replica)},
     el('b', {}, count), el('span', {}, text), el('span', {class: 'go'}, '›'));
-  const bar = (part, whole, cls) => el('div', {class: 'meter'}, el('div', {class: cls || '', style: 'width:' + percent(part, whole)}));
+  const button = (text, onclick, cls) => el('button', {class: cls || '', onclick}, text);
   const cards = [];
-  const copyingNow = data.copying;
-  const source = el('div', {class: 'card'}, el('h2', {}, replicaName(data.source)), el('p', {}, data.source));
-  if (copyingNow && copyingNow.phase === 'listing') source.append(el('p', {}, 'Listing its files…'));
+
+  const source = el('div', {class: 'card'}, el('h2', {}, data.source.device ? 'Photos on ' + data.source.device : 'Photos in ' + sourceName(data.source)),
+    pathLine(data.source.device ? data.source.inner : '', data.source.full));
+  if (reading && reading.phase === 'listing') source.append(el('p', {}, 'Listing its files…'));
   else {
-    source.append(link(over.total, 'files on it', 'all'));
-    const unhashed = over.total - over.hashed;
-    source.append(el('div', {class: 'stat'}, el('b', {}, over.hashed), el('span', {},
-      unhashed ? 'hashed so far (each is hashed as it\'s copied here)' : 'hashed: all of them')), bar(over.hashed, over.total));
-    if (unhashed) source.append(link(unhashed, 'not hashed yet' + (copyingNow && copyingNow.phase === 'copying' ? ': hashing…' : ''), 'unhashed'));
+    source.append(link(over.total, 'files', 'all'));
+    source.append(el('div', {class: 'stat'}, el('b', {}, over.hashed), el('span', {}, 'copied here and hashed')),
+      el('div', {class: 'meter'}, el('div', {style: 'width:' + percent(over.hashed, over.total)})));
+    if (reading && reading.phase === 'copying') {
+      source.append(el('p', {}, 'Copying and hashing: ' + reading.copied + ' of ' + reading.asked + '…'));
+    } else if (over.unhashed.files) {
+      source.append(el('p', {class: 'note'}, over.hashed ? 'The rest are compared by name and size only.' :
+        'Compared by name and size only. Copying them here (a temporary copy, used to sort them too) hashes them, to compare by contents:'));
+      const buttons = el('div', {class: 'row2'});
+      if (over.nameOnly.files && over.nameOnly.files < over.unhashed.files) {
+        buttons.append(button('Hash the ' + over.nameOnly.files + ' matched by name (' + size(over.nameOnly.size) + ')',
+          () => act('/api/import/read', {which: 'nameOnly'})));
+      }
+      buttons.append(button('Hash all ' + over.unhashed.files + ' (' + size(over.unhashed.size) + ')', () => act('/api/import/read', {which: 'all'})));
+      source.append(buttons);
+    }
   }
-  if (copyingNow && copyingNow.message) source.append(el('p', {class: 'c-orange'}, copyingNow.message));
+  if (reading && reading.message) source.append(el('p', {class: 'c-orange'}, reading.message));
+  if (!reading || reading.phase === 'done' || reading.phase === 'waiting') {
+    source.append(el('div', {class: 'row2'}, button(data.source.device ? 'Look at the phone again' : 'Look at the folder again',
+      () => act('/api/import/read', {which: 'list'}))));
+  }
   cards.push(source);
-  if (!over.checked) {
-    cards.push(el('div', {class: 'card'}, el('h2', {}, 'Your replicas'),
-      el('p', {}, 'Checking what ' + data.checked.map(replicaName).join(', ') + ' have…')));
-  } else {
-    for (const replica of over.replicas) {
-      const card = el('div', {class: 'card'}, el('h2', {}, 'In ' + replicaName(replica.path)), el('p', {}, replica.path));
-      card.append(el('div', {class: 'stat'}, el('b', {}, replica.have + ' of ' + over.total), el('span', {}, 'there already')),
-        el('div', {class: 'meter'}, el('div', {class: 'sure', style: 'width:' + percent(replica.contents, over.total)}),
-          el('div', {class: 'unsure', style: 'width:' + percent(replica.have - replica.contents, over.total)})));
-      if (replica.contents) card.append(link(replica.contents, 'the same contents (by hash)', 'contents', replica.path, 'sure'));
-      if (replica.namePhoneUnhashed) card.append(link(replica.namePhoneUnhashed, 'by name and size only: the phone\'s not hashed yet', 'name', replica.path, 'unsure'));
-      if (replica.nameReplicaUnhashed) card.append(link(replica.nameReplicaUnhashed, 'by name and size only: its copy isn\'t hashed', 'name', replica.path, 'unsure'));
-      card.append(link(replica.missing, 'not there', 'missing', replica.path, replica.missing ? 'missing' : ''));
-      cards.push(card);
+
+  const checked = data.checking.busy ? (over.checked ? 'Checking again…' : 'Checking what they have…') :
+    'Checked ' + ago(data.checking.ago) + '.';
+  for (const replica of data.replicas) {
+    const counted = over.replicas.find(found => found.path === replica.path);
+    const card = el('div', {class: 'card'}, el('h2', {}, 'Already in “' + replica.name + '”'),
+      el('p', {class: 'kind'}, replica.kind === 'drive' ? 'Google Drive replica' : 'Local disk replica'),
+      pathLine('', replica.path));
+    if (!over.checked) card.append(el('p', {}, checked));
+    else {
+      card.append(el('div', {class: 'stat'}, el('b', {}, counted.have + ' of ' + over.total), el('span', {}, 'there')),
+        el('div', {class: 'meter'}, el('div', {class: 'sure', style: 'width:' + percent(counted.contents, over.total)}),
+          el('div', {class: 'unsure', style: 'width:' + percent(counted.have - counted.contents, over.total)})));
+      if (counted.contents) card.append(link(counted.contents, 'the same contents (by hash)', 'contents', replica.path, 'sure'));
+      if (counted.namePhoneUnhashed) card.append(link(counted.namePhoneUnhashed, 'same name and size (the phone\'s not hashed)', 'name', replica.path, 'unsure'));
+      if (counted.nameReplicaUnhashed) card.append(link(counted.nameReplicaUnhashed, 'same name and size (its copy isn\'t hashed)', 'name', replica.path, 'unsure'));
+      card.append(link(counted.missing, 'not there', 'missing', replica.path, counted.missing ? 'missing' : ''));
+      card.append(el('p', {class: 'note'}, checked));
     }
-    if (over.replicas.length > 1) {
-      cards.push(el('div', {class: 'card'}, el('h2', {}, 'All together'),
-        link(over.inNone, 'in none of them', 'none', '', over.inNone ? 'missing' : ''),
-        link(over.inAll, 'in all of them', 'all-in')));
+    const buttons = el('div', {class: 'row2'});
+    if (replica.kind === 'drive') {
+      buttons.append(replica.reading ? el('span', {class: 'note'}, 'Reading it from Drive…') :
+        button('Read it from Drive again', () => act('/api/import/recheck', {replica: replica.path, how: 'drive'})));
+    } else {
+      if (!data.checking.busy) buttons.append(button('Check names and sizes again', () => act('/api/import/recheck', {})));
+      const job = replica.hashing;
+      if (job && job.started && job.state !== 'done') {
+        buttons.append(el('span', {class: 'note'}, 'Hashing its files: ' + job.done + ' of ' + job.files + '…'));
+      } else if (replica.unhashed) {
+        buttons.append(button('Hash its ' + replica.unhashed + ' unhashed files (slower, surer)',
+          () => act('/api/import/recheck', {replica: replica.path, how: 'hash'})));
+      }
     }
-    if (over.inAll && over.inAll > over.counts.skipped + over.counts.moved) {
-      cards.push(el('div', {class: 'card'}, el('p', {}, over.inAll === over.total ?
-        'Every file is in every replica already: nothing to sort.' : over.inAll + ' are in every replica already.'),
-        el('div', {class: 'row2'}, el('button', {onclick: skipInAll}, 'Skip the ' + over.inAll + ' in every replica'))));
-    }
+    card.append(buttons);
+    cards.push(card);
+  }
+  if (over.checked && over.replicas.length > 1) {
+    cards.push(el('div', {class: 'card'}, el('h2', {}, 'All together'),
+      link(over.inNone, 'in none of them', 'none', '', over.inNone ? 'missing' : ''),
+      link(over.inAll, 'in all of them', 'all-in')));
+  }
+  if (over.checked && over.inAll && over.inAll > over.counts.skipped + over.counts.moved) {
+    cards.push(el('div', {class: 'card'}, el('p', {}, over.inAll === over.total ?
+      'Every file is in every replica already: nothing to sort.' : over.inAll + ' are in every replica already.'),
+      el('div', {class: 'row2'}, button('Skip the ' + over.inAll + ' in every replica', skipInAll))));
   }
   for (const error of data.errors) cards.push(el('p', {class: 'c-red'}, error));
+
   const counts = over.counts;
   const open = over.total - counts.moved - counts.skipped - over.chosen;
-  cards.push(el('div', {class: 'card'}, el('h2', {}, 'Sorting into ' + replicaName(data.dest)),
+  const end = el('button', {class: 'danger', onclick: async () => {
+    if (!end.classList.contains('sure')) {
+      end.classList.add('sure');
+      end.textContent = 'End it: forget its choices and remove its copies';
+      return;
+    }
+    const answer = await api('POST', '/api/import/end', {id: page.id});
+    if (answer.ok) location.href = '/import'; else document.getElementById('status').textContent = answer.error || "Couldn't end it.";
+  }}, 'End this import');
+  cards.push(el('div', {class: 'card'}, el('h2', {}, 'Sorting into “' + replicaName(data.dest) + '”'),
     link(open, 'not chosen a folder yet', 'open'), link(over.chosen, 'chosen, to move', 'chosen'),
     counts.moved ? link(counts.moved, 'moved', 'moved') : '', counts.skipped ? link(counts.skipped, 'skipped', 'skipped') : '',
     el('div', {class: 'row2'}, el('a', {class: 'button primary', href: photosLink(over.checked && over.inNone ? 'none' : 'open')},
       over.checked && over.inNone ? 'Sort the ' + over.inNone + ' not in any replica' : 'Sort them'),
-      el('a', {class: 'button', href: photosLink('all')}, 'See all'))));
+      el('a', {class: 'button', href: photosLink('all')}, 'See all'), end)));
   if (data.applying) cards.push(el('div', {class: 'lines'}, data.applying.lines.map(([text, color]) => el('div', {class: color ? 'c-' + color : ''}, text))));
-  document.getElementById('main').replaceChildren(...cards);
+  if (!document.querySelector('#main button.sure')) document.getElementById('main').replaceChildren(...cards);
   renderFooter();
 }
 
@@ -210,7 +297,7 @@ function renderImport() {
   const main = document.getElementById('main');
   const focused = document.activeElement && document.activeElement.id === 'target';
   const parts = [];
-  parts.push(el('div', {class: 'note'}, data.source + ' → ' + data.dest + '. Checked against: ' + data.checked.join(', ') +
+  parts.push(el('div', {class: 'note'}, sourceName(data.source) + ' → ' + data.dest + '. Checked against: ' + data.checked.map(replicaName).join(', ') +
     (data.indexed ? '' : ' (checking them…)') + (data.errors.length ? '. ' + data.errors.join('; ') : '')));
   if (!focused) {
     const input = el('input', {type: 'text', id: 'target', list: 'folders', placeholder: 'A folder in ' + data.dest.split('/').pop() + ' (type to find one, or a new one)',
@@ -239,7 +326,7 @@ function renderImport() {
     parts.push(el('div', {class: 'day'}, header, el('div', {class: 'grid'}, files.map(photo))));
   }
   if (data.days.length && !data.days.some(day => day.files.some(passes))) parts.push(el('p', {class: 'note'}, 'None.'));
-  if (!data.days.length) parts.push(el('p', {class: 'note'}, data.copying && data.copying.phase === 'listing' ? 'Listing the source…' : 'No media files.'));
+  if (!data.days.length) parts.push(el('p', {class: 'note'}, data.reading && data.reading.phase === 'listing' ? 'Listing the source…' : 'No media files.'));
   if (data.applying) parts.push(el('div', {class: 'lines'}, data.applying.lines.map(([text, color]) => el('div', {class: color ? 'c-' + color : ''}, text))));
   main.replaceChildren(...parts);
   renderFooter();
@@ -275,13 +362,12 @@ function photo(file) {
   else if (file.state === 'skipped') caption.push(el('div', {class: 'skipped'}, 'skipped'));
   else if (file.target) caption.push(el('div', {class: 'to'}, '→ ' + file.target));
   for (const text of have(file)) caption.push(el('div', {class: 'have'}, '✓ in ' + text));
-  if (file.state === 'pending') caption.push(el('div', {class: 'skipped'}, 'copying…'));
   caption.push(el('div', {}, file.rel.split('/').pop()));
-  if (VIDEO.test(file.rel) && file.state !== 'pending' && file.state !== 'moved') {
+  if (VIDEO.test(file.rel) && file.state !== 'moved') {
     caption.push(el('a', {class: 'play', target: '_blank', onclick: event => event.stopPropagation(),
       href: '/api/import/file?id=' + encodeURIComponent(page.id) + '&rel=' + encodeURIComponent(file.rel)}, '▶ Play'));
   }
-  const image = file.state === 'pending' ? el('div', {class: 'noimg'}, 'not copied yet') : picture(file);
+  const image = picture(file);
   return el('div', {class: 'photo' + (page.selected.has(file.rel) ? ' sel' : '') + (file.state === 'moved' ? ' done' : ''),
     onclick: () => {
       if (file.state === 'moved') return;
@@ -307,18 +393,14 @@ async function assign(rels, target, skip) {
 
 function renderFooter() {
   const data = page.data;
-  const chosen = data.overview.ready;
+  const chosen = data.overview.chosen;
   const status = [countsText(data.counts)];
   if (page.selected.size) status.push(page.selected.size + ' selected');
-  if (data.copying && data.copying.message) status.push(data.copying.message);
   document.getElementById('status').textContent = status.join(' · ');
   const buttons = [];
-  if (data.copying && data.copying.phase === 'waiting' || (!data.copying && data.counts.pending)) {
-    buttons.push(el('button', {onclick: () => api('POST', '/api/import/copy', {id: page.id}).then(loadImport)}, 'Copy the rest'));
-  }
   buttons.push(el('button', {class: 'primary', disabled: !chosen || (data.applying && !data.applying.done),
     onclick: () => api('POST', '/api/import/apply', {id: page.id}).then(loadImport)},
-    'Move ' + chosen + ' chosen into ' + data.dest.split('/').pop()));
+    'Move ' + chosen + ' chosen into “' + replicaName(data.dest) + '”'));
   document.getElementById('actions').replaceChildren(...buttons);
 }
 

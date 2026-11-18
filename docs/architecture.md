@@ -169,13 +169,14 @@ The map (each module's docstring's first line; generated from the code):
     - `preview_lines.py`: The lines of a missing file's preview
     - `previews.py`: The previews of the missing files, sent to the picker as they're found
     - `sure.py`: The candidates that are surely the file
-- `phoneimport/`: Importing photos from a phone (or any dir) into a local replica, in the web version (web/importing.py): copied into an import of their own (store.py: resumable, since a phone's link may drop; copying.py), each tagged with where the replica and its synced ones have it already (known.py), grouped by day with where the replica's photos of that day are (suggest.py), then moved into the dirs chosen (applying.py)
+- `phoneimport/`: Importing photos from a phone (or any dir) into a local replica, in the web version (web/importing/): listed into its source's pool (pool.py, shared by the source's imports), compared by name and size, copied and hashed on asking (copying.py: resumable, since a phone's link may drop), each tagged with where the replica and its synced ones have it already (known.py), grouped by day with where the replica's photos of that day are (suggest.py), then moved into the dirs chosen (applying.py); an import keeps its choices (store.py)
   - `applying.py`: Moving an import's copied files into the dirs chosen for them in its replica (apply()), on a thread of its own: never over a file there, each moved file's SHA-1 kept in the hash cache; a dry run only says what it would do
-  - `copying.py`: Copying an import's files from its source (copy()), on a thread of its own, each by a .part file, its SHA-1 worked out as it's read; if the source goes (the phone unplugged), it waits, and goes on where it was
+  - `copying.py`: Reading a source into its pool (read()), a thread for each source: listing it, and copying the files asked for, each by a .part file, its SHA-1 worked out as it's read; if the source goes (the phone unplugged), it waits, and goes on where it was
+  - `pool.py`: What's been read from a source (Pool), shared by its imports: each file's size, time and SHA-1, its copy and thumbnail
   - `known.py`: Whether replicas have a file already (Known): by its SHA-1 (a local replica's from the hash cache, a Drive one's from the Drive cache), or else by its name and size, wherever it is in them (unless both hashes are known and differ)
   - `overview.py`: An import's overview (of()), its page's first screen: how many files, how many hashed, and for each replica how many it has by contents, by name and size only (and why: the phone's file or the replica's not hashed), or not; in none, in all; chosen, moved, skipped
-  - `sources.py`: Where an import's files come from: the phones plugged in (gvfs's MTP mounts), or any local dir; and a source's media files, wherever they are in it
-  - `store.py`: The imports kept (Import): each a folder of its own under IMPORTS_DIR, with the files copied and its manifest, saved at each change
+  - `sources.py`: Where an import's files come from: the phones plugged in (their DCIM, by gvfs's MTP mounts; a phone called by its model), or any local dir; and a source's media files, wherever they are in it
+  - `store.py`: The imports kept (Import), one for each source and replica: each a folder of its own under IMPORTS_DIR, with its manifest (what was chosen and done), saved at each change; ending one
   - `suggest.py`: Where an imported photo may go, by its date only (Suggester): where the replica's photos of that day are, else of the nearest day before it
   - `thumbs.py`: An imported file's thumbnail for the import's page (jpeg()), made by the pickers' pictures' code (ui/images.py)
 - `screens/`: Screens of their own: choosing replicas, the replicas dashboard, the AI's plan, zips and labels
@@ -298,7 +299,7 @@ The map (each module's docstring's first line; generated from the code):
   - `access.py`: Who may use the web version, and where it is: a key in its links (kept in WEB_FILE), checked on every request, and the computer's address on the local network
   - `api.py`: The web version's API for the session's screens (routes()): what the page polls for, and what it does there
   - `daemon.py`: dirdelta's daemon (run()): the web version, its pickers and messages in the browser, and the watcher, which emails a link when a phone or a known replica appears
-  - `importing.py`: The import page's API (routes()): the imports and the phones plugged in, starting one, an import's files by day with where the replicas have them, thumbnails, choosing dirs, moving them in
+  - `importing/`: The import page's API (routes()): the imports and the phones plugged in, starting one, an import's overview and files by day, thumbnails and files, copying and hashing, choosing dirs, moving them in, ending it; checks.py: what the replicas have (checked again when asked or old), hashing a replica or reading a Drive one again; state.py: what the page is sent
   - `messages.py`: dirdelta's messages in the browser (MessagesScreen): lines under a title, Stop as Ctrl-C, Continue, or asking for a line
   - `picker/`: treepicker in the browser: a picker's command (its arguments, its items, its pipes) done by the web page instead of the terminal program
     - `items.py`: A web picker's items, as --updates shows them, each change numbered
@@ -1185,18 +1186,27 @@ every link carries, then a cookie), and a watcher.
 - The page (`web/static/app.js`) polls `/api/state` (a long poll: each change is numbered) and draws a
   menu as a list, a tree with checkboxes or state marks, the preview column (pictures from treepicker's
   pixels), the keys as buttons (named by the keys row, or the `?` help's lines), and messages screens.
-- The import (`/import`, `phoneimport/`): a phone's storage (gvfs's MTP mount) or any dir is copied into
-  an import of its own (`~/.local/share/dirdelta/imports/<id>/`, with its manifest), resumably; each
-  file's SHA-1 is worked out while it's copied, and looked up in the destination replica's hashes (the
-  hash cache, or its `meta/hashes.sqlite`) and its synced replicas' (Drive's own SHA-1s), else by name
-  and size; an import's page opens on its overview (`overview.py`: per replica, how many it has by
-  contents, by name and size only, or not), each count a link to those photos (`#photos/KIND/REPLICA`,
-  so a phone's Back returns to it), and offers to skip the ones every replica has; a photo's thumbnail is made on the server (a video's frame needs
-  ffmpeg), else a video is drawn by the browser itself from the file (`/api/import/file`, served by ranges:
-  `server.FileReply`), with a Play link; the photos are shown by
-  day, with where that day's photos already are as suggestions; the dirs chosen are kept at each click,
-  and Move puts them in (a dry run says what it would do). Importing the same source into the same
-  replica again goes on with its latest import (listed again, so new photos are added).
+- The import (`/import`, `phoneimport/`): from a phone's DCIM (gvfs's MTP mount; `sources.PHONE_DIRS`, the
+  phone called by its model: "Pixel 8") or any dir, into a local replica; one import for each source and
+  replica (`~/.local/share/dirdelta/imports/<id>/`: its choices), and one pool for each source
+  (`imports/sources/<key>/`, `pool.py`: the files listed, their copies, SHA-1s and thumbnails), shared by
+  its imports, so nothing is read from a phone, or kept, twice. Starting an import only lists the
+  source: its files are compared by name and size first (looked up in the destination replica and its
+  synced ones: `known.py`); copying them (resumably, a reader for each source: `copying.py`) hashes
+  them, for a comparison by contents, and is offered for the ones matched by name or all, with their
+  size. An import's page opens on its overview (`overview.py`: per replica, how many it has by
+  contents, by name and size only (and why: the phone's file or the replica's isn't hashed), or not),
+  each count a link to those photos (`#photos/KIND/REPLICA`, so a phone's Back returns to it); each
+  replica's card offers to check its names and sizes again (also done when it's 10 minutes old), to hash
+  its unhashed files (the dashboard's `start_hashing`, checked again once done) or to read a Drive one
+  again (`web/importing/checks.py`), and it offers to skip the ones every replica has. Thumbnails are
+  made on the server, from the copy or else the phone's file (a video's frame needs ffmpeg), else a
+  video is drawn by the browser from the file (`/api/import/file`, served by ranges:
+  `server.FileReply`), with a Play link; the photos are shown by day, with where that day's photos
+  already are as suggestions; the dirs chosen are kept at each click, and Move puts them in (a file not
+  copied yet copied first; a dry run says what it would do). Starting the same source into the same
+  replica opens its import (listed again); "End this import" removes it, and the source's pool if no
+  other import has that source.
 - The watcher looks every 5 s for a phone's storage or a known local replica appearing, and emails the
   user a link (`sharing/link.py`; the address is kept in `settings.json` after the first one), at most
   once in 10 minutes a path.

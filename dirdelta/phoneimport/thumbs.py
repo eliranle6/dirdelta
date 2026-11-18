@@ -1,5 +1,5 @@
 """An imported file's thumbnail for the import's page (jpeg()): a JPEG, made by the pickers' pictures'
-code (ui/images.py: photos, HEIF, a video's frame by ffmpeg), kept in the import's folder"""
+code (ui/images.py: photos, HEIF, a video's frame by ffmpeg), kept in the source's pool"""
 import io
 import os
 
@@ -11,19 +11,19 @@ except ImportError:
     Image = None
 
 SIZE = 360
-THUMBS_DIR = 'thumbs'
 
 
-def jpeg(found, relpath):
-    """The JPEG of the import found's file at relpath, or None if it has none (not copied yet, or no
-    picture)"""
-    path = os.path.join(found.folder, THUMBS_DIR, relpath + '.jpg')
+def jpeg(source_pool, relpath):
+    """The JPEG of the file at relpath of source_pool (its copy, or else the phone's), or None if it has
+    none (no picture, or not there)"""
+    path = source_pool.thumb_path(relpath)
     try:
         with open(path, 'rb') as kept:
             return kept.read()
     except OSError:
         pass
-    encoded = images.of_local_file(found.local_path(relpath), SIZE, SIZE) if Image is not None else None
+    readable = source_pool.readable_path(relpath)
+    encoded = images.of_local_file(readable, SIZE, SIZE) if Image is not None and readable else None
     if not encoded:
         return None
     width, height, pixels = encoded.split(' ', 2)

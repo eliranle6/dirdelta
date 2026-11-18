@@ -11,21 +11,52 @@ GVFS_DIR = '/run/user/%d/gvfs' % (os.getuid(),)
 SKIPPED_DIRS = {'.thumbnails', '.trashed', '.Trash', 'Android', '.cache', 'cache', 'LOST.DIR'}
 
 
+# The dirs of a phone's storage imported from (others may be added: Pictures, WhatsApp's...)
+PHONE_DIRS = ('DCIM',)
+MTP_PREFIX = 'mtp:host='
+
+
 def phones():
-    """[(name, path)] of the storages of the phones mounted now (e.g. ('Pixel 7: Internal shared storage',
-    '/run/user/1000/gvfs/mtp:host=Google_Pixel_7_.../Internal shared storage'))"""
+    """[(name, path)] of the dirs imported from (PHONE_DIRS) of the phones mounted now, e.g. ('Pixel 8',
+    '/run/user/1000/gvfs/mtp:host=Google_Pixel_8_.../Internal shared storage/DCIM')"""
     found = []
-    for mount in sorted(glob.glob(os.path.join(GVFS_DIR, 'mtp:host=*'))):
-        device = os.path.basename(mount)[len('mtp:host='):].replace('_', ' ').strip()
+    for mount in sorted(glob.glob(os.path.join(GVFS_DIR, MTP_PREFIX + '*'))):
         try:
             storages = sorted(os.listdir(mount))
         except OSError:
             continue
         for storage in storages:
-            path = os.path.join(mount, storage)
-            if os.path.isdir(path):
-                found.append(('%s: %s' % (device, storage), path))
+            for name in PHONE_DIRS:
+                path = os.path.join(mount, storage, name)
+                if os.path.isdir(path):
+                    found.append((device_name(os.path.basename(mount)), path))
     return found
+
+
+def device_name(mount_name):
+    """A phone's name from its gvfs mount's (mtp:host=VENDOR_MODEL_SERIAL): its model, e.g. 'Pixel 8'
+    (with its vendor, if the model is no name of its own: 'SAMSUNG Android')"""
+    words = mount_name[len(MTP_PREFIX):].split('_') if mount_name.startswith(MTP_PREFIX) else [mount_name]
+    if len(words) > 1 and _is_serial(words[-1]):
+        words = words[:-1]
+    if len(words) > 2:
+        words = words[1:]
+    return ' '.join(words).strip() or mount_name
+
+
+def _is_serial(word):
+    return len(word) >= 6 and word.isalnum() and any(char.isdigit() for char in word)
+
+
+def describe(source):
+    """{'device': the phone's name (or None, for a local dir), 'inner': the path in it (in its storage:
+    'DCIM'; a local dir's whole path), 'full': source}"""
+    parts = source.split(os.sep)
+    mount = next((index for index, part in enumerate(parts) if part.startswith(MTP_PREFIX)), None)
+    if mount is None or not source.startswith(GVFS_DIR):
+        return {'device': None, 'inner': source, 'full': source}
+    inner = parts[mount + 2:] or parts[mount + 1:]
+    return {'device': device_name(parts[mount]), 'inner': '/'.join(inner), 'full': source}
 
 
 def media_files(source, is_stopped=lambda: False):

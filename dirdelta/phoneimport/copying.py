@@ -1,83 +1,122 @@
-"""Copying an import's files from its source (copy()), on a thread of its own: its media files listed,
-then each one not copied yet read into a .part file, its SHA-1 worked out as it's read (what tells
-whether a replica has it already), then renamed into place. If the source goes (the phone unplugged),
-it stops, and goes on where it was when it's run again."""
+"""Reading a source into its pool (read()), on a thread of its own, one at a time for a source: listing
+its media files (names, sizes and times: what's compared first), then copying the files asked for,
+each into a .part file, its SHA-1 worked out as it's read (the stronger comparison), then renamed into
+place. If the source goes (the phone unplugged), it stops, and goes on when it's asked again."""
 import hashlib
 import os
 import threading
-import time
 
+from dirdelta.phoneimport import pool as pools
 from dirdelta.phoneimport import sources
-from dirdelta.phoneimport import store
 
 CHUNK = 1 << 20
-# How often the manifest is saved while copying, at most (seconds)
-SAVE_INTERVAL = 2
+# How many files are copied between the pool's saves
+SAVE_EVERY = 20
 
-# {import id: its Copying}, the ones running or done since the daemon started
-_copyings = {}
+# {source: its Reading}, the ones running or done since the daemon started
+_readings = {}
 _lock = threading.Lock()
 
 
-class Copying(object):
-    """A copy of an import's files: its phase ('listing', 'copying', 'done', or 'waiting' for the
-    source, which can't be read), and what's said of it"""
+class Reading(object):
+    """Reading a source: its phase ('listing', 'copying', 'done', or 'waiting' for the source, which
+    can't be read), what's said of it, and how many of the files asked for are copied"""
 
-    def __init__(self, found):
-        self.import_ = found
-        self.phase = 'listing'
+    def __init__(self, source_pool):
+        self.pool = source_pool
+        self.phase = 'done'
         self.message = ''
-        self.thread = threading.Thread(target=self._run, daemon=True)
+        self.nr_asked = self.nr_copied = 0
+        self._is_listing = False
+        self._wanted = []
+        self._cond = threading.Lock()
+        self._is_running = False
+        self.thread = None
+
+    def ask(self, is_listing, relpaths):
+        """List the source again (if is_listing), and copy the files at relpaths (if they aren't)"""
+        with self._cond:
+            if not self._is_running and self.phase == 'done':
+                self.nr_asked = self.nr_copied = 0
+            self._is_listing = self._is_listing or is_listing
+            with self.pool.lock:
+                wanted = [relpath for relpath in relpaths if not self.pool.files.get(relpath, {}).get('copied')]
+            queued = set(self._wanted)
+            new = [relpath for relpath in wanted if relpath not in queued]
+            self._wanted.extend(new)
+            self.nr_asked += len(new)
+            if not self._is_running:
+                self._is_running = True
+                self.message = ''
+                self.phase = 'listing' if self._is_listing else 'copying'
+                self.thread = threading.Thread(target=self._run, daemon=True)
+                self.thread.start()
 
     def _run(self):
-        found = self.import_
-        try:
-            found.add(sources.media_files(found.source))
-        except OSError as error:
-            self._wait("Can't read %s (%s): plug the phone in (and allow file transfer) to go on." % (found.source, error.strerror))
-            return
-        self.phase = 'copying'
-        last_save = time.monotonic()
-        with found.lock:
-            pending = [relpath for relpath, info in found.files.items() if info['state'] == store.PENDING]
-        for relpath in pending:
-            try:
-                sha1 = _copy(os.path.join(found.source, relpath), found.local_path(relpath))
-            except OSError as error:
-                found.save()
-                if not os.path.isdir(found.source):
-                    self._wait("The source is gone (%s): plug it in again to go on." % (error.strerror,))
+        source_pool = self.pool
+        while True:
+            with self._cond:
+                is_listing, self._is_listing = self._is_listing, False
+                relpath = self._wanted.pop(0) if self._wanted and not is_listing else None
+                if not is_listing and relpath is None:
+                    source_pool.save()
+                    self.phase = 'done'
+                    self._is_running = False
                     return
-                self.message = "Couldn't copy %s: %s" % (relpath, error.strerror)
+            if is_listing:
+                self.phase = 'listing'
+                try:
+                    source_pool.add(sources.media_files(source_pool.source))
+                except OSError as error:
+                    return self._wait("Can't read %s (%s): plug the phone in (and allow file transfer) to go on."
+                                      % (source_pool.source, error.strerror))
                 continue
-            with found.lock:
-                found.files[relpath].update(state=store.COPIED, sha1=sha1)
-            if time.monotonic() - last_save > SAVE_INTERVAL:
-                found.save()
-                last_save = time.monotonic()
-        found.save()
-        self.phase = 'done'
+            self.phase = 'copying'
+            try:
+                sha1 = _copy(os.path.join(source_pool.source, relpath), source_pool.local_path(relpath))
+            except OSError as error:
+                if not os.path.isdir(source_pool.source):
+                    with self._cond:
+                        self._wanted.insert(0, relpath)
+                    return self._wait("The phone is gone (%s): plug it in again to go on." % (error.strerror,))
+                self.message = "Couldn't copy %s: %s" % (relpath, error.strerror)
+                self.nr_asked -= 1
+                continue
+            source_pool.copied(relpath, sha1)
+            self.nr_copied += 1
+            if self.nr_copied % SAVE_EVERY == 0:
+                source_pool.save()
 
     def _wait(self, message):
-        self.phase = 'waiting'
-        self.message = message
+        self.pool.save()
+        with self._cond:
+            self.phase = 'waiting'
+            self.message = message
+            self._is_running = False
 
 
-def copy(found):
-    """Start copying the import found (a store.Import) unless it's being copied; returns its Copying"""
+def read(source, is_listing=True, relpaths=()):
+    """Read source (list it again, if is_listing, and copy the files at relpaths); returns its Reading"""
     with _lock:
-        copying = _copyings.get(found.id)
-        if copying is not None and copying.thread.is_alive():
-            return copying
-        copying = _copyings[found.id] = Copying(found)
-        copying.thread.start()
-        return copying
+        reading = _readings.get(source)
+        if reading is None:
+            reading = _readings[source] = Reading(pools.of(source))
+    reading.ask(is_listing, relpaths)
+    return reading
 
 
-def copying_of(import_id):
-    """The import's Copying since the daemon started, or None"""
+def reading_of(source):
+    """The source's Reading since the daemon started, or None"""
     with _lock:
-        return _copyings.get(import_id)
+        return _readings.get(source)
+
+
+def copy_one(source_pool, relpath):
+    """Copy the file at relpath into the pool now (e.g. as it's moved); returns its SHA-1. Raises
+    OSError."""
+    sha1 = _copy(os.path.join(source_pool.source, relpath), source_pool.local_path(relpath))
+    source_pool.copied(relpath, sha1)
+    return sha1
 
 
 def _copy(source_path, path):

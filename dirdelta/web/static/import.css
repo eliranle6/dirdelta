@@ -39,3 +39,8 @@ a.stat { border-top: 1px solid var(--line); }
 .meter { display: flex; height: 8px; border-radius: 4px; background: var(--line); overflow: hidden; }
 .meter div { background: var(--accent); } .meter .sure { background: var(--green); } .meter .unsure { background: var(--orange); }
 .photo .play { color: var(--accent); text-decoration: none; font-weight: 600; }
+.where { display: flex; gap: 6px; align-items: baseline; flex-wrap: wrap; color: var(--muted); font-size: 13px; margin: 0; }
+.where .fullpath { flex-basis: 100%; overflow-wrap: anywhere; }
+button.tiny { font-size: 11px; padding: 1px 7px; border-radius: 10px; color: var(--muted); }
+.card .kind { margin-top: -6px; }
+button.danger { color: var(--red); } button.danger.sure { background: var(--red); border-color: var(--red); color: #fff; }

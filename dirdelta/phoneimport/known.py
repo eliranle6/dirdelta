@@ -24,6 +24,8 @@ class Known(object):
         self._by_name_size = collections.defaultdict(list)
         # {replica path: [the relpaths of its dirs]}
         self.dirs = {}
+        # {replica path: how many of its files have no hash known}
+        self.unhashed = {}
         self.errors = []
         self._lock = threading.Lock()
         self._is_indexed = False
@@ -56,6 +58,7 @@ class Known(object):
             stamp_size, stamp_mtime, hashes = hashed.get(relpath, (None, None, {}))
             sha1 = hashes.get('sha1') if (stamp_size, stamp_mtime) == (size, mtime_ns) else None
             self._add(root, relpath, size, sha1)
+            self.unhashed[root] = self.unhashed.get(root, 0) + (sha1 is None)
 
     def _index_drive(self, replica_path):
         dirs = []
