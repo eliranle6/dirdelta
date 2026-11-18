@@ -24,6 +24,13 @@ class KnownTest(ImportTest):
         self.assertEqual([], found.found('PXL_3.jpg', 2))
         self.assertIn('media/Family/2026', found.dirs[self.dest])
 
+    def test_a_file_of_the_same_name_and_size_but_another_hash_isnt_the_same(self):
+        other = self.write(self.dest, 'media/PXL_1.jpg', 'other')
+        hashcache.put(other, {'sha1': hashlib.sha1(b'other').hexdigest()})
+        found = known.Known([self.dest])
+        self.assertEqual([], found.found('PXL_1.jpg', 5, SHA1))
+        self.assertEqual([(self.dest, 'media/PXL_1.jpg', known.SAME_NAME_AND_SIZE)], found.found('PXL_1.jpg', 5))
+
     def test_a_drive_replica_has_a_file_by_drives_hash(self):
         entries = [drivecache.Entry('', 'root', True, False, None, None, {}, None),
                    drivecache.Entry('photos/x.jpg', 'id', False, False, 5, None, {'sha1': SHA1}, None)]

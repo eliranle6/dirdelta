@@ -172,7 +172,8 @@ The map (each module's docstring's first line; generated from the code):
 - `phoneimport/`: Importing photos from a phone (or any dir) into a local replica, in the web version (web/importing.py): copied into an import of their own (store.py: resumable, since a phone's link may drop; copying.py), each tagged with where the replica and its synced ones have it already (known.py), grouped by day with where the replica's photos of that day are (suggest.py), then moved into the dirs chosen (applying.py)
   - `applying.py`: Moving an import's copied files into the dirs chosen for them in its replica (apply()), on a thread of its own: never over a file there, each moved file's SHA-1 kept in the hash cache; a dry run only says what it would do
   - `copying.py`: Copying an import's files from its source (copy()), on a thread of its own, each by a .part file, its SHA-1 worked out as it's read; if the source goes (the phone unplugged), it waits, and goes on where it was
-  - `known.py`: Whether replicas have a file already (Known): by its SHA-1 (a local replica's from the hash cache, a Drive one's from the Drive cache), or else by its name and size, wherever it is in them
+  - `known.py`: Whether replicas have a file already (Known): by its SHA-1 (a local replica's from the hash cache, a Drive one's from the Drive cache), or else by its name and size, wherever it is in them (unless both hashes are known and differ)
+  - `overview.py`: An import's overview (of()), its page's first screen: how many files, how many hashed, and for each replica how many it has by contents, by name and size only (and why: the phone's file or the replica's not hashed), or not; in none, in all; chosen, moved, skipped
   - `sources.py`: Where an import's files come from: the phones plugged in (gvfs's MTP mounts), or any local dir; and a source's media files, wherever they are in it
   - `store.py`: The imports kept (Import): each a folder of its own under IMPORTS_DIR, with the files copied and its manifest, saved at each change
   - `suggest.py`: Where an imported photo may go, by its date only (Suggester): where the replica's photos of that day are, else of the nearest day before it
@@ -1188,8 +1189,12 @@ every link carries, then a cookie), and a watcher.
   an import of its own (`~/.local/share/dirdelta/imports/<id>/`, with its manifest), resumably; each
   file's SHA-1 is worked out while it's copied, and looked up in the destination replica's hashes (the
   hash cache, or its `meta/hashes.sqlite`) and its synced replicas' (Drive's own SHA-1s), else by name
-  and size; the photos are shown by day, with where that day's photos already are as suggestions; the
-  dirs chosen are kept at each click, and Move puts them in (a dry run says what it would do).
+  and size; an import's page opens on its overview (`overview.py`: per replica, how many it has by
+  contents, by name and size only, or not), each count a link to those photos (`#photos/KIND/REPLICA`,
+  so a phone's Back returns to it), and offers to skip the ones every replica has; the photos are shown by
+  day, with where that day's photos already are as suggestions; the dirs chosen are kept at each click,
+  and Move puts them in (a dry run says what it would do). Importing the same source into the same
+  replica again goes on with its latest import (listed again, so new photos are added).
 - The watcher looks every 5 s for a phone's storage or a known local replica appearing, and emails the
   user a link (`sharing/link.py`; the address is kept in `settings.json` after the first one), at most
   once in 10 minutes a path.

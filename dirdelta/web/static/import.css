@@ -23,6 +23,18 @@
 .card p { margin: 0; color: var(--muted); }
 .row2 { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
 select { font: inherit; padding: 7px 8px; border-radius: 8px; border: 1px solid var(--line); background: var(--card); color: var(--fg); max-width: 100%; }
-.note { color: var(--muted); font-size: 13px; }
+.note { color: var(--muted); font-size: 13px; overflow-wrap: anywhere; }
 .lines div { font-size: 12px; }
 .day h2 button { font-weight: 400; font-size: 14px; }
+a.button { font: inherit; border: 1px solid var(--line); background: var(--card); color: var(--fg); border-radius: 8px;
+  padding: 7px 12px; text-decoration: none; display: inline-block; }
+a.button.primary, .chips a.button.on { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); }
+.card p { overflow-wrap: anywhere; font-size: 13px; }
+.stat { display: flex; gap: 8px; align-items: baseline; padding: 6px 2px; color: var(--fg); text-decoration: none; }
+a.stat { border-top: 1px solid var(--line); }
+.stat b { min-width: 3.5em; text-align: right; font-variant-numeric: tabular-nums; }
+.stat span:nth-of-type(1) { flex: 1; }
+.stat .go { color: var(--muted); font-size: 18px; line-height: 1; }
+.stat.sure b { color: var(--green); } .stat.unsure b { color: var(--orange); } .stat.missing b { color: var(--red); }
+.meter { display: flex; height: 8px; border-radius: 4px; background: var(--line); overflow: hidden; }
+.meter div { background: var(--accent); } .meter .sure { background: var(--green); } .meter .unsure { background: var(--orange); }

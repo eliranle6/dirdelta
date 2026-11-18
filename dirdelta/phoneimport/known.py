@@ -53,10 +53,9 @@ class Known(object):
         hashed = hashcache.known_under(real_root)
         self.dirs[root] = sorted(relpath for relpath, (kind, _, _) in scan.entries.items() if kind == localscan.DIR)
         for relpath, (size, mtime_ns) in scan.files().items():
-            self._add(root, relpath, size)
             stamp_size, stamp_mtime, hashes = hashed.get(relpath, (None, None, {}))
-            if (stamp_size, stamp_mtime) == (size, mtime_ns) and 'sha1' in hashes:
-                self._by_sha1[hashes['sha1']].append((root, relpath))
+            sha1 = hashes.get('sha1') if (stamp_size, stamp_mtime) == (size, mtime_ns) else None
+            self._add(root, relpath, size, sha1)
 
     def _index_drive(self, replica_path):
         dirs = []
@@ -65,26 +64,29 @@ class Known(object):
                 if entry.relpath:
                     dirs.append(entry.relpath)
                 continue
+            sha1 = entry.hashes.get('sha1')
             if entry.size is not None:
-                self._add(replica_path, entry.relpath, entry.size)
-            if 'sha1' in entry.hashes:
-                self._by_sha1[entry.hashes['sha1']].append((replica_path, entry.relpath))
+                self._add(replica_path, entry.relpath, entry.size, sha1)
+            elif sha1:
+                self._by_sha1[sha1].append((replica_path, entry.relpath))
         self.dirs[replica_path] = sorted(dirs)
 
-    def _add(self, root, relpath, size):
-        self._by_name_size[(posixpath.basename(relpath).lower(), size)].append((root, relpath))
+    def _add(self, root, relpath, size, sha1=None):
+        self._by_name_size[(posixpath.basename(relpath).lower(), size)].append((root, relpath, sha1))
+        if sha1:
+            self._by_sha1[sha1].append((root, relpath))
 
     def found(self, name, size, sha1=None):
         """[(replica path, relpath, how)] of where the replicas have the file (each replica once: by
-        its contents if it can tell, else by its name and size)"""
+        its contents if it can tell, else by its name and size, unless both hashes are known and differ)"""
         self.index()
         found, seen = [], set()
         for root, relpath in self._by_sha1.get(sha1, []) if sha1 else []:
             if root not in seen:
                 found.append((root, relpath, SAME_CONTENTS))
                 seen.add(root)
-        for root, relpath in self._by_name_size.get((os.path.basename(name).lower(), size), []):
-            if root not in seen:
+        for root, relpath, their_sha1 in self._by_name_size.get((os.path.basename(name).lower(), size), []):
+            if root not in seen and not (sha1 and their_sha1 and sha1 != their_sha1):
                 found.append((root, relpath, SAME_NAME_AND_SIZE))
                 seen.add(root)
         return found
@@ -92,5 +94,5 @@ class Known(object):
     def media_relpaths(self, root):
         """The relpaths of the files of the local replica at root, as indexed (for the suggestions)"""
         self.index()
-        return [relpath for (name, size), places in self._by_name_size.items() for replica, relpath in places
+        return [relpath for (name, size), places in self._by_name_size.items() for replica, relpath, _ in places
                 if replica == root]

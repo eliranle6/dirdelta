@@ -6,7 +6,7 @@ import os
 import threading
 
 from dirdelta.known import replicas
-from dirdelta.phoneimport import applying, copying, known, sources, store, suggest, thumbs
+from dirdelta.phoneimport import applying, copying, known, overview, sources, store, suggest, thumbs
 from dirdelta.trees import paths
 from dirdelta.util import dryrun
 from dirdelta.web.server import Reply
@@ -63,7 +63,10 @@ def routes():
         source, dest = body.get('source', ''), body.get('dest', '')
         if not os.path.isdir(source) or not os.path.isdir(dest):
             return {'error': "Not a dir: %s" % (source if not os.path.isdir(source) else dest,)}
-        found = store.create(os.path.abspath(source), os.path.abspath(dest))
+        source, dest = os.path.abspath(source), os.path.abspath(dest)
+        # (The same source into the same replica goes on with its latest import, listed again for new files)
+        earlier = next((one for one in store.all_imports() if (one.source, one.dest) == (source, dest)), None)
+        found = _live(earlier.id) if earlier is not None else store.create(source, dest)
         copying.copy(found)
         cache.get(found.dest)
         return {'id': found.id}
@@ -74,7 +77,7 @@ def routes():
             return {'error': 'No such import'}
         live = (copying.copying_of(found.id) or applying.applying_of(found.id))
         found = live.import_ if live is not None else found
-        return _state(found, cache.get(found.dest))
+        return _state(found, cache.get(found.dest), with_files=query.get('files') != '0')
 
     def thumb(query, body):
         found = _live(query.get('id'))
@@ -132,25 +135,35 @@ def _summary(found):
             'counts': found.counts()}
 
 
-def _state(found, known_now):
+def _state(found, known_now, with_files=True):
+    """What the page shows of the import found: its overview, and its files by day (unless not
+    with_files: the overview alone, as a phone polls it while the files are hashed)"""
     is_indexed = getattr(known_now, 'suggester', None) is not None
-    days = {}
     with found.lock:
-        files = sorted(found.files.items(), key=lambda item: (suggest.date_of(item[0], item[1]['mtime']) or 0, item[0]))
-    for relpath, info in files:
-        day = suggest.date_of(relpath, info['mtime'])
-        have = [{'replica': replica, 'relpath': where, 'how': how} for replica, where, how in
-                known_now.found(relpath, info['size'], info.get('sha1'))] if is_indexed else None
-        days.setdefault(str(day), []).append(dict(info, rel=relpath, have=have))
+        files = {relpath: dict(info) for relpath, info in found.files.items()}
+    haves = {relpath: known_now.found(relpath, info['size'], info.get('sha1'))
+             for relpath, info in files.items()} if is_indexed else None
     copying_now, applying_now = copying.copying_of(found.id), applying.applying_of(found.id)
-    return dict(_summary(found), label=list(dryrun.label()), checked=known_now.replica_paths, indexed=is_indexed,
-                errors=known_now.errors,
-                folders=known_now.dirs.get(found.dest, []) if is_indexed else [],
-                days=[{'day': day, 'files': day_files,
-                       'suggested': known_now.suggester.suggest(_date(day)) if is_indexed else []}
-                      for day, day_files in days.items()],
-                copying={'phase': copying_now.phase, 'message': copying_now.message} if copying_now else None,
-                applying={'done': applying_now.is_done, 'lines': applying_now.lines} if applying_now else None)
+    state = dict(_summary(found), label=list(dryrun.label()), checked=known_now.replica_paths, indexed=is_indexed,
+                 errors=known_now.errors, overview=overview.of(files, haves, known_now.replica_paths),
+                 copying={'phase': copying_now.phase, 'message': copying_now.message} if copying_now else None,
+                 applying={'done': applying_now.is_done, 'lines': applying_now.lines} if applying_now else None)
+    if with_files:
+        state['folders'] = known_now.dirs.get(found.dest, []) if is_indexed else []
+        state['days'] = _days(files, haves, known_now.suggester if is_indexed else None)
+    return state
+
+
+def _days(files, haves, suggester):
+    """The files by day (each with where the replicas have it, and how sure that is), and the dirs
+    suggested for each day"""
+    days = {}
+    for relpath, info in sorted(files.items(), key=lambda item: (suggest.date_of(item[0], item[1]['mtime']) or 0, item[0])):
+        have = [{'replica': replica, 'relpath': where, 'how': overview.match(info, how)}
+                for replica, where, how in haves[relpath]] if haves is not None else None
+        days.setdefault(str(suggest.date_of(relpath, info['mtime'])), []).append(dict(info, rel=relpath, have=have))
+    return [{'day': day, 'files': day_files, 'suggested': suggester.suggest(_date(day)) if suggester else []}
+            for day, day_files in days.items()]
 
 
 def _date(text):

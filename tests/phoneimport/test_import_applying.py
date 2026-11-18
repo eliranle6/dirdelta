@@ -62,7 +62,7 @@ class ImportPageTest(ImportTest):
     def call(self, method, path, query=None, body=None):
         return self.routes[(method, path)](query or {}, body or {})
 
-    def test_an_import_by_day_with_what_the_replica_has_then_chosen_and_moved(self):
+    def test_an_import_by_day_and_its_overview_with_what_the_replica_has_then_chosen_and_moved(self):
         self.write(self.dest, 'media/Trip/PXL_20260224_1.jpg', 'old one')
         self.write(self.source, 'DCIM/PXL_20260224_1.jpg', 'old one')
         self.write(self.source, 'DCIM/PXL_20260225_2.jpg', 'new one')
@@ -73,9 +73,13 @@ class ImportPageTest(ImportTest):
         state = self.call('GET', '/api/import', {'id': import_id})
         self.assertEqual(['2026-02-24', '2026-02-25'], [day['day'] for day in state['days']])
         first, second = state['days'][0]['files'][0], state['days'][1]['files'][0]
-        self.assertEqual([{'replica': self.dest, 'relpath': 'media/Trip/PXL_20260224_1.jpg', 'how': 'same name and size'}],
+        self.assertEqual([{'replica': self.dest, 'relpath': 'media/Trip/PXL_20260224_1.jpg', 'how': 'nameReplicaUnhashed'}],
                          first['have'])
         self.assertEqual([], second['have'])
+        brief = self.call('GET', '/api/import', {'id': import_id, 'files': '0'})
+        self.assertNotIn('days', brief)
+        self.assertEqual((2, 2, 1, 1), (brief['overview']['total'], brief['overview']['hashed'],
+                                        brief['overview']['replicas'][0]['nameReplicaUnhashed'], brief['overview']['inNone']))
         self.assertEqual(['media/Trip'], state['days'][1]['suggested'])
         self.call('POST', '/api/import/assign', body={'id': import_id, 'rels': [first['rel']], 'skip': True})
         self.call('POST', '/api/import/assign', body={'id': import_id, 'rels': [second['rel']], 'target': 'media/Trip'})
@@ -85,6 +89,16 @@ class ImportPageTest(ImportTest):
         self.assertTrue(os.path.exists(os.path.join(self.dest, 'media/Trip/PXL_20260225_2.jpg')))
         self.assertEqual({'pending': 0, 'copied': 0, 'moved': 1, 'skipped': 1},
                          self.call('GET', '/api/import', {'id': import_id})['counts'])
+
+    def test_importing_the_same_source_into_the_same_replica_again_goes_on_with_its_import(self):
+        self.write(self.source, 'DCIM/a.jpg', 'a')
+        body = {'source': self.source, 'dest': self.dest}
+        import_id = self.call('POST', '/api/imports/new', body=body)['id']
+        self.wait_until(lambda: copying.copying_of(import_id).phase == 'done')
+        self.write(self.source, 'DCIM/b.jpg', 'b')
+        self.assertEqual(import_id, self.call('POST', '/api/imports/new', body=body)['id'])
+        self.wait_until(lambda: copying.copying_of(import_id).phase == 'done')
+        self.assertEqual({'DCIM/a.jpg', 'DCIM/b.jpg'}, set(store.load(import_id).files))
 
     def test_a_dir_outside_the_replica_cant_be_chosen(self):
         self.write(self.source, 'DCIM/a.jpg', 'a')
