@@ -66,3 +66,6 @@ a.item + a.item { border-top: 1px solid var(--line); }
 a.item .what { flex: 1; display: flex; flex-direction: column; gap: 4px; min-width: 0; overflow-wrap: anywhere; }
 a.item .go { color: var(--muted); font-size: 20px; }
 span.meter { display: flex; } span.meter span { background: var(--green); }
+.stat.zero { color: var(--muted); border-top: 1px solid var(--line); }
+.stat.zero.good b { color: var(--green); }
+.card h2 .head { display: inline-flex; align-items: center; gap: 8px; }

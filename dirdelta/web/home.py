@@ -4,8 +4,10 @@ Drive inboxes there are to sort photos from, what's running; the pairs to sync a
 started as a flow (see daemon.flow()); and hashing a replica, or pausing it"""
 import os
 
+from dirdelta.hashes import hashcache
 from dirdelta.hashes import hashing
 from dirdelta.known import mounts
+from dirdelta.known import replicainfo
 from dirdelta.known import replicanames
 from dirdelta.known import replicas
 from dirdelta.phoneimport import sources
@@ -14,19 +16,38 @@ from dirdelta.util import dryrun
 from dirdelta.web.importing import checks
 
 
+def _device(path):
+    """What the local path is on, for its icon: 'laptop' (the system's own disk) or 'disk' (another)"""
+    mount = mounts.current_mount(path)
+    return 'laptop' if mount is None or mount.target in ('/', '/home') else 'disk'
+
+
+def _when(stamp):
+    """A datetime as 'YYYY-MM-DD HH:MM', or None"""
+    return stamp.strftime('%Y-%m-%d %H:%M') if stamp else None
+
+
 def replica_info(path, known_replicas):
-    """What the dashboard says of the replica at path"""
+    """What the dashboard says of the replica at path: its name, kind, what it's on (its icon), its role
+    (an inbox: what it's sorted into), whether it's there, its hashing (a local one's), when its list was
+    read (a Drive one's), its log's last entry, and when it was last synced and changed"""
     is_cloud = paths.is_cloud_path(path)
+    sorted_into = [root for inbox, root in known_replicas.sorts if inbox == path]
+    names = replicanames.short_names([path] + sorted_into)
     found = {'path': path, 'name': replicanames.label(path) or os.path.basename(path.rstrip('/')) or path,
-             'kind': 'drive' if is_cloud else 'local', 'disk': replicanames.disk_name(path)}
+             'kind': 'drive' if is_cloud else 'local', 'disk': replicanames.disk_name(path),
+             'device': 'drive' if is_cloud else _device(path),
+             'inboxOf': [names.get(root, root) for root in sorted_into]}
     if is_cloud:
         found['there'], found['why'] = True, ''
+        found['listedAt'] = _when(replicainfo.cache_time(path))
     else:
         unmounted = mounts.unmounted(path)
         found['there'] = unmounted is None and os.path.isdir(path)
         found['why'] = ("its disk isn't mounted" if unmounted is not None else
                         "not there" if not found['there'] else '')
         found['hashing'] = checks.hash_state(path)
+        found['hashesKept'] = hashcache.count_under(path) if found['there'] else 0
     info = known_replicas.info_at(path) or {}
     found.update(lastEntry=info.get('last_entry'), seen=info.get('seen'), changed=info.get('changed'))
     return found
@@ -47,10 +68,17 @@ def routes(session):
         all_paths = dict.fromkeys([path for pair in known_replicas.favorites + known_replicas.history for path in pair] +
                                   [path for sort in known_replicas.sorts for path in sort])
         screen = session.screen()
+        names = replicanames.short_names(list(all_paths))
+        pairs = list(dict.fromkeys(known_replicas.favorites + known_replicas.history))
         return {'label': list(dryrun.label()),
                 'running': {'title': _title(screen)} if session.is_running else None,
                 'phones': [dict(sources.describe(path), name=name, path=path) for name, path in sources.phones()],
-                'replicas': [replica_info(path, known_replicas) for path in all_paths]}
+                'replicas': [replica_info(path, known_replicas) for path in all_paths],
+                'pairs': [{'a': a, 'b': b, 'nameA': names.get(a, a), 'nameB': names.get(b, b),
+                           'favorite': (a, b) in known_replicas.favorites, 'compared': known_replicas.comparison(a, b)}
+                          for a, b in pairs],
+                'sorts': [{'inbox': inbox, 'root': root, 'nameInbox': names.get(inbox, inbox), 'nameRoot': names.get(root, root)}
+                          for inbox, root in known_replicas.sorts]}
 
     def sync(query, body):
         known_replicas = replicas.load()

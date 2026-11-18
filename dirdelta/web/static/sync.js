@@ -25,7 +25,7 @@ function compared(pair) {
 }
 
 function row(title, note, onclick, disabled) {
-  return el('button', {class: 'item', disabled, onclick}, el('span', {class: 'what'}, el('b', {}, title), el('span', {class: 'note'}, note)),
+  return el('button', {class: 'item', disabled, onclick}, el('span', {class: 'what'}, el('b', {class: 'pairline'}, title), el('span', {class: 'note'}, note)),
     el('span', {class: 'go'}, '›'));
 }
 
@@ -41,15 +41,18 @@ async function load() {
   const busy = data.running;
   const pairRow = pair => row(pair.nameA + '  ⇄  ' + pair.nameB, compared(pair), () => start({kind: 'pair', a: pair.a, b: pair.b}), busy);
   const parts = [];
-  if (busy) parts.push(el('div', {class: 'card banner'}, el('b', {}, 'Something is running'), el('a', {class: 'button primary', href: '/run'}, 'Open it')));
-  if (data.favorites.length) parts.push(el('div', {class: 'section-title'}, 'Favorites'), el('div', {class: 'list'}, data.favorites.map(pairRow)));
-  if (data.recent.length) parts.push(el('div', {class: 'section-title'}, 'Recent'), el('div', {class: 'list'}, data.recent.map(pairRow)));
-  if (data.sorts.length) {
-    parts.push(el('div', {class: 'section-title'}, 'Sort an inbox'), el('div', {class: 'list'}, data.sorts.map(sort =>
-      row(sort.nameInbox + '  →  ' + sort.nameRoot, 'Sort its files into ' + sort.nameRoot, () => start({kind: 'sort', inbox: sort.inbox, root: sort.root}), busy))));
-  }
-  parts.push(el('div', {class: 'section-title'}, 'Something else'), el('div', {class: 'list'},
-    row('Choose other replicas', 'Any two folders, on disks or in Drive, or another inbox', () => start({}), busy)));
+  if (busy) parts.push(el('div', {class: 'card banner running'}, el('b', {}, 'Running now'), el('a', {class: 'button primary', href: '/run'}, 'Open it')));
+  // Syncing two replicas
+  const pairs = data.favorites.map(pair => Object.assign({favorite: true}, pair)).concat(data.recent);
+  parts.push(el('div', {class: 'section-title'}, 'Sync two replicas'), el('div', {class: 'list'},
+    pairs.map(pair => row([pair.favorite ? '★' : '', replicaLabel(pair.a, pair.nameA), '⇄', replicaLabel(pair.b, pair.nameB)], compared(pair),
+      () => start({kind: 'pair', a: pair.a, b: pair.b}), busy)),
+    row('Two other replicas…', 'Choose any two: folders on disks or in Drive', () => start({}), busy)));
+  // Sorting an inbox into a sorted tree
+  parts.push(el('div', {class: 'section-title'}, 'Sort an inbox'), el('div', {class: 'list'},
+    data.sorts.map(sort => row([replicaLabel(sort.inbox, sort.nameInbox, true), '→', replicaLabel(sort.root, sort.nameRoot)], 'Move its files into ' + sort.nameRoot + "'s folders",
+      () => start({kind: 'sort', inbox: sort.inbox, root: sort.root}), busy)),
+    row('Another inbox…', 'Choose an inbox and the tree to sort it into', () => start({}), busy)));
   document.getElementById('main').replaceChildren(...parts);
   setTimeout(load, 8000);
 }

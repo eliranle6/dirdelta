@@ -106,3 +106,42 @@ function tabBar(active) {
   draw(false);
   check();
 }
+
+// Small icons of what a replica or source is on (static SVG, drawn in the text's color)
+const ICONS = {
+  laptop: '<rect x="4" y="5" width="16" height="11" rx="1.5"/><path d="M2 19h20"/>',
+  disk: '<rect x="3" y="7" width="18" height="10" rx="2"/><circle cx="17" cy="12" r="1.2"/><path d="M6 12h6"/>',
+  drive: '<path d="M7 18h10a4 4 0 0 0 .5-7.97A6 6 0 0 0 6.1 9.2 4.5 4.5 0 0 0 7 18z"/>',
+  phone: '<rect x="7" y="2.5" width="10" height="19" rx="2"/><path d="M11 18.5h2"/>',
+  inbox: '<path d="M3 13l3-8h12l3 8v6H3z"/><path d="M3 13h5l1 2h6l1-2h5"/>',
+  folder: '<path d="M3 6.5h6l2 2h10v10.5H3z"/>',
+};
+
+function icon(name) {
+  const span = document.createElement('span');
+  span.className = 'icon';
+  span.innerHTML = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" ' +
+    'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (ICONS[name] || ICONS.folder) + '</svg>';
+  return span;
+}
+
+// How old a time ('YYYY-MM-DD HH:MM') is, in words, and its tone: fresh (green), oldish (yellow), old (red)
+function age(when, freshDays, oldDays) {
+  if (!when) return {text: 'never', tone: 'none'};
+  const then = new Date(when.replace(' ', 'T'));
+  const hours = (Date.now() - then) / 3600000;
+  const text = hours < 1 ? 'just now' : hours < 24 ? Math.floor(hours) + ' h ago' : Math.floor(hours / 24) + ' days ago';
+  return {text, tone: hours < freshDays * 24 ? 'ok' : hours < oldDays * 24 ? 'warn' : 'bad'};
+}
+
+// A small status chip: a dot of its tone (ok, warn, bad, none) and its text
+function chip(tone, text) {
+  return el('span', {class: 'chip ' + tone}, el('span', {class: 'dot'}), text);
+}
+
+// A replica's name after its icon: Drive's (its 'cloud/' then left out) or a disk's
+function replicaLabel(path, name, isInbox) {
+  const isDrive = path.startsWith('cloud/') || path === 'cloud';
+  return el('span', {class: 'rname'}, icon(isInbox ? 'inbox' : isDrive ? 'drive' : 'disk'),
+    isDrive && name.startsWith('cloud/') ? name.slice('cloud/'.length) : name);
+}

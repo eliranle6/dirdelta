@@ -1,19 +1,24 @@
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 10px; }
-.replica .head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.head { display: flex; align-items: center; gap: 8px; }
 .replica .head b { font-size: 16px; }
-.replica.away { opacity: .7; }
-.state { font-size: 12px; font-weight: 700; padding: 2px 8px; border-radius: 10px; white-space: nowrap; }
-.state.ok { background: color-mix(in srgb, var(--green) 18%, transparent); color: var(--green); }
-.state.off { background: color-mix(in srgb, var(--red) 15%, transparent); color: var(--red); }
-.entry { font-size: 13px; font-style: italic; overflow-wrap: anywhere; }
-.line { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.line .meter { flex: 1 1 100%; }
-.meter { display: flex; height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; }
-.meter div { background: var(--accent); }
-button.small { font-size: 13px; padding: 4px 10px; margin-left: auto; }
+.replica.away { opacity: .75; }
+.entry { font-size: 13px; font-style: italic; overflow-wrap: anywhere; color: var(--muted); }
+.where { display: flex; gap: 6px; align-items: baseline; flex-wrap: wrap; color: var(--muted); font-size: 12px; margin-top: -4px; }
+.where .fullpath { flex-basis: 100%; overflow-wrap: anywhere; }
+button.tiny { font-size: 11px; padding: 1px 7px; border-radius: 10px; color: var(--muted); }
+button.small, a.button.small { font-size: 13px; padding: 4px 10px; }
+.row2.end { justify-content: flex-end; }
 .banner { flex-direction: row; justify-content: space-between; align-items: center; }
+.banner.running { border-left: 5px solid var(--green); }
+.tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+.tile { background: var(--card); border: 1px solid var(--line); border-top: 4px solid var(--grey); border-radius: 10px; padding: 8px 12px;
+  display: flex; flex-direction: column; gap: 2px; }
+.tile.ok { border-top-color: var(--green); } .tile.warn { border-top-color: var(--yellow); } .tile.bad { border-top-color: var(--red); }
+.tile-title { font-size: 12px; color: var(--muted); }
 .list { display: flex; flex-direction: column; background: var(--card); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
-button.item { display: flex; align-items: center; gap: 10px; text-align: left; border: 0; border-radius: 0; background: none; padding: 11px 14px; width: 100%; }
-button.item + button.item { border-top: 1px solid var(--line); }
-button.item .what { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; overflow-wrap: anywhere; }
-button.item .go { color: var(--muted); font-size: 20px; }
+.list .item, button.item { display: flex; align-items: center; gap: 10px; text-align: left; padding: 11px 14px; width: 100%; }
+button.item { border: 0; border-radius: 0; background: none; }
+.list > * + * { border-top: 1px solid var(--line); }
+.item .what { flex: 1; display: flex; flex-direction: column; gap: 4px; min-width: 0; overflow-wrap: anywhere; }
+.item .go { color: var(--muted); font-size: 20px; }
+.list > button.item + button.item { border-top: 1px solid var(--line); }
