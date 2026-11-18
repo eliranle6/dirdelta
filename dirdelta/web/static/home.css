@@ -28,3 +28,7 @@ button.item { border: 0; border-radius: 0; background: none; }
 .syncbar .only + .only { background: var(--orange); }
 .syncline { display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: 13px; align-items: baseline; }
 .item.pair { align-items: flex-start; } .item.pair .syncmark { margin-top: 2px; } .item.pair button { margin-top: 2px; }
+.tile-hint { font-size: 11px; color: var(--muted); }
+.statename { font-size: 12px; font-weight: 700; }
+.entry-label { font-style: normal; font-weight: 600; }
+.list .item.stacked { flex-direction: column; align-items: stretch; }

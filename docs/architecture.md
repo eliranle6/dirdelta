@@ -299,6 +299,7 @@ The map (each module's docstring's first line; generated from the code):
   - `access.py`: Who may use the web version, and where it is: a key in its links (kept in WEB_FILE), checked on every request, and the computer's address on the local network
   - `api.py`: The web version's API for the session's screens (routes()): what the page polls for, and what it does there
   - `daemon.py`: dirdelta's daemon (run()): the web version, its pickers and messages in the browser, the flows it starts (flow(): the start menu, a pair's sync, an inbox's sort), and the watcher, which emails a link when a phone or a known replica appears
+  - `naming.py`: What the web version calls a replica: its name and where it is, 'eliran (Drive)', 'eliran (disk OS)', so two of one name are told apart
   - `home.py`: The dashboard's and the Sync page's API (routes()): the replicas (disk, there or not, hashing, last log entry, last synced), the phones, what's running; the pairs and sorts to start; hashing a replica
   - `importing/`: The import page's API (routes()): the imports and the phones plugged in and Drive inboxes, starting one, an import's overview and files by day, thumbnails and files, copying and hashing, choosing dirs, moving them in, ending it; checks.py: what the replicas have (checked again when asked or old), hashing a replica or reading a Drive one again; state.py: what the page is sent
   - `messages.py`: dirdelta's messages in the browser (MessagesScreen): lines under a title, Stop as Ctrl-C, Continue, or asking for a line
@@ -1197,7 +1198,7 @@ every link carries, then a cookie), and a watcher.
   a menu as a list, a tree with checkboxes or state marks, the preview column (pictures from
   treepicker's pixels), the keys as buttons (named by the keys row, or the `?` help's lines), and
   messages screens.
-- The import (`/import`, `phoneimport/`): from a phone's DCIM (gvfs's MTP mount; `sources.PHONE_DIRS`, the
+- The import (`/import`, `phoneimport/`): photos and videos (not audio: `sources.is_photo()`) from a phone's DCIM (gvfs's MTP mount; `sources.PHONE_DIRS`, the
   phone called by its model: "Pixel 8"), a Drive inbox (a sort's inbox in Drive: listed from the Drive
   cache, hashed by Drive, its thumbnails Drive's, downloaded into a local replica and then moved to
   Drive's trash, or moved within Drive into a Drive one) or any dir, into a replica; one import for each

@@ -21,7 +21,7 @@ function compared(pair) {
   const [onlyA, onlyB] = found.only;
   const what = !onlyA && !onlyB ? 'In step' : [onlyA ? onlyA + ' only in ' + pair.nameA : '', onlyB ? onlyB + ' only in ' + pair.nameB : '']
     .filter(Boolean).join(', ');
-  return what + ' · ' + found.when.split(' ')[0];
+  return what + ' · compared ' + age(found.when).text;
 }
 
 function row(title, note, onclick, disabled) {

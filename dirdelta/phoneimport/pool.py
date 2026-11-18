@@ -7,6 +7,7 @@ import json
 import os
 import shutil
 import threading
+import time
 
 from dirdelta.phoneimport import store
 from dirdelta.trees import paths
@@ -30,6 +31,8 @@ class Pool(object):
         self.files = files or {}
         self.lock = threading.RLock()
         self._tree = None
+        # When the source was last listed (seconds since the epoch), or None
+        self.listed_at = None
 
     @property
     def folder(self):
@@ -82,6 +85,7 @@ class Pool(object):
                 for relpath in [relpath for relpath, info in self.files.items() if relpath not in listed and not info['copied']]:
                     del self.files[relpath]
             self._tree = None
+            self.listed_at = time.time()
             self.save()
 
     def copied(self, relpath, sha1):
@@ -98,7 +102,7 @@ class Pool(object):
             os.makedirs(self.folder, exist_ok=True)
             temp_path = os.path.join(self.folder, MANIFEST + '.tmp')
             with open(temp_path, 'w') as manifest:
-                json.dump({'source': self.source, 'files': self.files}, manifest)
+                json.dump({'source': self.source, 'listedAt': self.listed_at, 'files': self.files}, manifest)
             os.replace(temp_path, os.path.join(self.folder, MANIFEST))
 
     def remove(self):
@@ -116,7 +120,8 @@ def of(source):
             found = _pools[source] = Pool(source)
             try:
                 with open(os.path.join(found.folder, MANIFEST)) as manifest:
-                    found.files = json.load(manifest).get('files', {})
+                    content = json.load(manifest)
+                found.files, found.listed_at = content.get('files', {}), content.get('listedAt')
             except (OSError, ValueError):
                 pass
         return found

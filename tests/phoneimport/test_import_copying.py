@@ -93,7 +93,7 @@ class DriveSourceTest(ImportTest):
     def test_a_drive_folders_media_files_are_listed_from_the_cache_hashed_by_drive_and_whats_gone_from_it_dropped(self):
         source = 'cloud/unsorted'
         found = store.create(source, self.dest, 'disk-1')
-        with mock.patch('dirdelta.drive.drivecache.entries', return_value=self.entries('a.jpg', 'notes.txt', 'b.mp4')):
+        with mock.patch('dirdelta.drive.drivecache.entries', return_value=self.entries('a.jpg', 'notes.txt', 'song.mp3', 'b.mp4')):
             self.wait_for(copying.read(source).thread)
         self.assertEqual({'a.jpg': (store.PENDING, self.SHA1), 'b.mp4': (store.PENDING, self.SHA1)},
                          {relpath: (info['state'], info['sha1']) for relpath, info in found.files().items()})

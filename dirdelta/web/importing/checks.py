@@ -12,6 +12,7 @@ from dirdelta.known import replicas
 from dirdelta.phoneimport import known, suggest
 from dirdelta.trees import paths
 from dirdelta.ui.picker import updates
+from dirdelta.web import naming
 
 RECHECK_AFTER = 600
 # How long a replica's identity (its disk's, by findmnt) is taken as known, in seconds
@@ -136,7 +137,7 @@ class Checks(object):
 def replica_state(check, root):
     """What the page says of a replica of check: its name, kind, and what's being done to it"""
     is_cloud = paths.is_cloud_path(root)
-    found = {'path': root, 'name': replicanames.label(root) or os.path.basename(root.rstrip('/')) or root,
+    found = {'path': root, 'name': naming.name(root),
              'kind': 'drive' if is_cloud else 'local', 'disk': replicanames.disk_name(root), 'reading': root in check.reading,
              'unhashed': check.known.unhashed.get(root, 0) if check.known is not None and not is_cloud else 0}
     if not is_cloud:
@@ -171,6 +172,6 @@ def destinations(source=None):
     is_drive = source is not None and paths.is_cloud_path(source)
     found = [path for path in dict.fromkeys(candidates) if path != source and
              (os.path.isdir(path) if not paths.is_cloud_path(path) else is_drive)]
-    return [{'path': path, 'name': replicanames.label(path) or os.path.basename(path.rstrip('/')) or path,
+    return [{'path': path, 'name': naming.name(path),
              'disk': replicanames.disk_name(path), 'kind': 'drive' if paths.is_cloud_path(path) else 'local'}
             for path in found]

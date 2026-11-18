@@ -71,6 +71,15 @@ def describe(source):
     return {'device': device_name(parts[mount]), 'drive': False, 'inner': '/'.join(inner), 'full': source}
 
 
+# What's imported: photos and videos (not audio: a phone's recordings and music aren't sorted here)
+PHOTO_EXTENSIONS = frozenset(media.IMAGE_EXTENSIONS + media.VIDEO_EXTENSIONS)
+
+
+def is_photo(name):
+    """Whether the file named name is a photo or a video, by its extension"""
+    return media.extension(name) in PHOTO_EXTENSIONS
+
+
 def drive_media_files(source):
     """{relpath: (size, mtime, sha1)} of the media files under the Drive folder source, as the Drive
     cache has them (Drive's own SHA-1s: nothing to hash). Raises OSError if the cache has no such folder."""
@@ -78,7 +87,7 @@ def drive_media_files(source):
     try:
         for entry in drivecache.entries(paths.path_in_cloud(source)):
             name = os.path.basename(entry.relpath)
-            if entry.is_dir or entry.size is None or not media.is_media(name) or name.startswith('.'):
+            if entry.is_dir or entry.size is None or not is_photo(name) or name.startswith('.'):
                 continue
             found[entry.relpath] = (entry.size, int(entry.modified or 0), entry.hashes.get('sha1'))
     except drivecache.DriveCacheError as error:
@@ -87,7 +96,7 @@ def drive_media_files(source):
 
 
 def media_files(source, is_stopped=lambda: False):
-    """{relpath: (size, mtime)} of the media files under source (images, audio, video), but in
+    """{relpath: (size, mtime)} of the photos and videos under source, but in
     SKIPPED_DIRS and hidden ones. Raises OSError if source can't be read at all."""
     os.listdir(source)
     found = {}
@@ -96,7 +105,7 @@ def media_files(source, is_stopped=lambda: False):
             break
         dirnames[:] = sorted(name for name in dirnames if name not in SKIPPED_DIRS and not name.startswith('.'))
         for name in sorted(filenames):
-            if not media.is_media(name) or name.startswith('.'):
+            if not is_photo(name) or name.startswith('.'):
                 continue
             path = os.path.join(dirpath, name)
             try:

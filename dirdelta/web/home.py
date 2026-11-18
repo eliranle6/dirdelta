@@ -14,6 +14,7 @@ from dirdelta.matching import syncstate
 from dirdelta.phoneimport import sources
 from dirdelta.trees import paths
 from dirdelta.util import dryrun
+from dirdelta.web import naming
 from dirdelta.web.importing import checks
 
 
@@ -34,11 +35,10 @@ def replica_info(path, known_replicas):
     read (a Drive one's), its log's last entry, and when it was last synced and changed"""
     is_cloud = paths.is_cloud_path(path)
     sorted_into = [root for inbox, root in known_replicas.sorts if inbox == path]
-    names = replicanames.short_names([path] + sorted_into)
-    found = {'path': path, 'name': replicanames.label(path) or os.path.basename(path.rstrip('/')) or path,
+    found = {'path': path, 'name': naming.own_name(path), 'place': naming.place(path), 'fullName': naming.name(path),
              'kind': 'drive' if is_cloud else 'local', 'disk': replicanames.disk_name(path),
              'device': 'drive' if is_cloud else _device(path),
-             'inboxOf': [names.get(root, root) for root in sorted_into]}
+             'inboxOf': [naming.name(root) for root in sorted_into]}
     if is_cloud:
         found['there'], found['why'] = True, ''
         found['listedAt'] = _when(replicainfo.cache_time(path))
@@ -98,7 +98,7 @@ def routes(session):
         all_paths = dict.fromkeys([path for pair in known_replicas.favorites + known_replicas.history for path in pair] +
                                   [path for sort in known_replicas.sorts for path in sort])
         screen = session.screen()
-        names = replicanames.short_names(list(all_paths))
+        names = {path: naming.name(path) for path in all_paths}
         pairs = list(dict.fromkeys(known_replicas.favorites + known_replicas.history))
         return {'label': list(dryrun.label()),
                 'running': {'title': _title(screen)} if session.is_running else None,
@@ -111,9 +111,9 @@ def routes(session):
     def sync(query, body):
         known_replicas = replicas.load()
         recent = [pair for pair in known_replicas.history if pair not in known_replicas.favorites]
-        names = replicanames.short_names(list(dict.fromkeys(
+        names = {path: naming.name(path) for path in dict.fromkeys(
             [path for pair in known_replicas.favorites + recent for path in pair] +
-            [path for sort in known_replicas.sorts for path in sort])))
+            [path for sort in known_replicas.sorts for path in sort])}
 
         def pair_info(pair):
             compared = known_replicas.comparison(*pair)

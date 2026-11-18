@@ -7,11 +7,12 @@ import time
 from dirdelta.known import replicanames
 from dirdelta.phoneimport import applying, copying, overview, sources, suggest
 from dirdelta.util import dryrun
+from dirdelta.web import naming
 from dirdelta.web.importing import checks as checking
 
 
 def summary(found):
-    return {'id': found.id, 'source': sources.describe(found.source), 'dest': found.dest,
+    return {'id': found.id, 'source': sources.describe(found.source), 'dest': found.dest, 'destName': naming.name(found.dest),
             'destDisk': replicanames.disk_name(found.dest),
             'otherDisk': found.dest_id is not None and found.dest_id != checking.identity(found.dest),
             'created': found.created, 'counts': found.counts()}
@@ -32,6 +33,7 @@ def import_state(found, check, with_files=True):
                            'ago': int(time.time() - check.checked_at) if check.checked_at else None},
                  replicas=[checking.replica_state(check, root) for root in replica_paths],
                  overview=overview.of(files, haves, replica_paths),
+                 listedAgo=int(time.time() - found.pool.listed_at) if found.pool.listed_at else None,
                  reading={'phase': reading.phase, 'message': reading.message, 'asked': reading.nr_asked,
                           'copied': reading.nr_copied} if reading else None,
                  applying={'done': moving.is_done, 'lines': moving.lines} if moving else None)

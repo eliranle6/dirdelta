@@ -69,3 +69,8 @@ span.meter { display: flex; } span.meter span { background: var(--green); }
 .stat.zero { color: var(--muted); border-top: 1px solid var(--line); }
 .stat.zero.good b { color: var(--green); }
 .card h2 .head { display: inline-flex; align-items: center; gap: 8px; }
+.chips.scroll { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 2px; scrollbar-width: none; }
+.chips.scroll .button { white-space: nowrap; flex: none; }
+.bar input { flex: 1 1 160px; min-width: 0; }
+.card.quiet { background: transparent; }
+h2.head { display: flex; align-items: center; gap: 8px; }

@@ -81,13 +81,40 @@ function pictureCanvas(encoded) {
   return canvas;
 }
 
+// What the mode labels mean, said when one is tapped
+const LABEL_NOTES = {
+  'DRY RUN': 'Dry run: every button only says what it would do. No file is copied, moved or removed.',
+  'LIVE': 'Live: buttons really copy, move and remove files.',
+};
+
 function labelChip([text, color]) {
-  return el('span', {class: 'label b-' + (COLORS.includes(color) ? color : 'grey')}, text);
+  const chipped = el('span', {class: 'label b-' + (COLORS.includes(color) ? color : 'grey'), title: LABEL_NOTES[text] || ''}, text);
+  if (LABEL_NOTES[text]) {
+    chipped.classList.add('tappable');
+    chipped.addEventListener('click', () => {
+      const header = document.getElementById('top');
+      const shown = document.getElementById('modenote');
+      if (shown) shown.remove();
+      else header.append(el('div', {id: 'modenote', class: 'modenote c-' + color}, LABEL_NOTES[text]));
+    });
+  }
+  return chipped;
+}
+
+// A path, shortened to its last parts, the whole shown on a tap (and hidden on the next)
+function pathLine(full, before) {
+  const parts = full.split('/').filter(Boolean);
+  const short = parts.length > 2 ? '…/' + parts.slice(-2).join('/') : full;
+  const shown = el('button', {class: 'pathbutton', title: full, onclick: event => {
+    event.preventDefault();
+    shown.textContent = shown.textContent === full ? short : full;
+  }}, short);
+  return el('div', {class: 'where'}, before ? el('span', {}, before) : '', shown);
 }
 
 // The pages' tabs, the one shown marked (active: 'home', 'photos', 'sync', 'run'), and Running while a
 // flow runs (a sync, a sort, the start menu: its screens are on /run), checked every few seconds
-const TABS = [['home', '/', 'Home'], ['replicas', '/replicas', 'Replicas'], ['photos', '/import', 'Photos'], ['sync', '/sync', 'Sync']];
+const TABS = [['home', '/', 'Home'], ['replicas', '/replicas', 'Replicas'], ['photos', '/import', 'Photos'], ['sync', '/sync', 'Sync & sort']];
 
 function tabBar(active) {
   const nav = document.getElementById('tabs');
@@ -125,12 +152,14 @@ function icon(name) {
   return span;
 }
 
-// How old a time ('YYYY-MM-DD HH:MM') is, in words, and its tone: fresh (green), oldish (yellow), old (red)
-function age(when, freshDays, oldDays) {
+// How old a time ('YYYY-MM-DD HH:MM') is, in words, and its tone, the same scale everywhere: within a
+// day fresh (green), within a week oldish (yellow), older old (red)
+function age(when, freshDays = 1, oldDays = 7) {
   if (!when) return {text: 'never', tone: 'none'};
   const then = new Date(when.replace(' ', 'T'));
   const hours = (Date.now() - then) / 3600000;
-  const text = hours < 1 ? 'just now' : hours < 24 ? Math.floor(hours) + ' h ago' : Math.floor(hours / 24) + ' days ago';
+  const days = Math.floor(hours / 24);
+  const text = hours < 1 ? 'just now' : hours < 24 ? Math.floor(hours) + ' h ago' : days === 1 ? 'yesterday' : days + ' days ago';
   return {text, tone: hours < freshDays * 24 ? 'ok' : hours < oldDays * 24 ? 'warn' : 'bad'};
 }
 
@@ -142,6 +171,5 @@ function chip(tone, text) {
 // A replica's name after its icon: Drive's (its 'cloud/' then left out) or a disk's
 function replicaLabel(path, name, isInbox) {
   const isDrive = path.startsWith('cloud/') || path === 'cloud';
-  return el('span', {class: 'rname'}, icon(isInbox ? 'inbox' : isDrive ? 'drive' : 'disk'),
-    isDrive && name.startsWith('cloud/') ? name.slice('cloud/'.length) : name);
+  return el('span', {class: 'rname'}, icon(isInbox ? 'inbox' : isDrive ? 'drive' : 'disk'), name);
 }

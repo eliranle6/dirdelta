@@ -1,0 +1,47 @@
+"""What the web version calls a replica (name()): its own name (its label, or its dir's) and where it
+is, so two of one name (a disk's eliran and Drive's) are told apart wherever they're named: 'eliran
+(Drive)', 'eliran (disk win)', 'eliran (this computer)'"""
+import os
+import threading
+import time
+
+from dirdelta.known import mounts
+from dirdelta.known import replicanames
+from dirdelta.trees import paths
+
+# How long where a local path is (findmnt's) is taken as known, in seconds
+PLACE_FOR = 30
+
+# {path: (when, its place)}
+_places = {}
+_lock = threading.Lock()
+
+
+def own_name(path):
+    """The replica's label, or its dir's name"""
+    return replicanames.label(path) or os.path.basename(path.rstrip('/')) or path
+
+
+def place(path):
+    """Where the replica at path is: 'Drive', 'this computer' (the system's disk), or 'disk NAME' (the
+    mount point's name, e.g. 'disk win')"""
+    if paths.is_cloud_path(path):
+        return 'Drive'
+    now = time.monotonic()
+    with _lock:
+        found = _places.get(path)
+    if found is not None and now - found[0] < PLACE_FOR:
+        return found[1]
+    mount = mounts.current_mount(path)
+    if mount is None or mount.target in ('/', '/home'):
+        found = 'this computer'
+    else:
+        found = 'disk ' + (mount.label or os.path.basename(mount.target.rstrip('/')) or mount.target)
+    with _lock:
+        _places[path] = (now, found)
+    return found
+
+
+def name(path):
+    """The replica's name, with where it is: 'eliran (Drive)'"""
+    return '%s (%s)' % (own_name(path), place(path))
