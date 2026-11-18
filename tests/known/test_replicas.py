@@ -118,8 +118,10 @@ class ReplicasFileTest(unittest.TestCase):
         known.note_compared('/a/', 'cloud/b', 2, 1, datetime.datetime(2026, 11, 1, 15, 0))
         replicas.save(known)
         loaded = replicas.load()
-        self.assertEqual(loaded.comparison('/a', 'cloud/b'), {'only': [2, 1], 'when': '2026-11-01 15:00'})
-        self.assertEqual(loaded.comparison('cloud/b', '/a'), {'only': [1, 2], 'when': '2026-11-01 15:00'})
+        self.assertEqual(loaded.comparison('/a', 'cloud/b'), {'only': [2, 1], 'when': '2026-11-01 15:00', 'total': None})
+        self.assertEqual(loaded.comparison('cloud/b', '/a'), {'only': [1, 2], 'when': '2026-11-01 15:00', 'total': None})
+        loaded.note_compared('/a', 'cloud/b', 2, 1, datetime.datetime(2026, 11, 2, 9, 0), totals=[100, 99])
+        self.assertEqual([99, 100], loaded.comparison('cloud/b', '/a')['total'])
         self.assertIsNone(loaded.comparison('/a', '/c'))
 
     def test_whats_known_of_a_replica_by_its_identity(self):

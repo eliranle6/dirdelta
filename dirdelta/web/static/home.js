@@ -71,12 +71,35 @@ function pathLine(full) {
   return el('div', {class: 'where'}, toggle, whole);
 }
 
-// A pair's sync status, as the terminal's dashboard shows it: its mark in its color (≡ in sync, » « one
-// ahead, ≠ branched, ? not known; grey if a replica changed since), and what it is in words
+// A pair's sync status: how much of it is in step (the files both had, of all either had, and what each
+// lacked: a bar), as the terminal's dashboard's mark (≡ in sync, » « one ahead, ≠ branched, ? not known);
+// and how stale that is: when it was compared (green today, yellow this week, red before), and whether a
+// replica changed since (then it may not be so anymore)
 function pairRow(pair, isRunning) {
-  return el('div', {class: 'item'}, el('span', {class: 'syncmark c-' + pair.state.color}, pair.state.mark),
+  const synced = pair.synced;
+  const compared = age(pair.state.when, 1, 7);
+  const parts = [];
+  if (!synced) parts.push(el('span', {class: 'note'}, 'Never compared: sync them to know.'));
+  else {
+    const {onlyA, onlyB, totalA, share} = synced;
+    const either = totalA === null ? null : totalA + onlyB;
+    const percent = share === null ? null : (share === 1 ? '100' : Math.min(99.9, Math.floor(share * 1000) / 10).toString());
+    if (either) {
+      parts.push(el('div', {class: 'syncbar'}, el('div', {class: 'both', style: 'width:' + (100 * (either - onlyA - onlyB) / either) + '%'}),
+        el('div', {class: 'only', style: 'width:' + (100 * onlyA / either) + '%'}), el('div', {class: 'only', style: 'width:' + (100 * onlyB / either) + '%'})));
+    }
+    parts.push(el('div', {class: 'syncline'}, percent !== null ? el('b', {}, percent + '% in step') : '',
+      el('span', {}, !onlyA && !onlyB ? 'Each has all the other\'s files' :
+        [onlyA ? onlyA.toLocaleString() + ' only in ' + pair.nameA : '', onlyB ? onlyB.toLocaleString() + ' only in ' + pair.nameB : '']
+          .filter(Boolean).join(' · ')),
+      percent === null ? el('span', {class: 'note'}, '(how many files each has: known after its next sync)') : ''));
+  }
+  const fresh = [];
+  if (pair.state.when) fresh.push(chip(compared.tone, 'Compared ' + compared.text));
+  if (pair.changedSince.length) fresh.push(chip('bad', pair.changedSince.join(' and ') + ' changed since: may be out of date'));
+  return el('div', {class: 'item pair'}, el('span', {class: 'syncmark c-' + pair.state.color}, pair.state.mark),
     el('span', {class: 'what'}, el('b', {class: 'pairline'}, pair.favorite ? '★' : '', replicaLabel(pair.a, pair.nameA), '⇄',
-      replicaLabel(pair.b, pair.nameB)), el('span', {class: 'note'}, pair.state.text)),
+      replicaLabel(pair.b, pair.nameB)), parts, fresh.length ? el('div', {class: 'chips-row'}, fresh) : ''),
     el('button', {class: 'small', disabled: isRunning, onclick: () => start({kind: 'pair', a: pair.a, b: pair.b})}, 'Sync'));
 }
 

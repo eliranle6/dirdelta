@@ -211,7 +211,9 @@ class SyncMenu(object):
         self.noted[:] = futures
         self.known_replicas.note_compared(self.replica_a_path, self.replica_b_path,
                                           *[len(future.result().relpaths) for future in futures],
-                                          when=datetime.datetime.now())
+                                          when=datetime.datetime.now(),
+                                          totals=[sum(1 for _ in replica.iter_files())
+                                                  for replica in (self.replica_a, self.replica_b)])
         replicas.save(self.known_replicas)
 
     def shown_as(self):

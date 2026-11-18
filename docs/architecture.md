@@ -1186,8 +1186,9 @@ every link carries, then a cookie), and a watcher.
   same screen. Stop raises KeyboardInterrupt in the flow's thread, as Ctrl-C does.
 - The pages, each with the same tabs (`markup.js`'s tabBar()): Home (`/`, `home.js`: the whole picture:
   tiles of the replicas there, the last sync, the hashing and Drive's oldest list, what's running, the
-  phones plugged in, each pair's sync status as the terminal's dashboard has it (`syncstate`: ≡ » « ≠ ?)
-  with Sync, and the inboxes), Replicas (`/replicas`, the same script: each replica's icon, disk, role
+  phones plugged in, each pair's sync status (`syncstate`'s mark, ≡ » « ≠ ?; how much was in step, the files
+  both had of all either had, by the totals a sync notes with its comparison since 2026-11-18; and how
+  stale that is: when it was compared, and which replica changed since) with Sync, and the inboxes), Replicas (`/replicas`, the same script: each replica's icon, disk, role
   (an inbox), status chips (mounted, synced, hashed, its list read), log entry and hashing to start or
   pause), Photos (`/import`, below), Sync (`/sync`, `sync.js`: the favorite
   pairs, the recent ones and the inbox sorts, each started with a tap: `daemon.flow()`, `main.run_pair()`,

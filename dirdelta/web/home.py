@@ -74,7 +74,22 @@ def pair_info(path_a, path_b, names, known_replicas):
             'favorite': (path_a, path_b) in known_replicas.favorites, 'compared': known_replicas.comparison(path_a, path_b),
             'state': {'kind': state.kind, 'mark': mark, 'color': color, 'when': state.when,
                       'text': syncstate.describe(state._replace(changed=[names.get(path, path) for path in state.changed]),
-                                                 name_a, name_b)}}
+                                                 name_a, name_b)},
+            'synced': _synced(known_replicas.comparison(path_a, path_b)),
+            'changedSince': [names.get(path, path) for path in state.changed]}
+
+
+def _synced(comparison):
+    """How much of the pair was in step when it was last compared: {'onlyA', 'onlyB', 'totalA', 'totalB',
+    'share': the files both had, of all either had (0-1; None if the totals weren't noted then)}, or None"""
+    if comparison is None:
+        return None
+    (only_a, only_b), total = comparison['only'], comparison.get('total')
+    found = {'onlyA': only_a, 'onlyB': only_b, 'totalA': None, 'totalB': None, 'share': None}
+    if total:
+        both, either = total[0] - only_a, total[0] + only_b
+        found.update(totalA=total[0], totalB=total[1], share=both / either if either else 1.0)
+    return found
 
 
 def routes(session):

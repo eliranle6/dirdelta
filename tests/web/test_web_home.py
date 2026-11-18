@@ -1,10 +1,12 @@
 """The web version's dashboard and Sync page (web/home.py), and the flows they start (daemon.flow())"""
+import datetime
 import os
 import shutil
 import tempfile
 import unittest
 from unittest import mock
 
+from dirdelta.known import replicalog
 from dirdelta.known import replicas
 from dirdelta.web import daemon, home
 from web_support import WebTest
@@ -41,6 +43,17 @@ class HomeTest(WebTest):
         self.assertEqual([(self.local, 'cloud/photos')], [(pair['a'], pair['b']) for pair in found['favorites']])
         self.assertEqual([(self.gone, self.local)], [(pair['a'], pair['b']) for pair in found['recent']])
         self.assertEqual([('cloud/unsorted', self.local)], [(sort['inbox'], sort['root']) for sort in found['sorts']])
+
+    def test_a_pairs_status_says_how_much_was_in_step_and_whether_its_changed_since(self):
+        known = replicas.load()
+        known.note_compared(self.local, 'cloud/photos', 10, 30, datetime.datetime(2026, 11, 1, 9, 0), totals=[1000, 1020])
+        known.note_seen(replicalog.identity(self.local), self.local, None, datetime.datetime(2026, 11, 2, 9, 0))
+        known.note_changed(replicalog.identity(self.local), datetime.datetime(2026, 11, 2, 9, 0))
+        pair = next(pair for pair in self.call('GET', '/api/home')['pairs'] if pair['b'] == 'cloud/photos')
+        self.assertEqual((10, 30, 1000), (pair['synced']['onlyA'], pair['synced']['onlyB'], pair['synced']['totalA']))
+        self.assertAlmostEqual(990 / 1030, pair['synced']['share'])
+        self.assertEqual('2026-11-01 09:00', pair['state']['when'])
+        self.assertEqual(1, len(pair['changedSince']))
 
     def test_only_a_known_local_replica_is_hashed_from_the_dashboard(self):
         with mock.patch('dirdelta.screens.hashes_screen.dashboard_actions.start_hashing') as start_hashing:

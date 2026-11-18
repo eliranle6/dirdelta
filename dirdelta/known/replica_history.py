@@ -34,7 +34,7 @@ class Replicas(object):
         self.known = {identity: dict(info) for identity, info in (known or {}).items()}
         # Of each pair a sync compared, the latest first: {'pair': [path_a, path_b] (normalized),
         # 'only': [how many of a's files b lacked, how many of b's a lacked], 'when': 'YYYY-MM-DD
-        # HH:MM'}
+        # HH:MM', and since 2026-11-18 'total': [how many files each had]}
         self.compared = [dict(item) for item in (compared or [])]
         # {what a label is of (replicanames.label_key()): the label the user gave it}
         self.labels = dict(labels or {})
@@ -49,22 +49,30 @@ class Replicas(object):
         else:
             self.labels.pop(key, None)
 
-    def note_compared(self, path_a, path_b, only_a, only_b, when):
+    def note_compared(self, path_a, path_b, only_a, only_b, when, totals=None):
         """Note that a sync just found (when, a datetime) that a had only_a files b lacked, and b
-        only_b that a lacked"""
+        only_b that a lacked (and, if given, totals: how many files each had)"""
         pair = pair_of(path_a, path_b)
-        self.compared = [{'pair': list(pair), 'only': [only_a, only_b], 'when': _time(when)}] + [
+        item = {'pair': list(pair), 'only': [only_a, only_b], 'when': _time(when)}
+        if totals is not None:
+            item['total'] = list(totals)
+        self.compared = [item] + [
             old for old in self.compared if not _is_same_pair(old['pair'], pair)]
         del self.compared[MAX_HISTORY + len(self.favorites):]
 
     def comparison(self, path_a, path_b):
         """What a sync last found of the pair, a's first: {'only': [a's files b lacked, b's a lacked],
-        'when': 'YYYY-MM-DD HH:MM'}; or None if it was never compared"""
+        'when': 'YYYY-MM-DD HH:MM', 'total': [how many files each had] or None (not noted then)}; or
+        None if it was never compared"""
         pair = pair_of(path_a, path_b)
         for item in self.compared:
             if _is_same_pair(item['pair'], pair):
-                only = item['only'] if tuple(item['pair']) == pair else list(reversed(item['only']))
-                return {'only': list(only), 'when': item['when']}
+                is_same_order = tuple(item['pair']) == pair
+                only = item['only'] if is_same_order else list(reversed(item['only']))
+                total = item.get('total')
+                if total is not None and not is_same_order:
+                    total = list(reversed(total))
+                return {'only': list(only), 'when': item['when'], 'total': list(total) if total else None}
         return None
 
     def note_seen(self, identity, path, entry, when):

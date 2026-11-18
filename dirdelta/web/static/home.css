@@ -23,3 +23,8 @@ button.item { border: 0; border-radius: 0; background: none; }
 .item .go { color: var(--muted); font-size: 20px; }
 .list > button.item + button.item { border-top: 1px solid var(--line); }
 .item .syncmark { font-size: 22px; font-weight: 700; width: 1.1em; text-align: center; flex: none; } a.tile { color: inherit; text-decoration: none; }
+.syncbar { display: flex; height: 10px; border-radius: 5px; overflow: hidden; background: var(--line); }
+.syncbar .both { background: var(--green); } .syncbar .only { background: var(--yellow); }
+.syncbar .only + .only { background: var(--orange); }
+.syncline { display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: 13px; align-items: baseline; }
+.item.pair { align-items: flex-start; } .item.pair .syncmark { margin-top: 2px; } .item.pair button { margin-top: 2px; }
