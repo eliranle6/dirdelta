@@ -103,7 +103,14 @@ function pairRow(pair, isRunning) {
 
 // The whole picture: one tile each for the replicas, the syncs, the hashing and Drive's lists
 function summary(data) {
-  const there = data.replicas.filter(replica => replica.there).length;
+  // (Replicas only: an inbox isn't one, its files are sorted into one)
+  const kept = data.replicas.filter(replica => !replica.inboxOf.length);
+  const disks = kept.filter(replica => replica.kind === 'local'), inDrive = kept.filter(replica => replica.kind === 'drive');
+  const mounted = disks.filter(replica => replica.there).length;
+  const there = mounted + (data.drive.connected ? inDrive.length : 0);
+  const where = [disks.length ? (mounted === disks.length ? (disks.length === 1 ? 'Its disk is mounted' : 'Every disk is mounted') :
+      (disks.length - mounted) + ' disk' + (disks.length - mounted === 1 ? ' isn\'t' : 's aren\'t') + ' mounted') : '',
+    inDrive.length ? (data.drive.connected ? 'Drive is connected' : 'Drive isn\'t connected') : ''].filter(Boolean).join(' · ');
   const lastSync = data.pairs.map(pair => pair.compared && pair.compared.when).filter(Boolean).sort().pop();
   const synced = age(lastSync);
   const jobs = data.replicas.filter(replica => replica.hashing && replica.hashing.state);
@@ -113,8 +120,8 @@ function summary(data) {
   const tile = (tone, title, value, hint, href) => el(href ? 'a' : 'div', {class: 'tile ' + tone, href},
     el('span', {class: 'tile-title'}, title), el('b', {}, value), hint ? el('span', {class: 'tile-hint'}, hint) : '');
   return el('div', {class: 'tiles'},
-    tile(!data.replicas.length ? 'none' : there === data.replicas.length ? 'ok' : 'bad', 'Replicas available', there + ' of ' + data.replicas.length,
-      !data.replicas.length ? 'None yet' : there === data.replicas.length ? 'Every disk is mounted' : 'A disk isn\'t mounted', '/replicas'),
+    tile(!kept.length ? 'none' : there === kept.length ? 'ok' : 'bad', 'Replicas available', there + ' of ' + kept.length,
+      !kept.length ? 'None yet' : where, '/replicas'),
     tile(lastSync ? synced.tone : 'none', 'Last sync', lastSync ? synced.text : 'never', 'Sync status is below'),
     tile(hashing ? 'warn' : jobs.length && jobs.every(replica => replica.hashing.state === 'done') ? 'ok' : 'none', 'File hashes',
       hashing ? waiting(hashing.name) : jobs.length ? 'Up to date' : 'Not computed yet', 'They find moved and renamed files', '/replicas'),
@@ -144,7 +151,8 @@ function pluggedIn(data) {
       replica.there ? chip('ok', 'Mounted') : chip('bad', 'Not plugged in')));
   }
   const inDrive = data.replicas.filter(replica => replica.kind === 'drive');
-  rows.push(row('drive', 'Google Drive', inDrive.length ? 'Holds ' + inDrive.map(replica => replica.fullName).join(', ') : 'Holds no replica of ' + data.user + "'s yet",
+  const held = inDrive.map(replica => replica.inboxOf.length ? 'the inbox ' + replica.fullName : replica.fullName);
+  rows.push(row('drive', 'Google Drive', inDrive.length ? 'Holds ' + held.join(' and ') : 'Holds no replica of ' + data.user + "'s yet",
     data.drive.connected ? chip('ok', 'Connected') : chip('bad', 'Not connected')));
   return el('div', {class: 'list'}, rows);
 }
