@@ -22,8 +22,12 @@ class ServerTest(unittest.TestCase):
         patcher.start()
         self.addCleanup(patcher.stop)
         self.key = access.settings()['key']
+        self.video = os.path.join(temp_dir, 'v.mp4')
+        with open(self.video, 'wb') as video:
+            video.write(b'0123456789')
         routes = {('GET', '/api/hello'): lambda query, body: {'hello': query.get('name')},
-                  ('POST', '/api/echo'): lambda query, body: body}
+                  ('POST', '/api/echo'): lambda query, body: body,
+                  ('GET', '/api/file'): lambda query, body: server.FileReply(self.video)}
         self.server = server.serve(routes, self.key, '127.0.0.1', 0)
         threading.Thread(target=self.server.serve_forever, daemon=True).start()
         self.addCleanup(self.server.server_close)
@@ -53,6 +57,18 @@ class ServerTest(unittest.TestCase):
         with self.assertRaises(urllib.error.HTTPError) as raised:
             self.get('/../web/server.py?k=' + self.key)
         self.assertEqual(404, raised.exception.code)
+
+
+    def test_a_file_is_sent_whole_or_the_range_asked_for_as_a_browsers_video_asks(self):
+        whole = self.get('/api/file?k=' + self.key)
+        self.assertEqual((200, b'0123456789', 'video/mp4'), (whole.status, whole.read(), whole.headers['Content-Type']))
+        for asked, status, part in (('bytes=2-4', 206, b'234'), ('bytes=7-', 206, b'789'), ('bytes=-3', 206, b'789')):
+            answer = self.get('/api/file?k=' + self.key, {'Range': asked})
+            self.assertEqual((status, part), (answer.status, answer.read()), asked)
+        self.assertEqual('bytes 2-4/10', self.get('/api/file?k=' + self.key, {'Range': 'bytes=2-4'}).headers['Content-Range'])
+        with self.assertRaises(urllib.error.HTTPError) as raised:
+            self.get('/api/file?k=' + self.key, {'Range': 'bytes=20-'})
+        self.assertEqual(416, raised.exception.code)
 
 
 class WatcherTest(unittest.TestCase):

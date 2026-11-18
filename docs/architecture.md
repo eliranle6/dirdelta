@@ -1191,7 +1191,9 @@ every link carries, then a cookie), and a watcher.
   hash cache, or its `meta/hashes.sqlite`) and its synced replicas' (Drive's own SHA-1s), else by name
   and size; an import's page opens on its overview (`overview.py`: per replica, how many it has by
   contents, by name and size only, or not), each count a link to those photos (`#photos/KIND/REPLICA`,
-  so a phone's Back returns to it), and offers to skip the ones every replica has; the photos are shown by
+  so a phone's Back returns to it), and offers to skip the ones every replica has; a photo's thumbnail is made on the server (a video's frame needs
+  ffmpeg), else a video is drawn by the browser itself from the file (`/api/import/file`, served by ranges:
+  `server.FileReply`), with a Play link; the photos are shown by
   day, with where that day's photos already are as suggestions; the dirs chosen are kept at each click,
   and Move puts them in (a dry run says what it would do). Importing the same source into the same
   replica again goes on with its latest import (listed again, so new photos are added).

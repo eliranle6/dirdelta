@@ -1,5 +1,5 @@
 """The import page's API (routes()): the imports and the phones plugged in, starting one, an import's
-files by day (each with where the replicas have it already, and suggestions), their thumbnails, the
+files by day (each with where the replicas have it already, and suggestions), their thumbnails and files, the
 dirs chosen for them, copying again and moving them in (see phoneimport/)"""
 import datetime
 import os
@@ -9,7 +9,7 @@ from dirdelta.known import replicas
 from dirdelta.phoneimport import applying, copying, known, overview, sources, store, suggest, thumbs
 from dirdelta.trees import paths
 from dirdelta.util import dryrun
-from dirdelta.web.server import Reply
+from dirdelta.web.server import FileReply, Reply
 
 
 class _KnownCache(object):
@@ -84,6 +84,12 @@ def routes():
         data = thumbs.jpeg(found, query.get('rel', '')) if found is not None and _is_inside(query.get('rel', '')) else None
         return Reply(data, 'image/jpeg', is_kept=True) if data else Reply(b'', 'text/plain', 404)
 
+    def file(query, body):
+        found, relpath = _live(query.get('id')), query.get('rel', '')
+        if found is None or not _is_inside(relpath) or relpath not in found.files:
+            return Reply(b'', 'text/plain', 404)
+        return FileReply(found.local_path(relpath))
+
     def assign(query, body):
         found = _live(body.get('id'))
         if found is None:
@@ -116,7 +122,7 @@ def routes():
         return {'ok': found is not None}
 
     return {('GET', '/api/imports'): listing, ('POST', '/api/imports/new'): new, ('GET', '/api/import'): state,
-            ('GET', '/api/import/thumb'): thumb, ('POST', '/api/import/assign'): assign,
+            ('GET', '/api/import/thumb'): thumb, ('GET', '/api/import/file'): file, ('POST', '/api/import/assign'): assign,
             ('POST', '/api/import/copy'): copy_again, ('POST', '/api/import/apply'): apply}
 
 

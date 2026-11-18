@@ -245,6 +245,30 @@ function renderImport() {
   renderFooter();
 }
 
+const VIDEO = /\.(mp4|m4v|mov|3gp|webm|mkv)$/i;
+// Each file's picture, kept across the redraws (a video isn't loaded again at each)
+const pictures = new Map();
+
+// A file's picture: the server's thumbnail; else, for a video, the browser's own first frame (the
+// server may have no ffmpeg); else its name
+function picture(file) {
+  let image = pictures.get(file.rel);
+  if (image) return image;
+  const query = '?id=' + encodeURIComponent(page.id) + '&rel=' + encodeURIComponent(file.rel);
+  const name = () => el('div', {class: 'noimg'}, file.rel.split('/').pop());
+  const keep = node => { pictures.set(file.rel, node); return node; };
+  image = keep(el('img', {loading: 'lazy', alt: file.rel, src: '/api/import/thumb' + query}));
+  image.addEventListener('error', () => {
+    let instead = name();
+    if (VIDEO.test(file.rel)) {
+      instead = el('video', {muted: true, playsinline: true, preload: 'metadata', src: '/api/import/file' + query + '#t=0.5'});
+      instead.addEventListener('error', () => instead.replaceWith(keep(name())));
+    }
+    image.replaceWith(keep(instead));
+  });
+  return image;
+}
+
 function photo(file) {
   const caption = [];
   if (file.state === 'moved') caption.push(el('div', {class: 'to'}, '✓ moved'));
@@ -253,9 +277,11 @@ function photo(file) {
   for (const text of have(file)) caption.push(el('div', {class: 'have'}, '✓ in ' + text));
   if (file.state === 'pending') caption.push(el('div', {class: 'skipped'}, 'copying…'));
   caption.push(el('div', {}, file.rel.split('/').pop()));
-  const image = file.state === 'pending' ? el('div', {class: 'noimg'}, 'not copied yet') :
-    el('img', {loading: 'lazy', alt: file.rel, src: '/api/import/thumb?id=' + encodeURIComponent(page.id) + '&rel=' + encodeURIComponent(file.rel)});
-  image.addEventListener('error', () => image.replaceWith(el('div', {class: 'noimg'}, file.rel.split('/').pop())));
+  if (VIDEO.test(file.rel) && file.state !== 'pending' && file.state !== 'moved') {
+    caption.push(el('a', {class: 'play', target: '_blank', onclick: event => event.stopPropagation(),
+      href: '/api/import/file?id=' + encodeURIComponent(page.id) + '&rel=' + encodeURIComponent(file.rel)}, '▶ Play'));
+  }
+  const image = file.state === 'pending' ? el('div', {class: 'noimg'}, 'not copied yet') : picture(file);
   return el('div', {class: 'photo' + (page.selected.has(file.rel) ? ' sel' : '') + (file.state === 'moved' ? ' done' : ''),
     onclick: () => {
       if (file.state === 'moved') return;
