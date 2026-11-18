@@ -1,6 +1,7 @@
 """Who may use the web version, and where it is: a key in its links (kept in WEB_FILE, so a link
 stays good when the daemon restarts), checked on every request (in the address once, then a cookie),
-and the computer's address on the local network"""
+and the computer's address on the local network; and which of dirdelta's users a browser is (user_of():
+a cookie of its own, chosen on the page, or a link's u=)"""
 import json
 import os
 import secrets
@@ -10,6 +11,7 @@ import urllib.parse
 WEB_FILE = os.path.expanduser('~/.config/dirdelta/web.json')
 DEFAULT_PORT = 8765
 COOKIE = 'dirdelta_key'
+USER_COOKIE = 'dirdelta_user'
 # How long a browser keeps the key (seconds)
 COOKIE_AGE = 30 * 24 * 3600
 
@@ -38,6 +40,21 @@ def is_allowed(key, path, cookie_header):
         return True
     cookies = [part.strip() for part in (cookie_header or '').split(';')]
     return '%s=%s' % (COOKIE, key) in cookies
+
+
+def user_of(path, cookie_header):
+    """The user a request is for: its address's u=, else its cookie's, if they're a user; else the owner"""
+    from dirdelta.known import users
+    asked = urllib.parse.parse_qs(urllib.parse.urlsplit(path).query).get('u', [None])[-1]
+    if asked is None:
+        cookies = dict(part.strip().partition('=')[::2] for part in (cookie_header or '').split(';') if '=' in part)
+        asked = urllib.parse.unquote(cookies.get(USER_COOKIE, ''))
+    return asked if asked and users.exists(asked) else users.OWNER
+
+
+def user_cookie(name):
+    """(Not HttpOnly: the page changes it)"""
+    return '%s=%s; Path=/; Max-Age=%d; SameSite=Strict' % (USER_COOKIE, name, COOKIE_AGE)
 
 
 def cookie(key):

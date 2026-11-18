@@ -6,6 +6,7 @@ import unittest
 from unittest import mock
 
 from dirdelta.drive import drivecache
+from dirdelta.known import users
 from dirdelta.phoneimport import copying, pool, sources, store
 from import_support import ImportTest
 
@@ -80,6 +81,21 @@ class CopyingTest(ImportTest):
         second.end()
         self.assertFalse(os.path.exists(copy))
         self.assertEqual([], store.all_imports())
+
+
+    def test_each_users_imports_are_their_own_but_a_phones_copies_are_shared(self):
+        self.write(self.source, 'Camera/a.jpg', 'a')
+        mine = store.create(self.source, self.dest, 'disk-1')
+        self.read()
+        self.read(False, ['Camera/a.jpg'])
+        with mock.patch.object(users, 'all_users', return_value=[users.OWNER, 'hagit']), users.acting_as('hagit'):
+            self.assertEqual([], store.all_imports())
+            hers = store.create(self.source, self.dest, 'disk-1')
+            self.assertIsNot(mine, hers)
+            self.assertEqual(store.COPIED, hers.files()['Camera/a.jpg']['state'])
+            hers.end()
+        self.assertEqual([mine], store.all_imports())
+        self.assertTrue(os.path.exists(mine.pool.local_path('Camera/a.jpg')))
 
 
 class DriveSourceTest(ImportTest):

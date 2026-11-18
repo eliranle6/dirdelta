@@ -113,8 +113,8 @@ function summary(data) {
   const tile = (tone, title, value, hint, href) => el(href ? 'a' : 'div', {class: 'tile ' + tone, href},
     el('span', {class: 'tile-title'}, title), el('b', {}, value), hint ? el('span', {class: 'tile-hint'}, hint) : '');
   return el('div', {class: 'tiles'},
-    tile(there === data.replicas.length ? 'ok' : 'bad', 'Replicas available', there + ' of ' + data.replicas.length,
-      there === data.replicas.length ? 'Every disk is mounted' : 'A disk isn\'t mounted', '/replicas'),
+    tile(!data.replicas.length ? 'none' : there === data.replicas.length ? 'ok' : 'bad', 'Replicas available', there + ' of ' + data.replicas.length,
+      !data.replicas.length ? 'None yet' : there === data.replicas.length ? 'Every disk is mounted' : 'A disk isn\'t mounted', '/replicas'),
     tile(lastSync ? synced.tone : 'none', 'Last sync', lastSync ? synced.text : 'never', 'Sync status is below'),
     tile(hashing ? 'warn' : jobs.length && jobs.every(replica => replica.hashing.state === 'done') ? 'ok' : 'none', 'File hashes',
       hashing ? waiting(hashing.name) : jobs.length ? 'Up to date' : 'Not computed yet', 'They find moved and renamed files', '/replicas'),
@@ -143,17 +143,23 @@ function pluggedIn(data) {
     rows.push(row(replica.device, replica.fullName, replica.place === 'this computer' ? 'On this computer\'s own disk' : 'On a separate disk',
       replica.there ? chip('ok', 'Mounted') : chip('bad', 'Not plugged in')));
   }
-  if (data.replicas.some(replica => replica.kind === 'drive')) {
-    rows.push(row('drive', 'Google Drive', 'Holds ' + data.replicas.filter(replica => replica.kind === 'drive').map(replica => replica.fullName).join(', '),
-      data.drive.connected ? chip('ok', 'Connected') : chip('bad', 'Not connected')));
-  }
+  const inDrive = data.replicas.filter(replica => replica.kind === 'drive');
+  rows.push(row('drive', 'Google Drive', inDrive.length ? 'Holds ' + inDrive.map(replica => replica.fullName).join(', ') : 'Holds no replica of ' + data.user + "'s yet",
+    data.drive.connected ? chip('ok', 'Connected') : chip('bad', 'Not connected')));
   return el('div', {class: 'list'}, rows);
 }
 
 function homePage(data) {
   const parts = [summary(data)];
+  if (!data.replicas.length) {
+    // (A new user's: nothing of theirs yet)
+    parts.push(el('div', {class: 'card banner'}, el('div', {}, el('b', {}, data.user + ' has no replicas yet'),
+      el('div', {class: 'note'}, 'Choose two copies of the same files to keep in step, e.g. a folder on this computer and one in Google Drive. ' +
+        'They\'re then ' + data.user + '\'s replicas, shown here and on Replicas, Sync and the imports.')),
+      el('button', {class: 'primary', disabled: !!data.running, onclick: () => start({})}, 'Choose two replicas to sync')));
+  }
   if (data.running) {
-    parts.push(el('div', {class: 'card banner running'}, el('div', {}, el('b', {}, 'Running now'),
+    parts.push(el('div', {class: 'card banner running'}, el('div', {}, el('b', {}, 'Running now' + (data.running.user && data.running.user !== data.user ? ' (for ' + data.running.user + ')' : '')),
       data.running.title ? el('div', {class: 'note'}, data.running.title) : ''),
       el('a', {class: 'button primary', href: '/run'}, 'Open it')));
   }

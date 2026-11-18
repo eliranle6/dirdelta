@@ -5,6 +5,7 @@ replica's drive is mounted (to sync it)"""
 import sys
 import threading
 
+from dirdelta.known import users
 from dirdelta.sharing import link as sharing
 from dirdelta.ui import frontend
 from dirdelta.util import dryrun
@@ -26,7 +27,7 @@ def run(port=None):
     routes.update(importing.routes())
     routes.update(home.routes(session))
     web_server = server.serve(routes, key, HOST, port)
-    watcher = Watcher(lambda kind, name, path: _say(kind, name, key, port))
+    watcher = Watcher(lambda kind, name, path, whose: _say(kind, name, key, port, whose))
     watcher.start()
     _out("dirdelta's web version (%s): %s\n" % (dryrun.label()[0], access.link(key, port)))
     try:
@@ -51,16 +52,19 @@ def flow(body):
     return main.start_menu()
 
 
-def _say(kind, name, key, port):
-    """Email the user a link to what appeared: a phone's import page, or the start menu"""
-    if kind == PHONE:
-        url, what = access.link(key, port, '/import'), "Import the photos of %s" % (name,)
-    else:
-        url, what = access.link(key, port), "Sync %s (it's there now)" % (name,)
+def _say(kind, name, key, port, whose):
+    """Email each user of whose a link to what appeared (opening the page as them): a phone's import
+    page, or the start menu"""
+    for user in whose:
+        if kind == PHONE:
+            url, what = access.link(key, port, '/import', u=user), "Import the photos of %s" % (name,)
+        else:
+            url, what = access.link(key, port, u=user), "Sync %s (it's there now)" % (name,)
 
-    def send():
-        _out("%s: %s\n" % (what, sharing.email(url, what)))
-    threading.Thread(target=send, daemon=True).start()
+        def send(user=user, url=url, what=what):
+            with users.acting_as(user):
+                _out("%s (%s): %s\n" % (what, user, sharing.email(url, what)))
+        threading.Thread(target=send, daemon=True).start()
 
 
 def _out(text):

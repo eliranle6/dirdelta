@@ -145,7 +145,8 @@ The map (each module's docstring's first line; generated from the code):
   - `replicalog.py`: Each replica's log of changes, LOG_NAME at its root, which the user keeps, newest last:
   - `replicanames.py`: What to call a replica on the screens, telling which disk or Drive account it's on, as the user labeled it if ...
   - `replicas.py`: The pairs of replicas the user synced (history, the latest first) and the ones they made favorites, and the in...
-  - `settings.py`: The user's choices that last from one run to the next (SETTINGS_FILE): whether the file pickers show the selec...
+  - `users.py`: Who dirdelta is used by (its users: each one's replicas, pairs, sorts, settings and imports their own, the rest shared), and who acts now
+  - `settings.py`: Each user's choices that last from one run to the next (SETTINGS_FILE): whether the file pickers show the selec...
   - `mounts/`: The volumes that local replicas are on, kept in MOUNTS_FILE (JSON) so that one that isn't mounted now (a disk'...
     - `current.py`: What's mounted now, and remembering it
     - `file.py`: The mounts kept, in MOUNTS_FILE
@@ -1231,7 +1232,19 @@ every link carries, then a cookie), and a watcher.
   other import has that source.
 - The watcher looks every 5 s for a phone's storage or a known local replica appearing, and emails the
   user a link (`sharing/link.py`; the address is kept in `settings.json` after the first one), at most
-  once in 10 minutes a path.
+  once in 10 minutes a path: a replica to each user who has it, a phone to each who imported from it
+  (else the owner), the link opening the page as them (`u=`).
+- Users (`known/users.py`, 2026-11-18): each user's `replicas.json`, `settings.json` and imports are
+  their own; the owner's (the computer's login) where they always were, another's in a `users/NAME/`
+  folder beside them (`users.own()`). Shared: the hash cache, Drive's cache and account (the owner's
+  login), the mounts, the phones' pools (`imports/sources/`; ending an import removes its pool only if
+  no user's import has the source). Who acts now (`users.current()`) is the thread's (`acting_as()`),
+  else the run's (`set_default()`: `--user`/`-u`, `DIRDELTA_USER`, else the owner). The server answers
+  each request as its browser's user (`access.user_of()`: a link's `u=`, else the `dirdelta_user`
+  cookie, else the owner); a flow runs as whoever started it, and so do the threads it starts (the
+  run's user while it runs). The top bar (`markup.js`'s userBar()) changes the user, adds one, or sets
+  the address links are emailed to them (`/api/users`, `/api/users/add`, `/api/users/email`); a new
+  user's Home offers to choose their first two replicas.
 
 ## What replicas are called: `replicanames.py`, `label_screen.py`
 

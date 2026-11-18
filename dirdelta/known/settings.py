@@ -1,10 +1,13 @@
-"""The user's choices that last from one run to the next (SETTINGS_FILE): whether the file pickers
+"""Each user's choices that last from one run to the next (SETTINGS_FILE): whether the file pickers
 show the selected file's picture (images.py; `i` in a picker switches it), and the address links are
 emailed to (sharing/link.py)."""
 import json
 import os
 import threading
 
+from dirdelta.known import users
+
+# The owner's (another user's: in a folder of theirs beside it, see users.py)
 SETTINGS_FILE = os.path.expanduser('~/.config/dirdelta/settings.json')
 _lock = threading.Lock()
 
@@ -36,7 +39,7 @@ def set_email_address(address):
 
 def _load():
     try:
-        with open(SETTINGS_FILE) as f:
+        with open(users.own(SETTINGS_FILE)) as f:
             settings = json.load(f)
         return settings if isinstance(settings, dict) else {}
     except (OSError, ValueError):
@@ -44,12 +47,13 @@ def _load():
 
 
 def _save(settings):
+    path = users.own(SETTINGS_FILE)
     try:
-        os.makedirs(os.path.dirname(SETTINGS_FILE), exist_ok=True)
-        temp_path = SETTINGS_FILE + '.tmp'
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        temp_path = path + '.tmp'
         with open(temp_path, 'w') as f:
             json.dump(settings, f, indent=1)
-        os.replace(temp_path, SETTINGS_FILE)
+        os.replace(temp_path, path)
     except OSError:
         # Then it's only for this run (nothing's printed: a picker may have the screen)
         pass

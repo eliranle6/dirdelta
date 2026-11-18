@@ -1,11 +1,12 @@
 """The web version's session (Session): dirdelta's flow (the start menu, a sync, a sort) run on a thread
-of its own, its pickers and messages shown in the browser (ui/frontend.py points the terminal's at it),
+of its own, as the user who started it, its pickers and messages shown in the browser (ui/frontend.py points the terminal's at it),
 and what's shown now, each change numbered so the browsers (the laptop's, a phone's) wait for the next"""
 import contextlib
 import ctypes
 import itertools
 import threading
 
+from dirdelta.known import users
 from dirdelta.web import messages as web_messages
 from dirdelta.web import picker as web_picker
 
@@ -27,6 +28,8 @@ class Session(object):
         self._screens = []
         self.log = []
         self._flow = None
+        # Who the flow running (or the last) is for: the user who started it
+        self.user = None
 
     # Changes, and waiting for them
 
@@ -77,14 +80,18 @@ class Session(object):
         if self.is_running:
             return False
         self.log = []
+        self.user = users.current()
         self._flow = threading.Thread(target=self._run, args=(flow,), daemon=True)
         self._flow.start()
         self.bump()
         return True
 
     def _run(self, flow):
+        # As the user who started it, and so are the threads it starts (the run's user then)
+        users.set_default(self.user)
         try:
-            flow()
+            with users.acting_as(self.user):
+                flow()
             # (So a run that ended, e.g. gone back from, says so: the page shows nothing running then)
             self.print_line("The run ended.", 'grey')
         except KeyboardInterrupt:
@@ -96,6 +103,7 @@ class Session(object):
             self.print_line("Something went wrong: %s" % (error,), 'red')
             raise
         finally:
+            users.set_default(users.OWNER)
             self.bump()
 
     def stop(self):

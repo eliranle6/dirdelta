@@ -144,3 +144,18 @@ nav#tabs .tabgroup { flex: 2 1 0; }
 /* The tabs always on a row of their own, under the title */
 nav#tabs { flex: 0 0 auto; width: calc(100% + 32px); max-width: none; order: 3; }
 nav#tabs .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); animation: pulse 1.4s ease-in-out infinite; flex: none; }
+
+/* The top bar: whose replicas these are, and the user menu */
+#userbar { order: -2; flex: 0 0 auto; width: calc(100% + 32px); margin: -8px -16px 0; padding: 5px 16px; display: flex; align-items: center;
+  justify-content: space-between; gap: 10px; background: var(--card); border-bottom: 1px solid var(--line); font-size: 13px; }
+#userbar .brand { font-weight: 700; letter-spacing: .02em; color: var(--muted); }
+#userbar .userpick { display: flex; align-items: center; gap: 6px; min-width: 0; color: var(--muted); }
+#userbar select { font: inherit; font-weight: 700; color: var(--fg); background: var(--bg); border: 1px solid var(--line);
+  border-radius: 6px; padding: 3px 6px; width: auto; max-width: 45vw; }
+#userform { order: -1; flex: 0 0 100%; }
+#userform:empty { display: none; }
+#userform form { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 4px 0; font-size: 14px; }
+#userform .formtitle { flex-basis: 100%; color: var(--muted); }
+#userform input { font: inherit; flex: 1 1 180px; min-width: 0; padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px;
+  background: var(--bg); color: var(--fg); }
+#userform .note { flex-basis: 100%; color: var(--red); }

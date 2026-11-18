@@ -120,7 +120,7 @@ const TABS = [['home', '/', 'Home'], ['replicas', '/replicas', 'Replicas'], ['sy
 const INBOX_TABS = [['photos', '/import', 'Photos import'], ['unsorted', '/unsorted', 'Unsorted import']];
 
 // (Called again, it marks another tab: a page may know which only once it's loaded)
-let shownTab = null, isRunning = false;
+let shownTab = null, isRunning = false, runningFor = null;
 
 function tabBar(active) {
   const nav = document.getElementById('tabs');
@@ -129,9 +129,12 @@ function tabBar(active) {
   shownTab = active;
   if (!isFirst) return drawTabs(nav);
   drawTabs(nav);
+  userBar();
   const check = async () => {
     try {
-      isRunning = (await (await fetch('/api/running')).json()).running;
+      const found = await (await fetch('/api/running')).json();
+      isRunning = found.running;
+      runningFor = found.user;
       drawTabs(nav);
     } catch (error) { /* (the next check) */ }
     setTimeout(check, 5000);
@@ -144,9 +147,57 @@ function drawTabs(nav) {
   // (What's running is part of Sync: its tab has a dot then, and the running flow's page is under it)
   const tab = ([key, href, text]) => el('a', {href: key === 'sync' && running ? '/run' : href,
     class: 'tab' + (key === active || (key === 'sync' && active === 'run') ? ' on' : '')},
-    key === 'sync' && running ? el('span', {class: 'dot', title: 'Running now'}) : '', text);
+    key === 'sync' && running ? el('span', {class: 'dot', title: 'Running now' + (runningFor ? ' (for ' + runningFor + ')' : '')}) : '', text);
   nav.replaceChildren(...TABS.map(tab),
     el('div', {class: 'tabgroup'}, el('span', {class: 'grouplabel'}, 'Inboxes'), el('div', {class: 'grouptabs'}, INBOX_TABS.map(tab))));
+}
+
+// The top bar: whose dirdelta this is (each user's replicas, pairs, sorts and imports are their own),
+// a menu to change to another user, add one, or set where links are emailed to them
+async function userBar() {
+  const header = document.getElementById('top');
+  if (!header || document.getElementById('userbar')) return;
+  const bar = el('div', {id: 'userbar'});
+  const form = el('div', {id: 'userform'});
+  header.prepend(bar, form);
+  let found;
+  try {
+    found = await (await fetch('/api/users')).json();
+  } catch (error) { return; }
+  const pick = el('select', {id: 'userpick', 'aria-label': 'User', onchange: () => {
+    const value = pick.value;
+    pick.value = found.current;
+    if (value === '+add') return showForm('add');
+    if (value === '+email') return showForm('email');
+    document.cookie = 'dirdelta_user=' + encodeURIComponent(value) + '; Path=/; Max-Age=2592000; SameSite=Strict';
+    // (To the tab's own page: an import's page is the last user's)
+    location.href = location.pathname;
+  }},
+    el('optgroup', {label: 'Change user'}, found.users.map(name => el('option', {value: name, selected: name === found.current}, name))),
+    el('optgroup', {label: found.current},
+      el('option', {value: '+email'}, found.email ? 'Email for links…' : 'Set the email for links…'),
+      el('option', {value: '+add'}, 'Add a user…')));
+  bar.replaceChildren(el('span', {class: 'brand'}, 'dirdelta'),
+    el('label', {class: 'userpick'}, icon('person'), el('span', {class: 'whose'}, 'Replicas of'), pick));
+
+  function showForm(kind) {
+    const input = el('input', {type: kind === 'add' ? 'text' : 'email', placeholder: kind === 'add' ? "The new user's name, e.g. hagit" : 'name@example.com',
+      value: kind === 'email' ? (found.email || '') : '', autocomplete: 'off'});
+    const note = el('span', {class: 'note'});
+    const submit = async event => {
+      event.preventDefault();
+      const answer = await (await fetch(kind === 'add' ? '/api/users/add' : '/api/users/email', {method: 'POST',
+        body: JSON.stringify(kind === 'add' ? {name: input.value} : {address: input.value})})).json();
+      if (!answer.ok) return note.replaceChildren(answer.error);
+      if (kind === 'add') document.cookie = 'dirdelta_user=' + encodeURIComponent(answer.name) + '; Path=/; Max-Age=2592000; SameSite=Strict';
+      location.href = location.pathname;
+    };
+    form.replaceChildren(el('form', {onsubmit: submit},
+      el('span', {class: 'formtitle'}, kind === 'add' ? 'Add a user, with replicas of their own:' : 'Email links for ' + found.current + ' to:'),
+      input, el('button', {type: 'submit', class: 'primary'}, kind === 'add' ? 'Add and switch to them' : 'Save'),
+      el('button', {type: 'button', onclick: () => form.replaceChildren()}, 'Cancel'), note));
+    input.focus();
+  }
 }
 
 // Small icons of what a replica or source is on (static SVG, drawn in the text's color)
@@ -157,6 +208,7 @@ const ICONS = {
   phone: '<rect x="7" y="2.5" width="10" height="19" rx="2"/><path d="M11 18.5h2"/>',
   inbox: '<path d="M3 13l3-8h12l3 8v6H3z"/><path d="M3 13h5l1 2h6l1-2h5"/>',
   folder: '<path d="M3 6.5h6l2 2h10v10.5H3z"/>',
+  person: '<circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/>',
 };
 
 function icon(name) {

@@ -1,7 +1,7 @@
 """The web version's dashboard and Sync page's API (routes()): the replicas dirdelta knows (each one's
 disk, whether it's there, its hashing, its log's last entry, when it was last synced), the phones and
 Drive inboxes there are to sort photos from, what's running; the pairs to sync and the sorts, each
-started as a flow (see daemon.flow()); and hashing a replica, or pausing it"""
+started as a flow (see daemon.flow()); hashing a replica, or pausing it; and the users (users.py)"""
 import os
 
 from dirdelta.drive import driveapi
@@ -11,6 +11,8 @@ from dirdelta.known import mounts
 from dirdelta.known import replicainfo
 from dirdelta.known import replicanames
 from dirdelta.known import replicas
+from dirdelta.known import settings
+from dirdelta.known import users
 from dirdelta.matching import syncstate
 from dirdelta.phoneimport import sources
 from dirdelta.trees import paths
@@ -102,7 +104,8 @@ def routes(session):
         names = {path: naming.name(path) for path in all_paths}
         pairs = list(dict.fromkeys(known_replicas.favorites + known_replicas.history))
         return {'label': list(dryrun.label()),
-                'running': {'title': _title(screen)} if session.is_running else None,
+                'running': {'title': _title(screen), 'user': session.user} if session.is_running else None,
+                'user': users.current(),
                 # (Signed in to Drive: its login is kept; whether it's still good is known when it's used)
                 'drive': {'connected': os.path.exists(driveapi.TOKEN_PATH)},
                 'phones': [dict(sources.describe(path), name=name, path=path) for name, path in sources.phones()],
@@ -144,7 +147,27 @@ def routes(session):
         return {'ok': True}
 
     def running(query, body):
-        return {'running': session.is_running}
+        return {'running': session.is_running, 'user': session.user if session.is_running else None}
+
+    def user_list(query, body):
+        return {'users': users.all_users(), 'current': users.current(), 'owner': users.OWNER,
+                'email': settings.email_address()}
+
+    def set_email(query, body):
+        address = (body.get('address') or '').strip()
+        if address.count('@') != 1 or ' ' in address:
+            return {'ok': False, 'error': "That's not an email address."}
+        settings.set_email_address(address)
+        return {'ok': True}
+
+    def add_user(query, body):
+        name = (body.get('name') or '').strip().lower()
+        try:
+            users.add(name)
+        except (users.UserError, OSError) as error:
+            return {'ok': False, 'error': str(error)}
+        return {'ok': True, 'name': name}
 
     return {('GET', '/api/home'): home, ('GET', '/api/sync'): sync, ('POST', '/api/home/hash'): hash_replica,
-            ('GET', '/api/running'): running}
+            ('GET', '/api/running'): running, ('GET', '/api/users'): user_list, ('POST', '/api/users/add'): add_user,
+            ('POST', '/api/users/email'): set_email}

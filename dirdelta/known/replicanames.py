@@ -1,5 +1,5 @@
 """What to call a replica on the screens, telling which disk or Drive account it's on, as the
-user labeled it if they did (kept in replicas.REPLICAS_FILE, see Replicas.labels), by what doesn't
+user labeled it if they did (kept in the user's replicas.json, see Replicas.labels), by what doesn't
 change when a path does: each replica's its own, by its identity() (a local one's disk's UUID and its
 path there, wherever it's mounted; a Drive one's account and path). Shows nothing, and
 asks nothing of Drive: see label_screen.py, and drivemeta.check() for the account's user name."""
@@ -64,8 +64,9 @@ def labels():
     """{label_key(): label}, as the file has them now"""
     global _labels, _labels_of
     try:
-        status = os.stat(replicas.REPLICAS_FILE)
-        state = (replicas.REPLICAS_FILE, status.st_mtime_ns, status.st_size)
+        path = replicas.replicas_file()
+        status = os.stat(path)
+        state = (path, status.st_mtime_ns, status.st_size)
     except OSError:
         return {}
     if state != _labels_of:

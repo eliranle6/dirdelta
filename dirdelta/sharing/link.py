@@ -5,6 +5,7 @@ from google.auth.exceptions import GoogleAuthError
 
 from dirdelta.drive import driveapi
 from dirdelta.known import settings
+from dirdelta.known import users
 from dirdelta.sharing import gmail
 from dirdelta.sharing import qr
 from dirdelta.ui import messages
@@ -23,11 +24,15 @@ def share(url, what, label=None):
 
 
 def email(url, what):
-    """Email url to the user (the address it was sent to before, else Drive's login's, kept for next
-    time), saying it's for what. Returns what to say of it: where it went, or why it wasn't sent."""
+    """Email url to the user (the address it was sent to before, else, for the owner, Drive's login's,
+    kept for next time: Drive's account is the owner's, see users.py), saying it's for what. Returns
+    what to say of it: where it went, or why it wasn't sent."""
+    to = settings.email_address()
+    if to is None and users.current() != users.OWNER:
+        return "Not emailed: no address for %s (set it on the web page's user menu)" % (users.current(),)
     messages.print_line("Emailing the address to you...")
     try:
-        to = settings.email_address() or driveapi.user_email()
+        to = to or driveapi.user_email()
         gmail.send(to, "dirdelta: %s" % (what,), BODY % (what, url))
         settings.set_email_address(to)
     except gmail.MailError as error:

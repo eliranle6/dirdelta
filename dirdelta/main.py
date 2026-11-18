@@ -14,6 +14,7 @@ from dirdelta.known import mounts
 from dirdelta.util import programs
 from dirdelta.known import replicanames
 from dirdelta.known import replicas
+from dirdelta.known import users
 from dirdelta.trees import replicafactory
 
 
@@ -29,11 +30,19 @@ def parse_args():
     # The daemon: the web version (on the network, at PORT), and the watch for replicas appearing
     parser.add_argument("--serve", action='store_true')
     parser.add_argument("--port", type=int, default=None)
+    # Whose replicas, pairs and sorts (see users.py): a user's own, the computer's login's if not given
+    parser.add_argument("-u", "--user", default=None)
     return parser.parse_args()
 
 
 def main():
     args = parse_args()
+    if args.user is not None:
+        try:
+            users.set_default(args.user.strip().lower())
+            users.add(users.current())
+        except (users.UserError, OSError) as error:
+            sys.exit('dirdelta: %s' % (error,))
     if args.serve:
         # (Imported only here: the daemon's server, which the terminal's dirdelta doesn't need)
         from dirdelta.web import daemon

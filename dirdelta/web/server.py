@@ -1,5 +1,5 @@
 """The web version's HTTP server (serve()): the page's files (static/), and the API's routes, each
-request checked for the key (see access.py)"""
+request checked for the key (see access.py), and answered as its browser's user"""
 import json
 import mimetypes
 import os
@@ -8,6 +8,7 @@ import re
 import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
+from dirdelta.known import users
 from dirdelta.ui.picker import updates
 from dirdelta.web import access
 
@@ -52,6 +53,12 @@ class _Handler(BaseHTTPRequestHandler):
     def _handle(self, method):
         if not access.is_allowed(self.key, self.path, self.headers.get('Cookie')):
             return self._send(403, 'text/plain', b'This page needs its link (with its key).')
+        # (Each request as its browser's user: what's read and kept is theirs, see users.py)
+        self.user = access.user_of(self.path, self.headers.get('Cookie'))
+        with users.acting_as(self.user):
+            return self._answer(method)
+
+    def _answer(self, method):
         parts = urllib.parse.urlsplit(self.path)
         query = {name: values[-1] for name, values in urllib.parse.parse_qs(parts.query).items()}
         route = self.routes.get((method, parts.path))
@@ -95,6 +102,7 @@ class _Handler(BaseHTTPRequestHandler):
         self.send_header('Cache-Control', 'private, max-age=86400' if is_kept else 'no-store')
         if set_cookie:
             self.send_header('Set-Cookie', access.cookie(self.key))
+            self.send_header('Set-Cookie', access.user_cookie(self.user))
         self.end_headers()
         self.wfile.write(data)
 

@@ -78,21 +78,21 @@ class WatcherTest(unittest.TestCase):
         self.watcher = Watcher(lambda *args: self.said.append(args), look=lambda: dict(self.there))
 
     def test_what_appears_is_said_once_but_not_what_was_there_at_the_start(self):
-        self.there['/old'] = (PHONE, 'old phone')
+        self.there['/old'] = (PHONE, 'old phone', ['me'])
         self.watcher.check(now=0)
-        self.there['/phone'] = (PHONE, 'Pixel')
+        self.there['/phone'] = (PHONE, 'Pixel', ['me'])
         self.watcher.check(now=5)
         self.watcher.check(now=10)
-        self.assertEqual([(PHONE, 'Pixel', '/phone')], self.said)
+        self.assertEqual([(PHONE, 'Pixel', '/phone', ['me'])], self.said)
 
     def test_a_flaky_link_is_said_again_only_after_a_quiet_while(self):
         self.watcher.check(now=0)
         for now in (5, 15, 25):
-            self.there['/phone'] = (PHONE, 'Pixel')
+            self.there['/phone'] = (PHONE, 'Pixel', ['me'])
             self.watcher.check(now=now)
             del self.there['/phone']
             self.watcher.check(now=now + 1)
-        self.there['/phone'] = (PHONE, 'Pixel')
+        self.there['/phone'] = (PHONE, 'Pixel', ['me'])
         self.watcher.check(now=5 + 600)
         self.assertEqual(2, len(self.said))
 

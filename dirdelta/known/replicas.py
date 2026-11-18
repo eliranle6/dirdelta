@@ -1,5 +1,5 @@
 """The pairs of replicas the user synced (history, the latest first) and the ones they made favorites,
-and the inboxes they sorted (each with its sorted tree, see inbox.py), kept in REPLICAS_FILE (JSON)
+and the inboxes they sorted (each with its sorted tree, see inbox.py), kept in the user's REPLICAS_FILE (JSON, see users.py)
 for the menu that chooses what to sync or sort (see choose_replicas.py); the dirs of each sorted
 tree that its inboxes' files were moved or copied to last, offered first next time, and its other
 replicas a sort was asked to copy them into too; and what's known
@@ -15,9 +15,11 @@ The file is this module's (load(), save()); what's kept in it is replica_history
 import json
 import os
 
+from dirdelta.known import users
 from dirdelta.known.replica_history import Replicas, pair_of, normalized
 from dirdelta.known.replica_history import MAX_HISTORY, MAX_PATHS_KEPT, MAX_RECENT_DIRS, MAX_SORTS  # noqa: F401
 
+# The owner's (another user's is in a folder of theirs beside it: replicas_file(), see users.py)
 REPLICAS_FILE = os.path.expanduser('~/.config/dirdelta/replicas.json')
 
 
@@ -25,11 +27,17 @@ class ReplicasError(Exception):
     pass
 
 
+def replicas_file():
+    """The current user's file"""
+    return users.own(REPLICAS_FILE)
+
+
 def load():
-    """The Replicas in REPLICAS_FILE (none if there's no file yet)"""
+    """The current user's Replicas (none if there's no file yet)"""
+    path = replicas_file()
     try:
-        with open(REPLICAS_FILE) as replicas_file:
-            content = json.load(replicas_file)
+        with open(path) as opened:
+            content = json.load(opened)
         return Replicas(_pairs(content.get('history', [])), _pairs(content.get('favorites', [])),
                         _pairs(content.get('sorts', [])), _recent_dirs(content.get('recent_dirs', {})),
                         _known(content.get('known', {})), _compared(content.get('compared', [])),
@@ -39,11 +47,12 @@ def load():
         return Replicas()
     except (OSError, ValueError, AttributeError, TypeError) as error:
         # Not overwritten with an empty one: it may be favorites edited by hand, with a typo
-        raise ReplicasError("Cannot read %s (fix or remove it): %s" % (REPLICAS_FILE, error))
+        raise ReplicasError("Cannot read %s (fix or remove it): %s" % (path, error))
 
 
 def save(replicas):
-    """Write replicas to REPLICAS_FILE, replacing it at once (so it's never half-written)"""
+    """Write replicas to the current user's file, replacing it at once (so it's never half-written)"""
+    path = replicas_file()
     content = {'favorites': [list(pair) for pair in replicas.favorites],
                'history': [list(pair) for pair in replicas.history],
                'sorts': [list(pair) for pair in replicas.sorts],
@@ -53,14 +62,14 @@ def save(replicas):
                'labels': replicas.labels,
                'followers': replicas.followers}
     try:
-        os.makedirs(os.path.dirname(REPLICAS_FILE), exist_ok=True)
-        temp_path = REPLICAS_FILE + '.tmp'
-        with open(temp_path, 'w') as replicas_file:
-            json.dump(content, replicas_file, indent=2)
-            replicas_file.write('\n')
-        os.replace(temp_path, REPLICAS_FILE)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        temp_path = path + '.tmp'
+        with open(temp_path, 'w') as opened:
+            json.dump(content, opened, indent=2)
+            opened.write('\n')
+        os.replace(temp_path, path)
     except OSError as error:
-        raise ReplicasError("Cannot write %s: %s" % (REPLICAS_FILE, error))
+        raise ReplicasError("Cannot write %s: %s" % (path, error))
 
 
 def _pairs(items):
