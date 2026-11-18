@@ -10,6 +10,7 @@ from dirdelta.known import mounts
 from dirdelta.known import replicainfo
 from dirdelta.known import replicanames
 from dirdelta.known import replicas
+from dirdelta.matching import syncstate
 from dirdelta.phoneimport import sources
 from dirdelta.trees import paths
 from dirdelta.util import dryrun
@@ -62,6 +63,20 @@ def _title(screen):
     return title.replace('\x01', ' ').split(' > ')[-1].strip() if isinstance(title, str) else ''
 
 
+def pair_info(path_a, path_b, names, known_replicas):
+    """What the dashboard says of a pair: its sync state, as the terminal's dashboard does (syncstate:
+    in sync, one ahead, branched or not known; its mark and color, grey if a replica changed since;
+    what it is in words, by the replicas' short names)"""
+    name_a, name_b = names.get(path_a, path_a), names.get(path_b, path_b)
+    state = syncstate.of(known_replicas, path_a, path_b)
+    mark, color = syncstate.mark(state)
+    return {'a': path_a, 'b': path_b, 'nameA': name_a, 'nameB': name_b,
+            'favorite': (path_a, path_b) in known_replicas.favorites, 'compared': known_replicas.comparison(path_a, path_b),
+            'state': {'kind': state.kind, 'mark': mark, 'color': color, 'when': state.when,
+                      'text': syncstate.describe(state._replace(changed=[names.get(path, path) for path in state.changed]),
+                                                 name_a, name_b)}}
+
+
 def routes(session):
     def home(query, body):
         known_replicas = replicas.load()
@@ -74,9 +89,7 @@ def routes(session):
                 'running': {'title': _title(screen)} if session.is_running else None,
                 'phones': [dict(sources.describe(path), name=name, path=path) for name, path in sources.phones()],
                 'replicas': [replica_info(path, known_replicas) for path in all_paths],
-                'pairs': [{'a': a, 'b': b, 'nameA': names.get(a, a), 'nameB': names.get(b, b),
-                           'favorite': (a, b) in known_replicas.favorites, 'compared': known_replicas.comparison(a, b)}
-                          for a, b in pairs],
+                'pairs': [pair_info(a, b, names, known_replicas) for a, b in pairs],
                 'sorts': [{'inbox': inbox, 'root': root, 'nameInbox': names.get(inbox, inbox), 'nameRoot': names.get(root, root)}
                           for inbox, root in known_replicas.sorts]}
 

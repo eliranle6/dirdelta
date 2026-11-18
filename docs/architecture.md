@@ -1184,9 +1184,12 @@ every link carries, then a cookie), and a watcher.
   every thread beside it (counts coming in, previews, pictures, AI's suggestions) work unchanged. The
   server keeps each picker's selection, picks and states, so the laptop's browser and a phone's show the
   same screen. Stop raises KeyboardInterrupt in the flow's thread, as Ctrl-C does.
-- The pages, each with the same tabs (`markup.js`'s tabBar()): Home (`/`, `home.js`: the dashboard: what's
-  plugged in, each replica's disk, whether it's there, its hashing (to start or pause), its log's last
-  entry and when it was synced), Photos (`/import`, below), Sync (`/sync`, `sync.js`: the favorite
+- The pages, each with the same tabs (`markup.js`'s tabBar()): Home (`/`, `home.js`: the whole picture:
+  tiles of the replicas there, the last sync, the hashing and Drive's oldest list, what's running, the
+  phones plugged in, each pair's sync status as the terminal's dashboard has it (`syncstate`: ≡ » « ≠ ?)
+  with Sync, and the inboxes), Replicas (`/replicas`, the same script: each replica's icon, disk, role
+  (an inbox), status chips (mounted, synced, hashed, its list read), log entry and hashing to start or
+  pause), Photos (`/import`, below), Sync (`/sync`, `sync.js`: the favorite
   pairs, the recent ones and the inbox sorts, each started with a tap: `daemon.flow()`, `main.run_pair()`,
   `main.run_sort()`; or the start menu, for any other), and Running (`/run`, while a flow runs). The
   Running page (`web/static/app.js`) polls `/api/state` (a long poll: each change is numbered) and draws

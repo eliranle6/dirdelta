@@ -70,7 +70,7 @@ background, at the lowest priority, into the hash cache, so a file is found by
 its contents (SHA-1, as Drive's) whatever its name and size. `#` in the file
 pickers (and the "Replicas dashboard" in the sync's and the start menus) shows
 how far it got, pauses and resumes it. `--serve` (`make serve`; `make service` installs it as a systemd user service) runs the daemon: the
-web version on the local network (tabs: Home, the dashboard; Photos, a phone's or a Drive inbox's photos
+web version on the local network (tabs: Home, the whole picture and each pair's sync status; Replicas, each one's status; Photos, a phone's or a Drive inbox's photos
 sorted into a replica: `/import`, `phoneimport/`; Sync, the pairs and sorts started with a tap, the same
 flows, their pickers and messages in the browser; with the key in its link: `web/`, see
 docs/architecture.md, "The web version"), and a watch that emails the user a link when a phone is plugged in or a known

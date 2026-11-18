@@ -87,7 +87,7 @@ function labelChip([text, color]) {
 
 // The pages' tabs, the one shown marked (active: 'home', 'photos', 'sync', 'run'), and Running while a
 // flow runs (a sync, a sort, the start menu: its screens are on /run), checked every few seconds
-const TABS = [['home', '/', 'Home'], ['photos', '/import', 'Photos'], ['sync', '/sync', 'Sync']];
+const TABS = [['home', '/', 'Home'], ['replicas', '/replicas', 'Replicas'], ['photos', '/import', 'Photos'], ['sync', '/sync', 'Sync']];
 
 function tabBar(active) {
   const nav = document.getElementById('tabs');

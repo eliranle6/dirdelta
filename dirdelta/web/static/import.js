@@ -46,7 +46,13 @@ async function load() {
 function importLink(id) { return '/import?id=' + encodeURIComponent(id); }
 
 // What a source is called: the phone's name, or a local dir's
-function sourceName(source) { return source.device || source.full.split('/').filter(Boolean).pop() || source.full; }
+function sourceName(source) {
+  const name = source.device || source.full.split('/').filter(Boolean).pop() || source.full;
+  return source.drive ? name + ' (Drive inbox)' : name;
+}
+
+// A source's own name, without what it is
+function bareName(source) { return source.device || source.full.split('/').filter(Boolean).pop() || source.full; }
 
 // The dir in the source (DCIM), and a small button showing its whole path
 function pathLine(inner, full) {
@@ -191,9 +197,10 @@ function renderOverview() {
   const [tone, toneText] = !over.total ? ['red', listing ? waiting('Reading the ' + thing) : 'Not read yet'] :
     over.unhashed.files ? ['yellow', reading && reading.phase === 'copying' ? waiting('Hashing') : 'Name + size only'] : ['green', 'Hashed'];
   const source = el('div', {class: 'card tone-' + tone},
-    el('h2', {}, data.source.device ? 'Photos on ' + data.source.device : 'Photos in ' + (drive ? 'Drive: ' : '') + sourceName(data.source),
+    el('h2', {}, data.source.device ? 'Photos on ' + data.source.device : drive ? 'Photos in the inbox “' + bareName(data.source) + '”' :
+      'Photos in ' + bareName(data.source),
       el('span', {class: 'pill'}, toneText)),
-    pathLine(data.source.device ? data.source.inner : '', data.source.full));
+    pathLine(data.source.device ? data.source.inner : drive ? 'Google Drive inbox' : '', data.source.full));
   if (listing && !over.total) source.append(el('p', {}, waiting('Listing its files')));
   else {
     source.append(link(over.total, 'files' + (listing ? ' (listing again)' : ''), 'all'));

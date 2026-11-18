@@ -1,7 +1,10 @@
-// The dashboard (web/home.py): the whole picture at a glance (are the replicas there, when they were last
-// synced, are they hashed, how old Drive's lists are), what's running, the phones plugged in, each pair's
-// sync status and each inbox (each started from here), and each replica, with its status in colors.
+// The dashboard (web/home.py), two pages of it: Home, the whole picture at a glance (are the replicas
+// there, when they were last synced, are they hashed, how old Drive's lists are), what's running, the
+// phones plugged in, each pair's sync status (as the terminal's dashboard's) and each inbox, each started
+// from here; and Replicas, each replica with its status in colors, and its hashing to start or pause.
 'use strict';
+
+const PAGE = document.body.dataset.page;
 
 let timer = null;
 
@@ -68,15 +71,13 @@ function pathLine(full) {
   return el('div', {class: 'where'}, toggle, whole);
 }
 
-// A pair's sync status: in step, what each lacked, or not compared yet; and how long ago
-function pairStatus(pair) {
-  const found = pair.compared;
-  if (!found) return chip('none', 'Not compared yet');
-  const [onlyA, onlyB] = found.only;
-  const when = age(found.when, 7, 30).text;
-  if (!onlyA && !onlyB) return chip('ok', 'In step · ' + when);
-  return chip('warn', [onlyA ? onlyA + ' only in ' + pair.nameA : '', onlyB ? onlyB + ' only in ' + pair.nameB : '']
-    .filter(Boolean).join(', ') + ' · ' + when);
+// A pair's sync status, as the terminal's dashboard shows it: its mark in its color (≡ in sync, » « one
+// ahead, ≠ branched, ? not known; grey if a replica changed since), and what it is in words
+function pairRow(pair, isRunning) {
+  return el('div', {class: 'item'}, el('span', {class: 'syncmark c-' + pair.state.color}, pair.state.mark),
+    el('span', {class: 'what'}, el('b', {class: 'pairline'}, pair.favorite ? '★' : '', replicaLabel(pair.a, pair.nameA), '⇄',
+      replicaLabel(pair.b, pair.nameB)), el('span', {class: 'note'}, pair.state.text)),
+    el('button', {class: 'small', disabled: isRunning, onclick: () => start({kind: 'pair', a: pair.a, b: pair.b})}, 'Sync'));
 }
 
 // The whole picture: one tile each for the replicas, the syncs, the hashing and Drive's lists
@@ -88,25 +89,16 @@ function summary(data) {
   const hashing = jobs.find(replica => replica.hashing.started && replica.hashing.state !== 'done');
   const drive = data.replicas.filter(replica => replica.kind === 'drive' && replica.listedAt).map(replica => replica.listedAt).sort()[0];
   const listed = age(drive, 1, 7);
-  const tile = (tone, title, value) => el('div', {class: 'tile ' + tone}, el('span', {class: 'tile-title'}, title), el('b', {}, value));
+  const tile = (tone, title, value, href) => el(href ? 'a' : 'div', {class: 'tile ' + tone, href}, el('span', {class: 'tile-title'}, title), el('b', {}, value));
   return el('div', {class: 'tiles'},
-    tile(there === data.replicas.length ? 'ok' : 'bad', 'Replicas there', there + ' of ' + data.replicas.length),
+    tile(there === data.replicas.length ? 'ok' : 'bad', 'Replicas there', there + ' of ' + data.replicas.length, '/replicas'),
     tile(lastSync ? synced.tone : 'none', 'Last sync', lastSync ? synced.text : 'never'),
     tile(hashing ? 'warn' : jobs.length && jobs.every(replica => replica.hashing.state === 'done') ? 'ok' : 'none', 'Hashing',
-      hashing ? waiting(hashing.name) : jobs.length ? 'Idle' : 'Not started'),
-    drive ? tile(listed.tone, "Drive's oldest list", listed.text) : '');
+      hashing ? waiting(hashing.name) : jobs.length ? 'Idle' : 'Not started', '/replicas'),
+    drive ? tile(listed.tone, "Drive's oldest list", listed.text, '/replicas') : '');
 }
 
-async function load() {
-  clearTimeout(timer);
-  let data;
-  try {
-    data = await api('GET', '/api/home');
-  } catch (error) {
-    document.getElementById('main').replaceChildren(el('p', {}, error.message));
-    return;
-  }
-  document.getElementById('labels').replaceChildren(labelChip(data.label));
+function homePage(data) {
   const parts = [summary(data)];
   if (data.running) {
     parts.push(el('div', {class: 'card banner running'}, el('div', {}, el('b', {}, 'Running now'),
@@ -121,13 +113,9 @@ async function load() {
         el('a', {class: 'button primary', href: '/import'}, 'Sort its photos')));
     }
   }
-  if (data.pairs.length) {
-    parts.push(el('div', {class: 'section-title'}, 'Sync status'), el('div', {class: 'list'}, data.pairs.map(pair =>
-      el('div', {class: 'item'}, el('span', {class: 'what'}, el('b', {class: 'pairline'}, pair.favorite ? '★' : '', replicaLabel(pair.a, pair.nameA), '⇄',
-        replicaLabel(pair.b, pair.nameB)),
-        el('span', {}, pairStatus(pair))),
-        el('button', {class: 'small', disabled: !!data.running, onclick: () => start({kind: 'pair', a: pair.a, b: pair.b})}, 'Sync')))));
-  }
+  parts.push(el('div', {class: 'section-title'}, 'Sync status'));
+  parts.push(data.pairs.length ? el('div', {class: 'list'}, data.pairs.map(pair => pairRow(pair, !!data.running))) :
+    el('p', {class: 'note'}, 'No pairs synced yet: start one from Sync.'));
   if (data.sorts.length) {
     parts.push(el('div', {class: 'section-title'}, 'Inboxes to sort'), el('div', {class: 'list'}, data.sorts.map(sort =>
       el('div', {class: 'item'}, el('span', {class: 'what'}, el('b', {class: 'pairline'}, replicaLabel(sort.inbox, sort.nameInbox, true), '→',
@@ -135,11 +123,30 @@ async function load() {
         el('a', {class: 'button small', href: '/import'}, 'Photos'),
         el('button', {class: 'small', disabled: !!data.running, onclick: () => start({kind: 'sort', inbox: sort.inbox, root: sort.root})}, 'All files')))));
   }
+  return parts;
+}
+
+function replicasPage(data) {
   const local = data.replicas.filter(replica => replica.kind === 'local');
   const drive = data.replicas.filter(replica => replica.kind === 'drive');
-  if (local.length) parts.push(el('div', {class: 'section-title'}, 'Replicas on disks'), el('div', {class: 'grid'}, local.map(replicaCard)));
-  if (drive.length) parts.push(el('div', {class: 'section-title'}, 'Replicas in Google Drive'), el('div', {class: 'grid'}, drive.map(replicaCard)));
+  const parts = [];
+  if (local.length) parts.push(el('div', {class: 'section-title'}, 'On disks'), el('div', {class: 'grid'}, local.map(replicaCard)));
+  if (drive.length) parts.push(el('div', {class: 'section-title'}, 'In Google Drive'), el('div', {class: 'grid'}, drive.map(replicaCard)));
   if (!data.replicas.length) parts.push(el('p', {class: 'note'}, 'No replicas yet: sync two folders first (Sync).'));
+  return parts;
+}
+
+async function load() {
+  clearTimeout(timer);
+  let data;
+  try {
+    data = await api('GET', '/api/home');
+  } catch (error) {
+    document.getElementById('main').replaceChildren(el('p', {}, error.message));
+    return;
+  }
+  document.getElementById('labels').replaceChildren(labelChip(data.label));
+  const parts = PAGE === 'replicas' ? replicasPage(data) : homePage(data);
   const open = [...document.querySelectorAll('.fullpath')].filter(path => !path.hidden).map(path => path.textContent);
   document.getElementById('main').replaceChildren(...parts);
   // (A path shown stays shown across the redraws)
@@ -148,5 +155,5 @@ async function load() {
   timer = setTimeout(load, busy ? 2000 : 8000);
 }
 
-tabBar('home');
+tabBar(PAGE);
 load();
