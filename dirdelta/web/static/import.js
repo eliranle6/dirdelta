@@ -106,21 +106,23 @@ async function loadList() {
   const folders = data.inboxes.filter(inbox => inbox.kind !== 'phone'), phones = data.inboxes.filter(inbox => inbox.kind === 'phone');
   const jump = kindJump, block = (id, iconName, title, text, cards, extra) => kindBlock(id, iconName, title, text, cards, extra || '');
   const parts = [el('p', {class: 'note'}, 'Inboxes are where new files come in, to be sorted into your replicas. There are two kinds:'),
-    el('div', {class: 'kindjumps'}, jump('unsorted', 'inbox', 'Unsorted folders', thereOutOf(folders) + ' there', inboxesTone(folders)),
-      jump('phones', 'phone', 'Phones\' photos', thereOutOf(phones) + ' plugged in', inboxesTone(phones))),
-    block('unsorted', 'inbox', 'Unsorted folders',
-      'Folders new files land in, e.g. unsorted in Google Drive. Sort their photos by day, with previews, or all their files, folder by folder.',
-      folders.length ? folders.map(inboxCard) : el('p', {class: 'note'}, 'None yet: add one below.'), folderAdder('inbox')),
-    block('phones', 'phone', 'Phones\' photos',
-      'A phone plugged in by USB: its camera\'s photos and videos, sorted by day, with previews and where they are already.',
-      phones.length ? phones.map(inboxCard) : el('div', {class: 'card quiet'}, el('div', {class: 'head'}, icon('phone'), el('b', {}, 'No phone plugged in')),
-        el('div', {class: 'note'}, 'Plug one in by USB and choose "File transfer" on it: it shows here within a few seconds.')))];
+    ...kindParts([
+      {jump: jump('unsorted', 'inbox', 'Unsorted folders', thereOutOf(folders) + ' there', inboxesTone(folders)),
+       block: block('unsorted', 'inbox', 'Unsorted folders',
+         'Folders new files land in, e.g. unsorted in Google Drive. Sort their photos by day, with previews, or all their files, folder by folder.',
+         folders.length ? folders.map(inboxCard) : el('p', {class: 'note'}, 'None yet: add one below.'), folderAdder('inbox'))},
+      {jump: jump('phones', 'phone', 'Phones\' photos', thereOutOf(phones) + ' plugged in', inboxesTone(phones)),
+       block: block('phones', 'phone', 'Phones\' photos',
+         'A phone plugged in by USB: its camera\'s photos and videos, sorted by day, with previews and where they are already.',
+         phones.length ? phones.map(inboxCard) : el('div', {class: 'card quiet'}, el('div', {class: 'head'}, icon('phone'), el('b', {}, 'No phone plugged in')),
+           el('div', {class: 'note'}, 'Plug one in by USB and choose "File transfer" on it: it shows here within a few seconds.')))}],
+      {add: 'unsorted'})];
   const main = document.getElementById('main');
   if (!main.contains(document.activeElement) || document.activeElement === document.body) main.replaceChildren(...parts);
   // (A link to a kind, e.g. Home's to #phones, goes to it once it's drawn: once)
   const kind = !page.scrolled && ['unsorted', 'phones', 'add'].includes(location.hash.slice(1)) ? location.hash.slice(1) : null;
   page.scrolled = true;
-  if (kind) document.getElementById(kind === 'add' ? 'unsorted' : kind).scrollIntoView();
+  if (kind && layout() !== 'tabs') document.getElementById(kind === 'add' ? 'unsorted' : kind).scrollIntoView();
   later(5);
 }
 

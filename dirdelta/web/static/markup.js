@@ -173,6 +173,10 @@ async function userBar() {
     pick.value = found.current;
     if (value === '+add') return showForm('add');
     if (value === '+email') return showForm('email');
+    if (value.startsWith('+layout:')) {
+      setLayout(value.slice('+layout:'.length));
+      return void location.reload();
+    }
     document.cookie = 'dirdelta_user=' + encodeURIComponent(value) + '; Path=/; Max-Age=2592000; SameSite=Strict';
     // (To the tab's own page: an import's page is the last user's)
     location.href = location.pathname;
@@ -180,7 +184,9 @@ async function userBar() {
     el('optgroup', {label: 'Change user'}, found.users.map(name => el('option', {value: name, selected: name === found.current}, name))),
     el('optgroup', {label: found.current},
       el('option', {value: '+email'}, found.email ? 'Email for links…' : 'Set the email for links…'),
-      el('option', {value: '+add'}, 'Add a user…')));
+      el('option', {value: '+add'}, 'Add a user…')),
+    el('optgroup', {label: 'Layout'}, Object.entries(LAYOUTS).map(([key, text]) =>
+      el('option', {value: '+layout:' + key}, (key === layout() ? '✓ ' : '') + text))));
   bar.replaceChildren(el('span', {class: 'brand'}, 'dirdelta'),
     el('a', {id: 'runningpill', href: '/run', hidden: !isRunning || shownTab === 'run'}, el('span', {class: 'dot'}), 'Running'),
     el('label', {class: 'userpick'}, icon('person'), el('span', {class: 'whose'}, 'Replicas of'), pick));
@@ -338,6 +344,52 @@ function inboxProgress(inbox) {
   const checked = inbox.imports.map(found => found.already && found.already.checked).filter(Boolean).sort()[0];
   return {text: parts.join(' · ') + ' (of ' + sum.total.toLocaleString() + ')', share,
     checked: checked ? 'Replicas checked ' + age(checked).text : 'Replicas not checked yet'};
+}
+
+// How a tab's parts are laid out (this browser's choice, kept in its storage): 'blocks', all of them one
+// after another with a jump to each on top; or 'tabs', a row of sub-tabs on top, one part shown at a time
+const LAYOUTS = {blocks: 'Parts one after another', tabs: 'Parts as sub-tabs'};
+
+function layout() {
+  try {
+    const kept = localStorage.getItem('dirdelta_layout');
+    return kept in LAYOUTS ? kept : 'blocks';
+  } catch (error) {
+    return 'blocks';
+  }
+}
+
+function setLayout(key) {
+  try { localStorage.setItem('dirdelta_layout', key); } catch (error) { /* (blocks, then) */ }
+}
+
+// The part shown of each page's, as sub-tabs: {page: id}, chosen once (from the link's #, e.g. Home's to
+// #phones; aliases: {'#': id}), then by a tap on its sub-tab (and kept in the address, for reloading)
+const shownPart = {};
+
+// A tab's parts ([{jump: kindJump(), block: kindBlock()}]), laid out as layout() says
+function kindParts(parts, aliases = {}) {
+  const jumps = parts.map(part => part.jump), blocks = parts.map(part => part.block);
+  if (layout() !== 'tabs') return [el('div', {class: 'kindjumps'}, jumps), ...blocks];
+  const ids = blocks.map(block => block.id), page = location.pathname;
+  if (!ids.includes(shownPart[page])) {
+    const hash = location.hash.slice(1);
+    shownPart[page] = ids.includes(aliases[hash] || hash) ? aliases[hash] || hash : ids[0];
+  }
+  const show = id => {
+    shownPart[page] = id;
+    history.replaceState(null, '', '#' + id);
+    jumps.forEach((jump, index) => jump.classList.toggle('on', ids[index] === id));
+    blocks.forEach(block => { block.hidden = block.id !== id; });
+  };
+  jumps.forEach((jump, index) => {
+    jump.onclick = event => { event.preventDefault(); show(ids[index]); };
+    jump.setAttribute('role', 'tab');
+  });
+  const row = el('div', {class: 'kindtabs', role: 'tablist'}, jumps);
+  const shown = [row, ...blocks];
+  show(shownPart[page]);
+  return shown;
 }
 
 // A tab's part, a block of its own in its color (.kind-ID), and a jump to it for the top of the tab

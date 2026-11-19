@@ -284,13 +284,14 @@ function replicasPage(data) {
   // Two parts, each in a block of its own: every two replicas' sync status (what's done here, first), and
   // the replicas themselves
   return [el('p', {class: 'note'}, 'Replicas are copies of ' + data.user + '\'s files, kept in step by syncing any two of them.'),
-    el('div', {class: 'kindjumps'},
-      kindJump('pairs', 'sync', 'Sync status', !data.pairs.length ? 'No pair yet' : apart ? apart + ' out of ' + data.pairs.length + ' out of step' : unknown ? unknown + ' out of ' + data.pairs.length + ' not synced yet' : 'All in step',
+    ...kindParts([
+      {jump: kindJump('pairs', 'sync', 'Sync status', !data.pairs.length ? 'No pair yet' : apart ? apart + ' out of ' + data.pairs.length + ' out of step' : unknown ? unknown + ' out of ' + data.pairs.length + ' not synced yet' : 'All in step',
         !data.pairs.length || data.pairs.some(pair => pair.state.kind === 'branched') ? 'bad' : apart || unknown ? 'warn' : 'ok'),
-      kindJump('replicas', 'replicas', 'Replicas', there + ' out of ' + data.replicas.length + ' available',
-        !data.replicas.length || !there ? 'bad' : there < data.replicas.length ? 'warn' : 'ok')),
-    kindBlock('pairs', 'sync', 'Sync status', 'Every two replicas are a pair: how far in step each was when last synced, and Sync.', pairs, other),
-    kindBlock('replicas', 'replicas', 'Replicas', 'Each copy: a folder on this computer, on a disk or in Google Drive.', ...cards, folderAdder('replica'))];
+       block: kindBlock('pairs', 'sync', 'Sync status', 'Every two replicas are a pair: how far in step each was when last synced, and Sync.', pairs, other)},
+      {jump: kindJump('replicas', 'replicas', 'Replicas', there + ' out of ' + data.replicas.length + ' available',
+        !data.replicas.length || !there ? 'bad' : there < data.replicas.length ? 'warn' : 'ok'),
+       block: kindBlock('replicas', 'replicas', 'Replicas', 'Each copy: a folder on this computer, on a disk or in Google Drive.', ...cards, folderAdder('replica'))}],
+      {add: 'replicas'})];
 }
 
 // (A link to a part, e.g. Home's to #add, goes to it once it's drawn: once)
@@ -316,7 +317,7 @@ async function load() {
   document.getElementById('main').replaceChildren(...parts);
   // (A path shown whole stays so across the redraws)
   document.querySelectorAll('.pathbutton').forEach(path => { if (open.includes(path.title)) path.textContent = path.title; });
-  if (PAGE === 'replicas') scrollToPart();
+  if (PAGE === 'replicas' && layout() !== 'tabs') scrollToPart();
   const busy = data.replicas.some(replica => replica.hashing && replica.hashing.started && replica.hashing.state !== 'done');
   timer = setTimeout(load, busy ? 2000 : 8000);
 }
