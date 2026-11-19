@@ -173,6 +173,10 @@ async function userBar() {
     pick.value = found.current;
     if (value === '+add') return showForm('add');
     if (value === '+email') return showForm('email');
+    if (value.startsWith('+theme:')) {
+      kept('dirdelta_theme', value.slice('+theme:'.length));
+      return void location.reload();
+    }
     if (value.startsWith('+layout:')) {
       setLayout(value.slice('+layout:'.length));
       return void location.reload();
@@ -186,7 +190,9 @@ async function userBar() {
       el('option', {value: '+email'}, found.email ? 'Email for links…' : 'Set the email for links…'),
       el('option', {value: '+add'}, 'Add a user…')),
     el('optgroup', {label: 'Layout'}, Object.entries(LAYOUTS).map(([key, text]) =>
-      el('option', {value: '+layout:' + key}, (key === layout() ? '✓ ' : '') + text))));
+      el('option', {value: '+layout:' + key}, (key === layout() ? '✓ ' : '') + text))),
+    el('optgroup', {label: 'Theme'}, Object.entries(THEMES).map(([key, text]) =>
+      el('option', {value: '+theme:' + key}, (key === theme() ? '✓ ' : '') + text))));
   // (The mode's label, DRY RUN or LIVE, in this bar: the page's title is its tab's, so no row of its own)
   bar.replaceChildren(el('span', {class: 'brand'}, 'dirdelta'), document.getElementById('labels') || '',
     el('a', {id: 'runningpill', href: '/run', hidden: !isRunning || shownTab === 'run'}, el('span', {class: 'dot'}), 'Running'),
@@ -346,6 +352,28 @@ function inboxProgress(inbox) {
   return {text: parts.join(' · ') + ' (of ' + sum.total.toLocaleString() + ')', share,
     checked: checked ? 'Replicas checked ' + age(checked).text : 'Replicas not checked yet'};
 }
+
+// This browser's colors (kept in its storage): light (the default), dark, or like the device's
+const THEMES = {light: 'Light', dark: 'Dark', device: 'Like the device'};
+
+function theme() {
+  try {
+    const found = localStorage.getItem('dirdelta_theme');
+    return found in THEMES ? found : 'light';
+  } catch (error) {
+    return 'light';
+  }
+}
+
+function kept(key, value) {
+  try { localStorage.setItem(key, value); } catch (error) { /* (the default, then) */ }
+}
+
+function showTheme() {
+  document.documentElement.dataset.theme = theme();
+}
+
+showTheme();
 
 // How a tab's parts are laid out (this browser's choice, kept in its storage): as sub-tabs, one part shown at a
 // time, 'tabs' (the default: a row of them, the one shown underlined) or 'folders' (folder tabs joined to the
