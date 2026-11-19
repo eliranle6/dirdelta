@@ -108,11 +108,11 @@ async function loadList() {
   const parts = [...kindParts([
       {jump: jump('unsorted', 'inbox', 'Unsorted folders', thereOutOf(folders) + ' there', inboxesTone(folders)),
        block: block('unsorted', 'inbox', 'Unsorted folders',
-         'Folders new files land in, e.g. unsorted in Google Drive. Sort their photos by day, with previews, or all their files, folder by folder.',
+         '',
          folders.length ? folders.map(inboxCard) : el('p', {class: 'note'}, 'None yet: add one below.'), folderAdder('inbox'))},
       {jump: jump('phones', 'phone', 'Phones\' photos', thereOutOf(phones) + ' plugged in', inboxesTone(phones)),
        block: block('phones', 'phone', 'Phones\' photos',
-         'A phone plugged in by USB: its camera\'s photos and videos, sorted by day, with previews and where they are already.',
+         '',
          phones.length ? phones.map(inboxCard) : el('div', {class: 'card quiet'}, el('div', {class: 'head'}, icon('phone'), el('b', {}, 'No phone plugged in')),
            el('div', {class: 'note'}, 'Plug one in by USB and choose "File transfer" on it: it shows here within a few seconds.')))}],
       {add: 'unsorted'})];
