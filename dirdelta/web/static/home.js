@@ -289,7 +289,7 @@ function replicasPage(data) {
        block: kindBlock('pairs', 'sync', 'Sync status', '', pairs, other)},
       {jump: kindJump('replicas', 'replicas', 'Replicas', there + ' out of ' + data.replicas.length + ' available',
         !data.replicas.length || !there ? 'bad' : there < data.replicas.length ? 'warn' : 'ok'),
-       block: kindBlock('replicas', 'replicas', 'Replicas', 'Each copy: a folder on this computer, on a disk or in Google Drive.', ...cards, folderAdder('replica'))}],
+       block: kindBlock('replicas', 'replicas', 'Replicas', '', ...cards, folderAdder('replica'))}],
       {add: 'replicas'})];
 }
 
