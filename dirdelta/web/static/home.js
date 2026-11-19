@@ -89,7 +89,8 @@ function pairRow(pair, isRunning) {
       el('span', {}, !onlyA && !onlyB ? 'Each has all the other\'s files' :
         [onlyA ? onlyA.toLocaleString() + ' only in ' + pair.nameA : '', onlyB ? onlyB.toLocaleString() + ' only in ' + pair.nameB : '']
           .filter(Boolean).join(' · ')),
-      percent === null ? el('span', {class: 'note'}, 'The share in step shows after the next sync.') : ''));
+      el('span', {class: 'note'}, 'As of the last sync: files added since aren\'t counted, only its age tells.' +
+        (percent === null ? ' A % shows from the next sync.' : ''))));
   }
   const fresh = [];
   if (pair.state.when) fresh.push(chip(compared.tone, 'Compared ' + compared.text));
@@ -126,7 +127,9 @@ function summary(data) {
       inboxesTile(data, tile)),
     ...section('Indexing',
       hashes,
-      drive ? tile(listed.tone, 'drive', 'Drive file lists', 'Read ' + listed.text, listed.tone === 'ok' ? 'Fresh' : 'A sync reads them again', '/replicas') : '')];
+      drive ? tile(data.drive.reading.length ? 'warn' : listed.tone, 'drive', 'Drive file lists',
+      data.drive.reading.length ? waiting('Reading now') : 'Read ' + listed.text,
+      data.drive.reading.length ? 'In the background' : 'Read again once a day, when opened', '/replicas') : '')];
 }
 
 // How alike the replicas are, as far as is known: of the files either replica of a pair had when it was
@@ -146,7 +149,7 @@ function inStepTile(data, tile) {
   if (!counted && apart !== null) {
     // (Compared before the totals were noted: only how many files were apart is known)
     return tile(apart ? 'warn' : 'ok', 'equal', 'Replicas in step', apart ? apart.toLocaleString() + ' file' + (apart === 1 ? '' : 's') + ' apart' : 'In step',
-      'When last compared; the share shows after the next sync', '/replicas');
+      'As of the last sync; a % from the next one', '/replicas');
   }
   if (!counted) {
     return tile('none', 'equal', 'Replicas in step', 'Not known yet', data.pairs.length ? 'A sync compares them' : 'Add two replicas', '/replicas');
@@ -154,7 +157,7 @@ function inStepTile(data, tile) {
   const share = either ? both / either : 1;
   const percent = share === 1 ? '100%' : Math.min(99.9, Math.floor(share * 1000) / 10) + '%';
   return tile(share >= 0.99 ? 'ok' : share >= 0.9 ? 'warn' : 'bad', 'equal', 'Replicas in step', percent,
-    'Files in both, when last compared (' + counted + ' of ' + data.pairs.length + ' pair' + (data.pairs.length === 1 ? '' : 's') + ')' +
+    'Files in both as of the last sync, newer ones not counted (' + counted + ' of ' + data.pairs.length + ' pair' + (data.pairs.length === 1 ? '' : 's') + ')' +
       (changed ? '; changed since' : ''), '/replicas');
 }
 

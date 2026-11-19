@@ -1,5 +1,6 @@
 """Reading a Drive folder anew into the cache"""
 import contextlib
+import threading
 
 from dirdelta.drive import driveapi
 from dirdelta.drive import drivecache
@@ -18,6 +19,11 @@ def changing_both(folder_path, other_path):
             yield
 
 
+# One folder read at a time (a sync's, and freshening.py's in the background), so neither writes over
+# the other's
+_one_at_a_time = threading.Lock()
+
+
 def refresh_cache(folder_path):
     """Read the folder at folder_path (a path in Drive, like /eliran; / is all of My Drive) anew from
     Drive, and put it in the cache, in place of what the cache had under it (making the cache, if
@@ -26,6 +32,11 @@ def refresh_cache(folder_path):
     time). The rest of the cache isn't read again. Raises HttpError if Drive can't be asked, and
     drivecache.DriveCacheError if it has no such folder (or two); either way (and on Ctrl-C), the
     cache is as it was."""
+    with _one_at_a_time:
+        _refresh_cache(folder_path)
+
+
+def _refresh_cache(folder_path):
     folder_path = '/' + '/'.join(paths.components(folder_path))
     root_id = driveapi.service().files().get(fileId='root', fields='id').execute(
         num_retries=NUM_RETRIES)['id']

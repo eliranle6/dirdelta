@@ -103,7 +103,7 @@ Developer tasks all live in the Makefile (`make` lists them): `test`,
 than adding shell scripts. `make clean`
 removes this copy's build output (and what older versions left in the repo), not the venv. It does not
 touch `~/.cache/dirdelta/files.sqlite` (the real Drive cache, an old `files.txt` is imported once, refreshed a folder at a
-time: a replica's, at the start or from the main menu, or one in it, with the file
+time: a replica's, at the start or from the main menu, or in the background when dirdelta is opened and it's over a day old (`freshening.py`), or one in it, with the file
 picker's `Ctrl-R`; with a `files.stale` next to it, listing the folders where a
 change dirdelta made to Drive was cut off before it was added to the cache, and a
 `files.times`, when each folder's list was last updated and uploaded to the replica's
@@ -188,7 +188,7 @@ them by name. A big class's tests are split by topic into modules of their own, 
 prefix), which a test module imports by name: the runner puts its folder and the ones above it, up to
 `tests/` (helpers.py), on the path.
 
-Modules are tested where it's worth it, not for the sake of a test file each (935 tests, all passing as of 2026-11-18; 150 were removed on 2026-11-06 as redundant, white-box or pinning styling) except
+Modules are tested where it's worth it, not for the sake of a test file each (937 tests, all passing as of 2026-11-19; 150 were removed on 2026-11-06 as redundant, white-box or pinning styling) except
 the thin wiring in `main.py`/`dirsync_main.py`, covered only by running the
 app. A test is worth keeping if it says what the code does for whoever uses it: not one that sets
 or reads private state, counts calls to an inner function, restates a constant or a style (colors,

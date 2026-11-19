@@ -5,6 +5,7 @@ pausing it; and the users (users.py)"""
 import os
 
 from dirdelta.drive import driveapi
+from dirdelta.drive import freshening
 from dirdelta.hashes import hashcache
 from dirdelta.hashes import hashing
 from dirdelta.known import mounts
@@ -97,13 +98,15 @@ def routes(session):
     def home(query, body):
         known_replicas = replicas.load()
         all_paths = known_replicas.replica_paths()
+        # (Drive's lists of the user's replicas and inboxes over a day old read again, in the background)
+        freshening.refresh_stale(all_paths + known_replicas.inbox_paths())
         screen = session.screen()
         names = {path: naming.name(path) for path in all_paths}
         return {'label': list(dryrun.label()),
                 'running': {'title': _title(screen), 'user': session.user, 'tab': session.tab} if session.is_running else None,
                 'user': users.current(),
                 # (Signed in to Drive: its login is kept; whether it's still good is known when it's used)
-                'drive': {'connected': os.path.exists(driveapi.TOKEN_PATH)},
+                'drive': {'connected': os.path.exists(driveapi.TOKEN_PATH), 'reading': freshening.reading()},
                 'phones': [dict(sources.describe(path), name=name, path=path) for name, path in sources.phones()],
                 'replicas': [replica_info(path, known_replicas) for path in all_paths],
                 'pairs': [pair_info(a, b, names, known_replicas) for a, b in known_replicas.pairs()],

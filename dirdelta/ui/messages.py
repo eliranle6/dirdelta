@@ -6,6 +6,7 @@ import contextlib
 import readline
 import shutil
 import sys
+import threading
 
 import termcolor
 
@@ -15,11 +16,27 @@ from dirdelta.ui import frontend
 _is_stopped = False
 # Whether the last line printed is print_progress()'s, so it hasn't ended
 _is_progress_shown = False
+# Whether this thread's lines aren't printed (quiet())
+_local = threading.local()
+
+
+@contextlib.contextmanager
+def quiet():
+    """This thread's print_line() and print_progress() print nothing while in it (work in the
+    background, e.g. freshening.py's)"""
+    before = getattr(_local, 'quiet', False)
+    _local.quiet = True
+    try:
+        yield
+    finally:
+        _local.quiet = before
 
 
 def print_line(line, color=None):
     """Print line (in color, a termcolor name like 'red', if given)."""
     global _is_progress_shown
+    if getattr(_local, 'quiet', False):
+        return
     if frontend.current is not None:
         frontend.current.print_line(line, color)
         return
@@ -37,6 +54,8 @@ def print_progress(line):
     """Print line over the one print_progress() printed last, if it's the last line printed, for
     progress that changes often (e.g. a count). Only on a terminal: elsewhere it would be a line per
     change."""
+    if getattr(_local, 'quiet', False):
+        return
     if frontend.current is not None:
         frontend.current.print_progress(line)
         return

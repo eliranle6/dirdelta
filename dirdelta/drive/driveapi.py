@@ -56,6 +56,29 @@ def service():
     return _local.service
 
 
+def can_log_in_quietly():
+    """Whether service() would log in without the browser (the saved login is good, or its refresh is):
+    what's done in the background asks this first"""
+    if _shared_credentials is not None:
+        return True
+    if not os.path.exists(TOKEN_PATH):
+        return False
+    try:
+        creds = Credentials.from_authorized_user_file(TOKEN_PATH)
+        if not creds.has_scopes(SCOPES):
+            return False
+        if creds.valid:
+            return True
+        if creds.expired and creds.refresh_token:
+            creds.refresh(Request())
+            with open(TOKEN_PATH, 'w') as token:
+                token.write(creds.to_json())
+            return creds.valid
+    except (RefreshError, OSError, ValueError):
+        return False
+    return False
+
+
 def get_url(url):
     """The contents at url, got with the login's credentials (e.g. a file's thumbnailLink, which Drive
     serves only to its owner). Raises OSError if it can't."""

@@ -41,6 +41,10 @@ def routes():
     checks = checking.Checks()
 
     def listing(query, body):
+        from dirdelta.drive import freshening
+        known_replicas = replicas.load()
+        # (Drive's lists of the user's replicas and inboxes over a day old read again, in the background)
+        freshening.refresh_stale(known_replicas.replica_paths() + known_replicas.inbox_paths())
         return {'inboxes': inboxes(), 'label': list(dryrun.label())}
 
     def new(query, body):

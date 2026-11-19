@@ -69,6 +69,7 @@ The map (each module's docstring's first line; generated from the code):
     - `prompt.py`: The prompt of a Task (with the files of its focus, which the AI may read), and the schema of its answer
 - `drive/`: Google Drive: its API, the cache of its file list, and a Drive folder as a replica
   - `clouddirtreefactory.py`: A Drive replica's tree, after asking whether to refresh its file list from Drive first
+  - `freshening.py`: Reading the user's Drive replicas' and inboxes' lists again when dirdelta is opened (the start menu, the web version's Home, Replicas and Inboxes), once one is over a day old: in a thread, quietly (messages.quiet()), only if Drive's login needs no browser (driveapi.can_log_in_quietly()), errors to errors.log; refresh.py reads one folder at a time, so a sync's read waits for it
   - `driveapi.py`: dirdelta's connection to the Google Drive API (service()), logged in with the OAuth secrets in SECRETS_DIR: cr...
   - `clouddirtree/`: A Google Drive folder as a replica (CloudDirTree): its files read from the Drive cache (drivecache.py), copied...
     - `constants.py`: How a Drive tree's changes are made: how many at once, in what requests, retried how often
@@ -1198,7 +1199,7 @@ every link carries, then a cookie), and a watcher.
   compared, by files; how many files were apart if a pair's totals weren't noted), and the share of the
   inboxes' files sorted; the last sync (of the replica synced longest ago: each replica's last, its pairs'
   latest), and the last sort (an import's choices last saved)); Available now (the replicas there, and the inboxes
-  there of each kind); Indexing (the hashing and Drive's oldest list). An age is
+  there of each kind); Indexing (the hashing and Drive's oldest list, "Reading now" while `freshening.py` reads one). An age is
   green within 2 days, yellow within 30, red after (each pair's sync status, which replicas are plugged in, and
   the inboxes are on their own tabs). Replicas (`/replicas`, the same
   script; `/sync`, the old tab's address, too), in two parts, each a block of its own in a color of its own

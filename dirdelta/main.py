@@ -5,6 +5,7 @@ import os
 import sys
 
 from dirdelta.trees import localscan
+from dirdelta.drive import freshening
 from dirdelta.screens import choose_replicas
 from dirdelta.sync import dirsync_main
 from dirdelta import dirpick_main
@@ -88,7 +89,10 @@ def start_menu(args=None):
     parse_args()'s, without paths; the defaults if None)"""
     args = args or _default_args()
     while True:
-        chosen = choose_replicas.run(replicas.load())
+        known_replicas = replicas.load()
+        # (Drive's lists of the replicas and inboxes over a day old read again, quietly, meanwhile)
+        freshening.refresh_stale(known_replicas.replica_paths() + known_replicas.inbox_paths())
+        chosen = choose_replicas.run(known_replicas)
         if chosen is None:
             return None
         if isinstance(chosen, choose_replicas.Sort):
