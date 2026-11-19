@@ -100,9 +100,9 @@ function pairRow(pair, isRunning) {
     el('button', {class: 'small', disabled: isRunning, onclick: () => start({kind: 'pair', a: pair.a, b: pair.b})}, 'Sync'));
 }
 
-// The whole picture, two tiles to a row, the replicas' on the left and the inboxes' on the right (each
-// leading to its tab): which are there; how far in step the replicas are, and how much of the inboxes is
-// sorted; the last sync and sort; the hashing and Drive's lists
+// The whole picture, in three sections of tiles, two to a row, the replicas' left and the inboxes' right
+// (each leading to its tab): how up to date they are (in step, sorted; the last sync and sort); what's
+// there now; and behind the scenes, the hashing and Drive's lists
 function summary(data) {
   const kept = data.replicas;
   const disks = kept.filter(replica => replica.kind === 'local'), inDrive = kept.filter(replica => replica.kind === 'drive');
@@ -116,13 +116,17 @@ function summary(data) {
   const hashes = tile(hashing ? 'warn' : jobs.length && jobs.every(replica => replica.hashing.state === 'done') ? 'ok' : 'none', 'hash', 'File hashes',
     hashing ? waiting(hashing.name) : jobs.length ? 'Up to date' : 'Not computed yet', 'They find moved and renamed files', '/replicas');
   if (!drive) hashes.classList.add('wide');
-  return el('div', {class: 'tiles'},
-    tile(!kept.length ? 'none' : there === kept.length ? 'ok' : 'bad', 'replicas', 'Replicas available', there + ' out of ' + kept.length, '', '/replicas'),
-    inboxesTile(data, tile),
-    inStepTile(data, tile), sortedTile(data, tile),
-    lastSyncTile(data, tile), lastSortTile(data, tile),
-    hashes,
-    drive ? tile(listed.tone, 'drive', 'Drive file lists', 'Read ' + listed.text, listed.tone === 'ok' ? 'Fresh' : 'A sync reads them again', '/replicas') : '');
+  const section = (title, ...tiles) => [el('div', {class: 'section-title'}, title), el('div', {class: 'tiles'}, tiles)];
+  return [
+    ...section('How up to date',
+      inStepTile(data, tile), sortedTile(data, tile),
+      lastSyncTile(data, tile), lastSortTile(data, tile)),
+    ...section('Available now',
+      tile(!kept.length ? 'none' : there === kept.length ? 'ok' : 'bad', 'replicas', 'Replicas available', there + ' out of ' + kept.length, '', '/replicas'),
+      inboxesTile(data, tile)),
+    ...section('Behind the scenes',
+      hashes,
+      drive ? tile(listed.tone, 'drive', 'Drive file lists', 'Read ' + listed.text, listed.tone === 'ok' ? 'Fresh' : 'A sync reads them again', '/replicas') : '')];
 }
 
 // How alike the replicas are, as far as is known: of the files either replica of a pair had when it was
@@ -217,7 +221,7 @@ function inboxesTile(data, tile) {
 }
 
 function homePage(data) {
-  const parts = [summary(data)];
+  const parts = [];
   if (!data.replicas.length) {
     // (A new user's: nothing of theirs yet)
     parts.push(el('div', {class: 'card banner'}, el('div', {}, el('b', {}, data.user + ' has no replicas yet'),
@@ -230,10 +234,8 @@ function homePage(data) {
       data.running.title ? el('div', {class: 'note'}, data.running.title) : ''),
       el('a', {class: 'button primary', href: '/run'}, 'Open it')));
   }
-  parts.push(el('div', {class: 'section-title'}, 'Sync status of each replica pair'));
-  parts.push(data.pairs.length ? el('div', {class: 'list'}, data.pairs.map(pair => pairRow(pair, !!data.running))) :
-    el('p', {class: 'note'}, 'Any two replicas are a pair: add them on Replicas.'));
-  return parts;
+  // (Each pair's sync status is on Replicas)
+  return parts.concat(summary(data));
 }
 
 // The user's replicas: each one's status, adding one; and every two of them, a pair, its sync status and Sync

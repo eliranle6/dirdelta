@@ -1193,18 +1193,20 @@ every link carries, then a cookie), and a watcher.
   their inboxes are where new files come in (sorted into that tree: into any replica, then synced to the
   others). See `known/replica_lists.py`: the replicas and inboxes added, or used by a sync or a sort.
   Home (`/`, `home.js`): the whole picture: tiles with icons, two to a row, the replicas' left and the inboxes' right, each
-  leading to its tab: the replicas there, and the inboxes there of each kind; the replicas in step (a guess: of
+  leading to its tab, in three sections: How up to date (the replicas in step (a guess: of
   the files either replica of a pair had when it was last compared, the share both had, over every pair
   compared, by files; how many files were apart if a pair's totals weren't noted), and the share of the
   inboxes' files sorted; the last sync (of the replica synced longest ago: each replica's last, its pairs'
-  latest), and the last sort (an import's choices last saved); the hashing and Drive's oldest list. An age is
-  green within 2 days, yellow within 30, red after, then each pair's sync status (`syncstate`'s mark, ≡ » « ≠ ?; how much was in
-  step, the files both had of all either had, by the totals a sync notes with its comparison since
-  2026-11-18; and how stale that is: when it was compared, and which replica changed since) with Sync
-  (which replicas are plugged in, and the inboxes, are on their own tabs). Replicas (`/replicas`, the same
+  latest), and the last sort (an import's choices last saved)); Available now (the replicas there, and the inboxes
+  there of each kind); Behind the scenes (the hashing and Drive's oldest list). An age is
+  green within 2 days, yellow within 30, red after (each pair's sync status, which replicas are plugged in, and
+  the inboxes are on their own tabs). Replicas (`/replicas`, the same
   script; `/sync`, the old tab's address, too): "+ Add a replica" (`web/adding.py`), each replica's card
   (icon, disk, status chips: mounted, synced, hashed, its list read; log entry; hashing to start or pause;
-  Forget), every pair's sync status with Sync (`daemon.flow()`, `main.run_pair()`), and the start menu
+  Forget), every pair's sync status (`syncstate`'s mark, ≡ » « ≠ ?; how much was in
+  step, the files both had of all either had, by the totals a sync notes with its comparison since
+  2026-11-18; and how stale that is: when it was compared, and which replica changed since) with Sync
+  (`daemon.flow()`, `main.run_pair()`), and the start menu
   for any other two folders. Inboxes (`/inboxes`, `import.js`; `/import` and `/unsorted`, the old tabs'
   addresses, too): its two kinds each in a block of its own, in a color of its own, with a jump to each on
   top (so neither is missed): Unsorted folders (the user's inboxes, "+ Add an unsorted folder") and
