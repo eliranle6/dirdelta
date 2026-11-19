@@ -293,6 +293,12 @@ function forgetButton(path, what) {
   return box;
 }
 
+// A progress bar, share (0-100) filled (in tone's color: '' blue, 'sure' green), with the share beside it
+function bar(share, tone = '') {
+  const shown = Math.max(0, Math.min(100, Math.floor(share || 0)));
+  return el('div', {class: 'bar'}, el('div', {class: 'meter'}, el('div', {class: tone, style: 'width:' + shown + '%'})), el('b', {}, shown + '%'));
+}
+
 // How many inboxes of a kind are there now, out of how many the user has (a phone: plugged in, of the
 // ones known: plugged in, or with an import): 'N out of M'
 function thereOutOf(inboxes) {

@@ -189,8 +189,16 @@ button.danger { background: var(--red); border-color: var(--red); color: #fff; }
 .list a.item + a.item, .list a.item + .item, .list .item + a.item { border-top: 1px solid var(--line); }
 .list a.item .what { flex: 1; display: flex; flex-direction: column; gap: 4px; min-width: 0; overflow-wrap: anywhere; }
 .list a.item .go { color: var(--muted); font-size: 20px; }
-.meter { display: block; height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; }
-.meter > span { display: block; height: 100%; background: var(--accent); }
+/* A progress bar (all pages'): thick, its empty part plain against the card, filled in a strong color (green:
+   sure, yellow: by name and size only), always shown, 0% too; bar() puts the share beside it */
+.meter { display: flex; height: 14px; border-radius: 7px; overflow: hidden; flex: none;
+  background: color-mix(in srgb, var(--fg) 10%, var(--card)); border: 1px solid color-mix(in srgb, var(--fg) 30%, var(--card)); }
+.meter > * { display: block; height: 100%; background: var(--accent); }
+.meter > .sure { background: var(--green); } .meter > .unsure { background: var(--yellow); }
+.meter.thick { height: 18px; border-radius: 9px; }
+.bar { display: flex; align-items: center; gap: 8px; }
+.bar .meter { flex: 1; }
+.bar b { font-size: 14px; min-width: 3em; text-align: right; font-variant-numeric: tabular-nums; }
 .card.inbox { display: flex; flex-direction: column; gap: 8px; }
 .card.inbox .head, .card.replica .head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .card.inbox .into { display: flex; align-items: center; gap: 6px; }

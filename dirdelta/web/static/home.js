@@ -43,7 +43,28 @@ function statusChips(replica) {
     replica.there ? chip('ok', replica.kind === 'drive' ? 'In Drive' : 'Mounted') : chip('bad', replica.why),
     chip(replica.seen ? synced.tone : 'none', replica.seen ? verb + ' ' + synced.text : 'Never ' + verb.toLowerCase()),
     replica.kind === 'local' ? hashChip(replica) : '',
-    replica.kind === 'drive' ? (listed => chip(listed.tone, 'File list read ' + listed.text))(age(replica.listedAt)) : '');
+    replica.kind === 'drive' ? (replica.reading ? chip('warn', waiting('Reading its file list')) :
+      (listed => chip(listed.tone, 'File list read ' + listed.text))(age(replica.listedAt))) : '');
+}
+
+// How far a replica's hashing (a local one's) or its file list's reading (a Drive one's) is, as a bar; or ''
+function workBar(replica) {
+  const job = replica.hashing;
+  if (replica.reading) return el('div', {}, el('div', {class: 'note'}, readText(replica.reading)), bar(readShare(replica.reading)));
+  if (job && job.files && job.state !== 'done' && job.state !== 'not scanned' && job.state !== 'scanning') {
+    return el('div', {}, el('div', {class: 'note'}, job.done.toLocaleString() + ' of ' + job.files.toLocaleString() + ' files hashed'),
+      bar(100 * job.done / job.files));
+  }
+  return '';
+}
+
+// A Drive list's reading: how far, in words, and its share (of about how many there are)
+function readText(reading) {
+  return 'Reading Drive\'s file list: ' + reading.read.toLocaleString() + (reading.expected ? ' of about ' + reading.expected.toLocaleString() : '') + ' files and folders';
+}
+
+function readShare(reading) {
+  return reading.expected ? Math.min(99, 100 * reading.read / reading.expected) : 0;
 }
 
 function replicaCard(replica) {
@@ -61,6 +82,7 @@ function replicaCard(replica) {
     el('div', {class: 'note'}, replica.kind === 'drive' ? 'In Google Drive' : 'On ' + replica.place),
     pathLine(replica.path),
     statusChips(replica),
+    workBar(replica),
     entry ? el('div', {class: 'entry'}, el('span', {class: 'entry-label'}, 'Last log entry: '), entry) : '',
     actions.length ? el('div', {class: 'row2 end'}, actions) : '');
 }
@@ -116,6 +138,7 @@ function summary(data) {
     el('span', {class: 'tile-title'}, icon(glyph), title), el('b', {}, value), hint ? el('span', {class: 'tile-hint'}, hint) : '');
   const hashes = tile(hashing ? 'warn' : jobs.length && jobs.every(replica => replica.hashing.state === 'done') ? 'ok' : 'none', 'hash', 'File hashes',
     hashing ? waiting(hashing.name) : jobs.length ? 'Up to date' : 'Not computed yet', 'They find moved and renamed files', '/replicas');
+  if (hashing && hashing.hashing.files) hashes.append(bar(100 * hashing.hashing.done / hashing.hashing.files));
   if (!drive) hashes.classList.add('wide');
   const section = (title, ...tiles) => [el('div', {class: 'section-title'}, title), el('div', {class: 'tiles'}, tiles)];
   return [
@@ -127,9 +150,16 @@ function summary(data) {
       inboxesTile(data, tile)),
     ...section('Indexing',
       hashes,
-      drive ? tile(data.drive.reading.length ? 'warn' : listed.tone, 'drive', 'Drive file lists',
-      data.drive.reading.length ? waiting('Reading now') : 'Read ' + listed.text,
-      data.drive.reading.length ? 'In the background' : 'Read again once a day, when opened', '/replicas') : '')];
+      drive ? driveTile(data, tile, listed) : '')];
+}
+
+// How old Drive's oldest list is, or how far reading one again is (a bar)
+function driveTile(data, tile, listed) {
+  const reading = data.drive.reading[0];
+  if (!reading) return tile(listed.tone, 'drive', 'Drive file lists', 'Read ' + listed.text, 'Read again once a day, when opened', '/replicas');
+  const found = tile('warn', 'drive', 'Drive file lists', waiting('Reading now'), readText(reading), '/replicas');
+  found.append(bar(readShare(reading)));
+  return found;
 }
 
 // How alike the replicas are, as far as is known: of the files either replica of a pair had when it was

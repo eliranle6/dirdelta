@@ -14,12 +14,16 @@ MAX_AGE = datetime.timedelta(days=1)
 _lock = threading.Lock()
 # The cloud paths being read now, or waiting to be
 _reading = set()
+# How far each one's reading got: {path: (files and folders read, about how many there are, or None)}
+_progress = {}
 
 
 def reading():
-    """The cloud paths being read now (or waiting to be), sorted"""
+    """[{'path', 'read', 'expected'}]: the cloud paths being read now (or waiting to be: read 0), how many
+    of their files and folders were read so far, of about how many (None if not known)"""
     with _lock:
-        return sorted(_reading)
+        return [{'path': path, 'read': _progress.get(path, (0, None))[0], 'expected': _progress.get(path, (0, None))[1]}
+                for path in sorted(_reading)]
 
 
 def stale(cloud_paths, now=None):
@@ -60,9 +64,15 @@ def _read(cloud_paths):
     for path in cloud_paths:
         try:
             with messages.quiet():
-                refresh.refresh_cache(paths.path_in_cloud(path))
+                refresh.refresh_cache(paths.path_in_cloud(path), lambda read, expected, path=path: _note(path, read, expected))
         except Exception:
             updates.log_error()
         finally:
             with _lock:
                 _reading.discard(path)
+                _progress.pop(path, None)
+
+
+def _note(path, read, expected):
+    with _lock:
+        _progress[path] = (read, expected)

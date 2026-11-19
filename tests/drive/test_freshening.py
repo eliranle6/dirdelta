@@ -25,7 +25,9 @@ class FresheningTest(unittest.TestCase):
             patcher.start()
             self.addCleanup(patcher.stop)
 
-    def _refresh(self, folder):
+    def _refresh(self, folder, on_progress):
+        on_progress(5, 10)
+        self.progress = freshening.reading()
         self.read.append(folder)
         if len(self.read) == 2:
             self.done.set()
@@ -38,6 +40,8 @@ class FresheningTest(unittest.TestCase):
         self.assertEqual(['cloud/old', 'cloud/never'], found)
         self.assertTrue(self.done.wait(5))
         self.assertEqual(['/old', '/never'], self.read)
+        # (As the last one was read: how far it got, the others done)
+        self.assertEqual([{'path': 'cloud/never', 'read': 5, 'expected': 10}], self.progress)
 
     def test_nothing_is_read_without_a_drive_login(self):
         with mock.patch('dirdelta.drive.driveapi.TOKEN_PATH', '/nonexistent/token.json'):

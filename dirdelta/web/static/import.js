@@ -66,7 +66,7 @@ function inboxCard(inbox) {
       !inbox.there ? chip('bad', 'Not there') : '');
   const parts = [head, inbox.kind === 'phone' ? pathLine(inbox.source.full, where + ' · its ' + inbox.source.inner + ' folder') : pathLine(inbox.path, where),
     el('div', {class: 'note'}, progress.text),
-    progress.share !== null ? el('span', {class: 'meter'}, el('span', {style: 'width:' + progress.share + '%'})) : ''];
+    bar(progress.share, 'sure')];
   const dests = inbox.dests;
   if (!dests.length) {
     parts.push(el('p', {class: 'note'}, inbox.kind === 'drive' ? 'Add a replica to sort it into (Replicas).' :

@@ -1199,7 +1199,7 @@ every link carries, then a cookie), and a watcher.
   compared, by files; how many files were apart if a pair's totals weren't noted), and the share of the
   inboxes' files sorted; the last sync (of the replica synced longest ago: each replica's last, its pairs'
   latest), and the last sort (an import's choices last saved)); Available now (the replicas there, and the inboxes
-  there of each kind); Indexing (the hashing and Drive's oldest list, "Reading now" while `freshening.py` reads one). An age is
+  there of each kind); Indexing (the hashing and Drive's oldest list, "Reading now" while `freshening.py` reads one, each with its progress bar). Progress bars are one thick, high-contrast `.meter` (app.css), always shown, 0% too, with the share beside it (`bar()`, markup.js): an inbox's sorting, a replica's hashing or its Drive list's reading (refresh_cache()'s on_progress, `freshening.reading()`). An age is
   green within 2 days, yellow within 30, red after (each pair's sync status, which replicas are plugged in, and
   the inboxes are on their own tabs). Replicas (`/replicas`, the same
   script; `/sync`, the old tab's address, too), in two parts, each a block of its own in a color of its own

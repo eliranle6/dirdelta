@@ -43,6 +43,7 @@ def replica_info(path, known_replicas):
              'device': 'drive' if is_cloud else _device(path)}
     if is_cloud:
         found['there'], found['why'] = True, ''
+        found['reading'] = next((one for one in freshening.reading() if one['path'] == path), None)
         found['listedAt'] = _when(replicainfo.cache_time(path))
     else:
         unmounted = mounts.unmounted(path)

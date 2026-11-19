@@ -24,19 +24,20 @@ def changing_both(folder_path, other_path):
 _one_at_a_time = threading.Lock()
 
 
-def refresh_cache(folder_path):
+def refresh_cache(folder_path, on_progress=None):
     """Read the folder at folder_path (a path in Drive, like /eliran; / is all of My Drive) anew from
     Drive, and put it in the cache, in place of what the cache had under it (making the cache, if
     there's none). The folder is found by its path's names, a request a level, then what's in it is
     read, a level of folders at a time (MAX_FOLDERS_PER_QUERY folders a request, one request at a
     time). The rest of the cache isn't read again. Raises HttpError if Drive can't be asked, and
     drivecache.DriveCacheError if it has no such folder (or two); either way (and on Ctrl-C), the
-    cache is as it was."""
+    cache is as it was. on_progress(read, expected), if given, is told how far it got as it goes:
+    the files and folders read, of about how many (None if not known)."""
     with _one_at_a_time:
-        _refresh_cache(folder_path)
+        _refresh_cache(folder_path, on_progress or (lambda read, expected: None))
 
 
-def _refresh_cache(folder_path):
+def _refresh_cache(folder_path, on_progress):
     folder_path = '/' + '/'.join(paths.components(folder_path))
     root_id = driveapi.service().files().get(fileId='root', fields='id').execute(
         num_retries=NUM_RETRIES)['id']
@@ -62,6 +63,7 @@ def _refresh_cache(folder_path):
     items = []
     folder_ids = [folder_id]
     messages.print_progress(_read_progress(0, expected_count))
+    on_progress(0, expected_count)
     while folder_ids:
         next_folder_ids = []
         for start in range(0, len(folder_ids), MAX_FOLDERS_PER_QUERY):
@@ -73,6 +75,7 @@ def _refresh_cache(folder_path):
                 if md.get('mimeType') == drivecache.FOLDER_MIME_TYPE:
                     next_folder_ids.append(md['id'])
             messages.print_progress(_read_progress(len(items), expected_count))
+            on_progress(len(items), expected_count)
         folder_ids = next_folder_ids
     # Done: the count, without the last refresh's
     messages.print_progress(_read_progress(len(items), None))

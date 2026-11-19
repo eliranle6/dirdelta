@@ -8,7 +8,6 @@
 .sortmeter .big b { font-size: 22px; }
 .sortmeter .big button:first-of-type { margin-left: auto; }
 .sortmeter #position { font-size: 12px; margin-top: -2px; }
-.meter.thick { height: 12px; border-radius: 6px; }
 .sortmeter button { padding: 4px 10px; font-size: 13px; }
 .bar input { flex: 1 1 220px; }
 .chips { display: flex; gap: 6px; flex-wrap: wrap; }
@@ -46,8 +45,6 @@ a.stat { border-top: 1px solid var(--line); }
 .stat span:nth-of-type(1) { flex: 1; }
 .stat .go { color: var(--muted); font-size: 18px; line-height: 1; }
 .stat.sure b { color: var(--green); } .stat.unsure b { color: var(--yellow); } .stat.missing b { color: var(--red); }
-.meter { display: flex; height: 8px; border-radius: 4px; background: var(--line); overflow: hidden; }
-.meter div { background: var(--accent); } .meter .sure { background: var(--green); } .meter .unsure { background: var(--yellow); }
 .photo .play { color: var(--accent); text-decoration: none; font-weight: 600; }
 .where { display: flex; gap: 6px; align-items: baseline; flex-wrap: wrap; color: var(--muted); font-size: 13px; margin: 0; }
 .where .fullpath { flex-basis: 100%; overflow-wrap: anywhere; }
@@ -65,7 +62,6 @@ a.item { display: flex; align-items: center; gap: 10px; padding: 11px 14px; colo
 a.item + a.item { border-top: 1px solid var(--line); }
 a.item .what { flex: 1; display: flex; flex-direction: column; gap: 4px; min-width: 0; overflow-wrap: anywhere; }
 a.item .go { color: var(--muted); font-size: 20px; }
-span.meter { display: flex; } span.meter span { background: var(--green); }
 .stat.zero { color: var(--muted); border-top: 1px solid var(--line); }
 .stat.zero.good b { color: var(--green); }
 .card h2 .head { display: inline-flex; align-items: center; gap: 8px; }
