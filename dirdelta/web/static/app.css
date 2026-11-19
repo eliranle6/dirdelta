@@ -234,7 +234,7 @@ button.danger { background: var(--red); border-color: var(--red); color: #fff; }
 .kindtabs { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; align-items: stretch;
   background: linear-gradient(var(--kind), var(--kind)) bottom / 100% 2px no-repeat; }
 .kindtabs .kindjump { border-radius: 12px 12px 0 0; border: 2px dashed var(--kind); border-bottom: 0; background: var(--card);
-  margin: 6px 0 2px; padding: 8px 10px 10px; min-width: 0; align-items: flex-start; }
+  margin: 0 0 2px; padding: 8px 10px 10px; min-width: 0; align-items: flex-start; }
 .kindtabs .kindjump > .icon { display: none; }
 .kindtabs .kindjump .jumptext { min-width: 0; flex: 1; }
 .kindtabs .kindjump .jumptext > span:first-child { overflow-wrap: anywhere; }
