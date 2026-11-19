@@ -290,8 +290,10 @@ function replicasPage(data) {
   // the replicas themselves
   return [el('p', {class: 'note'}, 'Replicas are copies of ' + data.user + '\'s files, kept in step by syncing any two of them.'),
     el('div', {class: 'kindjumps'},
-      kindJump('pairs', 'sync', 'Sync status', !data.pairs.length ? 'No pair yet' : apart ? apart + ' out of ' + data.pairs.length + ' out of step' : unknown ? unknown + ' out of ' + data.pairs.length + ' not synced yet' : 'All in step'),
-      kindJump('replicas', 'replicas', 'Replicas', there + ' out of ' + data.replicas.length + ' available')),
+      kindJump('pairs', 'sync', 'Sync status', !data.pairs.length ? 'No pair yet' : apart ? apart + ' out of ' + data.pairs.length + ' out of step' : unknown ? unknown + ' out of ' + data.pairs.length + ' not synced yet' : 'All in step',
+        !data.pairs.length || data.pairs.some(pair => pair.state.kind === 'branched') ? 'bad' : apart || unknown ? 'warn' : 'ok'),
+      kindJump('replicas', 'replicas', 'Replicas', there + ' out of ' + data.replicas.length + ' available',
+        !data.replicas.length || !there ? 'bad' : there < data.replicas.length ? 'warn' : 'ok')),
     kindBlock('pairs', 'sync', 'Sync status', 'Every two replicas are a pair: how far in step each was when last synced, and Sync.', pairs, other),
     kindBlock('replicas', 'replicas', 'Replicas', 'Each copy: a folder on this computer, on a disk or in Google Drive.', ...cards, folderAdder('replica'))];
 }

@@ -1203,7 +1203,7 @@ every link carries, then a cookie), and a watcher.
   green within 2 days, yellow within 30, red after (each pair's sync status, which replicas are plugged in, and
   the inboxes are on their own tabs). Replicas (`/replicas`, the same
   script; `/sync`, the old tab's address, too), in two parts, each a block of its own in a color of its own
-  with a jump to each on top, as Inboxes' (`kindJump()`, `kindBlock()` in `markup.js`): Sync status (cyan,
+  with a jump to each on top, as Inboxes' (`kindJump()`, `kindBlock()` in `markup.js`), each jump with a status dot (green, yellow, red: on Inboxes, all sorted, files left to sort, none there and nothing to sort, `inboxesTone()`; on Replicas, all in step or not, or a pair branched or none; all there, some, none): Sync status (cyan,
   first: what's done here) and Replicas (indigo). "+ Add a replica" (`web/adding.py`), each replica's card
   (icon, disk, status chips: mounted, synced, hashed, its list read; log entry; hashing to start or pause;
   Forget), every pair's sync status (`syncstate`'s mark, ≡ » « ≠ ?; how much was in

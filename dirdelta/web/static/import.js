@@ -102,7 +102,8 @@ async function loadList() {
   const folders = data.inboxes.filter(inbox => inbox.kind !== 'phone'), phones = data.inboxes.filter(inbox => inbox.kind === 'phone');
   const jump = kindJump, block = (id, iconName, title, text, cards, extra) => kindBlock(id, iconName, title, text, cards, extra || '');
   const parts = [el('p', {class: 'note'}, 'Inboxes are where new files come in, to be sorted into your replicas. There are two kinds:'),
-    el('div', {class: 'kindjumps'}, jump('unsorted', 'inbox', 'Unsorted folders', thereOutOf(folders) + ' there'), jump('phones', 'phone', 'Phones\' photos', thereOutOf(phones) + ' plugged in')),
+    el('div', {class: 'kindjumps'}, jump('unsorted', 'inbox', 'Unsorted folders', thereOutOf(folders) + ' there', inboxesTone(folders)),
+      jump('phones', 'phone', 'Phones\' photos', thereOutOf(phones) + ' plugged in', inboxesTone(phones))),
     block('unsorted', 'inbox', 'Unsorted folders',
       'Folders new files land in, e.g. unsorted in Google Drive. Sort their photos by day, with previews, or all their files, folder by folder.',
       folders.length ? folders.map(inboxCard) : el('p', {class: 'note'}, 'None yet: add one below.'), folderAdder('inbox')),

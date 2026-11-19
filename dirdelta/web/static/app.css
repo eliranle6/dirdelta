@@ -223,3 +223,6 @@ button.danger { background: var(--red); border-color: var(--red); color: #fff; }
 .kindjump .jumptext { display: flex; flex-direction: column; gap: 1px; }
 .kindjump .jumptext .note { font-weight: 400; font-size: 13px; }
 .kind .kindlabel { font-size: 13px; font-weight: 700; color: var(--kind); margin: 2px 2px -4px; }
+.kindjump .status { margin-left: auto; width: 14px; height: 14px; border-radius: 50%; flex: none; align-self: flex-start;
+  background: var(--grey); box-shadow: 0 0 0 2px var(--card), 0 0 0 3px color-mix(in srgb, var(--fg) 25%, var(--card)); }
+.kindjump .status.ok { background: var(--green); } .kindjump .status.warn { background: var(--yellow); } .kindjump .status.bad { background: var(--red); }

@@ -319,11 +319,22 @@ function inboxProgress(inbox) {
 }
 
 // A tab's part, a block of its own in its color (.kind-ID), and a jump to it for the top of the tab
-function kindJump(id, iconName, title, note) {
+// (tone: its status dot's, 'ok' green, 'warn' yellow, 'bad' red; none if not given)
+function kindJump(id, iconName, title, note, tone) {
   return el('a', {class: 'kindjump kind-' + id, href: '#' + id, onclick: event => {
     event.preventDefault();
     document.getElementById(id).scrollIntoView({behavior: 'smooth'});
-  }}, icon(iconName), el('span', {class: 'jumptext'}, el('span', {}, title), el('span', {class: 'note'}, note)));
+  }}, icon(iconName), el('span', {class: 'jumptext'}, el('span', {}, title), el('span', {class: 'note'}, note)),
+    tone ? el('span', {class: 'status ' + tone, title: STATUS_WORDS[tone]}) : '');
+}
+
+const STATUS_WORDS = {ok: 'All good', warn: 'Something to do', bad: 'Needs attention'};
+
+// An inbox kind's status: green, all sorted; yellow, files left to sort; red, none there and nothing to sort
+function inboxesTone(inboxes) {
+  let left = 0;
+  for (const inbox of inboxes) for (const found of inbox.imports) left += found.counts.pending + found.counts.copied;
+  return left ? 'warn' : inboxes.some(inbox => inbox.there) ? 'ok' : 'bad';
 }
 
 function kindBlock(id, iconName, title, text, ...children) {
