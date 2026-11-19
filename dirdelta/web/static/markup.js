@@ -320,6 +320,9 @@ const ICONS = {
   phone: '<rect x="7" y="2.5" width="10" height="19" rx="2"/><path d="M11 18.5h2"/>',
   inbox: '<path d="M3 13l3-8h12l3 8v6H3z"/><path d="M3 13h5l1 2h6l1-2h5"/>',
   folder: '<path d="M3 6.5h6l2 2h10v10.5H3z"/>',
+  replicas: '<rect x="3" y="8" width="13" height="12" rx="1.5"/><path d="M8 5h11.5a1.5 1.5 0 0 1 1.5 1.5V16"/>',
+  sync: '<path d="M4 10a8 8 0 0 1 14-4l2 2"/><path d="M20 4v4h-4"/><path d="M20 14a8 8 0 0 1-14 4l-2-2"/><path d="M4 20v-4h4"/>',
+  hash: '<path d="M9 4L7 20M17 4l-2 16M4 9h16M3 15h16"/>',
   person: '<circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/>',
 };
 

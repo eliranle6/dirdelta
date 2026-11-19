@@ -1192,12 +1192,12 @@ every link carries, then a cookie), and a watcher.
   user has, with its action: a user's replicas are copies of their one tree (any two a pair, synced), and
   their inboxes are where new files come in (sorted into that tree: into any replica, then synced to the
   others). See `known/replica_lists.py`: the replicas and inboxes added, or used by a sync or a sort.
-  Home (`/`, `home.js`): the whole picture: tiles (the replicas there, the last sync, the hashing, Drive's
-  oldest list, the inboxes there of each kind and how many files are left to sort), the replicas plugged in (each disk replica mounted or not; Drive signed in or not, and
-  what of the user's it holds), each pair's sync status (`syncstate`'s mark, ≡ » « ≠ ?; how much was in
+  Home (`/`, `home.js`): the whole picture: tiles with icons, two to a row, each leading to its tab (the replicas there and
+  the inboxes there of each kind with how many files are left to sort; the last sync; the hashing and Drive's
+  oldest list), then each pair's sync status (`syncstate`'s mark, ≡ » « ≠ ?; how much was in
   step, the files both had of all either had, by the totals a sync notes with its comparison since
-  2026-11-18; and how stale that is: when it was compared, and which replica changed since) with Sync,
-  and the inboxes of each kind (as Inboxes has them) with how far each one's sorting is. Replicas (`/replicas`, the same
+  2026-11-18; and how stale that is: when it was compared, and which replica changed since) with Sync
+  (which replicas are plugged in, and the inboxes, are on their own tabs). Replicas (`/replicas`, the same
   script; `/sync`, the old tab's address, too): "+ Add a replica" (`web/adding.py`), each replica's card
   (icon, disk, status chips: mounted, synced, hashed, its list read; log entry; hashing to start or pause;
   Forget), every pair's sync status with Sync (`daemon.flow()`, `main.run_pair()`), and the start menu

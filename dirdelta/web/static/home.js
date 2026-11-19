@@ -100,31 +100,30 @@ function pairRow(pair, isRunning) {
     el('button', {class: 'small', disabled: isRunning, onclick: () => start({kind: 'pair', a: pair.a, b: pair.b})}, 'Sync'));
 }
 
-// The whole picture: one tile each for the replicas, the syncs, the hashing and Drive's lists
+// The whole picture, in three rows: the replicas and the inboxes there; the last sync; the hashing and
+// Drive's lists (each leading to the tab that says more)
 function summary(data) {
   const kept = data.replicas;
   const disks = kept.filter(replica => replica.kind === 'local'), inDrive = kept.filter(replica => replica.kind === 'drive');
-  const mounted = disks.filter(replica => replica.there).length;
-  const there = mounted + (data.drive.connected ? inDrive.length : 0);
-  const where = [disks.length ? (mounted === disks.length ? (disks.length === 1 ? 'Its disk is mounted' : 'Every disk is mounted') :
-      (disks.length - mounted) + ' disk' + (disks.length - mounted === 1 ? ' isn\'t' : 's aren\'t') + ' mounted') : '',
-    inDrive.length ? (data.drive.connected ? 'Drive is connected' : 'Drive isn\'t connected') : ''].filter(Boolean).join(' · ');
+  const there = disks.filter(replica => replica.there).length + (data.drive.connected ? inDrive.length : 0);
   const lastSync = data.pairs.map(pair => pair.compared && pair.compared.when).filter(Boolean).sort().pop();
   const synced = age(lastSync);
   const jobs = data.replicas.filter(replica => replica.hashing && replica.hashing.state);
   const hashing = jobs.find(replica => replica.hashing.started && replica.hashing.state !== 'done');
   const drive = data.replicas.filter(replica => replica.kind === 'drive' && replica.listedAt).map(replica => replica.listedAt).sort()[0];
   const listed = age(drive);
-  const tile = (tone, title, value, hint, href) => el(href ? 'a' : 'div', {class: 'tile ' + tone, href},
-    el('span', {class: 'tile-title'}, title), el('b', {}, value), hint ? el('span', {class: 'tile-hint'}, hint) : '');
+  const tile = (tone, glyph, title, value, hint, href) => el(href ? 'a' : 'div', {class: 'tile ' + tone, href},
+    el('span', {class: 'tile-title'}, icon(glyph), title), el('b', {}, value), hint ? el('span', {class: 'tile-hint'}, hint) : '');
+  const hashes = tile(hashing ? 'warn' : jobs.length && jobs.every(replica => replica.hashing.state === 'done') ? 'ok' : 'none', 'hash', 'File hashes',
+    hashing ? waiting(hashing.name) : jobs.length ? 'Up to date' : 'Not computed yet', 'They find moved and renamed files', '/replicas');
+  if (!drive) hashes.classList.add('wide');
+  const last = tile(lastSync ? synced.tone : 'none', 'sync', 'Last sync', lastSync ? synced.text : 'never', 'Sync status is below', '/replicas');
+  last.classList.add('wide');
   return el('div', {class: 'tiles'},
-    tile(!kept.length ? 'none' : there === kept.length ? 'ok' : 'bad', 'Replicas available', there + ' of ' + kept.length,
-      !kept.length ? 'None yet' : where, '/replicas'),
-    tile(lastSync ? synced.tone : 'none', 'Last sync', lastSync ? synced.text : 'never', 'Sync status is below', '/replicas'),
-    tile(hashing ? 'warn' : jobs.length && jobs.every(replica => replica.hashing.state === 'done') ? 'ok' : 'none', 'File hashes',
-      hashing ? waiting(hashing.name) : jobs.length ? 'Up to date' : 'Not computed yet', 'They find moved and renamed files', '/replicas'),
-    drive ? tile(listed.tone, 'Drive file lists', 'Read ' + listed.text, listed.tone === 'ok' ? 'Fresh' : 'A sync reads them again', '/replicas') : '',
-    inboxesTile(data, tile));
+    tile(!kept.length ? 'none' : there === kept.length ? 'ok' : 'bad', 'replicas', 'Replicas available', there + ' out of ' + kept.length, '', '/replicas'),
+    inboxesTile(data, tile),
+    last, hashes,
+    drive ? tile(listed.tone, 'drive', 'Drive file lists', 'Read ' + listed.text, listed.tone === 'ok' ? 'Fresh' : 'A sync reads them again', '/replicas') : '');
 }
 
 // The inboxes there now, of each kind (unsorted folders, phones plugged in), and how many of their files
@@ -143,31 +142,7 @@ function inboxesTile(data, tile) {
   }
   const value = el('span', {class: 'tile-lines'}, el('span', {}, thereOutOf(folders) + ' unsorted folders'), el('span', {}, thereOutOf(phones) + ' phones'));
   const hint = left ? left.toLocaleString() + ' files left to sort' : started ? 'All sorted' : there ? 'Not sorted yet' : 'None plugged in or added';
-  const found = tile(left ? 'warn' : started ? 'ok' : 'none', 'Inboxes available', value, hint, '/inboxes');
-  found.classList.add('wide');
-  return found;
-}
-
-function connectionRow(kind, title, sub, state, action) {
-  return el('div', {class: 'item'}, icon(kind),
-    el('span', {class: 'what'}, el('b', {}, title), sub ? el('span', {class: 'note'}, sub) : ''), state, action || '');
-}
-
-// Which replicas can be reached now: each disk replica (mounted, or not plugged in), and Drive (signed in,
-// or not)
-function pluggedIn(data) {
-  const row = connectionRow;
-  const rows = [];
-  for (const replica of data.replicas.filter(replica => replica.kind === 'local')) {
-    rows.push(row(replica.device, replica.fullName, replica.place === 'this computer' ? 'On this computer\'s own disk' : 'On a separate disk',
-      replica.there ? chip('ok', 'Mounted') : chip('bad', 'Not plugged in')));
-  }
-  const inDrive = data.replicas.filter(replica => replica.kind === 'drive');
-  const held = inDrive.map(replica => replica.fullName).concat(
-    data.inboxes.filter(inbox => inbox.kind === 'drive').map(inbox => 'the inbox ' + inbox.name));
-  rows.push(row('drive', 'Google Drive', inDrive.length ? 'Holds ' + held.join(' and ') : 'Holds no replica of ' + data.user + "'s yet",
-    data.drive.connected ? chip('ok', 'Connected') : chip('bad', 'Not connected')));
-  return el('div', {class: 'list'}, rows);
+  return tile(left ? 'warn' : started ? 'ok' : 'none', 'inbox', 'Inboxes available', value, hint, '/inboxes');
 }
 
 function homePage(data) {
@@ -184,35 +159,9 @@ function homePage(data) {
       data.running.title ? el('div', {class: 'note'}, data.running.title) : ''),
       el('a', {class: 'button primary', href: '/run'}, 'Open it')));
   }
-  parts.push(el('div', {class: 'section-title'}, 'Replicas plugged in'), pluggedIn(data));
   parts.push(el('div', {class: 'section-title'}, 'Sync status of each replica pair'));
   parts.push(data.pairs.length ? el('div', {class: 'list'}, data.pairs.map(pair => pairRow(pair, !!data.running))) :
     el('p', {class: 'note'}, 'Any two replicas are a pair: add them on Replicas.'));
-  // The inboxes, of each kind as on Inboxes (a phone's while it's plugged in, or being sorted), each
-  // one's sorting so far
-  const inboxRow = inbox => {
-    const progress = inboxProgress(inbox);
-    return el('a', {class: 'item', href: '/inboxes#' + (inbox.kind === 'phone' ? 'phones' : 'unsorted')},
-      icon(inbox.kind === 'phone' ? 'phone' : inbox.kind === 'drive' ? 'inbox' : 'folder'),
-      el('span', {class: 'what'}, el('b', {}, inbox.kind === 'phone' ? 'Photos on ' + inbox.name : inbox.name), el('span', {class: 'note'}, progress.text),
-        progress.share !== null ? el('span', {class: 'meter'}, el('span', {style: 'width:' + progress.share + '%'})) : ''),
-      inbox.kind === 'phone' ? chip(inbox.there ? 'ok' : 'none', inbox.there ? 'Plugged in' : 'Not plugged in') : '',
-      el('span', {class: 'go'}, '›'));
-  };
-  const folders = data.inboxes.filter(inbox => inbox.kind !== 'phone');
-  const phones = data.inboxes.filter(inbox => inbox.kind === 'phone' && (inbox.there || inbox.imports.length));
-  const folderRows = folders.map(inboxRow);
-  if (!folderRows.length) folderRows.push(el('a', {class: 'item', href: '/inboxes#add'}, icon('inbox'),
-    el('span', {class: 'what'}, el('b', {}, 'No unsorted folder yet'), el('span', {class: 'note'}, 'Add one on Inboxes, e.g. unsorted in Google Drive')),
-    el('span', {class: 'go'}, '›')));
-  const phoneRows = phones.map(inboxRow);
-  if (!data.inboxes.some(inbox => inbox.kind === 'phone' && inbox.there)) {
-    phoneRows.push(connectionRow('phone', 'No phone plugged in', 'Plug one in by USB and choose "File transfer" on it', chip('none', 'None')));
-  }
-  parts.push(el('div', {class: 'section-title'}, 'Inboxes'),
-    el('div', {class: 'kindlist kind-unsorted'}, el('div', {class: 'kindlabel'}, 'Unsorted folders · ' + thereOutOf(folders) + ' there'), el('div', {class: 'list'}, folderRows)),
-    el('div', {class: 'kindlist kind-phones'}, el('div', {class: 'kindlabel'}, 'Phones\' photos · ' + thereOutOf(phones) + ' plugged in'),
-      el('div', {class: 'list'}, phoneRows)));
   return parts;
 }
 
