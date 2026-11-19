@@ -228,12 +228,18 @@ button.danger { background: var(--red); border-color: var(--red); color: #fff; }
 .kindjump .status.ok { background: var(--green); } .kindjump .status.warn { background: var(--yellow); } .kindjump .status.bad { background: var(--red); }
 /* The parts as sub-tabs (layout() 'tabs'), as folder tabs: the one shown joined to its part (one outline in
    its color, the same tint), the others behind it, each outlined dashed in its own color (a tab, not shown) */
-.kindtabs { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; align-items: end; margin-bottom: -12px; position: relative; z-index: 1; }
+.kindtabs { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; align-items: stretch; margin-bottom: -12px; position: relative; z-index: 1; }
+/* (Both the same height whatever wraps, so the outline is one shape: the one not shown only lower by its top) */
 .kindtabs .kindjump { border-radius: 12px 12px 0 0; border: 2px dashed var(--kind); border-bottom: 0; background: var(--card);
-  margin: 6px 0 2px; padding-bottom: 10px; }
-.kindtabs .kindjump:not(.on) > .icon, .kindtabs .kindjump:not(.on) .jumptext { opacity: .75; }
+  margin: 6px 0 2px; padding: 8px 10px 10px; min-width: 0; align-items: flex-start; }
+.kindtabs .kindjump > .icon { display: none; }
+.kindtabs .kindjump .jumptext { min-width: 0; flex: 1; }
+.kindtabs .kindjump .jumptext > span:first-child { overflow-wrap: anywhere; }
+.kindtabs .kindjump .jumptext .note { font-size: 12px; }
+.kindtabs .kindjump .status { width: 12px; height: 12px; margin-top: 3px; }
+.kindtabs .kindjump:not(.on) .jumptext { opacity: .75; }
 .kindtabs .kindjump:not(.on):hover { background: color-mix(in srgb, var(--kind) 6%, var(--card)); }
-.kindtabs .kindjump.on { margin: 0; border-style: solid; padding-bottom: 16px;
+.kindtabs .kindjump.on { margin: 0; border-style: solid; padding-bottom: 18px;
   background: color-mix(in srgb, var(--kind) 7%, var(--bg)); }
 .kindtabs .kindjump.on .jumptext > span:first-child { color: var(--kind); }
 .kindtabs ~ .kind { border-top-left-radius: 0; border-top-right-radius: 0; }
