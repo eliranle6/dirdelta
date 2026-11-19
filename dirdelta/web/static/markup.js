@@ -353,15 +353,15 @@ function inboxProgress(inbox) {
     checked: checked ? 'Replicas checked ' + age(checked).text : 'Replicas not checked yet'};
 }
 
-// This browser's colors (kept in its storage): light (the default), dark, or like the device's
-const THEMES = {light: 'Light', dark: 'Dark', device: 'Like the device'};
+// This browser's colors (kept in its storage): like the device's (the default), light, or dark
+const THEMES = {device: 'Like the device', light: 'Light', dark: 'Dark'};
 
 function theme() {
   try {
     const found = localStorage.getItem('dirdelta_theme');
-    return found in THEMES ? found : 'light';
+    return found in THEMES ? found : 'device';
   } catch (error) {
-    return 'light';
+    return 'device';
   }
 }
 

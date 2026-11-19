@@ -1266,7 +1266,7 @@ every link carries, then a cookie), and a watcher.
   the address links are emailed to them (`/api/users`, `/api/users/add`, `/api/users/email`); a new
   user's Home offers to add their first replica. It holds the mode's label (DRY RUN or LIVE) too: the tabs'
   pages have no title row (their tab is their title); an import's page and a flow's keep theirs (breadcrumbs). Its menu also
-  sets this browser's theme (`theme()`, in its localStorage): light by default, dark, or like the device.
+  sets this browser's theme (`theme()`, in its localStorage): like the device by default, light, or dark.
 - Adding a replica or an inbox (`web/adding.py`, `markup.js`'s folderAdder(), on Replicas and Inboxes,
   `#add` opening it): its folder browsed on this computer (from home and the mounted disks) or in Google
   Drive (its folders as the Drive cache has them), not in another replica or inbox or holding one; kept
