@@ -121,7 +121,7 @@ async function loadList() {
   // (A link to a kind, e.g. Home's to #phones, goes to it once it's drawn: once)
   const kind = !page.scrolled && ['unsorted', 'phones', 'add'].includes(location.hash.slice(1)) ? location.hash.slice(1) : null;
   page.scrolled = true;
-  if (kind && layout() !== 'tabs') document.getElementById(kind === 'add' ? 'unsorted' : kind).scrollIntoView();
+  if (kind && layout() === 'blocks') document.getElementById(kind === 'add' ? 'unsorted' : kind).scrollIntoView();
   later(5);
 }
 

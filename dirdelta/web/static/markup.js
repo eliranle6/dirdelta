@@ -347,9 +347,10 @@ function inboxProgress(inbox) {
     checked: checked ? 'Replicas checked ' + age(checked).text : 'Replicas not checked yet'};
 }
 
-// How a tab's parts are laid out (this browser's choice, kept in its storage): 'tabs' (the default), a row of
-// sub-tabs on top, one part shown at a time; or 'blocks', all of them one after another with a jump to each on top
-const LAYOUTS = {tabs: 'Parts as sub-tabs', blocks: 'Parts one after another'};
+// How a tab's parts are laid out (this browser's choice, kept in its storage): as sub-tabs, one part shown at a
+// time, 'tabs' (the default: a row of them, the one shown underlined) or 'folders' (folder tabs joined to the
+// part shown); or 'blocks', all of them one after another with a jump to each on top
+const LAYOUTS = {tabs: 'Parts as sub-tabs', folders: 'Parts as folder tabs', blocks: 'Parts one after another'};
 
 function layout() {
   try {
@@ -371,7 +372,7 @@ const shownPart = {};
 // A tab's parts ([{jump: kindJump(), block: kindBlock()}]), laid out as layout() says
 function kindParts(parts, aliases = {}) {
   const jumps = parts.map(part => part.jump), blocks = parts.map(part => part.block);
-  if (layout() !== 'tabs') return [el('div', {class: 'kindjumps'}, jumps), ...blocks];
+  if (layout() === 'blocks') return [el('div', {class: 'kindjumps'}, jumps), ...blocks];
   const ids = blocks.map(block => block.id), page = location.pathname;
   if (!ids.includes(shownPart[page])) {
     const hash = location.hash.slice(1);
@@ -390,7 +391,7 @@ function kindParts(parts, aliases = {}) {
     jump.setAttribute('role', 'tab');
   });
   const row = el('div', {class: 'kindtabs', role: 'tablist'}, jumps);
-  const shown = [el('div', {class: 'kindtabbed'}, row, ...blocks)];
+  const shown = [el('div', {class: 'kindtabbed ' + (layout() === 'folders' ? 'folders' : 'segmented')}, row, ...blocks)];
   show(shownPart[page]);
   return shown;
 }

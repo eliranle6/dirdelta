@@ -316,7 +316,7 @@ async function load() {
   document.getElementById('main').replaceChildren(...parts);
   // (A path shown whole stays so across the redraws)
   document.querySelectorAll('.pathbutton').forEach(path => { if (open.includes(path.title)) path.textContent = path.title; });
-  if (PAGE === 'replicas' && layout() !== 'tabs') scrollToPart();
+  if (PAGE === 'replicas' && layout() === 'blocks') scrollToPart();
   const busy = data.replicas.some(replica => replica.hashing && replica.hashing.started && replica.hashing.state !== 'done');
   timer = setTimeout(load, busy ? 2000 : 8000);
 }
