@@ -226,14 +226,17 @@ button.danger { background: var(--red); border-color: var(--red); color: #fff; }
 .kindjump .status { margin-left: auto; width: 14px; height: 14px; border-radius: 50%; flex: none; align-self: flex-start;
   background: var(--grey); box-shadow: 0 0 0 2px var(--card), 0 0 0 3px color-mix(in srgb, var(--fg) 25%, var(--card)); }
 .kindjump .status.ok { background: var(--green); } .kindjump .status.warn { background: var(--yellow); } .kindjump .status.bad { background: var(--red); }
-/* The parts as sub-tabs (layout() 'tabs'): one row, the part shown in its color, the others plain */
-.kindtabs { display: grid; grid-template-columns: 1fr 1fr; border: 1px solid var(--line); border-radius: 12px; overflow: hidden;
-  background: var(--card); position: sticky; top: calc(var(--head, 0px) + 4px); z-index: 2; }
-.kindtabs .kindjump { border: 0; border-radius: 0; border-bottom: 4px solid transparent; background: none; }
-.kindtabs .kindjump:not(.on) > .icon, .kindtabs .kindjump:not(.on) .jumptext { opacity: .65; }
-.kindtabs .kindjump + .kindjump { border-left: 1px solid var(--line); }
-.kindtabs .kindjump.on { opacity: 1; border-bottom-color: var(--kind); background: color-mix(in srgb, var(--kind) 10%, var(--card)); }
+/* The parts as sub-tabs (layout() 'tabs'), as folder tabs: the one shown joined to its part (one outline in
+   its color, the same tint), the others behind it, each outlined dashed in its own color (a tab, not shown) */
+.kindtabs { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; align-items: end; margin-bottom: -12px; position: relative; z-index: 1; }
+.kindtabs .kindjump { border-radius: 12px 12px 0 0; border: 2px dashed var(--kind); border-bottom: 0; background: var(--card);
+  margin: 6px 0 2px; padding-bottom: 10px; }
+.kindtabs .kindjump:not(.on) > .icon, .kindtabs .kindjump:not(.on) .jumptext { opacity: .75; }
+.kindtabs .kindjump:not(.on):hover { background: color-mix(in srgb, var(--kind) 6%, var(--card)); }
+.kindtabs .kindjump.on { margin: 0; border-style: solid; padding-bottom: 16px;
+  background: color-mix(in srgb, var(--kind) 7%, var(--bg)); }
 .kindtabs .kindjump.on .jumptext > span:first-child { color: var(--kind); }
+.kindtabs ~ .kind { border-top-left-radius: 0; border-top-right-radius: 0; }
 .kind[hidden] { display: none; }
 /* (Its sub-tab names the part shown: its block says only what it is) */
 .kindtabs ~ .kind .kindhead > .icon, .kindtabs ~ .kind .kindhead h2 { display: none; }

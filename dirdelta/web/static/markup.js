@@ -346,21 +346,21 @@ function inboxProgress(inbox) {
     checked: checked ? 'Replicas checked ' + age(checked).text : 'Replicas not checked yet'};
 }
 
-// How a tab's parts are laid out (this browser's choice, kept in its storage): 'blocks', all of them one
-// after another with a jump to each on top; or 'tabs', a row of sub-tabs on top, one part shown at a time
-const LAYOUTS = {blocks: 'Parts one after another', tabs: 'Parts as sub-tabs'};
+// How a tab's parts are laid out (this browser's choice, kept in its storage): 'tabs' (the default), a row of
+// sub-tabs on top, one part shown at a time; or 'blocks', all of them one after another with a jump to each on top
+const LAYOUTS = {tabs: 'Parts as sub-tabs', blocks: 'Parts one after another'};
 
 function layout() {
   try {
     const kept = localStorage.getItem('dirdelta_layout');
-    return kept in LAYOUTS ? kept : 'blocks';
+    return kept in LAYOUTS ? kept : 'tabs';
   } catch (error) {
-    return 'blocks';
+    return 'tabs';
   }
 }
 
 function setLayout(key) {
-  try { localStorage.setItem('dirdelta_layout', key); } catch (error) { /* (blocks, then) */ }
+  try { localStorage.setItem('dirdelta_layout', key); } catch (error) { /* (the default, then) */ }
 }
 
 // The part shown of each page's, as sub-tabs: {page: id}, chosen once (from the link's #, e.g. Home's to
