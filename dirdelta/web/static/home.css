@@ -1,4 +1,5 @@
-.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 10px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(280px, 100%), 1fr)); gap: 10px; }
+.grid > * { min-width: 0; }
 .head { display: flex; align-items: center; gap: 8px; }
 .replica .head b { font-size: 16px; }
 .replica.away { opacity: .75; }
