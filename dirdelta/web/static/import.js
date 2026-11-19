@@ -100,12 +100,7 @@ async function loadList() {
   document.getElementById('labels').replaceChildren(labelChip(data.label));
   // Two kinds, each in a block of its own (so neither is missed): unsorted folders, and phones' photos
   const folders = data.inboxes.filter(inbox => inbox.kind !== 'phone'), phones = data.inboxes.filter(inbox => inbox.kind === 'phone');
-  const jump = (id, iconName, title, count) => el('a', {class: 'kindjump kind-' + id, href: '#' + id, onclick: event => {
-    event.preventDefault();
-    document.getElementById(id).scrollIntoView({behavior: 'smooth'});
-  }}, icon(iconName), el('span', {class: 'jumptext'}, el('span', {}, title), el('span', {class: 'note'}, count)));
-  const block = (id, iconName, title, text, cards, extra) => el('section', {class: 'kind kind-' + id, id},
-    el('div', {class: 'kindhead'}, icon(iconName), el('div', {}, el('h2', {}, title), el('p', {}, text))), cards, extra || '');
+  const jump = kindJump, block = (id, iconName, title, text, cards, extra) => kindBlock(id, iconName, title, text, cards, extra || '');
   const parts = [el('p', {class: 'note'}, 'Inboxes are where new files come in, to be sorted into your replicas. There are two kinds:'),
     el('div', {class: 'kindjumps'}, jump('unsorted', 'inbox', 'Unsorted folders', thereOutOf(folders) + ' there'), jump('phones', 'phone', 'Phones\' photos', thereOutOf(phones) + ' plugged in')),
     block('unsorted', 'inbox', 'Unsorted folders',

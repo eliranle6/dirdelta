@@ -312,6 +312,19 @@ function inboxProgress(inbox) {
   return {text: total ? decided.toLocaleString() + ' of ' + total.toLocaleString() + ' sorted (' + share + '%)' : 'Listing its files', share};
 }
 
+// A tab's part, a block of its own in its color (.kind-ID), and a jump to it for the top of the tab
+function kindJump(id, iconName, title, note) {
+  return el('a', {class: 'kindjump kind-' + id, href: '#' + id, onclick: event => {
+    event.preventDefault();
+    document.getElementById(id).scrollIntoView({behavior: 'smooth'});
+  }}, icon(iconName), el('span', {class: 'jumptext'}, el('span', {}, title), el('span', {class: 'note'}, note)));
+}
+
+function kindBlock(id, iconName, title, text, ...children) {
+  return el('section', {class: 'kind kind-' + id, id},
+    el('div', {class: 'kindhead'}, icon(iconName), el('div', {}, el('h2', {}, title), el('p', {}, text))), ...children);
+}
+
 // Small icons of what a replica or source is on (static SVG, drawn in the text's color)
 const ICONS = {
   laptop: '<rect x="4" y="5" width="16" height="11" rx="1.5"/><path d="M2 19h20"/>',

@@ -1201,7 +1201,9 @@ every link carries, then a cookie), and a watcher.
   there of each kind); Indexing (the hashing and Drive's oldest list). An age is
   green within 2 days, yellow within 30, red after (each pair's sync status, which replicas are plugged in, and
   the inboxes are on their own tabs). Replicas (`/replicas`, the same
-  script; `/sync`, the old tab's address, too): "+ Add a replica" (`web/adding.py`), each replica's card
+  script; `/sync`, the old tab's address, too), in two parts, each a block of its own in a color of its own
+  with a jump to each on top, as Inboxes' (`kindJump()`, `kindBlock()` in `markup.js`): Sync status (cyan,
+  first: what's done here) and Replicas (indigo). "+ Add a replica" (`web/adding.py`), each replica's card
   (icon, disk, status chips: mounted, synced, hashed, its list read; log entry; hashing to start or pause;
   Forget), every pair's sync status (`syncstate`'s mark, ≡ » « ≠ ?; how much was in
   step, the files both had of all either had, by the totals a sync notes with its comparison since

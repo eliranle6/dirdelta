@@ -2,14 +2,14 @@
   --bg: #f7f7f8; --fg: #1d1f23; --muted: #6b7078; --card: #ffffff; --line: #d9dbe0;
   --accent: #2563eb; --accent-fg: #fff; --sel: #dbe7ff; --picked: #fde2e2; --disabled: #a3a7ae;
   --red: #c62828; --green: #2e7d32; --yellow: #a07800; --blue: #1e5bd8; --magenta: #a21caf;
-  --cyan: #0e7490; --orange: #c2410c; --grey: #6b7078; --white: #888;
+  --cyan: #0e7490; --indigo: #4f46e5; --orange: #c2410c; --grey: #6b7078; --white: #888;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     --bg: #16181c; --fg: #e6e7ea; --muted: #9aa0a8; --card: #202329; --line: #33373e;
     --accent: #5b8cff; --sel: #263a63; --picked: #4a2326; --disabled: #5d626a;
     --red: #ff6b6b; --green: #5fd27a; --yellow: #e0c04a; --blue: #7aa7ff; --magenta: #e07af0;
-    --cyan: #4cc9e0; --orange: #ff9a52; --grey: #9aa0a8; --white: #ddd;
+    --cyan: #4cc9e0; --indigo: #a5a8ff; --orange: #ff9a52; --grey: #9aa0a8; --white: #ddd;
   }
 }
 :root[data-theme="dark"] {
@@ -194,3 +194,24 @@ button.danger { background: var(--red); border-color: var(--red); color: #fff; }
 .card.inbox { display: flex; flex-direction: column; gap: 8px; }
 .card.inbox .head, .card.replica .head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .card.inbox .into { display: flex; align-items: center; gap: 6px; }
+
+/* A tab's parts, each a block of its own in a color of its own, with a jump to each at the top (kindJump(), kindBlock()):
+   Replicas' sync status and replicas, Inboxes' unsorted folders and phones */
+.kindjumps { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.kindjump { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-radius: 10px; text-decoration: none; color: var(--fg);
+  background: var(--card); border: 1px solid var(--line); border-top: 4px solid var(--kind); font-weight: 600; }
+.kindjump .count { margin-left: auto; font-size: 18px; color: var(--kind); }
+.kind { display: flex; flex-direction: column; gap: 10px; padding: 12px; border-radius: 14px; border: 2px solid var(--kind);
+  background: color-mix(in srgb, var(--kind) 7%, var(--bg)); scroll-margin-top: calc(var(--head, 120px) + 8px); }
+.kind-unsorted { --kind: var(--blue); }
+.kind-phones { --kind: var(--magenta); }
+.kind-pairs { --kind: var(--cyan); }
+.kind-replicas { --kind: var(--indigo); }
+.kindhead { display: flex; gap: 10px; align-items: flex-start; }
+.kindhead > .icon { color: var(--kind); margin-top: 2px; }
+.kindhead > .icon svg { width: 26px; height: 26px; }
+.kindhead h2 { margin: 0; font-size: 18px; color: var(--kind); }
+.kindhead p { margin: 2px 0 0; color: var(--muted); font-size: 14px; }
+.kindjump .jumptext { display: flex; flex-direction: column; gap: 1px; }
+.kindjump .jumptext .note { font-weight: 400; font-size: 13px; }
+.kind .kindlabel { font-size: 13px; font-weight: 700; color: var(--kind); margin: 2px 2px -4px; }

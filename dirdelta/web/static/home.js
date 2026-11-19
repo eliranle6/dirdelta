@@ -242,17 +242,33 @@ function homePage(data) {
 function replicasPage(data) {
   const local = data.replicas.filter(replica => replica.kind === 'local');
   const drive = data.replicas.filter(replica => replica.kind === 'drive');
-  const parts = [el('p', {class: 'note'}, 'Replicas are copies of ' + data.user + '\'s files, kept in step by syncing any two of them.'),
-    folderAdder('replica')];
-  if (local.length) parts.push(el('div', {class: 'section-title'}, 'Replicas on disks'), el('div', {class: 'grid'}, local.map(replicaCard)));
-  if (drive.length) parts.push(el('div', {class: 'section-title'}, 'Replicas in Google Drive'), el('div', {class: 'grid'}, drive.map(replicaCard)));
-  parts.push(el('div', {class: 'section-title'}, 'Sync status of each pair'));
-  parts.push(data.pairs.length ? el('div', {class: 'list'}, data.pairs.map(pair => pairRow(pair, !!data.running))) :
-    el('p', {class: 'note'}, data.replicas.length ? 'Add another replica: any two are a pair to sync.' : 'Add two replicas: any two are a pair to sync.'));
-  parts.push(el('div', {class: 'list'}, el('a', {class: 'item', href: '#', onclick: event => { event.preventDefault(); start({}); }},
+  const there = data.replicas.filter(replica => replica.there).length;
+  const apart = data.pairs.filter(pair => ['a ahead', 'b ahead', 'branched'].includes(pair.state.kind)).length;
+  const unknown = data.pairs.filter(pair => pair.state.kind === 'unknown').length;
+  const pairs = data.pairs.length ? el('div', {class: 'list'}, data.pairs.map(pair => pairRow(pair, !!data.running))) :
+    el('p', {class: 'note'}, data.replicas.length ? 'Add another replica: any two are a pair to sync.' : 'Add two replicas: any two are a pair to sync.');
+  const other = el('div', {class: 'list'}, el('a', {class: 'item', href: '#', onclick: event => { event.preventDefault(); start({}); }},
     el('span', {class: 'what'}, el('b', {}, 'Sync two other folders once…'), el('span', {class: 'note'}, 'Any two, chosen on the terminal\'s screens')),
-    el('span', {class: 'go'}, '›'))));
-  return parts;
+    el('span', {class: 'go'}, '›')));
+  const cards = [];
+  if (local.length) cards.push(el('div', {class: 'kindlabel'}, 'On disks'), el('div', {class: 'grid'}, local.map(replicaCard)));
+  if (drive.length) cards.push(el('div', {class: 'kindlabel'}, 'In Google Drive'), el('div', {class: 'grid'}, drive.map(replicaCard)));
+  // Two parts, each in a block of its own: every two replicas' sync status (what's done here, first), and
+  // the replicas themselves
+  return [el('p', {class: 'note'}, 'Replicas are copies of ' + data.user + '\'s files, kept in step by syncing any two of them.'),
+    el('div', {class: 'kindjumps'},
+      kindJump('pairs', 'sync', 'Sync status', !data.pairs.length ? 'No pair yet' : apart ? apart + ' out of ' + data.pairs.length + ' out of step' : unknown ? unknown + ' out of ' + data.pairs.length + ' not synced yet' : 'All in step'),
+      kindJump('replicas', 'replicas', 'Replicas', there + ' out of ' + data.replicas.length + ' available')),
+    kindBlock('pairs', 'sync', 'Sync status', 'Every two replicas are a pair: how far in step each was when last synced, and Sync.', pairs, other),
+    kindBlock('replicas', 'replicas', 'Replicas', 'Each copy: a folder on this computer, on a disk or in Google Drive.', ...cards, folderAdder('replica'))];
+}
+
+// (A link to a part, e.g. Home's to #add, goes to it once it's drawn: once)
+let scrolled = false;
+function scrollToPart() {
+  const part = !scrolled && ['pairs', 'replicas', 'add'].includes(location.hash.slice(1)) ? location.hash.slice(1) : null;
+  scrolled = true;
+  if (part && document.getElementById(part === 'add' ? 'replicas' : part)) document.getElementById(part === 'add' ? 'replicas' : part).scrollIntoView();
 }
 
 async function load() {
@@ -270,6 +286,7 @@ async function load() {
   document.getElementById('main').replaceChildren(...parts);
   // (A path shown whole stays so across the redraws)
   document.querySelectorAll('.pathbutton').forEach(path => { if (open.includes(path.title)) path.textContent = path.title; });
+  if (PAGE === 'replicas') scrollToPart();
   const busy = data.replicas.some(replica => replica.hashing && replica.hashing.started && replica.hashing.state !== 'done');
   timer = setTimeout(load, busy ? 2000 : 8000);
 }
