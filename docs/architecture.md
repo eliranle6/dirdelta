@@ -1198,7 +1198,7 @@ every link carries, then a cookie), and a watcher.
   compared, by files; how many files were apart if a pair's totals weren't noted), and the share of the
   inboxes' files sorted; the last sync (of the replica synced longest ago: each replica's last, its pairs'
   latest), and the last sort (an import's choices last saved)); Available now (the replicas there, and the inboxes
-  there of each kind); Behind the scenes (the hashing and Drive's oldest list). An age is
+  there of each kind); Indexing (the hashing and Drive's oldest list). An age is
   green within 2 days, yellow within 30, red after (each pair's sync status, which replicas are plugged in, and
   the inboxes are on their own tabs). Replicas (`/replicas`, the same
   script; `/sync`, the old tab's address, too): "+ Add a replica" (`web/adding.py`), each replica's card

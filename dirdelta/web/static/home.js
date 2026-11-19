@@ -102,7 +102,7 @@ function pairRow(pair, isRunning) {
 
 // The whole picture, in three sections of tiles, two to a row, the replicas' left and the inboxes' right
 // (each leading to its tab): how up to date they are (in step, sorted; the last sync and sort); what's
-// there now; and behind the scenes, the hashing and Drive's lists
+// there now; and the indexing: the hashing and Drive's lists
 function summary(data) {
   const kept = data.replicas;
   const disks = kept.filter(replica => replica.kind === 'local'), inDrive = kept.filter(replica => replica.kind === 'drive');
@@ -124,7 +124,7 @@ function summary(data) {
     ...section('Available now',
       tile(!kept.length ? 'none' : there === kept.length ? 'ok' : 'bad', 'replicas', 'Replicas available', there + ' out of ' + kept.length, '', '/replicas'),
       inboxesTile(data, tile)),
-    ...section('Behind the scenes',
+    ...section('Indexing',
       hashes,
       drive ? tile(listed.tone, 'drive', 'Drive file lists', 'Read ' + listed.text, listed.tone === 'ok' ? 'Fresh' : 'A sync reads them again', '/replicas') : '')];
 }
