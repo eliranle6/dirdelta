@@ -100,14 +100,13 @@ function pairRow(pair, isRunning) {
     el('button', {class: 'small', disabled: isRunning, onclick: () => start({kind: 'pair', a: pair.a, b: pair.b})}, 'Sync'));
 }
 
-// The whole picture, in three rows: the replicas and the inboxes there; the last sync; the hashing and
-// Drive's lists (each leading to the tab that says more)
+// The whole picture, two tiles to a row, the replicas' on the left and the inboxes' on the right (each
+// leading to its tab): which are there; how far in step the replicas are, and how much of the inboxes is
+// sorted; the last sync and sort; the hashing and Drive's lists
 function summary(data) {
   const kept = data.replicas;
   const disks = kept.filter(replica => replica.kind === 'local'), inDrive = kept.filter(replica => replica.kind === 'drive');
   const there = disks.filter(replica => replica.there).length + (data.drive.connected ? inDrive.length : 0);
-  const lastSync = data.pairs.map(pair => pair.compared && pair.compared.when).filter(Boolean).sort().pop();
-  const synced = age(lastSync);
   const jobs = data.replicas.filter(replica => replica.hashing && replica.hashing.state);
   const hashing = jobs.find(replica => replica.hashing.started && replica.hashing.state !== 'done');
   const drive = data.replicas.filter(replica => replica.kind === 'drive' && replica.listedAt).map(replica => replica.listedAt).sort()[0];
@@ -117,13 +116,94 @@ function summary(data) {
   const hashes = tile(hashing ? 'warn' : jobs.length && jobs.every(replica => replica.hashing.state === 'done') ? 'ok' : 'none', 'hash', 'File hashes',
     hashing ? waiting(hashing.name) : jobs.length ? 'Up to date' : 'Not computed yet', 'They find moved and renamed files', '/replicas');
   if (!drive) hashes.classList.add('wide');
-  const last = tile(lastSync ? synced.tone : 'none', 'sync', 'Last sync', lastSync ? synced.text : 'never', 'Sync status is below', '/replicas');
-  last.classList.add('wide');
   return el('div', {class: 'tiles'},
     tile(!kept.length ? 'none' : there === kept.length ? 'ok' : 'bad', 'replicas', 'Replicas available', there + ' out of ' + kept.length, '', '/replicas'),
     inboxesTile(data, tile),
-    last, hashes,
+    inStepTile(data, tile), sortedTile(data, tile),
+    lastSyncTile(data, tile), lastSortTile(data, tile),
+    hashes,
     drive ? tile(listed.tone, 'drive', 'Drive file lists', 'Read ' + listed.text, listed.tone === 'ok' ? 'Fresh' : 'A sync reads them again', '/replicas') : '');
+}
+
+// How alike the replicas are, as far as is known: of the files either replica of a pair had when it was
+// last compared, the share both had, over every pair compared (by files, so a big pair counts more). A
+// guess: it's as of each comparison, and a replica may have changed since
+function inStepTile(data, tile) {
+  let both = 0, either = 0, counted = 0, changed = false, apart = null;
+  for (const pair of data.pairs) {
+    const synced = pair.synced;
+    if (synced) apart = (apart || 0) + synced.onlyA + synced.onlyB;
+    if (!synced || synced.share === null) continue;
+    both += synced.totalA - synced.onlyA;
+    either += synced.totalA + synced.onlyB;
+    counted += 1;
+    changed = changed || pair.changedSince.length > 0;
+  }
+  if (!counted && apart !== null) {
+    // (Compared before the totals were noted: only how many files were apart is known)
+    return tile(apart ? 'warn' : 'ok', 'equal', 'Replicas in step', apart ? apart.toLocaleString() + ' file' + (apart === 1 ? '' : 's') + ' apart' : 'In step',
+      'When last compared; the share shows after the next sync', '/replicas');
+  }
+  if (!counted) {
+    return tile('none', 'equal', 'Replicas in step', 'Not known yet', data.pairs.length ? 'A sync compares them' : 'Add two replicas', '/replicas');
+  }
+  const share = either ? both / either : 1;
+  const percent = share === 1 ? '100%' : Math.min(99.9, Math.floor(share * 1000) / 10) + '%';
+  return tile(share >= 0.99 ? 'ok' : share >= 0.9 ? 'warn' : 'bad', 'equal', 'Replicas in step', percent,
+    'Files in both, when last compared (' + counted + ' of ' + data.pairs.length + ' pair' + (data.pairs.length === 1 ? '' : 's') + ')' +
+      (changed ? '; changed since' : ''), '/replicas');
+}
+
+// When the replica synced longest ago was last synced (each replica's last sync: its pairs' latest), and
+// which one it is; the latest sync of any pair too, if it was later
+function lastSyncTile(data, tile) {
+  const latest = {};
+  for (const pair of data.pairs) {
+    const when = pair.compared && pair.compared.when;
+    for (const path of [pair.a, pair.b]) {
+      if (!(path in latest) || (when && (!latest[path] || when > latest[path]))) latest[path] = when || latest[path] || null;
+    }
+  }
+  const replicas = data.replicas.filter(replica => replica.path in latest);
+  if (!replicas.length) return tile('none', 'sync', 'Last sync', 'never', 'Of any two replicas', '/replicas');
+  const stalest = replicas.reduce((one, other) => !latest[other.path] || (latest[one.path] && latest[other.path] < latest[one.path]) ? other : one);
+  const newest = Object.values(latest).filter(Boolean).sort().pop();
+  const when = latest[stalest.path], found = age(when);
+  const everyone = replicas.every(replica => latest[replica.path] === when);
+  const hint = everyone ? (replicas.length === 2 ? 'Both replicas' : 'All ' + replicas.length + ' replicas') :
+    'The one longest ago: ' + stalest.fullName + (when ? '' : ' was never synced') + (newest && newest !== when ? '; the latest ' + age(newest).text : '');
+  return tile(when ? found.tone : 'bad', 'sync', 'Last sync', when ? found.text : 'never', hint, '/replicas');
+}
+
+// How much of the inboxes' files are sorted (moved into the tree, or skipped), of the ones being sorted
+function sortedTile(data, tile) {
+  let decided = 0, total = 0;
+  for (const inbox of data.inboxes) {
+    for (const found of inbox.imports) {
+      const counts = found.counts;
+      decided += counts.moved + counts.skipped;
+      total += counts.pending + counts.copied + counts.moved + counts.skipped;
+    }
+  }
+  if (!total) return tile('none', 'check', 'Inboxes sorted', 'Not started', 'Sort one on Inboxes', '/inboxes');
+  const share = decided / total;
+  return tile(decided === total ? 'ok' : 'warn', 'check', 'Inboxes sorted', Math.floor(share * 100) + '%',
+    decided.toLocaleString() + ' of ' + total.toLocaleString() + ' files', '/inboxes');
+}
+
+// When a file of an inbox was last sorted (or skipped), and which inbox's
+function lastSortTile(data, tile) {
+  let when = null, where = null;
+  for (const inbox of data.inboxes) {
+    for (const found of inbox.imports) {
+      if (found.changed && (!when || found.changed > when)) {
+        when = found.changed;
+        where = inbox.kind === 'phone' ? 'Photos on ' + inbox.name : inbox.name;
+      }
+    }
+  }
+  const found = age(when);
+  return tile(when ? found.tone : 'none', 'clock', 'Last sort', when ? found.text : 'never', where || 'Of any inbox', '/inboxes');
 }
 
 // The inboxes there now, of each kind (unsorted folders, phones plugged in), and how many of their files
@@ -132,17 +212,8 @@ function inboxesTile(data, tile) {
   const folders = data.inboxes.filter(inbox => inbox.kind !== 'phone');
   const phones = data.inboxes.filter(inbox => inbox.kind === 'phone');
   const there = folders.concat(phones).filter(inbox => inbox.there).length;
-  let left = 0, started = 0;
-  for (const inbox of data.inboxes) {
-    for (const found of inbox.imports) {
-      const counts = found.counts;
-      left += counts.pending + counts.copied;
-      started += 1;
-    }
-  }
   const value = el('span', {class: 'tile-lines'}, el('span', {}, thereOutOf(folders) + ' unsorted folders'), el('span', {}, thereOutOf(phones) + ' phones'));
-  const hint = left ? left.toLocaleString() + ' files left to sort' : started ? 'All sorted' : there ? 'Not sorted yet' : 'None plugged in or added';
-  return tile(left ? 'warn' : started ? 'ok' : 'none', 'inbox', 'Inboxes available', value, hint, '/inboxes');
+  return tile(there ? 'ok' : 'none', 'inbox', 'Inboxes available', value, '', '/inboxes');
 }
 
 function homePage(data) {

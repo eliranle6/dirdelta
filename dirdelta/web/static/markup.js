@@ -323,6 +323,9 @@ const ICONS = {
   replicas: '<rect x="3" y="8" width="13" height="12" rx="1.5"/><path d="M8 5h11.5a1.5 1.5 0 0 1 1.5 1.5V16"/>',
   sync: '<path d="M4 10a8 8 0 0 1 14-4l2 2"/><path d="M20 4v4h-4"/><path d="M20 14a8 8 0 0 1-14 4l-2-2"/><path d="M4 20v-4h4"/>',
   hash: '<path d="M9 4L7 20M17 4l-2 16M4 9h16M3 15h16"/>',
+  equal: '<circle cx="12" cy="12" r="9"/><path d="M8 10h8M8 14h8"/>',
+  check: '<circle cx="12" cy="12" r="9"/><path d="M8 12.5l3 3 5-6"/>',
+  clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
   person: '<circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/>',
 };
 
@@ -336,7 +339,7 @@ function icon(name) {
 
 // How old a time ('YYYY-MM-DD HH:MM') is, in words, and its tone, the same scale everywhere: within a
 // day fresh (green), within a week oldish (yellow), older old (red)
-function age(when, freshDays = 1, oldDays = 7) {
+function age(when, freshDays = 2, oldDays = 30) {
   if (!when) return {text: 'never', tone: 'none'};
   const then = new Date(when.replace(' ', 'T'));
   const hours = (Date.now() - then) / 3600000;

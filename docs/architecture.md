@@ -1192,9 +1192,13 @@ every link carries, then a cookie), and a watcher.
   user has, with its action: a user's replicas are copies of their one tree (any two a pair, synced), and
   their inboxes are where new files come in (sorted into that tree: into any replica, then synced to the
   others). See `known/replica_lists.py`: the replicas and inboxes added, or used by a sync or a sort.
-  Home (`/`, `home.js`): the whole picture: tiles with icons, two to a row, each leading to its tab (the replicas there and
-  the inboxes there of each kind with how many files are left to sort; the last sync; the hashing and Drive's
-  oldest list), then each pair's sync status (`syncstate`'s mark, ≡ » « ≠ ?; how much was in
+  Home (`/`, `home.js`): the whole picture: tiles with icons, two to a row, the replicas' left and the inboxes' right, each
+  leading to its tab: the replicas there, and the inboxes there of each kind; the replicas in step (a guess: of
+  the files either replica of a pair had when it was last compared, the share both had, over every pair
+  compared, by files; how many files were apart if a pair's totals weren't noted), and the share of the
+  inboxes' files sorted; the last sync (of the replica synced longest ago: each replica's last, its pairs'
+  latest), and the last sort (an import's choices last saved); the hashing and Drive's oldest list. An age is
+  green within 2 days, yellow within 30, red after, then each pair's sync status (`syncstate`'s mark, ≡ » « ≠ ?; how much was in
   step, the files both had of all either had, by the totals a sync notes with its comparison since
   2026-11-18; and how stale that is: when it was compared, and which replica changed since) with Sync
   (which replicas are plugged in, and the inboxes, are on their own tabs). Replicas (`/replicas`, the same

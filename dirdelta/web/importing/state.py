@@ -2,10 +2,11 @@
 name, the dir in it) and go, its overview, what's being done (reading the phone, checking or hashing
 the replicas, moving), and its files by day, each with where the replicas have it and how sure that is"""
 import datetime
+import os
 import time
 
 from dirdelta.known import replicanames
-from dirdelta.phoneimport import applying, copying, overview, sources, suggest
+from dirdelta.phoneimport import applying, copying, overview, sources, store, suggest
 from dirdelta.util import dryrun
 from dirdelta.web import naming
 from dirdelta.web.importing import checks as checking
@@ -15,7 +16,16 @@ def summary(found):
     return {'id': found.id, 'source': sources.describe(found.source), 'dest': found.dest, 'destName': naming.name(found.dest),
             'destDisk': replicanames.disk_name(found.dest),
             'otherDisk': found.dest_id is not None and found.dest_id != checking.identity(found.dest),
-            'created': found.created, 'counts': found.counts()}
+            'created': found.created, 'changed': _changed(found), 'counts': found.counts()}
+
+
+def _changed(found):
+    """When the import's choices were last saved (a file sorted, or skipped), 'YYYY-MM-DD HH:MM'"""
+    try:
+        stamp = os.path.getmtime(os.path.join(found.folder, store.MANIFEST))
+    except OSError:
+        stamp = found.created
+    return datetime.datetime.fromtimestamp(stamp).strftime('%Y-%m-%d %H:%M')
 
 
 def import_state(found, check, with_files=True):
