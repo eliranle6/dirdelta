@@ -381,13 +381,15 @@ function kindParts(parts, aliases = {}) {
     history.replaceState(null, '', '#' + id);
     jumps.forEach((jump, index) => jump.classList.toggle('on', ids[index] === id));
     blocks.forEach(block => { block.hidden = block.id !== id; });
+    // (The row draws the shown part's top edge, in its color: the tab shown covers it, joined to the part)
+    row.className = 'kindtabs kind-' + id;
   };
   jumps.forEach((jump, index) => {
     jump.onclick = event => { event.preventDefault(); show(ids[index]); };
     jump.setAttribute('role', 'tab');
   });
   const row = el('div', {class: 'kindtabs', role: 'tablist'}, jumps);
-  const shown = [row, ...blocks];
+  const shown = [el('div', {class: 'kindtabbed'}, row, ...blocks)];
   show(shownPart[page]);
   return shown;
 }
