@@ -149,9 +149,15 @@ nav#tabs .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--g
 #userbar { order: -2; flex: 0 0 auto; width: calc(100% + 32px); margin: -8px -16px 0; padding: 5px 16px; display: flex; align-items: center;
   justify-content: space-between; gap: 10px; background: var(--card); border-bottom: 1px solid var(--line); font-size: 13px; }
 #userbar .brand { font-weight: 700; letter-spacing: .02em; color: var(--muted); }
+#userbar #labels { margin-right: auto; flex-wrap: nowrap; } #userbar .label { white-space: nowrap; }
+#userbar .userpick .whose { white-space: nowrap; }
+@media (max-width: 480px) { #userbar .userpick .whose { display: none; } }
+/* (A page's title only if it says more than its tab: an import's, a flow's) */
+#crumbs:has(> #where:empty) { display: none; }
 #userbar .userpick { display: flex; align-items: center; gap: 6px; min-width: 0; color: var(--muted); }
 #userbar select { font: inherit; font-weight: 700; color: var(--fg); background: var(--bg); border: 1px solid var(--line);
-  border-radius: 6px; padding: 3px 6px; width: auto; max-width: 45vw; }
+  border-radius: 6px; padding: 3px 6px; width: auto; max-width: 45vw; min-width: 0; }
+#userbar .userpick { flex: 0 1 auto; } #userbar select { max-width: 36vw; }
 #userform { order: -1; flex: 0 0 100%; }
 #userform:empty { display: none; }
 #userform form { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 4px 0; font-size: 14px; }

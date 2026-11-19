@@ -1264,7 +1264,8 @@ every link carries, then a cookie), and a watcher.
   cookie, else the owner); a flow runs as whoever started it, and so do the threads it starts (the
   run's user while it runs). The top bar (`markup.js`'s userBar()) changes the user, adds one, or sets
   the address links are emailed to them (`/api/users`, `/api/users/add`, `/api/users/email`); a new
-  user's Home offers to add their first replica.
+  user's Home offers to add their first replica. It holds the mode's label (DRY RUN or LIVE) too: the tabs'
+  pages have no title row (their tab is their title); an import's page and a flow's keep theirs (breadcrumbs).
 - Adding a replica or an inbox (`web/adding.py`, `markup.js`'s folderAdder(), on Replicas and Inboxes,
   `#add` opening it): its folder browsed on this computer (from home and the mounted disks) or in Google
   Drive (its folders as the Drive cache has them), not in another replica or inbox or holding one; kept

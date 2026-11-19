@@ -187,7 +187,8 @@ async function userBar() {
       el('option', {value: '+add'}, 'Add a user…')),
     el('optgroup', {label: 'Layout'}, Object.entries(LAYOUTS).map(([key, text]) =>
       el('option', {value: '+layout:' + key}, (key === layout() ? '✓ ' : '') + text))));
-  bar.replaceChildren(el('span', {class: 'brand'}, 'dirdelta'),
+  // (The mode's label, DRY RUN or LIVE, in this bar: the page's title is its tab's, so no row of its own)
+  bar.replaceChildren(el('span', {class: 'brand'}, 'dirdelta'), document.getElementById('labels') || '',
     el('a', {id: 'runningpill', href: '/run', hidden: !isRunning || shownTab === 'run'}, el('span', {class: 'dot'}), 'Running'),
     el('label', {class: 'userpick'}, icon('person'), el('span', {class: 'whose'}, 'Replicas of'), pick));
 
