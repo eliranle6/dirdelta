@@ -283,11 +283,10 @@ function replicasPage(data) {
   if (drive.length) cards.push(el('div', {class: 'kindlabel'}, 'In Google Drive'), el('div', {class: 'grid'}, drive.map(replicaCard)));
   // Two parts, each in a block of its own: every two replicas' sync status (what's done here, first), and
   // the replicas themselves
-  return [el('p', {class: 'note'}, 'Replicas are copies of ' + data.user + '\'s files, kept in step by syncing any two of them.'),
-    ...kindParts([
+  return [...kindParts([
       {jump: kindJump('pairs', 'sync', 'Sync status', !data.pairs.length ? 'No pair yet' : apart ? apart + ' out of ' + data.pairs.length + ' out of step' : unknown ? unknown + ' out of ' + data.pairs.length + ' not synced yet' : 'All in step',
         !data.pairs.length || data.pairs.some(pair => pair.state.kind === 'branched') ? 'bad' : apart || unknown ? 'warn' : 'ok'),
-       block: kindBlock('pairs', 'sync', 'Sync status', 'Every two replicas are a pair: how far in step each was when last synced, and Sync.', pairs, other)},
+       block: kindBlock('pairs', 'sync', 'Sync status', '', pairs, other)},
       {jump: kindJump('replicas', 'replicas', 'Replicas', there + ' out of ' + data.replicas.length + ' available',
         !data.replicas.length || !there ? 'bad' : there < data.replicas.length ? 'warn' : 'ok'),
        block: kindBlock('replicas', 'replicas', 'Replicas', 'Each copy: a folder on this computer, on a disk or in Google Drive.', ...cards, folderAdder('replica'))}],

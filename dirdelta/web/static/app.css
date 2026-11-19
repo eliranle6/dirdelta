@@ -255,3 +255,5 @@ button.danger { background: var(--red); border-color: var(--red); color: #fff; }
 .kind[hidden] { display: none; }
 /* (Its sub-tab names the part shown: its block says only what it is) */
 .kindtabbed .kindhead > .icon, .kindtabbed .kindhead h2 { display: none; }
+/* (A part with no words of its own, as a sub-tab: no head at all) */
+.kindtabbed .kindhead:not(:has(p)) { display: none; }

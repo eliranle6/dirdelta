@@ -416,7 +416,7 @@ function inboxesTone(inboxes) {
 
 function kindBlock(id, iconName, title, text, ...children) {
   return el('section', {class: 'kind kind-' + id, id},
-    el('div', {class: 'kindhead'}, icon(iconName), el('div', {}, el('h2', {}, title), el('p', {}, text))), ...children);
+    el('div', {class: 'kindhead'}, icon(iconName), el('div', {}, el('h2', {}, title), text ? el('p', {}, text) : '')), ...children);
 }
 
 // Small icons of what a replica or source is on (static SVG, drawn in the text's color)
