@@ -305,17 +305,39 @@ function thereOutOf(inboxes) {
   return inboxes.filter(inbox => inbox.there).length + ' out of ' + inboxes.length;
 }
 
-// How far an inbox's sorting is: {text, share (0-100, or null if nothing's started)}
+// An import's files: {sorted (moved or skipped), there (not sorted, but a replica has them already, as last
+// checked: sure, by contents; byName, by name and size only), left (neither), total}
+function importTally(found) {
+  const counts = found.counts, already = found.already || {contents: 0, name: 0};
+  const there = already.contents + already.name;
+  return {sorted: counts.moved + counts.skipped, there, sure: already.contents, byName: already.name,
+    left: counts.pending + counts.copied - there, total: counts.pending + counts.copied + counts.moved + counts.skipped};
+}
+
+// The tallies of imports added up
+function tallies(imports) {
+  const sum = {sorted: 0, there: 0, sure: 0, byName: 0, left: 0, total: 0};
+  for (const found of imports) {
+    const tally = importTally(found);
+    for (const key in sum) sum[key] += tally[key];
+  }
+  return sum;
+}
+
+// How far an inbox's sorting is: {text, share (0-100: sorted or in a replica already; null if nothing's
+// started)}, with when the replicas were last checked
 function inboxProgress(inbox) {
   if (!inbox.imports.length) return {text: inbox.there ? 'Not sorted yet' : 'Not plugged in', share: null};
-  let decided = 0, total = 0;
-  for (const found of inbox.imports) {
-    const counts = found.counts;
-    decided += counts.moved + counts.skipped;
-    total += counts.pending + counts.copied + counts.moved + counts.skipped;
-  }
-  const share = total ? Math.floor(100 * decided / total) : 0;
-  return {text: total ? decided.toLocaleString() + ' of ' + total.toLocaleString() + ' sorted (' + share + '%)' : 'Listing its files', share};
+  const sum = tallies(inbox.imports);
+  if (!sum.total) return {text: 'Listing its files', share: 0};
+  const done = sum.sorted + sum.there, share = Math.floor(100 * done / sum.total);
+  const parts = [];
+  if (sum.sorted) parts.push(sum.sorted.toLocaleString() + ' sorted');
+  if (sum.there) parts.push(sum.there.toLocaleString() + ' in a replica already' + (sum.byName ? ' (' + sum.byName.toLocaleString() + ' by name and size only)' : ''));
+  parts.push(sum.left ? sum.left.toLocaleString() + ' left to sort' : 'none left to sort');
+  const checked = inbox.imports.map(found => found.already && found.already.checked).filter(Boolean).sort()[0];
+  return {text: parts.join(' · ') + ' (of ' + sum.total.toLocaleString() + ')', share,
+    checked: checked ? 'Replicas checked ' + age(checked).text : 'Replicas not checked yet'};
 }
 
 // A tab's part, a block of its own in its color (.kind-ID), and a jump to it for the top of the tab
@@ -330,11 +352,11 @@ function kindJump(id, iconName, title, note, tone) {
 
 const STATUS_WORDS = {ok: 'All good', warn: 'Something to do', bad: 'Needs attention'};
 
-// An inbox kind's status: green, all sorted; yellow, files left to sort; red, none there and nothing to sort
+// An inbox kind's status: green, all sorted (or in a replica already); yellow, files left to sort; red, none there and nothing
+// to sort
 function inboxesTone(inboxes) {
-  let left = 0;
-  for (const inbox of inboxes) for (const found of inbox.imports) left += found.counts.pending + found.counts.copied;
-  return left ? 'warn' : inboxes.some(inbox => inbox.there) ? 'ok' : 'bad';
+  const left = tallies(inboxes.flatMap(inbox => inbox.imports)).left;
+  return left ? 'warn' : inboxes.some(inbox => inbox.there || inbox.imports.length) ? 'ok' : 'bad';
 }
 
 function kindBlock(id, iconName, title, text, ...children) {

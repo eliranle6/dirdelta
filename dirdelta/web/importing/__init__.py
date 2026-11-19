@@ -11,8 +11,12 @@ from dirdelta.trees import paths
 from dirdelta.web import naming
 from dirdelta.util import dryrun
 from dirdelta.web.importing import checks as checking
-from dirdelta.web.importing.state import import_state, summary
+from dirdelta.web.importing.state import import_state, note_where, summary
 from dirdelta.web.server import FileReply, Reply
+
+
+# The replicas' checks, each import's destination's (shared by the pages: see checks.py)
+CHECKS = checking.Checks()
 
 
 def inboxes():
@@ -27,6 +31,8 @@ def inboxes():
                                 paths.is_cloud_path(path) or os.path.isdir(path)))
     imports = store.all_imports()
     for one in imports:
+        # (Which of its files the replicas have: checked again when due, in the background, and kept)
+        note_where(one, CHECKS.get(one.dest))
         described = sources.describe(one.source)
         found.setdefault(one.source, ('phone' if described['device'] else 'drive' if described['drive'] else 'folder',
                                       described['device'] or naming.name(one.source),
@@ -38,7 +44,7 @@ def inboxes():
 
 
 def routes():
-    checks = checking.Checks()
+    checks = CHECKS
 
     def listing(query, body):
         from dirdelta.drive import freshening

@@ -6,17 +6,47 @@ import os
 import time
 
 from dirdelta.known import replicanames
-from dirdelta.phoneimport import applying, copying, overview, sources, store, suggest
+from dirdelta.phoneimport import applying, copying, known, overview, sources, store, suggest
 from dirdelta.util import dryrun
 from dirdelta.web import naming
 from dirdelta.web.importing import checks as checking
 
 
 def summary(found):
+    files = found.files()
+    counts = {store.PENDING: 0, store.COPIED: 0, store.MOVED: 0, store.SKIPPED: 0}
+    for info in files.values():
+        counts[info['state']] += 1
     return {'id': found.id, 'source': sources.describe(found.source), 'dest': found.dest, 'destName': naming.name(found.dest),
             'destDisk': replicanames.disk_name(found.dest),
             'otherDisk': found.dest_id is not None and found.dest_id != checking.identity(found.dest),
-            'created': found.created, 'changed': _changed(found), 'counts': found.counts()}
+            'created': found.created, 'changed': _changed(found), 'counts': counts, 'already': already(found, files)}
+
+
+def already(found, files):
+    """{'contents', 'name', 'checked'}: how many of the files not sorted yet (not moved or skipped) a
+    replica has, by their contents and by their name and size only, as of when that was last checked
+    (where()); None if it never was"""
+    where = found.where()
+    if where is None:
+        return None
+    left = [relpath for relpath, info in files.items() if info['state'] in (store.PENDING, store.COPIED)]
+    hows = [where['files'].get(relpath) for relpath in left]
+    return {'contents': hows.count(store.THERE_CONTENTS), 'name': hows.count(store.THERE_NAME), 'checked': where.get('checked')}
+
+
+def note_where(found, check, files=None, haves=None):
+    """Keep which of the import's files check's replicas have (found.remember_where()), once it's done"""
+    if check.known is None or check.checked_at is None:
+        return
+    files = files if files is not None else found.files()
+    if haves is None:
+        haves = {relpath: check.known.found(relpath, info['size'], info['sha1']) for relpath, info in files.items()}
+    where = {}
+    for relpath, places in haves.items():
+        if places:
+            where[relpath] = store.THERE_CONTENTS if any(how == known.SAME_CONTENTS for _, _, how in places) else store.THERE_NAME
+    found.remember_where(where, datetime.datetime.fromtimestamp(check.checked_at).strftime('%Y-%m-%d %H:%M'))
 
 
 def _changed(found):
@@ -35,6 +65,8 @@ def import_state(found, check, with_files=True):
     known = check.known
     haves = {relpath: known.found(relpath, info['size'], info['sha1']) for relpath, info in files.items()} \
         if known is not None else None
+    if haves is not None:
+        note_where(found, check, files, haves)
     reading, moving = copying.reading_of(found.source), applying.applying_of(found.id)
     replica_paths = check.replica_paths
     state = dict(summary(found), label=list(dryrun.label()), checked=replica_paths, indexed=known is not None,

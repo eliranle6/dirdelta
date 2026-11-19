@@ -212,20 +212,15 @@ function lastSyncTile(data, tile) {
   return tile(when ? found.tone : 'bad', 'sync', 'Last sync', when ? found.text : 'never', hint, '/replicas');
 }
 
-// How much of the inboxes' files are sorted (moved into the tree, or skipped), of the ones being sorted
+// How much of the inboxes' files are sorted (moved into the tree, or skipped) or in a replica already (as
+// last checked), of the ones being sorted
 function sortedTile(data, tile) {
-  let decided = 0, total = 0;
-  for (const inbox of data.inboxes) {
-    for (const found of inbox.imports) {
-      const counts = found.counts;
-      decided += counts.moved + counts.skipped;
-      total += counts.pending + counts.copied + counts.moved + counts.skipped;
-    }
-  }
-  if (!total) return tile('none', 'check', 'Inboxes sorted', 'Not started', 'Sort one on Inboxes', '/inboxes');
-  const share = decided / total;
-  return tile(decided === total ? 'ok' : 'warn', 'check', 'Inboxes sorted', Math.floor(share * 100) + '%',
-    decided.toLocaleString() + ' of ' + total.toLocaleString() + ' files', '/inboxes');
+  const sum = tallies(data.inboxes.flatMap(inbox => inbox.imports));
+  if (!sum.total) return tile('none', 'check', 'Inboxes sorted', 'Not started', 'Sort one on Inboxes', '/inboxes');
+  const share = (sum.sorted + sum.there) / sum.total;
+  return tile(sum.left ? 'warn' : 'ok', 'check', 'Inboxes sorted', Math.floor(share * 100) + '%',
+    (sum.left ? sum.left.toLocaleString() + ' of ' + sum.total.toLocaleString() + ' files left' : 'All ' + sum.total.toLocaleString() + ' files') +
+      (sum.there ? '; ' + sum.there.toLocaleString() + ' were in a replica already' : ''), '/inboxes');
 }
 
 // When a file of an inbox was last sorted (or skipped), and which inbox's

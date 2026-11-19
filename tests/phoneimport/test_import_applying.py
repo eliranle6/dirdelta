@@ -10,6 +10,7 @@ from dirdelta.known import replicas
 from dirdelta.phoneimport import applying, copying, store
 from dirdelta.web import importing
 from dirdelta.web.importing import checks as checking
+from dirdelta.web.importing.state import summary
 from import_support import ImportTest
 
 
@@ -173,6 +174,19 @@ class ImportPageTest(ImportTest):
                          self.call('GET', '/api/import', {'id': import_id})['counts'])
         self.assertTrue(self.call('POST', '/api/import/end', body={'id': import_id})['ok'])
         self.assertEqual([], [found for inbox in self.call('GET', '/api/imports')['inboxes'] for found in inbox['imports']])
+
+    def test_the_files_a_replica_has_already_are_kept_and_count_as_not_left_to_sort(self):
+        self.write(self.dest, 'media/a.jpg', 'a')
+        self.write(self.source, 'a.jpg', 'a')
+        self.write(self.source, 'b.jpg', 'bb')
+        import_id = self.call('POST', '/api/imports/new', body={'source': self.source, 'dest': self.dest})['id']
+        self.wait_until(lambda: self.done(import_id))
+        listed = [found for inbox in self.call('GET', '/api/imports')['inboxes'] for found in inbox['imports']]
+        self.assertEqual((0, 1), (listed[0]['already']['contents'], listed[0]['already']['name']))
+        # (Kept: as after a restart, with the phone unplugged)
+        with store._lock:
+            store._loaded.clear()
+        self.assertEqual((0, 1), (summary(store.load(import_id))['already']['contents'], summary(store.load(import_id))['already']['name']))
 
     def test_starting_the_same_source_into_the_same_replica_again_opens_its_import_listed_again(self):
         self.write(self.source, 'a.jpg', 'a')

@@ -66,7 +66,8 @@ function inboxCard(inbox) {
       !inbox.there ? chip('bad', 'Not there') : '');
   const parts = [head, inbox.kind === 'phone' ? pathLine(inbox.source.full, where + ' · its ' + inbox.source.inner + ' folder') : pathLine(inbox.path, where),
     el('div', {class: 'note'}, progress.text),
-    bar(progress.share, 'sure')];
+    bar(progress.share, 'sure'),
+    progress.checked ? el('div', {class: 'note'}, progress.checked) : ''];
   const dests = inbox.dests;
   if (!dests.length) {
     parts.push(el('p', {class: 'note'}, inbox.kind === 'drive' ? 'Add a replica to sort it into (Replicas).' :
@@ -84,7 +85,10 @@ function inboxCard(inbox) {
     if (answer.error) document.getElementById('status').textContent = answer.error;
     else location.href = importLink(answer.id);
   }});
-  const named = () => { sortPhotos.textContent = opened() ? 'Continue sorting photos' : 'Sort photos'; };
+  const named = () => {
+    const found = opened();
+    sortPhotos.textContent = !found ? 'Sort photos' : importTally(found).left ? 'Continue sorting photos' : 'See its photos';
+  };
   named();
   const into = dests.length === 1 ? el('span', {class: 'note'}, 'Into ', el('b', {}, dests[0].name)) :
     el('label', {class: 'note into'}, 'Into ', el('select', {onchange: event => { dest = event.target.value; named(); }},

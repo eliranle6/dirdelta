@@ -14,6 +14,10 @@ from dirdelta.known import users
 # The owner's (another user's: in a folder of theirs beside it; the sources' pools are all here)
 IMPORTS_DIR = os.path.expanduser('~/.local/share/dirdelta/imports')
 MANIFEST = 'import.json'
+# Which of its files the replicas had when they were last checked (remember_where())
+WHERE = 'where.json'
+# How a file is there: by its contents, or by its name and size only
+THERE_CONTENTS, THERE_NAME = 'contents', 'name'
 
 # A file's states: on the source only, copied here (and hashed), moved into the replica, or left out
 PENDING, COPIED, MOVED, SKIPPED = 'pending', 'copied', 'moved', 'skipped'
@@ -39,6 +43,8 @@ class Import(object):
         self.choices = choices or {}
         self.created = created or time.time()
         self.lock = threading.RLock()
+        # (where(): loaded once, then kept)
+        self._where = None
 
     @property
     def folder(self):
@@ -83,6 +89,34 @@ class Import(object):
         for info in self.files().values():
             found[info['state']] += 1
         return found
+
+    def where(self):
+        """{'files': {relpath: THERE_CONTENTS or THERE_NAME}, 'checked': 'YYYY-MM-DD HH:MM'}: which of the
+        source's files a replica had, and how, when they were last checked (kept: the phone may be
+        unplugged since); None if they never were"""
+        with self.lock:
+            if self._where is None:
+                try:
+                    with open(os.path.join(self.folder, WHERE)) as kept:
+                        content = json.load(kept)
+                    self._where = {'files': dict(content['files']), 'checked': content.get('checked')}
+                except (OSError, ValueError, KeyError, TypeError):
+                    self._where = {}
+            return self._where or None
+
+    def remember_where(self, files, checked):
+        """Keep files ({relpath: THERE_CONTENTS or THERE_NAME}) as what the replicas had, checked when
+        checked says ('YYYY-MM-DD HH:MM'), if that's news"""
+        found = {'files': files, 'checked': checked}
+        with self.lock:
+            if self.where() == found:
+                return
+            self._where = found
+            os.makedirs(self.folder, exist_ok=True)
+            temp_path = os.path.join(self.folder, WHERE + '.tmp')
+            with open(temp_path, 'w') as kept:
+                json.dump(found, kept)
+            os.replace(temp_path, os.path.join(self.folder, WHERE))
 
     def save(self):
         with self.lock:

@@ -1214,7 +1214,7 @@ every link carries, then a cookie), and a watcher.
   addresses, too): its two kinds each in a block of its own, in a color of its own, with a jump to each on
   top (so neither is missed): Unsorted folders (the user's inboxes, "+ Add an unsorted folder") and
   Phones' photos (the phones plugged in, and any other source an import of theirs has: a phone
-  unplugged); a card for each inbox, each with its sorting's progress,
+  unplugged); a card for each inbox, each with its sorting's progress (files sorted, or in a replica already, by contents or by name and size only, as last checked: kept in the import's `where.json`, `store.Import.remember_where()`, so it's known with the phone unplugged; checked again in the background when due as the pages list the inboxes, `state.note_where()`; JS `importTally()`),
   the replica it's sorted into (the one its import has, else the likeliest: `checks.destinations()`; a
   choice only if there are several), "Sort photos" (its import, below) and, for a folder, "Sort all
   files" (the sort's own screens: `main.run_sort()`), and Forget. The running flow's page (`/run`)
