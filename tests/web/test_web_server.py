@@ -11,7 +11,7 @@ from unittest import mock
 
 import helpers  # noqa: F401 (the real caches and settings left alone)
 from dirdelta.web import access, server
-from dirdelta.web.watcher import PHONE, Watcher
+from dirdelta.web.watcher import PHONE, REPLICA, Watcher
 
 
 class ServerTest(unittest.TestCase):
@@ -75,7 +75,9 @@ class WatcherTest(unittest.TestCase):
     def setUp(self):
         self.there = {}
         self.said = []
-        self.watcher = Watcher(lambda *args: self.said.append(args), look=lambda: dict(self.there))
+        self.known = set()
+        self.watcher = Watcher(lambda *args: self.said.append(args), look=lambda: dict(self.there),
+                               known=lambda: set(self.known))
 
     def test_what_appears_is_said_once_but_not_what_was_there_at_the_start(self):
         self.there['/old'] = (PHONE, 'old phone', ['me'])
@@ -84,6 +86,17 @@ class WatcherTest(unittest.TestCase):
         self.watcher.check(now=5)
         self.watcher.check(now=10)
         self.assertEqual([(PHONE, 'Pixel', '/phone', ['me'])], self.said)
+
+    def test_a_known_replica_mounted_is_said_but_not_one_just_used_for_the_first_time(self):
+        self.known.add('/media/disk')
+        self.watcher.check(now=0)
+        self.there['/media/disk'] = (REPLICA, '/media/disk', ['me'])
+        # A sync of a folder that's been there all along makes it known, and there, at once
+        self.known.add('/home/me/new')
+        self.there['/home/me/new'] = (REPLICA, '/home/me/new', ['me'])
+        self.watcher.check(now=5)
+        self.watcher.check(now=10)
+        self.assertEqual([(REPLICA, '/media/disk', '/media/disk', ['me'])], self.said)
 
     def test_a_flaky_link_is_said_again_only_after_a_quiet_while(self):
         self.watcher.check(now=0)
