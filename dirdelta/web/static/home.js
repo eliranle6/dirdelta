@@ -386,7 +386,10 @@ function pairAdder(data) {
   if (!data.main || data.replicas.length < 3) return '';
   const pick = () => el('select', {}, data.replicas.map(replica => el('option', {value: replica.path}, replica.fullName)));
   const a = pick(), b = pick();
-  b.selectedIndex = Math.min(1, data.replicas.length - 1);
+  // (Starting on two that aren't a pair yet: the first two that aren't the main one)
+  const others = data.replicas.map((replica, index) => index).filter(index => !data.replicas[index].isMain);
+  a.selectedIndex = others[0] || 0;
+  b.selectedIndex = others.length > 1 ? others[1] : Math.min(1, data.replicas.length - 1);
   const note = el('span', {class: 'note'});
   return el('div', {class: 'pairadd'}, el('b', {}, '+ Another pair'), a, '⇄', b,
     el('button', {class: 'small', onclick: async () => {
