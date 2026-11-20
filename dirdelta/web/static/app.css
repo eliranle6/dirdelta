@@ -330,3 +330,13 @@ footer#bottom { max-height: 50vh; overflow-y: auto; overscroll-behavior: contain
   border-radius: 14px 14px 0 0; box-shadow: 0 -6px 24px color-mix(in srgb, #000 25%, transparent);
   display: flex; flex-direction: column; gap: 10px; }
 .panelwrap .sheet .split { display: block; }
+/* A diff's views, in its title: a row of buttons, the one shown on */
+.difftoggle { display: inline-flex; flex-wrap: wrap; gap: 4px; align-items: center; font-family: system-ui, sans-serif; white-space: normal; }
+.difftoggle b { margin-right: 4px; }
+.difftoggle button { font-size: 12px; padding: 2px 9px; border-radius: 12px; }
+.difftoggle button.on { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); }
+/* A files' menu's options with their icons, before their text */
+.option.withicon { display: flex; align-items: flex-start; gap: 10px; }
+.option.withicon > .icon { flex: none; margin-top: 1px; color: var(--muted); }
+.option.withicon.c-red > .icon, .option.withicon:has(.c-red) > .icon { color: var(--red); }
+.option.disabled > .icon { opacity: .5; }

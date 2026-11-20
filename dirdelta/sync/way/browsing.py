@@ -67,6 +67,17 @@ class Browsing(Picking):
                 done = self._act(chosen.files, selected)
                 if done is filescreen.READ_ANEW:
                     key = self.REFRESH_KEY
+                elif done == self.RENAME_IT:
+                    # (The menu's Rename it..., of the one picked file: as cc on it)
+                    renamed = self._after_rename(chosen, chosen.files[0])
+                    if renamed is None:
+                        picked = chosen.files
+                        continue
+                    missing, picked, selected = renamed
+                    if not missing:
+                        self._say_nothing()
+                        return
+                    continue
             if key == self.REFRESH_KEY:
                 done = []
                 self._read_anew_replicas(to_refresh)

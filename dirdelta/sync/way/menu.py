@@ -19,7 +19,7 @@ class Menu(object):
         confirm. Returns the ones done (in a dry run, the ones it would have done), or None if the
         user chose nothing (or didn't confirm, or opened them); or filescreen.READ_ANEW to read the folder of
         selected (the picker's selection, a file or a dir; by default the first file) anew from
-        Drive, as the key does."""
+        Drive, as the key does; or RENAME_IT to rename the one picked file, as cc does."""
         if selected is None:
             selected = relpaths[0]
         clouds = [replica for replica in (self._src, self._dst) if isinstance(replica, clouddirtree.CloudDirTree)]
@@ -59,6 +59,8 @@ class Menu(object):
         options[self.ASK_AI] = ("Ask AI what to do with %s, and review its plan" %
                                 ("it" if len(relpaths) == 1 else "the " + count,),
                                 None if only_here else "can't: it's for the files %s lacks" % (dst_name,))
+        if len(relpaths) == 1:
+            options[self.RENAME_IT] = ("Rename it...", None if replica_ops.is_writable(self._src) else "can't: it's read-only")
         if len(relpaths) == 1 and archives.is_archive(relpaths[0]):
             options[self.EXPLORE] = ("Explore it: what's in the zip", None)
         options[self.OPEN] = ("Open %s with %s program%s" %
@@ -70,6 +72,8 @@ class Menu(object):
             options[self.READ_ANEW] = ("Read %s anew from Google Drive" %
                                        (' and '.join(os.path.join(replica.displayname(), folder).rstrip('/') + '/'
                                                      for replica in clouds),), None)
+        else:
+            options[self.READ_ANEW] = ("See what changed in %s and %s outside dirdelta" % (src_name, dst_name), None)
         # After its key, if a picker's key does it too
         prefixes = picker.shortcut_prefixes([self.NOTHING] + [label for label, _ in options.values()],
                                             {label: self.SHORTCUTS[action] for action, (label, _) in options.items()
@@ -79,7 +83,7 @@ class Menu(object):
             return picker.Option(action, label, prefixes[label] + label if reason is None else
                                  picker.Disabled(picker.unstyled(prefixes[label]) + "%s: %s" % (label, reason)))
         # Similar actions together, a blank line between each kind
-        kinds = [[self.ASK_AI], [self.COPY, self.COPY_BACK], [self.REMOVE], [self.RENAME_IN_DST, self.RENAME_IN_SRC],
+        kinds = [[self.ASK_AI], [self.COPY, self.COPY_BACK], [self.REMOVE], [self.RENAME_IN_DST, self.RENAME_IN_SRC, self.RENAME_IT],
                  [self.EXPLORE, self.OPEN, self.READ_ANEW]]
         choices = picker.grouped([[picker.Option(self.NOTHING, self.NOTHING, prefixes[self.NOTHING] + self.NOTHING)]] +
                                  [[option(action) for action in kind if action in options] for kind in kinds])
@@ -99,6 +103,9 @@ class Menu(object):
             return None
         if action == self.READ_ANEW:
             return filescreen.READ_ANEW
+        if action == self.RENAME_IT:
+            # (Done as cc is, by the picker's loop: it knows what's picked and shown)
+            return self.RENAME_IT
         if action in (self.RENAME_IN_DST, self.RENAME_IN_SRC):
             moves = self._renames(action, may_be_there)
             return None if moves is None else self._rename(action, moves)

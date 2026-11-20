@@ -14,6 +14,7 @@ from dirdelta.sync.way.menu import Menu
 from dirdelta.sync.way.renames import Renames
 from dirdelta.ui import filescreen
 from dirdelta.ui import opening
+from dirdelta.ui import renaming
 from dirdelta.ui import sidetree
 
 
@@ -38,9 +39,12 @@ class InteractiveDirSync(Browsing, Keys, Lists, Menu, Copying, AskAI, Renames,
     READ_ANEW = 'read anew'
     ASK_AI = 'ask AI'
     EXPLORE = 'explore'
+    # Renaming the one picked file (cc's, on the selected one), to a name the user gives
+    RENAME_IT = 'rename it'
     # The picker's keys that do an option of the menu, shown before it
     # (Ctrl-X opens the selected one, not the picked ones: Open has no key)
-    SHORTCUTS = {READ_ANEW: 'Ctrl-R', ASK_AI: aiplan_screen.KEY_NAME, EXPLORE: archive_screen.KEY_NAME}
+    SHORTCUTS = {READ_ANEW: 'Ctrl-R', ASK_AI: aiplan_screen.KEY_NAME, EXPLORE: archive_screen.KEY_NAME,
+                 RENAME_IT: renaming.KEY_HINT[0]}
     # The label of each action's confirmation, so what it's for shows at a glance (magenta, not
     # red: red is LIVE's)
     LABELS = {COPY: ('COPY', 'blue'), COPY_BACK: ('COPY', 'blue'), REMOVE: ('REMOVE', 'magenta'),

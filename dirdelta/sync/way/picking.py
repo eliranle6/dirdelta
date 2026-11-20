@@ -17,6 +17,7 @@ from dirdelta.sync.combined import diffview
 from dirdelta.sync.combined import versions
 from dirdelta.ui import contextmenu
 from dirdelta.ui import filescreen
+from dirdelta.ui import frontend
 from dirdelta.ui import images
 from dirdelta.ui import opening
 from dirdelta.ui import picker
@@ -38,6 +39,10 @@ class Picking(object):
                   if self._only_differing else
                   "%s lacks these. Pick some, then choose what to do with them." % (dst_name,))
         keys = self.REFRESH_KEY + hashes_screen.KEY + aiplan_screen.KEY + contextmenu.KEY + archive_screen.KEY
+        # (In the browser, what's done to the selection is in Enter's menu, a panel over the tree, all of it:
+        # no buttons for those keys beside it)
+        if frontend.current is not None:
+            keys = hashes_screen.KEY + contextmenu.KEY
         # The keys row has little room: the rest are in the menu (:), and ?
         key_hints = [('Enter', 'choose what to do'), contextmenu.KEY_HINT]
         # The keys that aren't in the keys row, by what they're about, for ?
@@ -87,7 +92,8 @@ class Picking(object):
             chosen = picker.pick_files(
                 screen.src_name, missing, header=screen.header, picked=picked,
                 keys=screen.keys, selected=selected, key_hints=screen.key_hints,
-                shown_as=shown_as, notify_keys=opening.KEY + (diffview.KEY if differs else ''), twice_keys=renaming.KEY,
+                shown_as=shown_as, notify_keys=('' if frontend.current is not None else opening.KEY) + (diffview.KEY if differs else ''),
+                twice_keys='' if frontend.current is not None else renaming.KEY,
                 # dst beside it, to look through (e.g. for a newer version of a file)
                 side=picker.Side(screen.dst_name, self._side_items(), True, self._side_follow,
                                  self.SIDE_REMOVE_KEY + contextmenu.KEY + self.REFRESH_KEY,

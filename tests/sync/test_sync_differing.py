@@ -161,7 +161,8 @@ class DifferingTest(unittest.TestCase):
     def test_rename_and_ai_are_about_the_missing_ones_only(self):
         self.browse([['a.txt'], None], [NOTHING])
         shown = helpers.shown_of(self.pick_option.call_args.args[0])
-        disabled = [text.text.lstrip() for text in shown.values() if isinstance(text, picker.Disabled)]
+        # (Its key's prefix padded to the menu's longest)
+        disabled = [' '.join(text.text.split()) for text in shown.values() if isinstance(text, picker.Disabled)]
         self.assertTrue(any(text.startswith("Rename the files matching 0") for text in disabled), disabled)
         self.assertIn("[a] Ask AI what to do with it, and review its plan: can't: it's for the files %s lacks" % (self.dst_root,),
                       disabled)

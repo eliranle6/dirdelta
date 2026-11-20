@@ -102,7 +102,7 @@ class InTheBrowserTest(DiffFixture):
         lines = [picker.unstyled(line) for line in versions.lines((self.a, self.b), 'notes.txt', ('a', 'b'), None)]
         self.assertIn('-two', lines)
         self.assertIn('+three', lines)
-        self.assertEqual(versions.next_view(None), diffview.UNIFIED)
+        self.assertEqual(versions.next_view(None), diffview.VERSION_A)
         self.assertEqual(versions.next_view(versions.next_view(versions.next_view(diffview.UNIFIED))), diffview.UNIFIED)
 
     def test_a_version_not_on_this_machine_is_got_for_the_diff(self):

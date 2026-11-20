@@ -19,14 +19,33 @@ def views():
 
 
 def next_view(view):
-    """The view after view (the first, if view is None or isn't one here)"""
+    """The view after view (None, or one that isn't here: the first, the one shown then)"""
     shown = views()
-    return shown[(shown.index(view) + 1) % len(shown)] if view in shown else shown[0]
+    return shown[((shown.index(view) if view in shown else 0) + 1) % len(shown)]
 
 
 def width():
     """How wide the diff's lines may be: the terminal's preview column, or in the browser, any (it wraps)"""
     return 200 if frontend.current is not None else diffview.column_width()
+
+
+def view_label(view, names):
+    """What a view is called in the title: the changes, side by side, or a replica's name (its version)"""
+    return {diffview.SIDE_BY_SIDE: "side by side", diffview.UNIFIED: "changes",
+            diffview.VERSION_A: names[0], diffview.VERSION_B: names[1]}[view]
+
+
+def title_line(view, names):
+    """The diff's title: every view, the one shown in brackets, e.g. 'Diff: [changes] · a · b  (Ctrl-T: next)'
+    (the browser makes it buttons, each pressing Ctrl-T to get there)"""
+    parts = [("Diff: ", 'bold')]
+    for i, one in enumerate(views()):
+        if i:
+            parts.append((" · ", 'grey'))
+        label = view_label(one, names)
+        parts.append(("[%s]" % (label,), 'bold') if one == view else (label, 'grey'))
+    parts.append(("  (%s: next)" % (diffview.KEY_NAME,), 'grey'))
+    return picker.styled(parts)
 
 
 def lines(replicas, relpath, names, view):
@@ -35,8 +54,7 @@ def lines(replicas, relpath, names, view):
     them, downloading a Drive one (on this thread): or says why it can't."""
     view = view if view in views() else views()[0]
     if len(replicas) == 2:
-        title = picker.styled([("Diff, %s" % (diffview.view_name(view, names[0], names[1]),), 'bold'),
-                               ("  (%s: the changes, or either whole version)" % (diffview.KEY_NAME,), 'grey')])
+        title = title_line(view, names)
     else:
         title = picker.styled([("Its contents", 'bold')])
     versions = []

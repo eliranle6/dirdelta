@@ -1,6 +1,7 @@
 """What the sync's picker lists: the missing files, the ones that differ, and their previews"""
 import os
 
+from dirdelta.known import replicanames
 from dirdelta.matching import differing
 from dirdelta.matching import elsewhere
 from dirdelta.sync import comparing
@@ -28,8 +29,14 @@ class Lists(object):
         shown = differing.preview_lines(change, self._dst.displayname(), replica_ops.can_copy(self._src, self._dst))
         if not (replica_ops.is_local(self._src) and replica_ops.is_local(self._dst)):
             send({relpath: shown + ["", picker.styled([("Getting its versions for their diff...", 'grey')])]})
+        names = replicanames.told_apart([self._path_of(self._src), self._path_of(self._dst)])
         send({relpath: shown + versions.lines((self._src, self._dst), relpath,
-                                              (self._src.displayname(), self._dst.displayname()), self._diff_view)})
+                                              (names[self._path_of(self._src)], names[self._path_of(self._dst)]), self._diff_view)})
+
+    @staticmethod
+    def _path_of(replica):
+        """The replica's path, as the replicas' names know it (a Drive one's: cloud/...)"""
+        return replica.fullpath() if replica_ops.is_local(replica) else replica.displayname()
 
     def _next_diff_view(self, selected):
         """Ctrl-T: the diff's next view, and the selected file's sent again in it"""

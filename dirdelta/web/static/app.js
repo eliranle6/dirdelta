@@ -288,8 +288,21 @@ function renderTree() {
   box.replaceChildren(list);
 }
 
+// A files' menu's option's icon (the menus shown over a tree, what to do with its files), by what it does
+const ACTION_ICONS = [[/^Nothing/, 'back'], [/^Ask AI/, 'ai'], [/^Copy/, 'copy'], [/^Replace/, 'swap'],
+  [/^(Remove|Delete|Trash)/, 'trash'], [/^Rename/, 'pencil'], [/^Open/, 'open'],
+  [/^(Read .* anew|See what changed|Refresh|Rescan)/, 'refresh'], [/^Explore/, 'zip'], [/^Move/, 'move'],
+  [/^(Skip|Leave)/, 'skip']];
+
+function actionIcon(label) {
+  const text = label.replace(/^\s*\[[^\]]*\]\s*/, '').trim();
+  const found = ACTION_ICONS.find(([pattern]) => pattern.test(text));
+  return found ? found[1] : null;
+}
+
 function menuList() {
   const screen = view.screen;
+  const inPanel = document.getElementById('main').dataset.shows === 'panel';
   return el('div', {class: 'list'}, view.items.map(path => {
     const info = view.info.get(path);
     // (A line that isn't an option: a section's heading (── Name ──), a blank line, or what to read, e.g. the
@@ -299,11 +312,12 @@ function menuList() {
       return el('div', {class: 'option ' + (!plain ? 'blank' : plain.startsWith('\u2500') ? 'heading' : 'info')}, segmentsSpan(shown(path)));
     }
     const classes = ['option', path === view.selected ? 'sel' : '', info.d ? 'disabled' : '', info.c ? 'c-' + info.c : ''];
-    return el('button', {class: classes.join(' '), disabled: info.d, onclick: async () => {
+    const glyph = inPanel ? actionIcon(plainOf(shown(path))) : null;
+    return el('button', {class: classes.join(' ') + (glyph ? ' withicon' : ''), disabled: info.d, onclick: async () => {
       if (screen.previewBelow && view.selected !== path) { await act('select', {path}); return; }
       await act('select', {path});
       await act('enter');
-    }}, segmentsSpan(shown(path)));
+    }}, glyph ? icon(glyph) : '', segmentsSpan(shown(path)));
   }));
 }
 
@@ -423,13 +437,25 @@ async function loadPreview() {
   if (!screen.hasPreviews && !screen.previewBelow) { box.replaceChildren(); return; }
   const found = await api('GET', '/api/preview?screen=' + screen.id + '&path=' + encodeURIComponent(view.selected || ''));
   const lines = found.lines || [];
-  // (Whether it shows a diff, whose views a button goes through: see KEY_APPLIES)
-  const hasDiff = lines.some(line => line.includes('Ctrl-T: the changes'));
-  if (hasDiff !== view.previewHasDiff) { view.previewHasDiff = hasDiff; renderPickerActions(); }
   const content = [];
-  if (lines.length) content.push(el('pre', {}, lines.map(line => [previewLine(line), '\n'])));
+  if (lines.length) content.push(el('pre', {}, lines.map(line => [plainOf(line).startsWith('Diff: ') ? diffToggle(line) : previewLine(line), '\n'])));
   if (found.image) { const canvas = pictureCanvas(found.image); if (canvas) content.push(canvas); }
   box.replaceChildren(content.length ? el('div', {class: 'preview'}, content) : '');
+}
+
+function plainOf(line) { return styledParts(line).map(part => part.text).join(''); }
+
+// A diff's title ('Diff: [changes] · a · b  (Ctrl-T: next)', see versions.title_line()) as a row of buttons, one a
+// view, the one shown on: a tap presses Ctrl-T as many times as it takes to get there
+function diffToggle(line) {
+  const labels = plainOf(line).slice('Diff: '.length).split('  (')[0].split(' · ');
+  const shown = labels.findIndex(label => label.startsWith('['));
+  return el('span', {class: 'difftoggle'}, el('b', {}, 'Diff'), labels.map((label, i) => {
+    const name = label.replace(/^\[(.*)\]$/, '$1');
+    return el('button', {class: i === shown ? 'on' : '', onclick: async () => {
+      for (let n = (i - shown + labels.length) % labels.length; n > 0; n--) await act('press', {key: '\x14'});
+    }}, i === shown ? name : name);
+  }));
 }
 
 // How many rows of a tree fit from where its box starts to the bottom bar (at least a few)
@@ -512,11 +538,10 @@ function renderSide() {
 const GENERAL_KEYS = new Set(['i', '?']);
 // Keys the page has no button for: the menu (:) lists what's selected can have done, each with its key, as the
 // buttons here do (with files picked, it's Enter's); the replicas dashboard (#) is the Replicas tab's
-const NO_BUTTON_KEYS = new Set([':', '#']);
+const NO_BUTTON_KEYS = new Set([':', '#', 'Ctrl-T']);  // (Ctrl-T: the diff's views, in its title, diffToggle())
 // Keys whose buttons are shown only where they do something: exploring a zip on one, a diff's views on a diff
 const KEY_APPLIES = {
   'e': () => /\.zip$/i.test(view.selected || ''),
-  'Ctrl-T': () => view.previewHasDiff,
 };
 const applies = key => !NO_BUTTON_KEYS.has(key.name) && (!KEY_APPLIES[key.name] || KEY_APPLIES[key.name]());
 

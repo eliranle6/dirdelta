@@ -130,7 +130,7 @@ class InteractiveDirSyncTest(unittest.TestCase):
         self.assertEqual(options[0], NOTHING)
         # Each kind apart, after a blank line
         self.assertEqual([option.split(' ')[0] for option in options[1:]],
-                         ['', 'Ask', '', 'Copy', '', 'Remove', '', 'Rename', 'Rename', '', 'Open'])
+                         ['', 'Ask', '', 'Copy', '', 'Remove', '', 'Rename', 'Rename', 'Rename', '', 'Open', 'See'])
         self.assertEqual(self._offered()[1], (['sub/b.txt', 'sub/c.txt'], ['sub/b.txt']))
         self.assertEqual(self.pick_files.call_args.kwargs['selected'], 'sub/c.txt')
 
