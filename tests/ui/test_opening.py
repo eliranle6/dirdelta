@@ -91,7 +91,7 @@ class OpenerTest(unittest.TestCase):
         with mock.patch('dirdelta.ui.opening.names.MAX_OPENED', 1):
             opener.press(['a.txt', 'trip/c.jpg'], ['a.txt', 'trip/c.jpg'])
         self.assertEqual(self.opened(), [])
-        self.assertEqual(opener.status(), "Can't open 2 files at once (at most 1): pick fewer")
+        self.assertEqual(opener.status(), "Can't open 2 files at once (at most 1): check fewer")
 
     def test_a_drive_file_is_downloaded_first_with_its_progress_shown(self):
         opener = self.drive({'x.jpg': 4 * MB})

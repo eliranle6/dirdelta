@@ -50,7 +50,7 @@ class Menu(MenuOptions, MenuMoves):
                  for key, action in offered.items()}
         lines[self.ASK_AI] = self._said_lines(ASK, " tell it what to do; it answers with a plan to review")
         header = ("%s, in %s: what to do with it?" % (f.name, posixpath.dirname(posixpath.join(self.inbox_path, f.relpaths[0])))
-                  if f.is_one else "%s picked in %s. What to do with them?" % (f.count, self.inbox_path))
+                  if f.is_one else "%s checked in %s. What to do with them?" % (f.count, self.inbox_path))
         chosen = offered.get(picker.pick_option(choices, header=header, title="What to do", label=LABEL, previews_below=lines))
         return chosen.run() if chosen is not None else None
 

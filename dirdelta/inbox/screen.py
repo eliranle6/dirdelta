@@ -58,7 +58,7 @@ class Screen(object):
         """Let the user pick some of the inbox's files, then choose what to do with them (_act()),
         and back to the picker, where they were, until they quit, or the inbox is empty"""
         self._warn_if_read_only()
-        header = ("Files in %s, to sort into %s. Pick some, then choose what to do with them." %
+        header = ("Files in %s, to sort into %s. Check some, then choose what to do with them." %
                   (replicanames.full(self.inbox_path), replicanames.full(self.root_path)))
         keys = self.REFRESH_KEY + hashes_screen.KEY + aiplan_screen.KEY + contextmenu.KEY + archive_screen.KEY
         # The keys row has little room: the rest are in the menu (:), and ?
@@ -108,7 +108,7 @@ class Screen(object):
                                  [('Enter', ('copy' if self.MOVE_TO in self._cant_be_done() else 'move') + ' the files here'),
                                   (self.REFRESH_KEY_NAME, filescreen.SIDE_REFRESH_HINTS[self.root_is_cloud])],
                                  side_start),
-                none_picked_key_hints=[('Enter', 'Pick & choose what to do')],
+                none_picked_key_hints=[('Enter', 'Check & choose what to do')],
                 on_notify=lambda key, selected, picked, files=files: self._on_key(key, selected, picked, files),
                 on_selection=functools.partial(elsewhere.check_contents, files, self._inbox_tree,
                                                self._inbox_index, self._root_index, self._checked,

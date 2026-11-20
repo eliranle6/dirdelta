@@ -51,7 +51,7 @@ class KeysTest(InboxSortTest):
     def test_the_context_menu_with_nothing_picked(self):
         self.sort([picker.Picked(':', 'a.txt', []), None], [NOTHING])
         options = helpers.labels_of(self.pick_option.call_args.args[0])
-        for start in ("Choose what to do with a.txt", "Pick a.txt", "Ask AI", "Have Claude describe a.txt",
+        for start in ("Choose what to do with a.txt", "Check a.txt", "Ask AI", "Have Claude describe a.txt",
                       "Open a.txt", "Rename a.txt", "Replicas dashboard"):
             self.assertTrue(any(option.startswith(start) for option in options), start)
 

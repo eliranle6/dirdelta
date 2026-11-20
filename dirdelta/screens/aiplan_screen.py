@@ -35,7 +35,7 @@ def ask(task, default='', label=None, review=True, instruction=None):
     they typed)."""
     if aiplan.too_many(task):
         messages.show("Too many files for the AI", [
-            "That's %s, and it can be told of %d at most: pick some of them, then ask again." %
+            "That's %s, and it can be told of %d at most: check some of them, then ask again." %
             (text.files(len(task.files)), aiplan.MAX_FILES)], dryrun.label())
         return default, None
     typed = default
@@ -129,7 +129,7 @@ def _review(task, plan, label):
     chosen = picker.pick_files(
         "The AI's plan", list(steps), header=header, picked=list(steps), label=label,
         previews=lambda send: send(previews, default=[]), shown_as=lambda: shown,
-        key_hints=[('Enter', 'go on with the picked ones'), ('Space', 'pick or unpick'), ('q', 'back, doing nothing')])
+        key_hints=[('Enter', 'go on with the checked ones'), ('Space', 'check or uncheck'), ('q', 'back, doing nothing')])
     if chosen is None or not chosen.files:
         return None
     return [steps[item] for item in chosen.files]

@@ -680,7 +680,7 @@ const QUICK_ACTIONS = [
 ];
 
 function quickActions(screen, selected) {
-  const it = view.picked.size ? view.picked.size + ' picked' : selected;
+  const it = view.picked.size ? view.picked.size + ' checked' : selected;
   return QUICK_ACTIONS.filter(([, key]) => key !== 'e' || /\.zip$/i.test(view.selected || '')).map(([glyph, key, text]) =>
     el('button', {class: 'quick', onclick: () => { view.pendingKey = key; act('enter'); }},
       icon(glyph), text(screen, it), el('small', {class: 'keyname'}, key)));
@@ -697,8 +697,8 @@ function renderPickerActions() {
     const what = enter ? capitalized(enter[1]) : 'Choose';
     let label = what + (screen.multi ? '' : ' ' + selected);
     if (screen.states.length) label = 'Done';
-    else if (screen.multi) label = view.picked.size ? what + ' with ' + view.picked.size + ' picked' :
-      screen.enterPicksSelection ? what + ' with ' + selected : 'Pick some first';
+    else if (screen.multi) label = view.picked.size ? what + ' with ' + view.picked.size + ' checked' :
+      screen.enterPicksSelection ? what + ' with ' + selected : 'Check some first';
     const enterButton = el('button', {class: 'primary', disabled: screen.multi && !screen.states.length && !view.picked.size && !screen.enterPicksSelection,
       onclick: () => { if (opensMenu(screen)) openingPanel(); act('enter'); }}, label);
     // (A sync's file tree: ▾ beside it shows its menu's actions as buttons, see quickActions())

@@ -34,11 +34,11 @@ class Keys(object):
         name = contextmenu.selected_name(selected)
         is_file = selected in set(files)
         entries = [contextmenu.Entry('Enter', "Choose what to do with %s" % (name,), contextmenu.WHAT_TO_DO),
-                   contextmenu.Entry('Space', "Pick %s" % (name,), contextmenu.PICK),
+                   contextmenu.Entry('Space', "Check %s" % (name,), contextmenu.PICK),
                    contextmenu.Entry(aiplan_screen.KEY_NAME, "Ask AI what to do with all the files, and review its plan",
                                      aiplan_screen.KEY),
                    contextmenu.Entry('Ctrl-I', ("Have Claude say what %s is and where it goes, as a whole, while you go "
-                                                "on (each of its files: pick them, then Ctrl-I)" % (name,))
+                                                "on (each of its files: check them, then Ctrl-I)" % (name,))
                                      if selected and not is_file else
                                      "Have Claude describe %s and say where it goes, while you go on" % (name,),
                                      DESCRIBE_KEY)]

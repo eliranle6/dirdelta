@@ -212,7 +212,7 @@ class ContextMenuTest(TwoDirsTestCase):
         self.press([picker.Picked(':', 'a.txt', [])], 'Nothing')
         shown = [picker.unstyled(self.shown[option]) for option in self.options
                  if not isinstance(self.shown[option], picker.Skipped)]
-        self.assertTrue(any(line.startswith('[Space]') and 'Pick a.txt' in line for line in shown))
+        self.assertTrue(any(line.startswith('[Space]') and 'Check a.txt' in line for line in shown))
         self.assertTrue(any(line.startswith('[a]') for line in shown))
         self.assertTrue(any(line.startswith('[Ctrl-X]') for line in shown))
         self.assertTrue(any(line.startswith('[cc]') for line in shown))
@@ -231,7 +231,7 @@ class ContextMenuTest(TwoDirsTestCase):
         ask.assert_called_once_with(['a.txt', 'b.txt', 'c.txt'], ['a.txt'])
 
     def test_pick_comes_back_picked(self):
-        pick_files = self.press([picker.Picked(':', 'b.txt', [])], 'Pick')
+        pick_files = self.press([picker.Picked(':', 'b.txt', [])], 'Check')
         self.assertEqual(pick_files.call_args.kwargs['picked'], ['b.txt'])
 
     def test_what_to_do_is_enters_menu_of_the_selected_one(self):

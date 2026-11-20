@@ -12,7 +12,7 @@ from dirdelta.ui import picker
 GO_ON = 'go on'
 ADD = 'add'
 GO_ON_NONE = "Go on, copying into no other replica"
-GO_ON_PICKED = "Go on, copying into the %d picked too"
+GO_ON_PICKED = "Go on, copying into the %d checked too"
 ADD_LABEL = "Another replica of it (choose a dir)..."
 PICKED_MARK = "[x] "
 NOT_PICKED_MARK = "[ ] "
@@ -36,8 +36,8 @@ def choose(known_replicas, inbox_path, root_path):
             options.append(picker.Option(('toggle', path), label,
                                          picker.Disabled("%s (%s)" % (label, why_not)) if why_not else None))
         options += [picker.BLANK, picker.Option(ADD, ADD_LABEL)]
-        header = ("Also copy what this sort moves or copies into %s into other replicas of it? Enter picks one "
-                  "(or unpicks it); none are, unless picked. A file there already is left as it is." %
+        header = ("Also copy what this sort moves or copies into %s into other replicas of it? Enter checks one "
+                  "(or unchecks it); none are, unless checked. A file there already is left as it is." %
                   (replicanames.short_names([root_path])[root_path],))
         chosen = picker.pick_option(options, header=header, selected=selected, label=LABEL,
                                     title="Other replicas of the sorted tree")

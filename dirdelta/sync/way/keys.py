@@ -36,7 +36,7 @@ class Keys(object):
         is_file = selected in set(missing)
         clouds = [replica for replica in (self._src, self._dst) if isinstance(replica, clouddirtree.CloudDirTree)]
         entries = [contextmenu.Entry(None, "Choose what to do with %s" % (name,), contextmenu.WHAT_TO_DO),
-                   contextmenu.Entry('Space', "Pick %s" % (name,), contextmenu.PICK),
+                   contextmenu.Entry('Space', "Check %s" % (name,), contextmenu.PICK),
                    contextmenu.Entry(aiplan_screen.KEY_NAME, "Ask AI what to do with all the files, and review its plan",
                                      aiplan_screen.KEY)]
         if is_file and archives.is_archive(selected):

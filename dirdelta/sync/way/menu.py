@@ -88,11 +88,11 @@ class Menu(object):
         choices = picker.grouped([[picker.Option(self.NOTHING, self.NOTHING, prefixes[self.NOTHING] + self.NOTHING)]] +
                                  [[option(action) for action in kind if action in options] for kind in kinds])
         if not changed:
-            header = "%s picked in %s, which %s lacks. What to do with them?" % (count, src_name, dst_name)
+            header = "%s checked in %s, which %s lacks. What to do with them?" % (count, src_name, dst_name)
         elif not only_here:
-            header = "%s picked in %s, which %s has other versions of. What to do with them?" % (count, src_name, dst_name)
+            header = "%s checked in %s, which %s has other versions of. What to do with them?" % (count, src_name, dst_name)
         else:
-            header = ("%s picked in %s: %d %s lacks, %d it has other versions of. What to do with them?" %
+            header = ("%s checked in %s: %d %s lacks, %d it has other versions of. What to do with them?" %
                       (count, src_name, len(only_here), dst_name, len(changed)))
         action = picker.pick_option(choices, header=header, title="What to do")
         if action not in options:

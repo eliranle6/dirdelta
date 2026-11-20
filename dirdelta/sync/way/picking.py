@@ -35,9 +35,9 @@ class Picking(object):
         jobs = hashes_screen.jobs_of([self._src, self._dst])
         src_name, dst_name = (replicanames.full(replica.displayname() if not replica_ops.is_local(replica) else replica.fullpath())
                               for replica in (self._src, self._dst))
-        header = ("%s has other versions of these. Pick some, then choose what to do with them." % (dst_name,)
+        header = ("%s has other versions of these. Check some, then choose what to do with them." % (dst_name,)
                   if self._only_differing else
-                  "%s lacks these. Pick some, then choose what to do with them." % (dst_name,))
+                  "%s lacks these. Check some, then choose what to do with them." % (dst_name,))
         keys = self.REFRESH_KEY + hashes_screen.KEY + aiplan_screen.KEY + contextmenu.KEY + archive_screen.KEY
         # (In the browser, what's done to the selection is in Enter's menu, a panel over the tree, all of it:
         # no buttons for those keys beside it)
@@ -101,7 +101,7 @@ class Picking(object):
                                   (self.REFRESH_KEY_NAME, filescreen.SIDE_REFRESH_HINTS[self._dst in screen.clouds])],
                                  side_start),
                 enter_picks_selection=True,
-                none_picked_key_hints=[('Enter', 'Pick & choose what to do')],
+                none_picked_key_hints=[('Enter', 'Check & choose what to do')],
                 # Ctrl-X opens the selected one (the picked ones: the menu's Open); Ctrl-T, a diff's next view
                 on_notify=lambda key, selected, picked: (self._next_diff_view(selected) if key == diffview.KEY else
                                                          self._opener.press([selected], files)),

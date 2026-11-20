@@ -16,7 +16,7 @@ class Removals(object):
         lines = []
         folders = self._whole_folders(set(relpaths))
         if folders:
-            lines.append("Trashing %d folders whole, all of whose files are picked (checked with "
+            lines.append("Trashing %d folders whole, all of whose files are checked (looked up in "
                          "Drive first, for files the cache doesn't have):" % (len(folders),))
             lines += listed_names(folder + '/' for folder in folders)
         google_files = [relpath for relpath in relpaths if self._info(relpath).is_google]
@@ -42,7 +42,7 @@ class Removals(object):
             elif holding_more:
                 messages.print_line(
                     "Drive has files in %d folders that the cache doesn't (it's out of date), so "
-                    "they're kept, and their picked files are removed one by one: %s" %
+                    "they're kept, and their checked files are removed one by one: %s" %
                     (len(holding_more), ', '.join(sorted(holding_more)[:MAX_LISTED])), "yellow")
                 folders = self._whole_folders(picked, holding_more | kept)
         in_trashed_folders = set()

@@ -94,16 +94,16 @@ bin/python -m dirdelta --sort cloud/unsorted cloud/eliran
 ```
 
 An inbox is a dir of files not sorted yet; the sorted tree is where they go (local dirs or Google
-Drive folders; choosing it, the replicas you sync are offered too). The inbox's picker works like a sync's: pick files with `Space`, press
-`Enter` (with none picked, it picks the selected file, or a dir's files), and choose what to do with
+Drive folders; choosing it, the replicas you sync are offered too). The inbox's picker works like a sync's: check files with `Space`, press
+`Enter` (with none checked, it checks the selected file, or a dir's files), and choose what to do with
 them, with "Nothing" selected first:
 
-- `Ctrl-I` in the picker, on the picked files (or else the selected file): all of what's
+- `Ctrl-I` in the picker, on the checked files (or else the selected file): all of what's
   below, describing them and saying where they go, in the background. Files Claude was asked
   about before are asked about anew (and compared with the sorted tree again), since they may have
   changed; so does the menu's "Ask Claude where" (marked `[Ctrl-I]`).
-- `Ctrl-I` on a dir, with nothing picked, asks about the dir as a whole (to ask about each of its
-  files, pick them first, with Space): Claude describes a few of its files, then gets its size, its
+- `Ctrl-I` on a dir, with nothing checked, asks about the dir as a whole (to ask about each of its
+  files, check them first, with Space): Claude describes a few of its files, then gets its size, its
   types of files, some of their names, their dates and how many are in the sorted tree already, and
   says what it is (a tag after its name: `rome-2024/  [claude: Rome trip photos, Oct 2024]`) and what
   to do with it: move it (its own name or a better one, under the dir where it belongs, or into an
@@ -113,7 +113,7 @@ them, with "Nothing" selected first:
   Claude says", each moving or removing all of its files, a local dir with one rename. What Claude said is kept by the dir's
   path, its number of files and their size: a dir that changed is asked about again.
 - `Ctrl-X` in the picker opens the selected file (or dir) with its program (`xdg-open`), as a
-  double-click would; "Open" in the menu opens the picked files (up to 10), and has no key (a
+  double-click would; "Open" in the menu opens the checked files (up to 10), and has no key (a
   sync's picker has both too). A Drive file is downloaded first, into
   `~/.cache/dirdelta/downloads` (also where the files Claude reads are downloaded to), so it's
   downloaded once (the least recently used go beyond 2 GB). More than one to download is asked
@@ -127,12 +127,12 @@ them, with "Nothing" selected first:
   it; the files go there.
 - "Move N files to another dir in the inbox": a dir of the inbox picked (with `n`, `o`/`O` and `cc`
   too), and what's known of them goes with them.
-- In every picker of several files, `V` picks a range (as vim's visual line mode), and Esc
-  (`Ctrl-[`) unpicks: the range being picked, or else, without a search to drop, all.
+- In every picker of several files, `V` checks a range (as vim's visual line mode), and Esc
+  (`Ctrl-[`) unchecks: the range being checked, or else, without a search to drop, all.
 - "Describe N files with Claude": a short description of each (at most 10 words, by Claude Haiku, which reads
   the files), shown after its name in the picker (`a.txt  [claude: a shopping list]`), and searchable (`/claude:`
   shows the described ones). It's
-  done in the background: you go on picking, the files say "(Claude is looking at it...)" until
+  done in the background: you go on checking, the files say "(Claude is looking at it...)" until
   their descriptions come, and the bottom line says what Claude is doing.
 - "Ask Claude where N files go" (as `Ctrl-I` does, in the background too): their descriptions
   first (the missing ones), and which are copies (below), then Claude is
@@ -142,7 +142,7 @@ them, with "Nothing" selected first:
   named; with a reason, shown beside the file. It reads nothing itself.
 - Copies: each file is looked for in the sorted tree, as a sync looks for a moved file (by name, by
   size, and in Drive by hash), and the selected one's contents are compared with what's found (in
-  the background; the picked ones' before Claude is asked where they go). A file with the same
+  the background; the checked ones' before Claude is asked where they go). A file with the same
   contents as one in the sorted tree says so, highlighted ("a copy: it may be removed"), Claude is
   told, and may recommend removing it: "Remove 3 of the 5 files that are copies of files in X" (by their contents, whatever
   Claude says; asked twice).
@@ -179,7 +179,7 @@ it's there. The inbox is kept, even when it's left empty.
 
 Claude is asked through the Claude Agent SDK (`pip install claude-agent-sdk`, in `requirements.txt`),
 which runs Claude Code: the laptop's logged-in Claude, or `ANTHROPIC_API_KEY` if it's set. Claude reads
-the picked files itself (text, images, PDFs; a Drive file is downloaded first, and kept, see `Ctrl-X`), with no tool but
+the checked files itself (text, images, PDFs; a Drive file is downloaded first, and kept, see `Ctrl-X`), with no tool but
 `Read`, so their contents are sent to Anthropic: only when you choose to. What it says is kept in
 `~/.cache/dirdelta/ai.json`, by the file's path and size, so a file is asked about once, and it goes
 with the file when it's moved or copied. Descriptions and
@@ -281,10 +281,10 @@ switches the pictures off and on, for the pickers after it too (kept in `~/.conf
 
 ### The menu of the keys (`:`)
 
-In a sync's and a sort's file pickers, `:` with nothing picked opens a menu of what can be done there with
-the selected file or dir, each with its key: what to do with it, picking it, asking AI, opening, renaming,
+In a sync's and a sort's file pickers, `:` with nothing checked opens a menu of what can be done there with
+the selected file or dir, each with its key: what to do with it, checking it, asking AI, opening, renaming,
 reading anew from Drive, the dashboard (and in a sort, Claude's description), and below them, to read,
-the keys that only work in the list itself (search, a range, the side tree...). With files picked, `:` opens
+the keys that only work in the list itself (search, a range, the side tree...). With files checked, `:` opens
 the same menu as Enter, of what to do with them.
 
 ### Exploring a zip
@@ -295,11 +295,11 @@ downloaded first.
 
 ### Asking AI
 
-In a sync's and a sort's file pickers, `a` asks the AI (Claude, for now) about the picked files, or with
-none picked, about all of them; the menu that Enter opens has "Ask AI" too, for what it's about. A
-question ("what's in this zip file?") it just answers, "this" being what you're on: the picked files, or
+In a sync's and a sort's file pickers, `a` asks the AI (Claude, for now) about the checked files, or with
+none checked, about all of them; the menu that Enter opens has "Ask AI" too, for what it's about. A
+question ("what's in this zip file?") it just answers, "this" being what you're on: the checked files, or
 else the selected one. Asked to do something, in your own words, e.g. "copy the 2019 photos, and remove
-the unfinished downloads", it picks the files, and answers with a plan: in a sync, copying, removing from the source (to the trash),
+the unfinished downloads", it checks the files, and answers with a plan: in a sync, copying, removing from the source (to the trash),
 and renaming in either replica; in a sort, moving or copying into the sorted tree, moving or renaming
 in the inbox, and removing (to the trash).
 
@@ -335,17 +335,17 @@ DRYRUN=0 bin/python -m dirdelta /tmp/dd/alpha /tmp/dd/bravo    # Copy, Remove an
 The menu's first option, "Sync: all the differences in one tree", shows everything that differs in one
 tree (see "Syncing everything in one tree" below). Below it, it offers, for each direction, "Files in A, not
 in B" (with how many there are), for the simple cases (e.g. a read-only replica). Choose one,
-pick files with `Space` (on a directory it picks everything under it, or while a search filters
+check files with `Space` (on a directory it checks everything under it, or while a search filters
 the tree, the matches under it), and press `Enter`. A
-directory is marked picked (`X`, red) when everything under it is, and partly picked (`-`, magenta)
+directory is marked checked (`X`, red) when everything under it is, and partly checked (`-`, magenta)
 when only some of it is. Beside the tree, a column shows, for the selected file, where B has files
 of the same name, and for a big file, of its size with another name (found while you look, with
 how far it's got), the likeliest first: the same size, the same date taken (photos), the file's
 neighbours there too, the same modification time; for the selected file, the same-sized ones'
 contents are compared too (in the background), and one with the same contents is then the only one
 shown. One that's surely the file, moved or renamed, says so, highlighted in green (`Ctrl-P` hides the
-column). A Rename compares the contents of all the picked files first, so it moves only what's
-surely the file. `Enter` then asks what to do with the picked files, with
+column). A Rename compares the contents of all the checked files first, so it moves only what's
+surely the file. `Enter` then asks what to do with the checked files, with
 "Nothing" selected first: copy them to B, remove them from A, or, for the ones whose match in B is
 surely them, rename: move B's match to the file's path, or the file to the match's (greyed out
 when it can't be done); and what the picker's keys do, so they're all in the menu too: open them

@@ -70,7 +70,7 @@ class Opener(Downloading, Status):
         asks to press it again"""
         relpaths = list(relpaths)
         if len(relpaths) > names.MAX_OPENED:
-            self._say("Can't open %s at once (at most %d): pick fewer" % (files_text(len(relpaths)), names.MAX_OPENED))
+            self._say("Can't open %s at once (at most %d): check fewer" % (files_text(len(relpaths)), names.MAX_OPENED))
             return
         asked, self._asked = self._asked, None
         question = self.question(relpaths, files)

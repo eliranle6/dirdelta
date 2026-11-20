@@ -15,7 +15,7 @@ WHAT_TO_DO = 'what to do'
 NOTHING = "Nothing: back to the files"
 IN_THE_PICKER = "These keys work in the file list itself:"
 # What only treepicker does, so can't be done from a menu
-PICKER_KEYS = [('V', 'pick a range'), ('/', 'search'), ('f', 'only the matches of a search, or all'),
+PICKER_KEYS = [('V', 'check a range'), ('/', 'search'), ('f', 'only the matches of a search, or all'),
                ('Ctrl-P', 'show or hide the preview column'), ('?', 'all the keys')]
 SIDE_KEY_NAME = 'Ctrl-W l'
 
@@ -52,4 +52,4 @@ def choose(entries, header, label=None, side=None):
 
 
 def nothing_picked(count):
-    return "Nothing's picked (of %s). What to do?" % (text.files(count),)
+    return "Nothing's checked (of %s). What to do?" % (text.files(count),)

@@ -147,7 +147,7 @@ class Previews(object):
             lines += [picker.styled([("Remove it", 'bold')])]
         else:
             lines += [picker.styled([("Its files don't go together:", 'bold')]),
-                      grey_line("  pick them (Space), then Ctrl-I"), grey_line("  asks about each")]
+                      grey_line("  check them (Space), then Ctrl-I"), grey_line("  asks about each")]
         if recommendation.get('reason'):
             lines += [""] + wrapped(recommendation['reason'], "  ")
         copies = self._claude.dir_copies_of(dirpath)
