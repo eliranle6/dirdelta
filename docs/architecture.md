@@ -1279,7 +1279,7 @@ every link carries, then a cookie), and a watcher.
   the address links are emailed to them (`/api/users`, `/api/users/add`, `/api/users/email`); a new
   user's Home offers to add their first replica. It holds the mode's label (DRY RUN or LIVE) too: the breadcrumbs
   are a row under the tabs (what's shown is a page of its tab's): the tab first, then the part shown, or a flow's
-  screen (its tab, a sync's Replicas or a sort's Inboxes, for dirdelta's own name: `setTop()`); Home, a tab's page
+  screen (a tree's the flow's places, `places.trail()` as it's shown, e.g. Sync eliran ⇄ cloud/eliran > Only in eliran on LocalDisk(07B)) (its tab, a sync's Replicas or a sort's Inboxes, for dirdelta's own name: `setTop()`); Home, a tab's page
   alone, has none. Its menu also
   sets this browser's theme (`theme()`, in its localStorage): like the device by default, light, or dark.
 - Adding a replica or an inbox (`web/adding.py`, `markup.js`'s folderAdder(), on Replicas and Inboxes,

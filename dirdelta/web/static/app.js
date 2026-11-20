@@ -200,7 +200,8 @@ function updatePicker(screen, isNew) {
 
 function renderPickerFrame() {
   const screen = view.screen;
-  setTop(screen.root, screen.labels);
+  // (A menu's root is its breadcrumbs; a tree's is its folder: its page has the flow's, where it is)
+  setTop(screen.mode !== 'list' && screen.crumbs ? screen.crumbs : screen.root, screen.labels);
   const main = document.getElementById('main');
   const parts = [];
   if (screen.header) parts.push(el('div', {class: 'header'}, segmentsSpan(screen.header)));

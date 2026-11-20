@@ -137,7 +137,9 @@ class Action(object):
                                                        way.indexes[way.src], way.indexes[way.dst],
                                                        way.checked, self.changes, way.differs,
                                                        self.only_differing, way.compared)
-        with picker.place(DIFFER if self.only_differing else "Files in %s" % (replicanames.full(self.src_path),)):
+        # (Named for what it shows: e.g. 'Only in eliran on LocalDisk(07B)', the files the other lacks)
+        only_in = replicanames.told_apart([self.src_path, self.dst_path])[self.src_path]
+        with picker.place(DIFFER if self.only_differing else "Only in %s" % (only_in,)):
             sync.browse()
         self.was_read_anew = sync.was_read_anew
         return sync.has_changed

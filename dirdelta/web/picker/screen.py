@@ -4,6 +4,7 @@ as treepicker would, and works out what treepicker would print (see docs/treepic
 import os
 import threading
 
+from dirdelta.ui.picker import places
 from dirdelta.web.picker import keynames
 from dirdelta.web.picker import pipes
 from dirdelta.web.picker.items import Items
@@ -29,6 +30,8 @@ class PickerScreen(object):
         self.side_items = [record.split(' ', 1) for record in pipes.read_file(spec.side_file)]
         self.side_selected = spec.side_start
         self.selected = spec.select if spec.select is not None else self._first()
+        # (Where the flow is, the menus' breadcrumbs: a tree's page shows them too, as the menus' do)
+        self.crumbs = places.trail()
         self.version = bump()
         self._writers = {option: pipes.Writer(spec.fds[option]) for option in ('--selection', '--notify-fd')
                          if option in spec.fds}
@@ -168,7 +171,7 @@ class PickerScreen(object):
         spec = self.spec
         is_dir = spec.source not in (None, '-')
         return {'kind': self.kind, 'id': self.id, 'root': spec.source if is_dir and spec.root == '.' else spec.root,
-                'header': spec.header, 'footer': spec.footer,
+                'crumbs': self.crumbs, 'header': spec.header, 'footer': spec.footer,
                 'labels': spec.labels, 'mode': 'list' if spec.is_list else 'dir' if is_dir else 'tree',
                 'multi': spec.is_multi, 'dirsOnly': '--dirs-only' in spec.flags,
                 'keys': keynames.buttons(spec), 'hints': spec.key_hints, 'nonePickedHints': spec.none_picked_key_hints,
