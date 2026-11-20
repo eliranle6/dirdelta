@@ -570,13 +570,9 @@ function plainOf(line) { return styledParts(line).map(part => part.text).join(''
 function diffToggle(line) {
   const labels = plainOf(line).slice('Diff: '.length).split('  (')[0].split(' · ');
   const shown = labels.findIndex(label => label.startsWith('['));
-  // (Merging the two: the menu's Merge, on this file, checked first if nothing is; in a tree whose menu has it)
-  const merge = isSyncFilesTree(view.screen) ? el('button', {class: 'mergebutton', onclick: async () => {
-    const path = view.selected;
-    if (!view.picked.size && path) await act('pick', {paths: [path], on: true});
-    view.pendingKey = 'g';
-    act('enter');
-  }}, icon('merge'), 'Merge…') : '';
+  // (Merging the two: g, on this file, the selected one whose diff this is, whatever's checked)
+  const merge = view.screen.keys.some(key => key.name === 'g') ? el('button', {class: 'mergebutton',
+    onclick: () => act('press', {key: 'g'})}, icon('merge'), 'Merge…') : '';
   return el('span', {class: 'difftoggle'}, el('b', {}, 'Diff'), merge, labels.map((label, i) => {
     const name = label.replace(/^\[(.*)\]$/, '$1');
     return el('button', {class: i === shown ? 'on' : '', onclick: async () => {
@@ -665,7 +661,7 @@ function renderSide() {
 const GENERAL_KEYS = new Set(['i', '?']);
 // Keys the page has no button for: the menu (:) lists what's selected can have done, each with its key, as the
 // buttons here do (with files picked, it's Enter's); the replicas dashboard (#) is the Replicas tab's
-const NO_BUTTON_KEYS = new Set([':', '#', 'Ctrl-T']);  // (Ctrl-T: the diff's views, in its title, diffToggle())
+const NO_BUTTON_KEYS = new Set([':', '#', 'Ctrl-T', 'g']);  // (g: the diff's Merge..., diffToggle())  // (Ctrl-T: the diff's views, in its title, diffToggle())
 // Keys whose buttons are shown only where they do something: exploring a zip on one, a diff's views on a diff
 const KEY_APPLIES = {
   'e': () => /\.zip$/i.test(view.selected || ''),

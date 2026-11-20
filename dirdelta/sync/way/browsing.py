@@ -63,6 +63,9 @@ class Browsing(Picking):
                                     chosen.files or (contextmenu.under(only_missing, selected) if selected else []))
             elif key == picker.SIDE_KEY:
                 done = self._act_in_dst(chosen.side_selected, chosen.side_pressed == self.SIDE_REMOVE_KEY)
+            elif key == self.MERGE_KEY:
+                # (g: the selected file, the one whose diff is shown, whatever's checked)
+                done = self._merge_selected(selected)
             elif not key:
                 done = self._act(chosen.files, selected)
                 if done is filescreen.READ_ANEW:

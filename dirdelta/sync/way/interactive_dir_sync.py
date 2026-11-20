@@ -42,8 +42,10 @@ class InteractiveDirSync(Browsing, Keys, Lists, Menu, Copying, Merging, AskAI, R
     EXPLORE = 'explore'
     # Renaming the one picked file (cc's, on the selected one), to a name the user gives
     RENAME_IT = 'rename it'
-    # Merging the one picked file that differs: its two versions into one, written to both (merging.py)
+    # Merging the one picked file that differs: its two versions into one, written to both (merging.py); and
+    # the key merging the selected one (the one whose diff is shown), whatever's checked
     MERGE = 'merge'
+    MERGE_KEY, MERGE_KEY_HINT = 'g', ('g', 'merge the selected file that differs: its two versions into one')
     # The picker's keys that do an option of the menu, shown before it
     # (Ctrl-X opens the selected one, not the picked ones: Open has no key)
     SHORTCUTS = {READ_ANEW: 'Ctrl-R', ASK_AI: aiplan_screen.KEY_NAME, EXPLORE: archive_screen.KEY_NAME,

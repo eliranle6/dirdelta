@@ -31,6 +31,15 @@ class Merging(object):
             return "can't: one of them is read-only"
         return None
 
+    def _merge_selected(self, selected):
+        """g: merge the selected file, if it's one that can be merged (else say why). Returns as _merge()"""
+        reason = self._cant_merge([selected] if selected else [])
+        if reason is not None:
+            messages.show("Merge", ["Select a text file that differs to merge its two versions (%s)." %
+                                    (reason.replace("can't: ", ''),)], dryrun.label())
+            return None
+        return self._merge(selected)
+
     def _merge(self, relpath):
         """Merge the file's two versions and write the merge to both. Returns [relpath] once it's written (in a
         dry run, would have been), or None"""

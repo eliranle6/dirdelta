@@ -10,6 +10,7 @@ from unittest import mock
 import helpers
 from dirdelta.trees import localdiskdirtree
 from dirdelta.ui import merging
+from dirdelta.ui import picker
 from dirdelta.web import merging as web_merging
 from sync_way_support import NO, Sync, YES
 
@@ -59,6 +60,21 @@ class MergeTest(unittest.TestCase):
         # Both versions were given to merge, src's first
         args = self.merged.call_args.args
         self.assertEqual((args[2], args[3]), (['one', 'two', 'three'], ['one', '2']))
+
+    def test_g_merges_the_selected_file_whatever_is_checked(self):
+        self.write(self.src_root, 'other.txt', 'mine')
+        src = localdiskdirtree.LocalReplica(self.src_root)
+        dst = localdiskdirtree.LocalReplica(self.dst_root)
+        self.sync = Sync(src, dst)
+        # other.txt checked, notes.txt selected: g merges notes.txt, and other.txt is still checked after
+        picks = [picker.Picked(Sync.MERGE_KEY, 'notes.txt', ['other.txt']), None]
+        with helpers.scripted_files_picker(lambda relpaths: picks.pop(0)) as pick_files, \
+                helpers.answering_option_picker([YES]), \
+                mock.patch('dirdelta.ui.merging.merge', return_value=['merged']), \
+                mock.patch('dirdelta.util.dryrun.DRYRUN', False):
+            self.sync.browse()
+        self.assertEqual(self.read(self.dst_root, 'notes.txt'), 'merged\n')
+        self.assertEqual(pick_files.call_args.kwargs['picked'], ['other.txt'])
 
     def test_nothing_is_written_unless_confirmed_or_in_a_dry_run(self):
         with mock.patch('dirdelta.util.dryrun.DRYRUN', False):

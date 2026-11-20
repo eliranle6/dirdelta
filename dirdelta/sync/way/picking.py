@@ -38,17 +38,17 @@ class Picking(object):
         header = ("%s has other versions of these. Check some, then choose what to do with them." % (dst_name,)
                   if self._only_differing else
                   "%s lacks these. Check some, then choose what to do with them." % (dst_name,))
-        keys = self.REFRESH_KEY + hashes_screen.KEY + aiplan_screen.KEY + contextmenu.KEY + archive_screen.KEY
+        keys = self.REFRESH_KEY + hashes_screen.KEY + aiplan_screen.KEY + contextmenu.KEY + archive_screen.KEY + self.MERGE_KEY
         # (In the browser, what's done to the selection is in Enter's menu, a panel over the tree, all of it:
         # no buttons for those keys beside it)
         if frontend.current is not None:
-            keys = hashes_screen.KEY + contextmenu.KEY
+            keys = hashes_screen.KEY + contextmenu.KEY + self.MERGE_KEY
         # The keys row has little room: the rest are in the menu (:), and ?
         key_hints = [('Enter', 'choose what to do'), contextmenu.KEY_HINT]
         # The keys that aren't in the keys row, by what they're about, for ?
         more_keys = [
             ("The files", [aiplan_screen.KEY_HINT, archive_screen.KEY_HINT, opening.KEY_HINT, renaming.KEY_HINT] +
-             ([versions.KEY_HINT] if self.differs else [])),
+             ([versions.KEY_HINT, self.MERGE_KEY_HINT] if self.differs else [])),
             ("%s, on the right" % (dst_name,), [
                 ('Ctrl-W l', 'move to %s, on the right (Ctrl-W h: back)' % (dst_name,)),
                 (self.SIDE_REMOVE_KEY + ' there', 'remove what\'s selected there'),
