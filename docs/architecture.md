@@ -1229,6 +1229,8 @@ every link carries, then a cookie), and a watcher.
   (checked and selected told apart by color, everywhere they show: checked green, its checkbox and a tint, selected blue,
   its row and the details' "Selected:" header; what an action acts on named in its color, "Choose what to do with [✓ 2 checked]"
   or "[warranties.txt]", `targetChip()`, with "✕ Uncheck all" while files are checked; and checking a row selects it too)
+  (the selection's details maximized, ⤢ in their header: filling the screen under the top bar, as the selection moves, until
+  ⤡ or Esc, `maximizePreview()`)
   (on a wide screen the two trees side by side, as wide as each other, and the selection's details, its preview with a diff or
   the AI's suggestion, in the bottom bar right of the buttons, `placePreview()`; on a phone under the tree)
   (its trees, the picker's and the side's, with branch lines as treepicker's: │ ├ └, `visibleRows()`'s guides; each opened

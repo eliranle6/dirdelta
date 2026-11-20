@@ -536,12 +536,31 @@ async function loadPreview() {
   const content = [];
   // (Which node it's of: the selected one, the row tapped, not the ones checked)
   if (lines.length || found.image) {
-    content.push(el('div', {class: 'previewhead'}, 'Selected: ', el('span', {class: 'target selected'}, view.selected ? baseName(view.selected) : screen.root)));
+    content.push(el('div', {class: 'previewhead'}, 'Selected: ', el('span', {class: 'target selected'}, view.selected ? baseName(view.selected) : screen.root),
+      el('button', {class: 'maxbutton', title: view.previewMax ? 'Back to its place (Esc)' : 'Fill the screen with it',
+        'aria-pressed': String(!!view.previewMax), onclick: () => maximizePreview(!view.previewMax)}, view.previewMax ? '⤡' : '⤢')));
   }
   if (lines.length) content.push(el('pre', {}, lines.map(line => [plainOf(line).startsWith('Diff: ') ? diffToggle(line) : previewLine(line), '\n'])));
   if (found.image) { const canvas = pictureCanvas(found.image); if (canvas) content.push(canvas); }
   box.replaceChildren(content.length ? el('div', {class: 'preview'}, content) : '');
+  box.classList.toggle('max', !!view.previewMax && content.length > 0);
 }
+
+// The selection's details filling the screen (under the top bar), to read a long diff, or back in their place; it
+// stays so as the selection moves, until it's put back (its button, or Esc)
+function maximizePreview(on) {
+  view.previewMax = on;
+  placePanel();
+  view.previewVersion = -1;
+  loadPreview();
+}
+
+document.addEventListener('keydown', event => {
+  if (event.key === 'Escape' && view.previewMax && document.getElementById('main').dataset.shows !== 'panel') {
+    event.preventDefault();
+    maximizePreview(false);
+  }
+});
 
 function plainOf(line) { return styledParts(line).map(part => part.text).join(''); }
 

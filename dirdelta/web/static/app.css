@@ -382,3 +382,10 @@ button.tiny { font-size: 12px; padding: 2px 8px; border-radius: 10px; color: var
 /* (The main row on one line: the main button's text wraps rather than ? going to a line of its own) */
 .actsec.main { flex-wrap: nowrap; }
 .actsec.main > .primary, .actsec.main .splitbutton > button:first-child { min-width: 0; white-space: normal; text-align: left; }
+/* The selection's details: a button to fill the screen with them (under the top bar), and back */
+.preview .previewhead { display: flex; align-items: center; gap: 6px; }
+.preview .maxbutton { margin-left: auto; flex: none; font-size: 15px; line-height: 1; padding: 3px 8px; border-radius: 6px; }
+#preview.max { position: fixed; z-index: 4; left: 0; right: 0; top: var(--panel-top, 0); bottom: 0; margin: 0;
+  max-width: none; padding: 8px max(16px, calc((100vw - var(--page-width, 1040px)) / 2 + 16px)) 12px; background: var(--bg); overflow: hidden;
+  display: flex; flex-direction: column; max-height: none !important; }
+#preview.max > .preview { flex: 1; min-height: 0; overflow-y: auto; box-shadow: 0 6px 24px color-mix(in srgb, #000 22%, transparent); }
