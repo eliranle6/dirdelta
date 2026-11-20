@@ -14,7 +14,7 @@ from dirdelta.screens import label_screen
 from dirdelta.sync import comparing
 from dirdelta.sync import replica_ops
 from dirdelta.sync import combined
-from dirdelta.sync.options import STATE, SYNC_ALL, Action, state_line, sync_all_shown_as
+from dirdelta.sync.options import STATE, STATE_POINTS, SYNC_ALL, Action, state_lines, sync_all_shown_as
 from dirdelta.sync.ways import DIFFER, Way, find_all, find_differing
 from dirdelta.trees import localdiskdirtree
 from dirdelta.ui import messages
@@ -90,7 +90,7 @@ class SyncMenu(object):
                 is_favorite = self.known_replicas.is_favorite(self.replica_a_path, self.replica_b_path)
                 favorite_options = [self.REMOVE_FAVORITE if is_favorite else self.ADD_FAVORITE]
             options = picker.grouped([
-                [picker.Option(STATE, STATE, picker.Skipped(STATE))],
+                [picker.Option(line, line, picker.Skipped(line)) for line in (STATE,) + STATE_POINTS],
                 [picker.Skipped(SYNC_SECTION), SYNC_ALL],
                 [picker.Skipped(KINDS_SECTION)] + list(self.actions),
                 [picker.Skipped(UPDATE_SECTION), comparing.COMPARE] + list(self.rescans) + list(self.refreshes),
@@ -225,7 +225,7 @@ class SyncMenu(object):
         shown[SYNC_ALL] = sync_all_shown_as(self.ways, self.replica_a_path, self.replica_b_path)
         shown[comparing.COMPARE] = comparing.shown_as(self.ways[0].differs)
         # Only to read: moving goes past them
-        shown[STATE] = state_line(self.ways, self.replica_a_path, self.replica_b_path)
+        shown.update(state_lines(self.ways, self.replica_a_path, self.replica_b_path))
         shown[self.DASHBOARD] = "%s: files, last updates, hashes%s" % (
             self.DASHBOARD, " (%s)" % ("; ".join(text for text, _ in hash_status.status_parts(self.jobs)),) if self.jobs else "")
         if self.jobs:

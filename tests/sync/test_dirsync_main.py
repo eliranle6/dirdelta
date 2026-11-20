@@ -17,7 +17,7 @@ from dirdelta.sync import ways
 from dirdelta.trees import dirtree
 from dirdelta.trees import localdiskdirtree
 from dirdelta.ui import picker
-from sync_menu_support import MainMenuTest
+from sync_menu_support import STATE_ROWS, MainMenuTest
 
 
 class ScanErrorsWarningTest(unittest.TestCase):
@@ -91,7 +91,7 @@ class OptionsTest(MainMenuTest):
         with mock.patch('dirdelta.ui.picker.pick_option', return_value=dirsync_main.BACK) as pick_option:
             dirsync_main._sync(a, b, '/a', '/b')
         options, = pick_option.call_args.args
-        self.assertEqual(options[2:], [
+        self.assertEqual(options[STATE_ROWS:], [
             picker.Skipped(sync_menu.SYNC_SECTION), menu_options.SYNC_ALL, picker.BLANK,
             picker.Skipped(sync_menu.KINDS_SECTION), 'Files only in /a', 'Files only in /b', ways.DIFFER, picker.BLANK,
             picker.Skipped(sync_menu.UPDATE_SECTION), comparing.COMPARE, 'Rescan /a', picker.BLANK,
@@ -142,7 +142,7 @@ class OptionsTest(MainMenuTest):
             'Files only in LocalDisk:/b (1 file, and 2 that differ)',
             'Files that differ at the same paths in both (2 files)',
         ])
-        self.assertTrue(picker.unstyled(self.state_line.text).endswith("; 2 files at the same paths differ"))
+        self.assertEqual(self.state_points[2], "  \u2022 2 files at the same paths differ")
 
     def test_a_way_with_only_files_that_differ_can_still_be_picked(self):
         a = localdiskdirtree.LocalDiskDirTree('/a', silent=True)
@@ -156,11 +156,15 @@ class OptionsTest(MainMenuTest):
         b = localdiskdirtree.LocalDiskDirTree('/b', silent=True)
         self.shown(a, b)
         self.assertIsInstance(self.state_line, picker.Skipped)
-        self.assertEqual(picker.unstyled(self.state_line.text),
-                         "\u2260 Branched: a has 3 files that b lacks, and b has 1 file that a lacks")
+        self.assertEqual([picker.unstyled(self.state_line.text)] + self.state_points, [
+            "\u2260 Branched: each has files the other lacks",
+            "  \u2022 3 files only in a on LocalDisk",
+            "  \u2022 1 file only in b on LocalDisk",
+            "  \u2022 None at the same paths differ"])
         self.missing['/b'] = []
         self.shown(a, b)
-        self.assertIn("a is ahead: it has 3 files that b lacks", picker.unstyled(self.state_line.text))
+        self.assertEqual(picker.unstyled(self.state_line.text), "\u00bb a on LocalDisk is ahead of b on LocalDisk")
+        self.assertEqual(self.state_points[1], "  \u2022 None only in b on LocalDisk")
 
     def test_what_was_found_is_noted_for_the_start_menu(self):
         a = localdiskdirtree.LocalDiskDirTree('/a', silent=True)

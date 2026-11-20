@@ -10,29 +10,54 @@ from dirdelta.sync.ways import DIFFER, differ_word, files_text
 from dirdelta.ui import picker
 
 
-# The sync menu's first line: whether the two are in sync (see syncstate.py), as each way finds
-# their files
+# The sync menu's first lines: whether the two are in sync (see syncstate.py), as each way finds their
+# files; then a point each: the files only in the one, only in the other, and those at the same paths
+# that differ
 STATE = "Sync state"
+STATE_POINTS = ("Sync state: only in A", "Sync state: only in B", "Sync state: differing")
 
 
-def state_line(ways, path_a, path_b):
-    """The sync menu's line of whether the two are in sync, by what each way found (a
-    picker.Skipped), the replicas by their short names (the breadcrumbs')"""
-    names = replicanames.short_names([path_a, path_b])
-    path_a, path_b = names[path_a], names[path_b]
+def state_lines(ways, path_a, path_b):
+    """{STATE or one of STATE_POINTS: its line (a picker.Skipped)}, by what each way found, the replicas
+    by their short names and what each is on (replicanames.told_apart()); while they're found, the
+    points are blank"""
+    names = replicanames.told_apart([path_a, path_b])
+    name_a, name_b = names[path_a], names[path_b]
+    found = {point: picker.BLANK for point in STATE_POINTS}
     futures = [way.missing for way in ways]
     if not all(future.done() for future in futures):
-        return picker.Skipped(picker.styled([("%s Comparing them..." % (syncstate.MARKS[syncstate.UNKNOWN],), 'grey')]))
+        return dict(found, **{STATE: _grey("%s Comparing them..." % (syncstate.MARKS[syncstate.UNKNOWN],))})
     if any(future.exception() is not None for future in futures):
-        return picker.Skipped(picker.styled([("%s Couldn't compare them" % (syncstate.MARKS[syncstate.UNKNOWN],), 'grey')]))
+        return dict(found, **{STATE: _grey("%s Couldn't compare them" % (syncstate.MARKS[syncstate.UNKNOWN],))})
     only_a, only_b = [len(future.result().relpaths) for future in futures]
-    state = syncstate.State(syncstate.found(only_a, only_b), only_a, only_b, None, [])
-    mark, color = syncstate.mark(state)
+    kind = syncstate.found(only_a, only_b)
+    mark, color = syncstate.mark(syncstate.State(kind, only_a, only_b, None, []))
+    headline = {syncstate.IN_SYNC: "In sync: each has all the other's files",
+                syncstate.A_AHEAD: "%s is ahead of %s" % (name_a, name_b),
+                syncstate.B_AHEAD: "%s is ahead of %s" % (name_b, name_a),
+                syncstate.BRANCHED: "Branched: each has files the other lacks"}[kind]
+    found[STATE] = picker.Skipped(picker.styled([(mark + " " + headline, color)]))
+    for point, count, name in zip(STATE_POINTS, (only_a, only_b), (name_a, name_b)):
+        found[point] = _point([("%s only in %s" % (files_text(count) if count else "None", name), None)])
     differ = ways[0].differs
-    nr_differ = len(differ.result()) if differ.done() and differ.exception() is None else 0
-    return picker.Skipped(picker.styled([(mark + " ", color), (syncstate.describe(state, path_a, path_b), color),
-                                         ("; %s at the same paths %s" % (files_text(nr_differ), differ_word(nr_differ)) if nr_differ else "",
-                                          differing.STYLE)]))
+    if differ is None or not differ.done():
+        found[STATE_POINTS[2]] = _point([("Files at the same paths: comparing them...", 'grey')])
+    elif differ.exception() is not None:
+        found[STATE_POINTS[2]] = _point([("Files at the same paths: couldn't compare them", 'grey')])
+    else:
+        nr_differ = len(differ.result())
+        found[STATE_POINTS[2]] = _point([("%s at the same paths %s" % (files_text(nr_differ), differ_word(nr_differ))
+                                          if nr_differ else "None at the same paths differ", differing.STYLE if nr_differ else None)])
+    return found
+
+
+def _grey(text):
+    return picker.Skipped(picker.styled([(text, 'grey')]))
+
+
+def _point(parts):
+    """A line of the sync state's, as a bullet point under it"""
+    return picker.Skipped(picker.styled([("  \u2022 ", None)] + parts))
 
 
 # The sync menu's option of the combined tree (sync/combined/), the first

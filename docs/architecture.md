@@ -407,8 +407,11 @@ other lacks, and lacks none of the other's), branched (each has files the other
 lacks) or unknown, and the replicas changed since (by dirdelta, at the time of
 the change, `Changes.when()`, or a later log entry), which grey its mark. It has
 no screen code: `mark()`, `describe()` and `help_lines()` give marks and words
-for any front end. The sync menu's first line is the state as found now
-(`dirsync_main._state_line()`), and the dashboard lists the known pairs first,
+for any front end. The sync menu's first lines are the state as found now
+(`sync/options.py`'s `state_lines()`): who's ahead, then a bullet point each for the files only in
+one, only in the other, and those at the same paths that differ, the replicas named so two of one
+name are told apart (`replicanames.told_apart()`: "eliran on LocalDisk(07B)", "eliran on
+Cloud(me)"); the dashboard lists the known pairs first,
 under "Pairs: what's synced to what".
 
 ### `inbox/`, `claude/ai/` — sorting an inbox

@@ -125,3 +125,16 @@ def short_names(replica_paths):
         if named:
             names[path] = named if paths.is_cloud_path(path) else '%s:%s' % (named, names[path])
     return names
+
+
+def told_apart(replica_paths):
+    """{path: a name for it in a sentence that tells it from the others, wherever they are}: its short
+    name (short_names()'s) and what it's on, e.g. 'eliran on LocalDisk(07B)', 'eliran on
+    Cloud(me)'; a labeled one's as short_names() has it (its label says where)"""
+    names = short_names(replica_paths)
+    for path in names:
+        if label(path):
+            continue
+        name = '/'.join(paths.components(path)[1:]) or '/' if paths.is_cloud_path(path) else names[path]
+        names[path] = '%s on %s' % (name, disk_name(path))
+    return names

@@ -11,6 +11,9 @@ from dirdelta.sync import replica_ops
 from dirdelta.trees import localdiskdirtree
 from dirdelta.ui import picker
 
+# The menu's first rows: the sync state's (its line and points), and a blank line
+STATE_ROWS = 2 + len(menu_options.STATE_POINTS)
+
 
 class MainMenuTest(unittest.TestCase):
     def setUp(self):
@@ -49,10 +52,11 @@ class MainMenuTest(unittest.TestCase):
         def pick_option(options, shown_as, **_):
             while any('loading' in shown for shown in shown_as().values()):
                 time.sleep(0.01)
-            self.shown_options = [shown_as().get(option, option) for option in options[2:]
+            self.shown_options = [shown_as().get(option, option) for option in options[STATE_ROWS:]
                                   if not isinstance(option, picker.Skipped)]
             self.sections = options
             self.state_line = shown_as()[menu_options.STATE]
+            self.state_points = [picker.unstyled(shown_as()[point].text) for point in menu_options.STATE_POINTS]
             return dirsync_main.BACK
         with mock.patch('dirdelta.ui.picker.pick_option', side_effect=pick_option):
             dirsync_main._sync(replica_a, replica_b, '/a', '/b')
@@ -62,10 +66,10 @@ class MainMenuTest(unittest.TestCase):
         with mock.patch('dirdelta.ui.picker.pick_option', return_value=dirsync_main.BACK) as pick_option:
             dirsync_main._sync(replica_a, replica_b, '/a', '/b')
         options, = pick_option.call_args.args
-        self.assertEqual(options[:2], [picker.Option(menu_options.STATE, menu_options.STATE, picker.Skipped(menu_options.STATE)),
-                                       picker.BLANK])
+        self.assertEqual(options[:STATE_ROWS], [picker.Option(line, line, picker.Skipped(line))
+                                                for line in (menu_options.STATE,) + menu_options.STATE_POINTS] + [picker.BLANK])
         # The options, without the sections' headings and the blank lines between them
-        return [option for option in options[2:] if not isinstance(option, picker.Skipped)]
+        return [option for option in options[STATE_ROWS:] if not isinstance(option, picker.Skipped)]
 
     def browse(self, answers, has_changed=False):
         """The main menu answering answers in turn, each way's browse() changing the replicas'

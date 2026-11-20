@@ -58,6 +58,12 @@ class NamesTest(unittest.TestCase):
         self.assertEqual(replicanames.short_names(['cloud/a'])['cloud/a'], 'photos')
         self.assertEqual(replicanames.full('cloud/b'), 'Cloud(me):/b')
 
+    def test_two_of_one_name_are_told_apart_by_where_they_are(self):
+        self.assertEqual(replicanames.told_apart(['/mnt/disk/eliran', 'cloud/eliran']),
+                         {'/mnt/disk/eliran': 'eliran on LocalDisk(234)', 'cloud/eliran': 'eliran on Cloud(me)'})
+        self.label('cloud/eliran', 'photos')
+        self.assertEqual(replicanames.told_apart(['cloud/eliran'])['cloud/eliran'], 'photos')
+
     def test_a_label_changed_in_the_file_is_seen(self):
         self.label('/mnt/disk/a', 'one')
         self.assertEqual(replicanames.label('/mnt/disk/a'), 'one')
