@@ -90,13 +90,15 @@ function nameButton(replica) {
       draw();
       return row;
     };
-    const icons = pickRow('icon', Object.entries(LOOK_ICONS));
+    // (A Drive one is in the cloud: its icon's that, not to choose)
+    const icons = replica.kind === 'drive' ? el('div', {class: 'lookrow fixed'}, icon('drive'), ' Cloud (Google Drive)') :
+      pickRow('icon', Object.entries(LOOK_ICONS).filter(([name]) => name !== 'drive'));
     const colors = pickRow('color', Object.keys(LOOK_COLORS).map(name => [name, name]));
     let namer;
     const done = () => { namer.remove(); load(); };
     const save = async () => {
       const answer = await api('POST', '/api/replicas/name', {path: replica.path, name: input.value,
-        color: look.color || '', icon: look.icon || ''});
+        color: look.color || '', icon: replica.kind === 'drive' ? '' : look.icon || ''});
       if (answer.ok) done(); else note.textContent = answer.error;
     };
     input.addEventListener('keydown', event => { if (event.key === 'Enter') save(); if (event.key === 'Escape') done(); });

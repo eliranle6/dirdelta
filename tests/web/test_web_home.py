@@ -85,10 +85,10 @@ class HomeTest(WebTest):
             self.call('POST', '/api/replicas/name', {'path': 'cloud/photos', 'name': ''})
             self.assertNotIn('desktop', replicas.load().labels.values())
             self.assertFalse(self.call('POST', '/api/replicas/name', {'path': '/etc', 'name': 'x'})['ok'])
-            # Its look, given with it, is on the dashboard
+            # Its look, given with it, is on the dashboard: a Drive one's icon is always the cloud's, none kept
             self.call('POST', '/api/replicas/name', {'path': 'cloud/photos', 'name': 'desktop', 'color': 'teal', 'icon': 'nas'})
             found = next(replica for replica in self.call('GET', '/api/home')['replicas'] if replica['path'] == 'cloud/photos')
-            self.assertEqual(found['look'], {'color': 'teal', 'icon': 'nas'})
+            self.assertEqual(found['look'], {'color': 'teal'})
         self.assertEqual(3, save.call_count)
 
     def test_a_main_replica_pairs_each_other_with_it_and_a_pair_can_be_added(self):

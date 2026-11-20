@@ -177,7 +177,8 @@ def routes(session):
         known_replicas.set_label(key, name or None)
         # (Its look too, if the page says it: its color and icon, '' the default)
         if 'color' in body or 'icon' in body:
-            known_replicas.set_look(key, body.get('color') or None, body.get('icon') or None)
+            # (A Drive one's icon is the cloud's, always: not one chosen)
+            known_replicas.set_look(key, body.get('color') or None, None if paths.is_cloud_path(path) else body.get('icon') or None)
         replicas.save(known_replicas)
         return {'ok': True, 'name': naming.own_name(path)}
 

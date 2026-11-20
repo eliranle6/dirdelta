@@ -75,3 +75,4 @@ button.item { border: 0; border-radius: 0; background: none; }
   background: var(--accent); color: var(--accent-fg); }
 .pairadd { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 14px; }
 .pairadd select { max-width: 100%; font: inherit; padding: 5px 7px; border-radius: 8px; border: 1px solid var(--line); background: var(--card); color: var(--fg); }
+.lookrow.fixed { align-items: center; color: var(--muted); font-size: 14px; }
