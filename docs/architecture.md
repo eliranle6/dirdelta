@@ -1227,7 +1227,8 @@ every link carries, then a cookie), and a watcher.
   Running page (`web/static/app.js`) polls `/api/state` (a long poll: each change is numbered) and draws
   (its trees, the picker's and the side's, with branch lines as treepicker's: │ ├ └, `visibleRows()`'s guides; each opened
   at first as treepicker's, a level at a time while the next one fits the tree's height, `openToFit()`, and down to the selection;
-  the side tree's folders opened and closed by their ▸ ▾ too)
+  the side tree's folders opened and closed by their ▸ ▾ too, its files listed, and opened to what it follows: what the flow
+  thinks the selection on the left matches there, e.g. a file that differs' other version)
   (each screen at an address of its own, `/run#screen=N`, a picker a step of the browser's history, whose Back (a phone's back
   gesture) is the screen's own, q, and so is the page's Back button, `goBack()`: the flow then shows what came before, e.g. the
   file picker again from its action menu, which is shown as a panel over the tree it's about, dimmed under it (a menu right after

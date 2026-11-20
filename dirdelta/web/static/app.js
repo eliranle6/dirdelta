@@ -74,7 +74,7 @@ function newScreen(screen) {
   view.shownOne = true;
   Object.assign(view, {screen, items: [], info: new Map(), children: new Map(), fileCounts: new Map(),
     picked: new Set(), search: '', tab: 0, showHelp: false, previewVersion: -1, lazy: new Map(),
-    expanded: new Set(['.']), sideExpanded: null, scrollTo: 0, isKept: false});
+    expanded: new Set(['.']), sideExpanded: null, sideFollowed: undefined, scrollTo: 0, isKept: false});
   // Each screen its own address: a new picker a step of the browser's history (its Back is the screen's
   // Back, see goBack()); one shown on going back, or on a refresh, or a messages screen in its place
   const address = '#screen=' + screen.id;
@@ -458,20 +458,27 @@ function renderSide() {
   const side = view.screen.side;
   if (!box) return;
   if (!side) { box.replaceChildren(); return; }
-  const dirs = side.items.filter(item => item.t === 'd').map(item => item.p);
-  const known = new Set(dirs), under = new Map();
-  for (const path of dirs) {
+  // (Its folders and files, each under its folder)
+  const known = new Set(side.items.filter(item => item.t === 'd').map(item => item.p)), under = new Map();
+  for (const {p: path} of side.items) {
     const cut = path.lastIndexOf('/'), parent = cut > 0 && known.has(path.slice(0, cut)) ? path.slice(0, cut) : '';
     if (!under.has(parent)) under.set(parent, []);
     under.get(parent).push(path);
   }
   const kids = path => under.get(path) || [];
+  const openTo = path => { while (path.includes('/')) { path = path.slice(0, path.lastIndexOf('/')); if (known.has(path)) view.sideExpanded.add(path); } };
   if (!view.sideExpanded) {
     view.sideExpanded = new Set();
-    for (let path = view.sideSelected || ''; path.includes('/');) { path = path.slice(0, path.lastIndexOf('/')); if (known.has(path)) view.sideExpanded.add(path); }
+    openTo(view.sideSelected || '');
     // (Its box drawn first, empty, to know where it starts)
     box.replaceChildren(el('div', {class: 'side'}, el('h3', {}, side.root), el('div', {class: 'tree'})));
-    openToFit(kids, () => true, view.sideExpanded, rowsThatFit(box), ['']);
+    openToFit(kids, path => known.has(path), view.sideExpanded, rowsThatFit(box), ['']);
+  }
+  // It follows the selection on the left (to what the flow thinks it matches there, e.g. the other version of a
+  // file that differs): its folders opened to it
+  if (view.sideSelected !== view.sideFollowed) {
+    view.sideFollowed = view.sideSelected;
+    openTo(view.sideSelected || '');
   }
   const ordered = [];
   const walk = (parent, above) => kids(parent).forEach((path, index, all) => {
@@ -494,7 +501,7 @@ function renderSide() {
     ...guides.map(kind => el('span', {class: 'guide ' + kind})),
     el('span', {class: 'twisty' + (kids(path).length ? '' : ' leaf'), onclick: event => { event.stopPropagation(); if (kids(path).length) toggle(path); }},
       kids(path).length ? (view.sideExpanded.has(path) ? '▾' : '▸') : ''),
-    el('span', {class: 'name dir'}, baseName(path))));
+    el('span', {class: 'name' + (known.has(path) ? ' dir' : '')}, baseName(path))));
   box.replaceChildren(el('div', {class: 'side'}, el('h3', {}, side.root), el('div', {class: 'tree'}, rows)));
 }
 
