@@ -119,7 +119,25 @@ class ReplicasFileTest(unittest.TestCase):
                                             'known': {}, 'compared': [], 'labels': {},
                                             'followers': {'cloud/me': ['/mnt/win']},
                                             'replicas': ['/disk/me'], 'inboxes': ['cloud/phone'],
-                                            'looks': {'disk-key': {'color': 'teal', 'icon': 'usb'}}})
+                                            'looks': {'disk-key': {'color': 'teal', 'icon': 'usb'}},
+                                            'main': None, 'pairs': []})
+
+    def test_with_a_main_replica_each_other_is_paired_with_it_and_the_pairs_added_too(self):
+        known = replicas.Replicas()
+        for path in ('/laptop', 'cloud/me', '/usb'):
+            known.add_replica(path)
+        self.assertEqual(len(known.pairs()), 3)
+        known.set_main('/laptop/')
+        known.add_pair('cloud/me', '/usb')
+        known.add_pair('/usb', 'cloud/me')
+        self.assertEqual(known.pairs(), [('/laptop', 'cloud/me'), ('/laptop', '/usb'), ('cloud/me', '/usb')])
+        self.assertTrue(known.is_extra_pair('/usb', 'cloud/me'))
+        replicas.save(known)
+        loaded = replicas.load()
+        self.assertEqual((loaded.main_replica, loaded.extra_pairs), ('/laptop', [('cloud/me', '/usb')]))
+        loaded.remove_pair('/usb', 'cloud/me')
+        loaded.set_main(None)
+        self.assertEqual(len(loaded.pairs()), 3)
 
     def test_a_pairs_comparison_loads_back_either_way_around(self):
         known = replicas.Replicas()

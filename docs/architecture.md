@@ -1323,6 +1323,9 @@ The sync menu no longer has one.
 Each replica has a look too, given with its name in the web version: what it's on, as an icon (laptop, desktop, external
 disk, USB stick, NAS, phone, cloud; else as found), and a color, shown on its card and wherever its name is said
 (`Replicas.looks`, by the same key as its label; `replicaLabel()`).
+A main replica (`Replicas.main_replica`, Make it the main one on its card): the pairs to sync are it with each other one
+(`pairs()`), then the ones the user added (`extra_pairs`, + Another pair on Sync status, each removable); without one,
+every two replicas are a pair.
 
 ## The file pickers' `:` menu: `contextmenu.py`
 

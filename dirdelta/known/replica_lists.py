@@ -21,9 +21,35 @@ class ReplicaLists(object):
         return list(dict.fromkeys(self.added_inboxes + [inbox for inbox, _ in self.sorts]))
 
     def pairs(self):
-        """Every two of the user's replicas, (a, b) the way a sync last had them if one did"""
+        """The pairs of the user's replicas to sync: with a main replica, it with each of the others (it first),
+        then the pairs the user added; else every two of them, (a, b) the way a sync last had them if one did"""
+        replicas = self.replica_paths()
+        if self.main_replica in replicas:
+            found = [(self.main_replica, other) for other in replicas if other != self.main_replica]
+            for pair in self.extra_pairs:
+                if all(path in replicas for path in pair) and frozenset(pair) not in {frozenset(one) for one in found}:
+                    found.append(tuple(pair))
+            return found
         used = {frozenset(pair): pair for pair in self.favorites + self.history}
-        return [used.get(frozenset(pair), pair) for pair in itertools.combinations(self.replica_paths(), 2)]
+        return [used.get(frozenset(pair), pair) for pair in itertools.combinations(replicas, 2)]
+
+    def set_main(self, path):
+        """Make the replica at path the main one (None: none, every two a pair)"""
+        self.main_replica = paths.normalized(path) if path else None
+
+    def add_pair(self, path_a, path_b):
+        """Add a pair to sync besides the main replica's (two of the user's replicas, neither the main one's pair)"""
+        pair = (paths.normalized(path_a), paths.normalized(path_b))
+        if pair[0] != pair[1] and frozenset(pair) not in {frozenset(one) for one in self.extra_pairs}:
+            self.extra_pairs.append(pair)
+
+    def remove_pair(self, path_a, path_b):
+        gone = frozenset((paths.normalized(path_a), paths.normalized(path_b)))
+        self.extra_pairs = [pair for pair in self.extra_pairs if frozenset(pair) != gone]
+
+    def is_extra_pair(self, path_a, path_b):
+        """Whether the pair is one the user added (not one of the main replica's)"""
+        return frozenset((paths.normalized(path_a), paths.normalized(path_b))) in {frozenset(one) for one in self.extra_pairs}
 
     def add_replica(self, path):
         path = paths.normalized(path)

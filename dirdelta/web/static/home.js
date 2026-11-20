@@ -119,13 +119,18 @@ function replicaCard(replica) {
     actions.push(el('button', {class: 'small', onclick: act(!!(job && job.started))},
       job && job.started ? 'Pause' : job && job.state ? 'Resume hashing' : 'Hash its files'));
   }
+  // (The main replica: every other is synced with it)
+  actions.push(el('button', {class: 'small', onclick: async () => {
+    await api('POST', '/api/replicas/main', {path: replica.isMain ? '' : replica.path}); load();
+  }}, replica.isMain ? 'Not the main one' : 'Make it the main one'));
   actions.push(nameButton(replica));
   actions.push(forgetButton(replica.path, 'replica'));
   const entry = replica.lastEntry ? (replica.lastEntry.date ? replica.lastEntry.date + ': ' : '') + replica.lastEntry.text : '';
   // (In the look the user gave it: its icon, and its color on the icon, the name and the card's edge)
   const color = lookColor(replica.look);
   return el('div', {class: 'card replica' + (replica.there ? '' : ' away'), style: color ? '--rcolor:' + color : ''},
-    el('div', {class: 'head', style: color ? 'color:' + color : ''}, icon((replica.look || {}).icon || replica.device), el('b', {}, replica.fullName)),
+    el('div', {class: 'head', style: color ? 'color:' + color : ''}, icon((replica.look || {}).icon || replica.device), el('b', {}, replica.fullName),
+      replica.isMain ? el('span', {class: 'mainbadge', title: 'Every other replica is synced with it'}, 'Main') : ''),
     el('div', {class: 'note'}, replica.kind === 'drive' ? 'In Google Drive' : 'On ' + replica.place),
     // (How many files, and their size: a local one's once its hashing listed them, a Drive one's as its list has them)
     replica.files ? el('div', {class: 'filecount'}, el('b', {}, replica.files.count.toLocaleString() + ' file' + (replica.files.count === 1 ? '' : 's')),
@@ -184,6 +189,8 @@ function pairRow(pair, running, user) {
   const fresh = [];
   if (pair.state.when) fresh.push(chip(compared.tone, 'Compared ' + compared.text));
   if (pair.changedSince.length) fresh.push(chip('bad', pair.changedSince.join(' and ') + ' changed since: may be out of date'));
+  // (A pair the user added besides the main replica's: it can be taken away)
+  if (pair.extra) fresh.push(el('button', {class: 'tiny', onclick: async () => { await api('POST', '/api/pairs/remove', {a: pair.a, b: pair.b}); load(); }}, '✕ Remove this pair'));
   // (While a run goes on, one at a time: this pair's sync is gone back to; any other run is offered to open)
   const button = syncing ? el('a', {class: 'button small primary', href: '/run'}, 'Go back to ongoing sync') :
     running ? el('a', {class: 'button small', href: '/run', title: 'One runs at a time: finish or leave it to sync these'},
@@ -367,6 +374,27 @@ function runningBanner(data) {
     el('span', {class: 'button primary'}, kind === 'run' ? 'Go back to it' : 'Go back to ongoing ' + kind));
 }
 
+// With a main replica, the pairs are it with each other one (and the ones added): said above them
+function mainNote(data) {
+  const main = data.replicas.find(replica => replica.isMain);
+  return main ? el('p', {class: 'note'}, 'Every replica is synced with the main one, ', replicaLabel(main.path, main.fullName),
+    '. Add another pair below, if you like.') : '';
+}
+
+// Adding a pair to sync besides the main replica's: two of the replicas, chosen
+function pairAdder(data) {
+  if (!data.main || data.replicas.length < 3) return '';
+  const pick = () => el('select', {}, data.replicas.map(replica => el('option', {value: replica.path}, replica.fullName)));
+  const a = pick(), b = pick();
+  b.selectedIndex = Math.min(1, data.replicas.length - 1);
+  const note = el('span', {class: 'note'});
+  return el('div', {class: 'pairadd'}, el('b', {}, '+ Another pair'), a, '⇄', b,
+    el('button', {class: 'small', onclick: async () => {
+      const answer = await api('POST', '/api/pairs/add', {a: a.value, b: b.value});
+      if (answer.ok) load(); else note.textContent = answer.error;
+    }}, 'Add'), note);
+}
+
 // The user's replicas: each one's status, adding one; and every two of them, a pair, its sync status and Sync
 function replicasPage(data) {
   const local = data.replicas.filter(replica => replica.kind === 'local');
@@ -387,7 +415,7 @@ function replicasPage(data) {
   return [...kindParts([
       {jump: kindJump('pairs', 'sync', 'Sync status', !data.pairs.length ? 'No pair yet' : apart ? apart + ' out of ' + data.pairs.length + ' out of step' : unknown ? unknown + ' out of ' + data.pairs.length + ' not synced yet' : 'All in step',
         !data.pairs.length || data.pairs.some(pair => pair.state.kind === 'branched') ? 'bad' : apart || unknown ? 'warn' : 'ok'),
-       block: kindBlock('pairs', 'sync', 'Sync status', '', pairs, other)},
+       block: kindBlock('pairs', 'sync', 'Sync status', '', mainNote(data), pairs, pairAdder(data), other)},
       {jump: kindJump('replicas', 'replicas', 'Replicas', there + ' out of ' + data.replicas.length + ' available',
         !data.replicas.length || !there ? 'bad' : there < data.replicas.length ? 'warn' : 'ok'),
        block: kindBlock('replicas', 'replicas', 'Replicas', '', ...cards, folderAdder('replica'))}],

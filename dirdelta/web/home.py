@@ -42,7 +42,8 @@ def replica_info(path, known_replicas):
     found = {'path': path, 'name': naming.own_name(path), 'place': naming.place(path), 'fullName': naming.name(path),
              'kind': 'drive' if is_cloud else 'local', 'disk': replicanames.disk_name(path),
              'device': 'drive' if is_cloud else _device(path), 'named': replicanames.label(path),
-             'look': known_replicas.looks.get(replicanames.label_key(path)) or {}}
+             'look': known_replicas.looks.get(replicanames.label_key(path)) or {},
+             'isMain': path == known_replicas.main_replica}
     if is_cloud:
         found['there'], found['why'] = True, ''
         found['reading'] = next((one for one in freshening.reading() if one['path'] == path), None)
@@ -101,6 +102,7 @@ def pair_info(path_a, path_b, names, known_replicas):
     state = syncstate.of(known_replicas, path_a, path_b)
     mark, color = syncstate.mark(state)
     return {'a': path_a, 'b': path_b, 'nameA': name_a, 'nameB': name_b,
+            'extra': known_replicas.is_extra_pair(path_a, path_b),
             'favorite': (path_a, path_b) in known_replicas.favorites, 'compared': known_replicas.comparison(path_a, path_b),
             'state': {'kind': state.kind, 'mark': mark, 'color': color, 'when': state.when,
                       'text': syncstate.describe(state._replace(changed=[names.get(path, path) for path in state.changed]),
@@ -140,6 +142,7 @@ def routes(session):
                 'phones': [dict(sources.describe(path), name=name, path=path) for name, path in sources.phones()],
                 'replicas': [replica_info(path, known_replicas) for path in all_paths],
                 'pairs': [pair_info(a, b, names, known_replicas) for a, b in known_replicas.pairs()],
+                'main': known_replicas.main_replica,
                 'inboxes': importing.inboxes()}
 
     def hash_replica(query, body):
@@ -178,6 +181,32 @@ def routes(session):
         replicas.save(known_replicas)
         return {'ok': True, 'name': naming.own_name(path)}
 
+    def set_main(query, body):
+        """Make the replica at body['path'] the main one, every other synced with it ('' or none: no main one,
+        every two a pair)"""
+        path = body.get('path') or ''
+        known_replicas = replicas.load()
+        if path and path not in known_replicas.replica_paths():
+            return {'ok': False, 'error': "That's not one of your replicas."}
+        known_replicas.set_main(path or None)
+        replicas.save(known_replicas)
+        return {'ok': True}
+
+    def change_pair(add):
+        def change(query, body):
+            """Add (or remove) a pair to sync besides the main replica's: body['a'], body['b'], two of the replicas"""
+            known_replicas = replicas.load()
+            a, b = body.get('a', ''), body.get('b', '')
+            if a == b or not {a, b} <= set(known_replicas.replica_paths()):
+                return {'ok': False, 'error': "Choose two of your replicas."}
+            if add:
+                known_replicas.add_pair(a, b)
+            else:
+                known_replicas.remove_pair(a, b)
+            replicas.save(known_replicas)
+            return {'ok': True}
+        return change
+
     def set_mode(query, body):
         """Live (body['live']) or a dry run, from the top bar's label: not while a run's screens are open,
         which were opened in the mode before (their labels would say otherwise)"""
@@ -208,4 +237,6 @@ def routes(session):
 
     return {('GET', '/api/home'): home, ('POST', '/api/home/hash'): hash_replica,
             ('GET', '/api/running'): running, ('GET', '/api/users'): user_list, ('POST', '/api/users/add'): add_user,
-            ('POST', '/api/users/email'): set_email, ('POST', '/api/mode'): set_mode, ('POST', '/api/replicas/name'): name_replica}
+            ('POST', '/api/users/email'): set_email, ('POST', '/api/mode'): set_mode, ('POST', '/api/replicas/name'): name_replica,
+            ('POST', '/api/replicas/main'): set_main, ('POST', '/api/pairs/add'): change_pair(True),
+            ('POST', '/api/pairs/remove'): change_pair(False)}

@@ -91,6 +91,19 @@ class HomeTest(WebTest):
             self.assertEqual(found['look'], {'color': 'teal', 'icon': 'nas'})
         self.assertEqual(3, save.call_count)
 
+    def test_a_main_replica_pairs_each_other_with_it_and_a_pair_can_be_added(self):
+        with mock.patch('dirdelta.known.replicas.save'):
+            self.assertTrue(self.call('POST', '/api/replicas/main', {'path': 'cloud/photos'})['ok'])
+            found = self.call('GET', '/api/home')
+            self.assertEqual({(pair['a'], pair['b']) for pair in found['pairs']},
+                             {('cloud/photos', self.local), ('cloud/photos', self.gone)})
+            self.assertEqual([replica['path'] for replica in found['replicas'] if replica['isMain']], ['cloud/photos'])
+            self.assertTrue(self.call('POST', '/api/pairs/add', {'a': self.local, 'b': self.gone})['ok'])
+            extra = [pair for pair in self.call('GET', '/api/home')['pairs'] if pair['extra']]
+            self.assertEqual([(pair['a'], pair['b']) for pair in extra], [(self.local, self.gone)])
+            self.assertFalse(self.call('POST', '/api/pairs/add', {'a': self.local, 'b': self.local})['ok'])
+            self.assertFalse(self.call('POST', '/api/replicas/main', {'path': '/etc'})['ok'])
+
     def test_only_a_known_local_replica_is_hashed_from_the_dashboard(self):
         with mock.patch('dirdelta.screens.hashes_screen.dashboard_actions.start_hashing') as start_hashing:
             self.assertFalse(self.call('POST', '/api/home/hash', {'path': '/etc'})['ok'])
