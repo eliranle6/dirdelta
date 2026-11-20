@@ -16,7 +16,7 @@ def routes(session, start_flow):
             # (A page's first ask is answered at once: nothing may change for a while)
             session.wait(since, POLL_WAIT)
         screen = session.screen()
-        found = {'version': session.version, 'running': session.is_running,
+        found = {'version': session.version, 'running': session.is_running, 'tab': session.tab,
                  'log': [list(line) for line in session.log], 'screen': None}
         if screen is not None:
             is_new = str(screen.id) != query.get('screen')

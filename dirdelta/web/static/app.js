@@ -39,6 +39,8 @@ async function poll() {
 }
 
 function apply(data) {
+  // (The run's tab, for the breadcrumbs' first part, known before the tab bar's own check)
+  if (data.tab) runningTab = data.tab;
   view.version = data.version;
   view.running = data.running;
   view.log = data.log;
@@ -403,7 +405,7 @@ function renderMessages(screen, isNew) {
 // Nothing shown: a flow ended (what it printed last), or none ran
 
 function renderHome() {
-  setTop((runningTab === 'inboxes' ? 'Inboxes' : 'Replicas') + ' > Running', []);
+  setTop('Running', []);
   const log = view.log.map(([text, color]) => el('div', {class: color ? 'c-' + color : ''}, segmentsSpan(text)));
   document.getElementById('main').replaceChildren(el('div', {class: 'card'},
     el('h2', {}, view.running ? 'Starting' : 'Nothing is running'),
@@ -417,8 +419,13 @@ function renderHome() {
 
 function waitingDots() { return el('span', {class: 'dots', style: 'animation-delay:-' + (Date.now() % 1600) + 'ms'}); }
 
+// The breadcrumbs (under the tabs: a run is a page of its tab's): the tab first (a sync's Replicas, a sort's
+// Inboxes), then where the run is, without dirdelta's own name (the top bar has it)
 function setTop(title, labels) {
-  document.getElementById('crumbs').replaceChildren(segmentsSpan(title || ''));
+  const rest = (title || '').replace(/^dirdelta(?: > |$)/, '');
+  const tab = runningTab === 'inboxes' ? ['/inboxes', 'Inboxes'] : ['/replicas', 'Replicas'];
+  document.getElementById('crumbs').replaceChildren(el('a', {href: tab[0]}, tab[1]),
+    rest ? el('span', {id: 'where'}, ' > ', segmentsSpan(rest)) : el('span', {id: 'where'}));
   document.getElementById('labels').replaceChildren(...(labels || []).map(labelChip));
   document.title = (title || 'dirdelta').split(' > ').pop();
 }

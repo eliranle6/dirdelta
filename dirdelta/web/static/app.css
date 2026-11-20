@@ -289,3 +289,10 @@ header#top, main, footer#bottom { width: 100%; max-width: var(--page-width); mar
 header#top { border-image: linear-gradient(to top, var(--line) 1px, var(--bg) 1px) fill 0 / 0 / 0 100vmax; }
 footer#bottom { border-image: linear-gradient(to bottom, var(--line) 1px, var(--bg) 1px) fill 0 / 0 / 0 100vmax; }
 #userbar { border-image: linear-gradient(to top, var(--line) 1px, var(--card) 1px) fill 0 / 0 / 0 100vmax; }
+/* The breadcrumbs under the tabs, a row of their own: the page shown is one of its tab's (the tab, then
+   the part or the run's screen); a tab's page alone (Home) has none */
+header#top > #crumbs { order: 10; flex: 1 0 100%; margin: 9px -16px -8px; padding: 6px 16px; font-size: 14px;
+  background: color-mix(in srgb, var(--accent) 7%, var(--bg)); border-top: 1px solid var(--line); color: var(--muted); }
+header#top > #crumbs > a { color: var(--accent); }
+header#top > #crumbs #where { color: var(--fg); }
+header#top > #crumbs:has(> #where:empty) { display: none; }
