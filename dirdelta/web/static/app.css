@@ -340,3 +340,13 @@ footer#bottom { max-height: 50vh; overflow-y: auto; overscroll-behavior: contain
 .option.withicon > .icon { flex: none; margin-top: 1px; color: var(--muted); }
 .option.withicon.c-red > .icon, .option.withicon:has(.c-red) > .icon { color: var(--red); }
 .option.disabled > .icon { opacity: .5; }
+/* On a wide screen: the two trees side by side, as wide as each other; the selection's details (its preview, a
+   diff, the AI's suggestion) in the bottom bar, right of its buttons, scrolling in themselves */
+@media (min-width: 900px) {
+  .split { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  footer#bottom.withpreview { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr); grid-template-rows: auto 1fr;
+    column-gap: 14px; align-items: start; max-height: 45vh; overflow: hidden; }
+  footer#bottom.withpreview > #status { grid-column: 1; grid-row: 1; }
+  footer#bottom.withpreview > #actions { grid-column: 1; grid-row: 2; overflow-y: auto; max-height: calc(45vh - 50px); }
+  footer#bottom.withpreview > #preview { grid-column: 2; grid-row: 1 / span 2; overflow-y: auto; max-height: calc(45vh - 18px); }
+}

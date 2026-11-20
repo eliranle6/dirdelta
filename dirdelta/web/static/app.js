@@ -210,9 +210,13 @@ function renderPickerFrame() {
     parts.push(el('input', {type: 'search', id: 'search', placeholder: 'Search', autocomplete: 'off',
       value: view.search, oninput: event => { view.search = event.target.value; renderTree(); }}));
   }
+  // On a wide screen the trees side by side, and what's shown of the selection (its details, a diff, the AI's
+  // suggestion) in the bottom bar, right of the buttons (placePreview()); on a phone, under the tree
+  const inBar = isWide() && screen.mode !== 'list';
   const body = el('div', {class: 'split'}, el('div', {id: 'tree'}),
-    el('div', {}, el('div', {id: 'preview'}), el('div', {id: 'side'})));
+    el('div', {}, inBar ? '' : el('div', {id: 'preview'}), el('div', {id: 'side'})));
   parts.push(body, el('div', {class: 'footer', id: 'footer'}), el('div', {class: 'help', id: 'help'}));
+  placePreview(inBar);
   // A menu right after a tree (what to do with its picks, then its confirmations): a panel over that tree,
   // dimmed under it, rather than a page of its own; the flow is the same (the panel is this menu's screen)
   const shown = main.dataset.shows;
@@ -223,6 +227,26 @@ function renderPickerFrame() {
   main.dataset.shows = screen.mode;
   main.replaceChildren(...parts);
 }
+
+// Whether the screen's wide enough for the trees side by side and the selection's details in the bottom bar
+const WIDE = window.matchMedia('(min-width: 900px)');
+function isWide() { return WIDE.matches; }
+
+// The bottom bar with the selection's details on the right of its buttons (wide), or without them
+function placePreview(inBar) {
+  const bottom = document.getElementById('bottom');
+  const there = bottom.querySelector(':scope > #preview');
+  bottom.classList.toggle('withpreview', inBar);
+  if (inBar && !there) bottom.append(el('div', {id: 'preview'}));
+  if (!inBar && there) there.remove();
+}
+
+// (Turning a phone sideways, or a window's width: the picker drawn again for it)
+WIDE.addEventListener('change', () => {
+  if (view.screen && view.screen.kind === 'picker' && document.getElementById('main').dataset.shows !== 'panel') {
+    renderPickerFrame(); renderPickerParts(); view.previewVersion = -1; loadPreview();
+  }
+});
 
 function showPanel(main, parts) {
   let sheet = main.querySelector('.panelwrap .sheet');
@@ -613,6 +637,7 @@ function short(text) {
 function renderMessages(screen, isNew) {
   setTop(screen.title, screen.labels);
   const main = document.getElementById('main');
+  if (isNew) placePreview(false);
   if (isNew) { main.dataset.shows = 'messages'; main.replaceChildren(el('div', {class: 'lines', id: 'lines'}), el('div', {id: 'ask'})); }
   const lines = document.getElementById('lines');
   lines.replaceChildren(...screen.lines.map(([text, color]) => el('div', {class: color ? 'c-' + color : ''}, segmentsSpan(text))));
@@ -639,6 +664,7 @@ function renderMessages(screen, isNew) {
 function renderHome() {
   setTop('Running', []);
   const log = view.log.map(([text, color]) => el('div', {class: color ? 'c-' + color : ''}, segmentsSpan(text)));
+  placePreview(false);
   document.getElementById('main').dataset.shows = 'home';
   document.getElementById('main').replaceChildren(el('div', {class: 'card'},
     el('h2', {}, view.running ? 'Starting' : 'Nothing is running'),
