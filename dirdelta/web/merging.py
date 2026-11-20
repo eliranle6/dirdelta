@@ -33,7 +33,7 @@ class MergeScreen(object):
         """What the page does: save (body['text']: the merged text), cancel, or ask the AI (suggest)"""
         action = body.get('action')
         if action == 'save' and isinstance(body.get('text'), str):
-            self._finish(body['text'].split('\n'))
+            self._finish(_lines(body['text']))
         elif action == 'cancel':
             self._finish(None)
         elif action == 'suggest' and self._suggest is not None and (self.ai is None or self.ai['status'] != 'asking'):
@@ -68,3 +68,9 @@ class MergeScreen(object):
 
     def state(self, since):
         return {'ai': self.ai, 'done': self._done.is_set()}
+
+
+def _lines(text):
+    """The text's lines, a line end at its end not making an empty last one (the file gets its own)"""
+    lines = text.split('\n')
+    return lines[:-1] if len(lines) > 1 and lines[-1] == '' else lines

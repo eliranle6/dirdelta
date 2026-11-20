@@ -412,3 +412,4 @@ button.tiny { font-size: 12px; padding: 2px 8px; border-radius: 10px; color: var
 .difftoggle .mergebutton { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; padding: 2px 9px; border-radius: 12px;
   border-color: var(--accent); color: var(--accent); }
 .difftoggle .mergebutton .icon svg { width: 14px; height: 14px; }
+.mergesame.blank { font-size: 12px; font-style: italic; }

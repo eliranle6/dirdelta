@@ -7,6 +7,7 @@ import tempfile
 
 from dirdelta.claude import ai
 from dirdelta.claude.ai import merging as ai_merging
+from dirdelta.known import replicanames
 from dirdelta.sync import replica_ops
 from dirdelta.sync.combined import diffing
 from dirdelta.trees import entries
@@ -34,7 +35,9 @@ class Merging(object):
         """Merge the file's two versions and write the merge to both. Returns [relpath] once it's written (in a
         dry run, would have been), or None"""
         title = "Merge %s" % (relpath,)
-        src_name, dst_name = self._src.displayname(), self._dst.displayname()
+        # (Named as the diff names them: 'eliran on LocalDisk(07B)')
+        names = replicanames.told_apart([self._path_of(self._src), self._path_of(self._dst)])
+        src_name, dst_name = names[self._path_of(self._src)], names[self._path_of(self._dst)]
         versions = []
         for replica, name in ((self._src, src_name), (self._dst, dst_name)):
             messages.print_line("Getting %s's version..." % (name,))

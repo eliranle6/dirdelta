@@ -29,4 +29,8 @@ def suggest_merge(name_a, lines_a, name_b, lines_b):
     merged = answer.get('merged')
     if not isinstance(merged, str):
         raise AIError("Its answer had no merge")
-    return merged.split('\n'), str(answer.get('notes') or '')
+    lines = merged.split('\n')
+    # (A line end at its end isn't an empty last line: the file gets its own)
+    if len(lines) > 1 and lines[-1] == '':
+        lines.pop()
+    return lines, str(answer.get('notes') or '')

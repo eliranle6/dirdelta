@@ -95,7 +95,8 @@ class MergeScreenTest(unittest.TestCase):
     def test_saving_gives_the_pages_text_as_lines_and_cancel_none(self):
         screen = self.screen()
         self.assertEqual(screen.meta()['blocks'], [{'same': ['a']}, {'a': ['b'], 'b': ['x']}])
-        screen.act({'action': 'save', 'text': 'a\nb\nx'})
+        screen.act({'action': 'save', 'text': 'a\nb\nx\n'})
+        # (Its last line end isn't an empty last line)
         self.assertEqual(screen.run(), ['a', 'b', 'x'])
         screen = self.screen()
         screen.act({'action': 'cancel'})

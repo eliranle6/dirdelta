@@ -844,6 +844,8 @@ function renderMerge(screen, isNew) {
 }
 
 function sameBlock(lines) {
+  // (Only empty lines alike: said, rather than a box with nothing in it)
+  if (lines.every(line => !line.trim())) return el('div', {class: 'mergesame blank'}, lines.length + ' empty line' + (lines.length === 1 ? '' : 's') + ' alike');
   // (Long alike stretches folded: their first and last lines shown, the rest on a tap)
   const shown = lines.length <= 6 ? lines : lines.slice(0, 2).concat(['…'], lines.slice(-2));
   const box = el('pre', {class: 'mergesame'}, shown.join('\n'));
