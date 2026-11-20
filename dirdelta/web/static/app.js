@@ -708,24 +708,16 @@ const QUICK_ACTIONS = [
 ];
 
 function quickActions(screen, selected) {
-  return [el('div', {class: 'acton'}, 'These act on ', targetChip(screen, selected))].concat(
+  return [el('div', {class: 'acton'}, view.picked.size ? ['These act on ', targetChip(screen, selected)] : 'These act on the checked files: check some first')].concat(
     QUICK_ACTIONS.filter(([, key]) => key !== 'e' || /\.zip$/i.test(view.selected || '')).map(([glyph, key, text]) =>
-      el('button', {class: 'quick', onclick: () => { view.pendingKey = key; act('enter'); }},
+      el('button', {class: 'quick', disabled: !view.picked.size, onclick: () => { view.pendingKey = key; act('enter'); }},
         icon(glyph), text(screen), el('small', {class: 'keyname'}, key))));
 }
 
-// What an action acts on, in its color: the checked files (green, as their checkboxes), or else the selected one
-// (blue, as its row and the details' header)
+// What an action acts on, in its color: the checked files (green, as their checkboxes); a single tree's (one node
+// chosen, no checkboxes) the selected one (blue, as its row and the details' header)
 function targetChip(screen, selected) {
   if (screen.multi && view.picked.size) return el('span', {class: 'target checked'}, '✓ ' + view.picked.size + ' checked');
-  // (A dir, or the top, selected: what's acted on is all its files, so it says so, not the dir's name alone)
-  const path = view.selected === null || view.selected === '' ? '.' : view.selected;
-  const info = view.info.get(path);
-  if (screen.multi && (path === '.' || (info && info.t === 'd'))) {
-    const count = view.fileCounts.get(path) || 0;
-    const files = count.toLocaleString() + ' file' + (count === 1 ? '' : 's');
-    return el('span', {class: 'target selected'}, path === '.' ? 'all ' + files : baseName(path) + ' (' + files + ')');
-  }
   return el('span', {class: 'target selected'}, selected);
 }
 
@@ -748,9 +740,10 @@ function renderPickerActions() {
     // (Named for what it acts on, in that one's color: the checked files, green, or else the selected one, blue)
     let label = [what + ' ', screen.multi ? '' : targetChip(screen, selected)];
     if (screen.states.length) label = 'Done';
-    else if (screen.multi) label = view.picked.size || screen.enterPicksSelection ? [what + ' with ', targetChip(screen, selected)] :
-      'Check some first';
-    const enterButton = el('button', {class: 'primary', disabled: screen.multi && !screen.states.length && !view.picked.size && !screen.enterPicksSelection,
+    // (With nothing checked it's off: what it acts on is the checked files, an empty set then, never the selection,
+    // which the terminal's Enter takes then, but which surprised: the whole tree, with the top selected)
+    else if (screen.multi) label = view.picked.size ? [what + ' with ', targetChip(screen, selected)] : 'Check files first';
+    const enterButton = el('button', {class: 'primary', disabled: screen.multi && !screen.states.length && !view.picked.size,
       onclick: () => { if (opensMenu(screen)) openingPanel(); act('enter'); }}, label);
     // (A sync's file tree: ▾ beside it shows its menu's actions as buttons, see quickActions())
     main.push(isSyncFilesTree(screen) ? el('span', {class: 'splitbutton'}, enterButton,

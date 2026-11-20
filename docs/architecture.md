@@ -1227,8 +1227,8 @@ every link carries, then a cookie), and a watcher.
   it runs, and "Running" in the top bar leads there. The
   Running page (`web/static/app.js`) polls `/api/state` (a long poll: each change is numbered) and draws
   (checked and selected told apart by color, everywhere they show: checked green, its checkbox and a tint, selected blue,
-  its row and the details' "Selected:" header; what an action acts on named in its color, "Choose what to do with [✓ 2 checked]"
-  or "[warranties.txt]", `targetChip()`, with "✕ Uncheck all" while files are checked; and checking a row selects it too)
+  its row and the details' "Selected:" header; what an action acts on named in its color, "Choose what to do with [✓ 2 checked]",
+  `targetChip()`, off with nothing checked ("Check files first": the terminal's Enter takes the selection then, not the web's), with "✕ Uncheck all" while files are checked; and checking a row selects it too)
   (the selection's details maximized, ⤢ in their header: filling the screen under the top bar, as the selection moves, until
   ⤡ or Esc, `maximizePreview()`)
   (on a wide screen the two trees side by side, as wide as each other, and the selection's details, its preview with a diff or
