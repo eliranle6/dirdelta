@@ -903,14 +903,20 @@ function renderMergeAI(screen) {
   const box = document.getElementById('mergeai');
   if (!box) return;
   const ai = screen.ai;
+  // (What the user tells the AI of the merge, kept as it's typed, across the box's redraws)
+  const askBox = buttonText => {
+    const context = el('textarea', {class: 'mergecontext', rows: 2, placeholder: "Anything the AI should know (optional): e.g. keep the newer prices; the Drive one's order is right",
+      oninput: event => { view.merge.context = event.target.value; }});
+    context.value = view.merge.context || '';
+    return [context, el('button', {onclick: () => act('merge', {merge: {action: 'suggest', context: view.merge.context || ''}})}, icon('ai'), ' ' + buttonText)];
+  };
   if (!ai) {
-    box.replaceChildren(el('button', {onclick: () => act('merge', {merge: {action: 'suggest'}})}, icon('ai'), ' Ask AI to merge them'));
+    box.replaceChildren(...askBox('Ask AI to merge them'));
     return;
   }
   if (ai.status === 'asking') { box.replaceChildren(el('div', {class: 'note'}, 'Claude is merging them', el('span', {class: 'dots'}))); return; }
   if (ai.status === 'failed') {
-    box.replaceChildren(el('div', {class: 'note c-red'}, "The AI couldn't merge them: " + ai.error),
-      el('button', {class: 'small', onclick: () => act('merge', {merge: {action: 'suggest'}})}, 'Ask again'));
+    box.replaceChildren(el('div', {class: 'note c-red'}, "The AI couldn't merge them: " + ai.error), ...askBox('Ask again'));
     return;
   }
   const use = () => {
@@ -922,7 +928,7 @@ function renderMergeAI(screen) {
     document.getElementById('mergeresult').scrollIntoView({block: 'start', behavior: 'smooth'});
   };
   box.replaceChildren(el('div', {class: 'mergeainotes'}, el('b', {}, "The AI's merge"), ' (' + ai.lines.length + ' lines): ', ai.notes || ''),
-    el('button', {class: 'small primary', onclick: use}, 'Put it in the result, to review'));
+    el('button', {class: 'small primary', onclick: use}, 'Put it in the result, to review'), ...askBox('Ask again, with this'));
 }
 
 function renderMessages(screen, isNew) {

@@ -62,9 +62,9 @@ class Merging(object):
             versions.append(read)
         (lines_a, ends_a), (lines_b, _) = versions
 
-        def suggest():
+        def suggest(context=''):
             try:
-                return ai_merging.suggest_merge(src_name, lines_a, dst_name, lines_b)
+                return ai_merging.suggest_merge(src_name, lines_a, dst_name, lines_b, context)
             except ai.AIError as error:
                 raise Exception(str(error))
         merged = merging.merge(title, (src_name, dst_name), lines_a, lines_b, dryrun.label(), suggest)

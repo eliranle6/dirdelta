@@ -121,15 +121,16 @@ class MergeScreenTest(unittest.TestCase):
     def asked(self, suggest):
         """The screen's AI state once it answered (it's asked on a thread of its own)"""
         screen = self.screen(suggest)
-        screen.act({'action': 'suggest'})
+        screen.act({'action': 'suggest', 'context': 'keep B'})
         deadline = time.monotonic() + 5
         while screen.ai['status'] == 'asking' and time.monotonic() < deadline:
             time.sleep(0.01)
         return screen.state(0)['ai']
 
     def test_the_ais_merge_comes_in_its_state_or_why_it_failed(self):
-        self.assertEqual(self.asked(lambda: (['a', 'x'], 'took B')), {'status': 'done', 'lines': ['a', 'x'], 'notes': 'took B'})
+        self.assertEqual(self.asked(lambda context: (['a', 'x'], 'took B: ' + context)),
+                         {'status': 'done', 'lines': ['a', 'x'], 'notes': 'took B: keep B'})
 
-        def fails():
+        def fails(context):
             raise Exception("too big")
         self.assertEqual(self.asked(fails), {'status': 'failed', 'error': 'too big'})

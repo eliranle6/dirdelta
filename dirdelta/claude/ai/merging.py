@@ -16,8 +16,9 @@ SCHEMA = {"type": "object", "properties": {"merged": {"type": "string"}, "notes"
           "required": ["merged", "notes"]}
 
 
-def suggest_merge(name_a, lines_a, name_b, lines_b):
-    """(the merged lines, what Claude says of them) of the two versions (named name_a and name_b). Raises
+def suggest_merge(name_a, lines_a, name_b, lines_b, context=''):
+    """(the merged lines, what Claude says of them) of the two versions (named name_a and name_b); context: what
+    the user says of the merge (what to keep, which is right...), if anything. Raises
     AIError if it can't be asked, or the versions are too big to send"""
     text_a, text_b = '\n'.join(lines_a), '\n'.join(lines_b)
     if len(text_a) + len(text_b) > MAX_CHARS:
@@ -25,6 +26,8 @@ def suggest_merge(name_a, lines_a, name_b, lines_b):
     prompt = ("Merge these two versions of a file.\n\n"
               "=== The version in %s ===\n%s\n=== End of it ===\n\n"
               "=== The version in %s ===\n%s\n=== End of it ===\n" % (name_a, text_a, name_b, text_b))
+    if context.strip():
+        prompt += "\nWhat the user says of this merge (follow it):\n%s\n" % (context.strip(),)
     answer = ask(prompt, SCHEMA, SYSTEM_PROMPT)
     merged = answer.get('merged')
     if not isinstance(merged, str):

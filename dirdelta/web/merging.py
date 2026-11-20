@@ -30,7 +30,8 @@ class MergeScreen(object):
         return self._result
 
     def act(self, body):
-        """What the page does: save (body['text']: the merged text), cancel, or ask the AI (suggest)"""
+        """What the page does: save (body['text']: the merged text), cancel, or ask the AI (suggest; body['context']:
+        what the user tells it of the merge)"""
         action = body.get('action')
         if action == 'save' and isinstance(body.get('text'), str):
             self._finish(_lines(body['text']))
@@ -39,11 +40,12 @@ class MergeScreen(object):
         elif action == 'suggest' and self._suggest is not None and (self.ai is None or self.ai['status'] != 'asking'):
             self.ai = {'status': 'asking'}
             self.version = self._bump()
-            threading.Thread(target=self._ask, daemon=True).start()
+            context = body.get('context') if isinstance(body.get('context'), str) else ''
+            threading.Thread(target=self._ask, args=(context,), daemon=True).start()
 
-    def _ask(self):
+    def _ask(self, context):
         try:
-            lines, notes = self._suggest()
+            lines, notes = self._suggest(context)
             self.ai = {'status': 'done', 'lines': list(lines), 'notes': notes}
         except Exception as error:
             self.ai = {'status': 'failed', 'error': str(error)}

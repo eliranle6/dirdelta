@@ -33,8 +33,9 @@ def blocks(lines_a, lines_b):
 
 def merge(title, names, lines_a, lines_b, label=None, suggest=None):
     """The merged lines of two versions (names: theirs, as the user knows them), as the user makes them,
-    or None if they went back. suggest, if given: a function asking the AI for its merge, returning (its
-    lines, what it says of them), or raising an Exception saying why it can't (the browser's Ask AI)"""
+    or None if they went back. suggest, if given: a function asking the AI for its merge (given what the user
+    says of it, if anything), returning (its lines, what it says of them), or raising an Exception saying why it
+    can't (the browser's Ask AI)"""
     if frontend.current is not None:
         return frontend.current.merge(title, names, lines_a, lines_b, label, suggest)
     return _in_editor(title, names, lines_a, lines_b, label)
