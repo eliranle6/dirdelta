@@ -497,11 +497,14 @@ function renderSide() {
   box.replaceChildren(el('div', {class: 'side'}, el('h3', {}, side.root), el('div', {class: 'tree'}, rows)));
 }
 
-// The keys a picker has for the whole of it, not its selection: shown under More (the rest act on what's selected)
-const GENERAL_KEYS = new Set(['#', ':', 'i', '?']);
+// The keys a picker has for the whole of it, not its selection: shown under Misc (the rest act on what's selected)
+const GENERAL_KEYS = new Set(['i', '?']);
+// Keys the page has no button for: the menu (:) lists what's selected can have done, each with its key, as the
+// buttons here do (with files picked, it's Enter's); the replicas dashboard (#) is the Replicas tab's
+const NO_BUTTON_KEYS = new Set([':', '#']);
 
 // The bottom bar, in sections: going back and the main action (Enter's, named for what it's on); what acts
-// on the selection; on the side tree's; and More (the picker's own: its dashboard, menu, pictures), folded
+// on the selection; on the side tree's; and Misc (the picker's own keys: the pictures)
 function renderPickerActions() {
   const screen = view.screen;
   const main = [];
@@ -530,26 +533,20 @@ function renderPickerActions() {
         (state.mark.trim() || '·') + ' ', el('small', {}, state.name)));
     }
   }
-  for (const key of screen.keys) {
+  for (const key of screen.keys.filter(key => !NO_BUTTON_KEYS.has(key.name))) {
     (GENERAL_KEYS.has(key.name) ? general : onSelection).push(keyButton(key, () => act('press', {key: key.key})));
   }
   const side = [];
   if (screen.side && screen.side.enterPicks) {
     side.push(el('button', {class: 'primary', disabled: !view.sideSelected, onclick: () => act('enter', {side: true})},
       'Into ' + (view.sideSelected || screen.side.root)));
-    for (const key of screen.side.keys) side.push(keyButton(key, () => act('enter', {side: true, key: key.key})));
+    for (const key of screen.side.keys.filter(key => !NO_BUTTON_KEYS.has(key.name))) side.push(keyButton(key, () => act('enter', {side: true, key: key.key})));
   }
   const section = (title, buttons, extra) => buttons.length ?
     el('div', {class: 'actsec' + (extra ? ' ' + extra : '')}, title ? el('div', {class: 'seclabel'}, title) : '', buttons) : '';
-  let more = '';
-  if (general.length) {
-    more = el('details', {class: 'actsec more'}, el('summary', {}, 'More'), el('div', {class: 'actrow'}, general));
-    try { more.open = localStorage.getItem('dirdelta_more') === 'open'; } catch (error) { /* (folded) */ }
-    more.addEventListener('toggle', () => kept('dirdelta_more', more.open ? 'open' : ''));
-  }
   document.getElementById('actions').replaceChildren(section('', main, 'main'),
     section(screen.mode === 'list' ? '' : 'On ' + selected, onSelection),
-    section(screen.side ? 'In ' + screen.side.root : '', side), more);
+    section(screen.side ? 'In ' + screen.side.root : '', side), section('Misc', general));
 }
 
 function renderHelp() {
