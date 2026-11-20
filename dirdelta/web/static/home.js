@@ -78,14 +78,17 @@ function nameButton(replica) {
     const input = el('input', {type: 'text', value: replica.named || '', placeholder: 'e.g. desktop, blue external disk',
       'aria-label': 'Its name'});
     const note = el('div', {class: 'note'});
+    let namer;
+    const done = () => { namer.remove(); load(); };
     const save = async () => {
       const answer = await api('POST', '/api/replicas/name', {path: replica.path, name: input.value});
-      if (answer.ok) load(); else note.textContent = answer.error;
+      if (answer.ok) done(); else note.textContent = answer.error;
     };
-    input.addEventListener('keydown', event => { if (event.key === 'Enter') save(); if (event.key === 'Escape') load(); });
-    card.append(el('div', {class: 'namer'}, el('label', {}, 'Its name'), input,
+    input.addEventListener('keydown', event => { if (event.key === 'Enter') save(); if (event.key === 'Escape') done(); });
+    namer = el('div', {class: 'namer'}, el('label', {}, 'Its name'), input,
       el('div', {class: 'row2'}, el('button', {class: 'small primary', onclick: save}, 'Save'),
-        el('button', {class: 'small', onclick: () => load()}, 'Cancel')), note));
+        el('button', {class: 'small', onclick: done}, 'Cancel')), note);
+    card.append(namer);
     button.disabled = true;
     input.focus();
   };
@@ -383,6 +386,11 @@ function scrollToPart() {
 
 async function load() {
   clearTimeout(timer);
+  // (A replica's name being typed: the page isn't redrawn under it, until it's saved or cancelled)
+  if (document.querySelector('.namer')) {
+    timer = setTimeout(load, 2000);
+    return;
+  }
   let data;
   try {
     data = await api('GET', '/api/home');
