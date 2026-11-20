@@ -186,7 +186,7 @@ The map (each module's docstring's first line; generated from the code):
   - `aiplan_screen.py`: The screens of asking AI about files (see aiplan.py): what's wanted, typed; waiting for it; then its answer, o...
   - `archive_screen.py`: Exploring an archive (see archives.py) in a picker, as a tree of what's in it, each file's size and date besid...
   - `choose_replicas.py`: The menu that chooses what to sync, when dirdelta is run without paths: a replica for each of its two slots (a...
-  - `label_screen.py`: Labeling replicas (see replicanames.py), e.g. 'laptop' or 'blue WD ext. disk'.
+  - `label_screen.py`: Naming replicas (see replicanames.py, which keeps a name as a label), e.g. 'desktop' or 'blue external disk'.
   - `pair_labels.py`: How the start menu labels pairs, sorts and replicas: their names, when each was updated, and their marks
   - `replica_choices.py`: Choosing one replica for a slot: a local dir, a Drive one, or one already known
   - `start_names.py`: The start menu's options, sections and what it returns
@@ -1300,8 +1300,11 @@ its label; `short_names()` and `labeled()` are for where there's less room, or t
 in `Replicas.labels`, by `label_key()`: each replica's identity (a local one's disk's UUID and path there, a Drive one's account and path). It reads
 them from the file when it changed, so nothing need be passed around; `drivemeta.check()` notes the account's user
 name in `files.times`, so naming a replica asks nothing of Drive. `identity()` moved here from `replicalog.py`.
-The sync menu labels its two replicas, and the dashboard has an option for each replica it lists (not one that isn't
-mounted or there: what its path is on now isn't its disk); both run `label_screen.run()`.
+A label is a replica's name to the user ('desktop', 'blue external disk': "name" in what's read, "label" being a disk's
+own), given with the replicas: the terminal's dashboard has an option for each replica it lists (not one that isn't
+mounted or there: what its path is on now isn't its disk), running `label_screen.run()`; the web version's Replicas tab
+a Name... in each card (`/api/replicas/name`), that tab being its dashboard (the sync and start menus have none there).
+The sync menu no longer has one.
 
 ## The file pickers' `:` menu: `contextmenu.py`
 

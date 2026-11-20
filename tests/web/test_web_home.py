@@ -78,6 +78,15 @@ class HomeTest(WebTest):
             self.assertFalse(self.call('POST', '/api/mode', {'live': True})['ok'])
             self.assertEqual(['DRY RUN', 'green'], self.call('GET', '/api/home')['label'])
 
+    def test_a_replica_is_named_and_unnamed_from_its_card(self):
+        with mock.patch('dirdelta.known.replicas.save') as save:
+            self.assertTrue(self.call('POST', '/api/replicas/name', {'path': 'cloud/photos', 'name': ' desktop '})['ok'])
+            self.assertIn('desktop', replicas.load().labels.values())
+            self.call('POST', '/api/replicas/name', {'path': 'cloud/photos', 'name': ''})
+            self.assertNotIn('desktop', replicas.load().labels.values())
+            self.assertFalse(self.call('POST', '/api/replicas/name', {'path': '/etc', 'name': 'x'})['ok'])
+        self.assertEqual(2, save.call_count)
+
     def test_only_a_known_local_replica_is_hashed_from_the_dashboard(self):
         with mock.patch('dirdelta.screens.hashes_screen.dashboard_actions.start_hashing') as start_hashing:
             self.assertFalse(self.call('POST', '/api/home/hash', {'path': '/etc'})['ok'])

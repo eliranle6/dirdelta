@@ -40,7 +40,7 @@ def replica_info(path, known_replicas):
     is_cloud = paths.is_cloud_path(path)
     found = {'path': path, 'name': naming.own_name(path), 'place': naming.place(path), 'fullName': naming.name(path),
              'kind': 'drive' if is_cloud else 'local', 'disk': replicanames.disk_name(path),
-             'device': 'drive' if is_cloud else _device(path)}
+             'device': 'drive' if is_cloud else _device(path), 'named': replicanames.label(path)}
     if is_cloud:
         found['there'], found['why'] = True, ''
         found['reading'] = next((one for one in freshening.reading() if one['path'] == path), None)
@@ -144,6 +144,19 @@ def routes(session):
         return {'running': session.is_running, 'user': session.user if session.is_running else None,
                 'tab': session.tab if session.is_running else None}
 
+    def name_replica(query, body):
+        """Name the replica at body['path'] (body['name']; empty: none, it's called by its folder again), as the
+        terminal's dashboard does (kept by its identity: its disk and the path on it, so not one not there)"""
+        path, name = body.get('path', ''), (body.get('name') or '').strip()
+        known_replicas = replicas.load()
+        if path not in known_replicas.replica_paths():
+            return {'ok': False, 'error': "That's not one of your replicas."}
+        if not paths.is_cloud_path(path) and mounts.unmounted(path) is not None:
+            return {'ok': False, 'error': "Its disk isn't mounted: plug it in to name it."}
+        known_replicas.set_label(replicanames.label_key(path), name or None)
+        replicas.save(known_replicas)
+        return {'ok': True, 'name': naming.own_name(path)}
+
     def set_mode(query, body):
         """Live (body['live']) or a dry run, from the top bar's label: not while a run's screens are open,
         which were opened in the mode before (their labels would say otherwise)"""
@@ -174,4 +187,4 @@ def routes(session):
 
     return {('GET', '/api/home'): home, ('POST', '/api/home/hash'): hash_replica,
             ('GET', '/api/running'): running, ('GET', '/api/users'): user_list, ('POST', '/api/users/add'): add_user,
-            ('POST', '/api/users/email'): set_email, ('POST', '/api/mode'): set_mode}
+            ('POST', '/api/users/email'): set_email, ('POST', '/api/mode'): set_mode, ('POST', '/api/replicas/name'): name_replica}

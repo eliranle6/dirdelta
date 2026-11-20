@@ -1,5 +1,5 @@
 """The sync menu of a pair of replicas (SyncMenu): each way's files, the files that differ, reading
-the replicas anew, the dashboard, labels and favorites"""
+the replicas anew, the dashboard (the terminal's: the browser's is its Replicas tab) and favorites"""
 import concurrent.futures
 import datetime
 
@@ -10,13 +10,13 @@ from dirdelta.known import replicas
 from dirdelta.matching import elsewhere
 from dirdelta.matching import syncstate
 from dirdelta.screens import hashes_screen
-from dirdelta.screens import label_screen
 from dirdelta.sync import comparing
 from dirdelta.sync import replica_ops
 from dirdelta.sync import combined
 from dirdelta.sync.options import STATE, STATE_POINTS, SYNC_ALL, Action, state_lines, sync_all_shown_as
 from dirdelta.sync.ways import DIFFER, Way, find_all, find_differing
 from dirdelta.trees import localdiskdirtree
+from dirdelta.ui import frontend
 from dirdelta.ui import messages
 from dirdelta.ui import picker
 from dirdelta.known import mounts
@@ -40,7 +40,6 @@ class SyncMenu(object):
     ADD_FAVORITE = "Add to favorites"
     REMOVE_FAVORITE = "Remove from favorites"
     DASHBOARD = hashes_screen.TITLE
-    LABELS = "Label the replicas"
 
     def __init__(self, replica_a, replica_b, replica_a_path, replica_b_path, known_replicas=None, changes=None):
         self.replica_a, self.replica_b = replica_a, replica_b
@@ -94,8 +93,8 @@ class SyncMenu(object):
                 [picker.Skipped(SYNC_SECTION), SYNC_ALL],
                 [picker.Skipped(KINDS_SECTION)] + list(self.actions),
                 [picker.Skipped(UPDATE_SECTION), comparing.COMPARE] + list(self.rescans) + list(self.refreshes),
-                [picker.Skipped(PAIR_SECTION), self.DASHBOARD] + favorite_options +
-                ([self.LABELS] if self.known_replicas is not None else []),
+                # (In the browser the Replicas tab is the dashboard, where they're named too)
+                [picker.Skipped(PAIR_SECTION)] + ([self.DASHBOARD] if frontend.current is None else []) + favorite_options,
                 [BACK]])
             option = picker.pick_option(options,
                                         shown_as=self.shown_as, selected=SYNC_ALL,
@@ -107,9 +106,6 @@ class SyncMenu(object):
                 return None
             if option == self.DASHBOARD:
                 hashes_screen.dashboard([self.replica_a, self.replica_b], self.known_replicas)
-                continue
-            if option == self.LABELS:
-                label_screen.run(self.known_replicas, [self.replica_a_path, self.replica_b_path])
                 continue
             if option in (self.ADD_FAVORITE, self.REMOVE_FAVORITE):
                 self.known_replicas.toggle_favorite(self.replica_a_path, self.replica_b_path)

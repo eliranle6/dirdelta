@@ -40,8 +40,10 @@ button.item { border: 0; border-radius: 0; background: none; }
 .item .syncmark { font-size: 22px; font-weight: 700; width: 1.1em; text-align: center; flex: none; } a.tile { color: inherit; text-decoration: none; }
 .syncbar { display: flex; height: 14px; border-radius: 7px; overflow: hidden; background: color-mix(in srgb, var(--fg) 10%, var(--card));
   border: 1px solid color-mix(in srgb, var(--fg) 30%, var(--card)); }
-.syncbar .both { background: var(--green); } .syncbar .only { background: var(--yellow); }
-.syncbar .only + .only { background: var(--orange); }
+.syncbar .both { background: var(--green); }
+/* (What one lacks: a grey hatch, apart from the in-step part's color) */
+.syncbar .only { background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--fg) 35%, transparent) 0 3px, transparent 3px 6px); }
+.syncbar .only + .only { background: repeating-linear-gradient(45deg, color-mix(in srgb, var(--fg) 35%, transparent) 0 3px, transparent 3px 6px); }
 .syncline { display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: 13px; align-items: baseline; }
 .item.pair { align-items: flex-start; } .item.pair .syncmark { margin-top: 2px; } .item.pair button { margin-top: 2px; }
 .tile-hint { font-size: 11px; color: var(--muted); }
@@ -57,3 +59,7 @@ button.item { border: 0; border-radius: 0; background: none; }
 .item.pair:has(> a.button) { flex-wrap: wrap; }
 .item.pair > a.button { flex: 1 0 100%; text-align: center; margin-top: 4px; }
 .banner.running span.button { display: block; padding: 8px 12px; border-radius: 8px; background: var(--accent); color: var(--accent-fg); font-weight: 600; }
+/* A replica's name, given in its card */
+.namer { display: flex; flex-direction: column; gap: 6px; border-top: 1px solid var(--line); padding-top: 8px; }
+.namer label { font-size: 12px; font-weight: 600; color: var(--muted); }
+.namer input { font: inherit; padding: 7px 9px; border-radius: 8px; border: 1px solid var(--line); background: var(--card); color: var(--fg); }

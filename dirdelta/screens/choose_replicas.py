@@ -10,6 +10,7 @@ from dirdelta.screens.pair_labels import (favorite_label, help_lines, known_path
                                           sort_label, styled_pair)
 from dirdelta.screens.replica_choices import choose_replica, known_replicas
 from dirdelta.trees import paths
+from dirdelta.ui import frontend
 from dirdelta.ui import messages
 from dirdelta.ui import picker
 from dirdelta.util import dryrun
@@ -32,7 +33,7 @@ def run(replicas):
         sorts = [picker.Option(('sort', Sort(*sort)), sort_label(*sort)) for sort in replicas.sorts]
         sections = [(SYNC_SECTION, slots + favorites), (RECENT_SYNCS_SECTION, recent),
                     (SORT_SECTION, [SORT]), (RECENT_SORTS_SECTION, sorts),
-                    (REPLICAS_SECTION, [KNOWN_LIST] if replicas.known else [])]
+                    (REPLICAS_SECTION, [KNOWN_LIST] if replicas.known and frontend.current is None else [])]
         # Quit apart from the last section too
         options = picker.grouped([[picker.Skipped(heading)] + section for heading, section in sections if section] + [[QUIT]])
         option = picker.pick_option(options, header='Choose the two replicas to sync, or an inbox to sort',

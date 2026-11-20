@@ -36,9 +36,9 @@ def label_option(name, known):
     """How the option that labels the replica named name is shown. Not of one that isn't there: what
     its path is on now isn't its disk, so it wouldn't be its identity, which its label is kept by"""
     if not paths.is_cloud_path(name) and not is_there(name):
-        return picker.Disabled("  Label the replica: its disk isn't mounted")
+        return picker.Disabled("  Name the replica: its disk isn't mounted")
     current = known.labels.get(replicanames.label_key(name))
-    return "  Label the replica%s" % (": now '%s'" % (current,) if current else "",)
+    return "  Name the replica%s" % (": now '%s'" % (current,) if current else "",)
 
 
 def finish_dashboard(items, options, shown, names, jobs, known, selected=None):

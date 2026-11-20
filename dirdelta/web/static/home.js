@@ -67,6 +67,31 @@ function readShare(reading) {
   return reading.expected ? Math.min(99, 100 * reading.read / reading.expected) : 0;
 }
 
+// Naming a replica ('desktop', 'blue external disk'): a field in its card, its name shown everywhere then (empty:
+// called by its folder again). Not one whose disk isn't mounted: a name is kept by its disk
+function nameButton(replica) {
+  const button = el('button', {class: 'small', disabled: !replica.there && replica.kind === 'local',
+    title: replica.there || replica.kind !== 'local' ? '' : "Its disk isn't mounted: plug it in to name it"},
+    replica.named ? 'Rename…' : 'Name…');
+  button.onclick = () => {
+    const card = button.closest('.card');
+    const input = el('input', {type: 'text', value: replica.named || '', placeholder: 'e.g. desktop, blue external disk',
+      'aria-label': 'Its name'});
+    const note = el('div', {class: 'note'});
+    const save = async () => {
+      const answer = await api('POST', '/api/replicas/name', {path: replica.path, name: input.value});
+      if (answer.ok) load(); else note.textContent = answer.error;
+    };
+    input.addEventListener('keydown', event => { if (event.key === 'Enter') save(); if (event.key === 'Escape') load(); });
+    card.append(el('div', {class: 'namer'}, el('label', {}, 'Its name'), input,
+      el('div', {class: 'row2'}, el('button', {class: 'small primary', onclick: save}, 'Save'),
+        el('button', {class: 'small', onclick: () => load()}, 'Cancel')), note));
+    button.disabled = true;
+    input.focus();
+  };
+  return button;
+}
+
 function replicaCard(replica) {
   const job = replica.hashing;
   const act = pause => async () => { await api('POST', '/api/home/hash', {path: replica.path, pause}); load(); };
@@ -75,6 +100,7 @@ function replicaCard(replica) {
     actions.push(el('button', {class: 'small', onclick: act(!!(job && job.started))},
       job && job.started ? 'Pause' : job && job.state ? 'Resume hashing' : 'Hash its files'));
   }
+  actions.push(nameButton(replica));
   actions.push(forgetButton(replica.path, 'replica'));
   const entry = replica.lastEntry ? (replica.lastEntry.date ? replica.lastEntry.date + ': ' : '') + replica.lastEntry.text : '';
   return el('div', {class: 'card replica' + (replica.there ? '' : ' away')},
@@ -92,6 +118,14 @@ function replicaCard(replica) {
 // and how stale that is: when it was compared (green today, yellow this week, red before), and whether a
 // replica changed since (then it may not be so anymore)
 const STATE_WORDS = {'in sync': 'In sync', 'a ahead': 'Out of step', 'b ahead': 'Out of step', 'branched': 'Out of step both ways', 'unknown': ''};
+
+// How in step a pair is, as a color: green only all of it; short of it, from red (80% or less) through orange to
+// yellow (just short of all), so 99% isn't taken for done
+function inStepColor(share) {
+  if (share >= 1) return 'var(--green)';
+  const hue = Math.round(48 * Math.max(0, Math.min(1, (share - 0.8) / 0.2)));
+  return 'hsl(' + hue + ' 80% 45%)';
+}
 
 // Whether what's running is this pair's sync (started from its Sync, by this user)
 function isSyncing(pair, running, user) {
@@ -112,10 +146,11 @@ function pairRow(pair, running, user) {
     const either = totalA === null ? null : totalA + onlyB;
     const percent = share === null ? null : (share === 1 ? '100' : Math.min(99.9, Math.floor(share * 1000) / 10).toString());
     if (either) {
-      parts.push(el('div', {class: 'syncbar'}, el('div', {class: 'both', style: 'width:' + (100 * (either - onlyA - onlyB) / either) + '%'}),
+      const inBoth = (either - onlyA - onlyB) / either;
+      parts.push(el('div', {class: 'syncbar'}, el('div', {class: 'both', style: 'width:' + (100 * inBoth) + '%;background:' + inStepColor(inBoth)}),
         el('div', {class: 'only', style: 'width:' + (100 * onlyA / either) + '%'}), el('div', {class: 'only', style: 'width:' + (100 * onlyB / either) + '%'})));
     }
-    parts.push(el('div', {class: 'syncline'}, percent !== null ? el('b', {}, percent + '% in step') : '',
+    parts.push(el('div', {class: 'syncline'}, percent !== null ? el('b', {style: 'color:' + inStepColor(share)}, percent + '% in step') : '',
       el('span', {}, !onlyA && !onlyB ? 'Each has all the other\'s files' :
         [onlyA ? onlyA.toLocaleString() + ' only in ' + pair.nameA : '', onlyB ? onlyB.toLocaleString() + ' only in ' + pair.nameB : '']
           .filter(Boolean).join(' · ')),
