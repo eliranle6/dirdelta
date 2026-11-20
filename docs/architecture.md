@@ -1224,7 +1224,9 @@ every link carries, then a cookie), and a watcher.
   is under its tab (a sync's Replicas', a sort's Inboxes': `Session.tab`), which has a pulsing dot while
   it runs, and "Running" in the top bar leads there. The
   Running page (`web/static/app.js`) polls `/api/state` (a long poll: each change is numbered) and draws
-  (its trees, the picker's and the side's, with branch lines as treepicker's: │ ├ └, `visibleRows()`'s guides)
+  (its trees, the picker's and the side's, with branch lines as treepicker's: │ ├ └, `visibleRows()`'s guides; each opened
+  at first as treepicker's, a level at a time while the next one fits the tree's height, `openToFit()`, and down to the selection;
+  the side tree's folders opened and closed by their ▸ ▾ too)
   (each screen at an address of its own, `/run#screen=N`, and what the tab showed of it, its open folders, tab, search
   and scroll, kept in its sessionStorage as the page goes: a refresh stays where it was, `keepView()`)
   a menu as a list, a tree with checkboxes or state marks, the preview column (pictures from

@@ -7,7 +7,7 @@ const MAX_ROWS = 1500;
 const view = {
   version: 0, screen: null, items: [], info: new Map(), children: new Map(), fileCounts: new Map(),
   picked: new Set(), selected: null, sideSelected: null, status: '', previewVersion: -1,
-  expanded: new Set(['.']), search: '', tab: 0, showHelp: false, lazy: new Map(), running: false, log: [],
+  expanded: new Set(['.']), sideExpanded: new Set(), search: '', tab: 0, showHelp: false, lazy: new Map(), running: false, log: [],
 };
 
 async function api(method, path, body) {
@@ -66,11 +66,14 @@ function apply(data) {
 function newScreen(screen) {
   Object.assign(view, {screen, items: [], info: new Map(), children: new Map(), fileCounts: new Map(),
     picked: new Set(), search: '', tab: 0, showHelp: false, previewVersion: -1, lazy: new Map(),
-    expanded: new Set(['.']), scrollTo: 0});
+    expanded: new Set(['.']), sideExpanded: null, scrollTo: 0, isKept: false});
   // (Each screen its own address, and what this tab showed of it kept: a refresh stays where it was)
   history.replaceState(null, '', '#screen=' + screen.id);
   const kept = keptView(screen);
-  if (kept) Object.assign(view, {expanded: new Set(kept.expanded), tab: kept.tab, search: kept.search, scrollTo: kept.scroll});
+  if (kept) {
+    Object.assign(view, {expanded: new Set(kept.expanded), tab: kept.tab, search: kept.search, scrollTo: kept.scroll, isKept: true,
+      sideExpanded: kept.sideExpanded ? new Set(kept.sideExpanded) : null});
+  }
   if (screen.items) setItems(screen.items);
   if (screen.mode === 'dir') [...view.expanded].forEach(loadChildren);
 }
@@ -83,7 +86,7 @@ function keepView() {
   if (!view.screen) return;
   try {
     sessionStorage.setItem('dirdelta_screen_' + view.screen.id, JSON.stringify({name: screenName(view.screen),
-      expanded: [...view.expanded], tab: view.tab, search: view.search, scroll: Math.round(window.scrollY)}));
+      expanded: [...view.expanded], sideExpanded: view.sideExpanded ? [...view.sideExpanded] : null, tab: view.tab, search: view.search, scroll: Math.round(window.scrollY)}));
   } catch (error) { /* (nothing kept: a refresh starts at the top) */ }
 }
 
@@ -151,6 +154,11 @@ function updatePicker(screen, isNew) {
     // Started on a node deep in the tree (--select): its dirs open, so it's seen
     if (view.selected && view.selected !== '.') ancestors(view.selected).forEach(dir => view.expanded.add(dir));
     renderPickerFrame();
+    // (Opened a level at a time while the next one fits the tree's height, as treepicker does)
+    if (!view.isKept && screen.mode === 'tree') {
+      openToFit(path => (view.children.get(path) || []).filter(child => inTab(child)), path => view.info.get(path).t === 'd',
+        view.expanded, rowsThatFit(document.getElementById('tree')), ['.']);
+    }
   }
   renderPickerParts();
   if (screen.previewVersion !== view.previewVersion || isNew) {
@@ -352,12 +360,35 @@ async function loadPreview() {
   box.replaceChildren(content.length ? el('div', {class: 'preview'}, content) : '');
 }
 
+// How many rows of a tree fit from where its box starts to the bottom bar (at least a few)
+function rowsThatFit(box) {
+  if (!box) return 10;
+  const bottom = document.getElementById('bottom');
+  const end = bottom ? bottom.getBoundingClientRect().top : window.innerHeight;
+  return Math.max(6, Math.floor((end - box.getBoundingClientRect().top) / 40));
+}
+
+// Opens a tree's folders a level at a time (into expanded), the whole of the next level while it still fits in
+// rows: what's shown at first, as treepicker's (kids(path): what's shown under it; tops: the first level's parents)
+function openToFit(kids, isDir, expanded, rows, tops) {
+  let shown = tops.length + tops.reduce((sum, top) => sum + kids(top).length, 0);
+  let level = tops.flatMap(top => kids(top)).filter(isDir);
+  while (level.length) {
+    const more = level.reduce((sum, path) => sum + (expanded.has(path) ? 0 : kids(path).length), 0);
+    if (shown + more > rows) break;
+    level.forEach(path => expanded.add(path));
+    shown += more;
+    level = level.flatMap(path => kids(path)).filter(isDir);
+  }
+}
+
+// The side tree (the other replica's folders, to choose one): opened as the picker's, its folders opened and
+// closed by their ▸ ▾, with branch lines
 function renderSide() {
   const box = document.getElementById('side');
   const side = view.screen.side;
   if (!box) return;
   if (!side) { box.replaceChildren(); return; }
-  // (Its folders in a tree, with branch lines as the picker's: each one's under its parent, in their order)
   const dirs = side.items.filter(item => item.t === 'd').map(item => item.p);
   const known = new Set(dirs), under = new Map();
   for (const path of dirs) {
@@ -365,18 +396,36 @@ function renderSide() {
     if (!under.has(parent)) under.set(parent, []);
     under.get(parent).push(path);
   }
+  const kids = path => under.get(path) || [];
+  if (!view.sideExpanded) {
+    view.sideExpanded = new Set();
+    for (let path = view.sideSelected || ''; path.includes('/');) { path = path.slice(0, path.lastIndexOf('/')); if (known.has(path)) view.sideExpanded.add(path); }
+    // (Its box drawn first, empty, to know where it starts)
+    box.replaceChildren(el('div', {class: 'side'}, el('h3', {}, side.root), el('div', {class: 'tree'})));
+    openToFit(kids, () => true, view.sideExpanded, rowsThatFit(box), ['']);
+  }
   const ordered = [];
-  const walk = (parent, above) => (under.get(parent) || []).forEach((path, index, all) => {
+  const walk = (parent, above) => kids(parent).forEach((path, index, all) => {
     if (ordered.length >= MAX_ROWS) return;
     const last = index === all.length - 1;
     ordered.push({path, guides: [...above, last ? 'elbow' : 'tee']});
-    walk(path, [...above, last ? 'blank' : 'pipe']);
+    if (view.sideExpanded.has(path)) walk(path, [...above, last ? 'blank' : 'pipe']);
   });
   walk('', []);
+  const toggle = path => {
+    if (view.sideExpanded.has(path)) view.sideExpanded.delete(path); else view.sideExpanded.add(path);
+    renderSide();
+  };
   const rows = ordered.map(({path, guides}) => el('div', {
     class: 'row' + (path === view.sideSelected ? ' sel' : ''),
-    onclick: () => act('sideSelect', {path}).then(() => { view.sideSelected = path; renderSide(); renderPickerActions(); })},
-    ...guides.map(kind => el('span', {class: 'guide ' + kind})), el('span', {class: 'name dir'}, baseName(path))));
+    onclick: () => {
+      if (path === view.sideSelected && kids(path).length) toggle(path);
+      act('sideSelect', {path}).then(() => { view.sideSelected = path; renderSide(); renderPickerActions(); });
+    }},
+    ...guides.map(kind => el('span', {class: 'guide ' + kind})),
+    el('span', {class: 'twisty' + (kids(path).length ? '' : ' leaf'), onclick: event => { event.stopPropagation(); if (kids(path).length) toggle(path); }},
+      kids(path).length ? (view.sideExpanded.has(path) ? '▾' : '▸') : ''),
+    el('span', {class: 'name dir'}, baseName(path))));
   box.replaceChildren(el('div', {class: 'side'}, el('h3', {}, side.root), el('div', {class: 'tree'}, rows)));
 }
 

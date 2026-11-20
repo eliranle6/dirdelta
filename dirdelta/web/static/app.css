@@ -322,3 +322,4 @@ header#top > #crumbs:has(> #where:empty) { display: none; }
 @media (hover: none) and (pointer: coarse) { #actions .keyname { display: none; } }
 /* (At most half the screen, scrolling in itself: the tree above it stays in sight) */
 footer#bottom { max-height: 50vh; overflow-y: auto; overscroll-behavior: contain; }
+.side .tree { border: 0; border-radius: 0; }
