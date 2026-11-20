@@ -1228,7 +1228,7 @@ every link carries, then a cookie), and a watcher.
   (each screen at an address of its own, `/run#screen=N`, and what the tab showed of it, its open folders, tab, search
   and scroll, kept in its sessionStorage as the page goes: a refresh stays where it was, `keepView()`)
   a menu as a list, a tree with checkboxes or state marks, the preview column (pictures from
-  treepicker's pixels), the keys as buttons (named by the keys row, or the `?` help's lines), and
+  treepicker's pixels), the keys as buttons (named by the keys row, or the `?` help's lines) in sections: Back, the main action (Enter's hint and what it's on: "Choose what to do with food.txt") and ?; what acts on the selection ("On food.txt"); on the side tree's ("In Cloud(...)"); and More, folded, the picker's own keys (`GENERAL_KEYS`: dashboard, menu, pictures); labels whole, wrapped; the key names hidden on a touch screen; the bar at most half the screen, and
   messages screens.
 - The import (`/import`, `phoneimport/`): photos and videos (not audio: `sources.is_photo()`) from a phone's DCIM (gvfs's MTP mount; `sources.PHONE_DIRS`, the
   phone called by its model: "Pixel 8"), a Drive inbox (a sort's inbox in Drive: listed from the Drive

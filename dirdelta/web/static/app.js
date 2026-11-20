@@ -380,39 +380,59 @@ function renderSide() {
   box.replaceChildren(el('div', {class: 'side'}, el('h3', {}, side.root), el('div', {class: 'tree'}, rows)));
 }
 
+// The keys a picker has for the whole of it, not its selection: shown under More (the rest act on what's selected)
+const GENERAL_KEYS = new Set(['#', ':', 'i', '?']);
+
+// The bottom bar, in sections: going back and the main action (Enter's, named for what it's on); what acts
+// on the selection; on the side tree's; and More (the picker's own: its dashboard, menu, pictures), folded
 function renderPickerActions() {
   const screen = view.screen;
-  const buttons = [];
+  const main = [];
   const back = screen.hints.find(([key]) => key === 'q');
-  buttons.push(el('button', {onclick: () => act('quit')}, back ? capitalized(back[1]) : 'Back'));
+  main.push(el('button', {onclick: () => act('quit')}, back ? capitalized(back[1]) : 'Back'));
+  const selected = view.selected ? baseName(view.selected) : screen.root;
   if (screen.mode !== 'list') {
-    let label = 'Choose';
+    const enter = screen.hints.find(([key]) => key === 'Enter');
+    const what = enter ? capitalized(enter[1]) : 'Choose';
+    let label = what + (screen.multi ? '' : ' ' + selected);
     if (screen.states.length) label = 'Done';
-    else if (screen.multi) label = view.picked.size ? 'Done · ' + view.picked.size + ' picked' : (screen.enterPicksSelection ? 'This one' : 'Pick some first');
-    buttons.push(el('button', {class: 'primary', disabled: screen.multi && !screen.states.length && !view.picked.size && !screen.enterPicksSelection,
+    else if (screen.multi) label = view.picked.size ? what + ' with ' + view.picked.size + ' picked' :
+      screen.enterPicksSelection ? what + ' with ' + selected : 'Pick some first';
+    main.push(el('button', {class: 'primary', disabled: screen.multi && !screen.states.length && !view.picked.size && !screen.enterPicksSelection,
       onclick: () => act('enter')}, label));
   }
+  if (screen.hints.length || screen.help.length) {
+    main.push(el('button', {class: 'help', title: 'What the keys do', onclick: () => { view.showHelp = !view.showHelp; renderHelp(); }}, '?'));
+  }
+  const keyButton = (key, onclick) => el('button', {title: key.text, onclick},
+    key.text ? short(capitalized(key.text)) : key.name, el('small', {class: 'keyname'}, key.name));
+  const onSelection = [], general = [];
   if (screen.states.length && view.selected !== null) {
     for (const state of screen.states) {
-      buttons.push(el('button', {class: 'c-' + state.color, onclick: () => act('state', {paths: [view.selected || '.'], name: state.name})},
+      onSelection.push(el('button', {class: 'c-' + state.color, onclick: () => act('state', {paths: [view.selected || '.'], name: state.name})},
         (state.mark.trim() || '·') + ' ', el('small', {}, state.name)));
     }
   }
   for (const key of screen.keys) {
-    buttons.push(el('button', {title: key.text, onclick: () => act('press', {key: key.key})},
-      key.text ? short(capitalized(key.text)) : key.name, el('small', {}, key.name)));
+    (GENERAL_KEYS.has(key.name) ? general : onSelection).push(keyButton(key, () => act('press', {key: key.key})));
   }
+  const side = [];
   if (screen.side && screen.side.enterPicks) {
-    buttons.push(el('button', {class: 'primary', disabled: !view.sideSelected, onclick: () => act('enter', {side: true})},
+    side.push(el('button', {class: 'primary', disabled: !view.sideSelected, onclick: () => act('enter', {side: true})},
       'Into ' + (view.sideSelected || screen.side.root)));
-    for (const key of screen.side.keys) {
-      buttons.push(el('button', {onclick: () => act('enter', {side: true, key: key.key})}, key.text || key.name));
-    }
+    for (const key of screen.side.keys) side.push(keyButton(key, () => act('enter', {side: true, key: key.key})));
   }
-  if (screen.hints.length || screen.help.length) {
-    buttons.push(el('button', {onclick: () => { view.showHelp = !view.showHelp; renderHelp(); }}, '?'));
+  const section = (title, buttons, extra) => buttons.length ?
+    el('div', {class: 'actsec' + (extra ? ' ' + extra : '')}, title ? el('div', {class: 'seclabel'}, title) : '', buttons) : '';
+  let more = '';
+  if (general.length) {
+    more = el('details', {class: 'actsec more'}, el('summary', {}, 'More'), el('div', {class: 'actrow'}, general));
+    try { more.open = localStorage.getItem('dirdelta_more') === 'open'; } catch (error) { /* (folded) */ }
+    more.addEventListener('toggle', () => kept('dirdelta_more', more.open ? 'open' : ''));
   }
-  document.getElementById('actions').replaceChildren(...buttons);
+  document.getElementById('actions').replaceChildren(section('', main, 'main'),
+    section(screen.mode === 'list' ? '' : 'On ' + selected, onSelection),
+    section(screen.side ? 'In ' + screen.side.root : '', side), more);
 }
 
 function renderHelp() {
@@ -426,10 +446,9 @@ function renderHelp() {
 
 function capitalized(text) { return text ? text[0].toUpperCase() + text.slice(1) : text; }
 
-// A key's description, cut to fit a button (the whole of it is its title): to its first ':' or '(', or 28 characters
+// A key's description on a button (the whole of it is its title): to its first ':' or '(', all of it (it wraps)
 function short(text) {
-  const cut = text.split(/[:(]/)[0].trim();
-  return cut.length > 28 ? cut.slice(0, 27).trimEnd() + '…' : cut;
+  return text.split(/[:(]/)[0].trim();
 }
 
 // A messages screen

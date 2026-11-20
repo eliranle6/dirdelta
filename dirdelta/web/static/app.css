@@ -307,3 +307,18 @@ header#top > #crumbs:has(> #where:empty) { display: none; }
 .row .guide.tee::after, .row .guide.elbow::after { left: 8px; right: 0; top: 50%; border-top: 1.5px solid; }
 .tree .row .twisty.leaf { height: 0; border-top: 1.5px solid var(--muted); opacity: .55; }
 .tree .row > .guide + .name { margin-left: 4px; }
+/* The bottom bar in sections: the main row (back, the main action, ?); what acts on the selection; on the
+   side tree's; More (the picker's own keys), folded. A label wraps rather than being cut */
+#actions { flex-direction: column; flex-wrap: nowrap; gap: 8px; }
+.actsec, .actsec .actrow { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.actsec .seclabel { flex-basis: 100%; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em;
+  color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.actsec + .actsec { border-top: 1px solid var(--line); padding-top: 7px; }
+.actsec.main .primary { flex: 1 1 auto; }
+.actsec button { white-space: normal; text-align: left; }
+.actsec.more { display: block; }
+.actsec.more summary { cursor: pointer; font-size: 13px; font-weight: 600; color: var(--muted); }
+.actsec.more[open] summary { margin-bottom: 6px; }
+@media (hover: none) and (pointer: coarse) { #actions .keyname { display: none; } }
+/* (At most half the screen, scrolling in itself: the tree above it stays in sight) */
+footer#bottom { max-height: 50vh; overflow-y: auto; overscroll-behavior: contain; }
