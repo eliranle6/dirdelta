@@ -52,6 +52,8 @@ class Menu(object):
                                  self._cant_rename(self._src, nr_renamed_in_src)),
         }
         if changed:
+            options[self.MERGE] = ("Merge the two versions of it into one, written to both" if len(relpaths) == 1 else
+                                   "Merge the two versions of one file into one", self._cant_merge(relpaths))
             options[self.COPY_BACK] = (("Replace it with its version in %s" if len(relpaths) == 1 else
                                         "Replace these with their versions in %s" if not only_here else
                                         "Replace the %d of these that differ with their versions in %%s" % (len(changed),)) %
@@ -83,7 +85,7 @@ class Menu(object):
             return picker.Option(action, label, prefixes[label] + label if reason is None else
                                  picker.Disabled(picker.unstyled(prefixes[label]) + "%s: %s" % (label, reason)))
         # Similar actions together, a blank line between each kind
-        kinds = [[self.ASK_AI], [self.COPY, self.COPY_BACK], [self.REMOVE], [self.RENAME_IN_DST, self.RENAME_IN_SRC, self.RENAME_IT],
+        kinds = [[self.ASK_AI], [self.COPY, self.COPY_BACK, self.MERGE], [self.REMOVE], [self.RENAME_IN_DST, self.RENAME_IN_SRC, self.RENAME_IT],
                  [self.EXPLORE, self.OPEN, self.READ_ANEW]]
         choices = picker.grouped([[picker.Option(self.NOTHING, self.NOTHING, prefixes[self.NOTHING] + self.NOTHING)]] +
                                  [[option(action) for action in kind if action in options] for kind in kinds])
@@ -116,6 +118,8 @@ class Menu(object):
             return None
         if action == self.COPY_BACK:
             return self._copy_back(changed)
+        if action == self.MERGE:
+            return self._merge(relpaths[0])
         return self._copy_or_remove(action, relpaths)
 
     def _copy_label(self, relpaths, changed, src, dst):

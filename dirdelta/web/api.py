@@ -46,6 +46,8 @@ def routes(session, start_flow):
             return {'ok': False}
         elif screen.kind == 'messages':
             screen.answer(body.get('text'))
+        elif screen.kind == 'merge':
+            screen.act(body.get('merge') or {})
         else:
             _act_on_picker(screen, action, body)
         return {'ok': True}

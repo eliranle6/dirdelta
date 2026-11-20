@@ -56,6 +56,7 @@ function apply(data) {
   const isNew = !view.screen || view.screen.id !== screen.id;
   if (isNew) newScreen(screen);
   if (screen.kind === 'picker') updatePicker(screen, isNew);
+  else if (screen.kind === 'merge') renderMerge(screen, isNew);
   else renderMessages(screen, isNew);
   if (isNew && view.scrollTo) {
     // (Back where the page was before it was refreshed, once it's drawn, and again once a dir's lists came)
@@ -325,7 +326,7 @@ function renderTree() {
 }
 
 // A files' menu's option's icon (the menus shown over a tree, what to do with its files), by what it does
-const ACTION_ICONS = [[/^Nothing/, 'back'], [/^Ask AI/, 'ai'], [/^Copy/, 'copy'], [/^Replace/, 'swap'],
+const ACTION_ICONS = [[/^Nothing/, 'back'], [/^Ask AI/, 'ai'], [/^Copy/, 'copy'], [/^Replace/, 'swap'], [/^Merge/, 'merge'],
   [/^(Remove|Delete|Trash)/, 'trash'], [/^Rename/, 'pencil'], [/^Open/, 'open'],
   [/^(Read .* anew|See what changed|Refresh|Rescan)/, 'refresh'], [/^Explore/, 'zip'], [/^Move/, 'move'],
   [/^(Skip|Leave)/, 'skip']];
@@ -344,7 +345,7 @@ function withoutKeyPrefix(label) { return label.replace(KEY_PREFIX, '').replace(
 // one as the sync's screens have it (> to the other replica and < from it, as the combined tree's; d removes,
 // as in the tree on the right; m and M rename to match, there and here; Esc goes back; Ctrl-X opens), else
 // 1-9, in their order: {path: key}
-const INVENTED_KEYS = [[/^Nothing/, 'Esc'], [/^Copy/, '>'], [/^Replace/, '<'], [/^(Remove|Delete|Trash)/, 'd'],
+const INVENTED_KEYS = [[/^Nothing/, 'Esc'], [/^Copy/, '>'], [/^Replace/, '<'], [/^Merge/, 'g'], [/^(Remove|Delete|Trash)/, 'd'],
   [/^Rename the files matching/, 'm'], [/^Rename .* their matches/, 'M'], [/^Open/, 'Ctrl-X'], [/^Ask AI/, 'a'],
   [/^Explore/, 'e'], [/^(Read .* anew|See what changed)/, 'Ctrl-R']];
 
@@ -569,7 +570,14 @@ function plainOf(line) { return styledParts(line).map(part => part.text).join(''
 function diffToggle(line) {
   const labels = plainOf(line).slice('Diff: '.length).split('  (')[0].split(' · ');
   const shown = labels.findIndex(label => label.startsWith('['));
-  return el('span', {class: 'difftoggle'}, el('b', {}, 'Diff'), labels.map((label, i) => {
+  // (Merging the two: the menu's Merge, on this file, checked first if nothing is; in a tree whose menu has it)
+  const merge = isSyncFilesTree(view.screen) ? el('button', {class: 'mergebutton', onclick: async () => {
+    const path = view.selected;
+    if (!view.picked.size && path) await act('pick', {paths: [path], on: true});
+    view.pendingKey = 'g';
+    act('enter');
+  }}, icon('merge'), 'Merge…') : '';
+  return el('span', {class: 'difftoggle'}, el('b', {}, 'Diff'), merge, labels.map((label, i) => {
     const name = label.replace(/^\[(.*)\]$/, '$1');
     return el('button', {class: i === shown ? 'on' : '', onclick: async () => {
       for (let n = (i - shown + labels.length) % labels.length; n > 0; n--) await act('press', {key: '\x14'});
@@ -697,6 +705,7 @@ function setActionsOpen(open) { kept('dirdelta_actions', open ? 'open' : ''); }
 const QUICK_ACTIONS = [
   ['copy', '>', screen => 'Copy to ' + screen.side.root],
   ['swap', '<', screen => 'Replace with ' + screen.side.root + "'s"],
+  ['merge', 'g', () => 'Merge the two versions…'],
   ['trash', 'd', () => 'Remove'],
   ['pencil', 'cc', () => 'Rename…'],
   ['pencil', 'm', () => 'Rename the match there'],
@@ -797,6 +806,126 @@ function short(text) {
 }
 
 // A messages screen
+
+// A merge of two versions of a text file (web/merging.py): each block where they differ shown with both sides, and
+// which to keep (one, the other, both in either order); the result, built from those choices (a block not chosen yet
+// keeps both, between conflict marks), and edited at will; the AI's merge to start from; Save writes it to both
+const MERGE_MARKS = ['<<<<<<< ', '=======', '>>>>>>> '];
+const MERGE_CHOICES = [['a', 'This one'], ['b', 'That one'], ['ab', 'Both'], ['ba', 'Both, that first']];
+
+function renderMerge(screen, isNew) {
+  setTop(screen.title, screen.labels);
+  if (isNew) {
+    placePreview(false);
+    document.body.style.minHeight = '';
+    view.merge = {choices: screen.blocks.map(() => null), edited: false, aiShown: null};
+    const main = document.getElementById('main');
+    main.dataset.shows = 'merge';
+    const [nameA, nameB] = screen.names;
+    const blocks = screen.blocks.map((block, index) => block.same ? sameBlock(block.same) : differBlock(block, index, nameA, nameB));
+    const result = el('textarea', {id: 'mergeresult', spellcheck: 'false', 'aria-label': 'The merged text',
+      oninput: () => { view.merge.edited = true; mergeStatus(screen); }});
+    main.replaceChildren(
+      el('div', {class: 'mergehead'}, el('div', {class: 'note'}, 'Where the two versions differ, choose what to keep: ',
+        el('span', {class: 'side-a'}, nameA), ' or ', el('span', {class: 'side-b'}, nameB), ', or both. Then check the result below, edit it if you like, and save it to both.'),
+        screen.canSuggest ? el('div', {id: 'mergeai'}) : ''),
+      el('div', {class: 'mergeblocks'}, blocks),
+      el('div', {class: 'section-title'}, 'The result'),
+      el('div', {class: 'note', id: 'mergeresultnote'}),
+      result);
+    buildMergeResult(screen);
+  }
+  renderMergeAI(screen);
+  mergeStatus(screen);
+  document.getElementById('actions').replaceChildren(el('div', {class: 'actsec main'},
+    el('button', {onclick: () => act('merge', {merge: {action: 'cancel'}})}, 'Cancel'),
+    el('button', {class: 'primary', onclick: () => act('merge', {merge: {action: 'save', text: document.getElementById('mergeresult').value}})},
+      'Save the merge to both')));
+}
+
+function sameBlock(lines) {
+  // (Long alike stretches folded: their first and last lines shown, the rest on a tap)
+  const shown = lines.length <= 6 ? lines : lines.slice(0, 2).concat(['…'], lines.slice(-2));
+  const box = el('pre', {class: 'mergesame'}, shown.join('\n'));
+  if (lines.length > 6) {
+    box.title = 'Show all ' + lines.length + ' lines';
+    box.classList.add('folded');
+    box.onclick = () => { box.textContent = lines.join('\n'); box.classList.remove('folded'); box.onclick = null; };
+  }
+  return box;
+}
+
+function differBlock(block, index, nameA, nameB) {
+  const side = (lines, cls, name) => el('div', {class: 'mergeside ' + cls}, el('div', {class: 'mergename'}, name),
+    el('pre', {}, lines.length ? lines.join('\n') : '(nothing here)'));
+  const choices = el('div', {class: 'mergechoices'}, MERGE_CHOICES.map(([key, text]) =>
+    el('button', {class: 'small', 'data-key': key, onclick: () => chooseBlock(index, key)},
+      text === 'This one' ? nameA : text === 'That one' ? nameB : key === 'ab' ? 'Both' : 'Both, ' + nameB + ' first')));
+  return el('div', {class: 'mergediff', id: 'mergeblock' + index}, el('div', {class: 'mergesides'}, side(block.a, 'side-a', nameA), side(block.b, 'side-b', nameB)), choices);
+}
+
+function chooseBlock(index, key) {
+  const screen = view.screen;
+  // (Your edits to the result give way to it, rebuilt from the choices: the note says so)
+  view.merge.dropped = view.merge.edited;
+  view.merge.choices[index] = key;
+  view.merge.edited = false;
+  document.querySelectorAll('#mergeblock' + index + ' .mergechoices button').forEach(button =>
+    button.classList.toggle('on', button.dataset.key === key));
+  buildMergeResult(screen);
+}
+
+function buildMergeResult(screen) {
+  const [nameA, nameB] = screen.names, lines = [];
+  screen.blocks.forEach((block, index) => {
+    if (block.same) { lines.push(...block.same); return; }
+    const key = view.merge.choices[index];
+    if (key === 'a') lines.push(...block.a);
+    else if (key === 'b') lines.push(...block.b);
+    else if (key === 'ab') lines.push(...block.a, ...block.b);
+    else if (key === 'ba') lines.push(...block.b, ...block.a);
+    else lines.push(MERGE_MARKS[0] + nameA, ...block.a, MERGE_MARKS[1], ...block.b, MERGE_MARKS[2] + nameB);
+  });
+  document.getElementById('mergeresult').value = lines.join('\n');
+  mergeStatus(screen);
+}
+
+function mergeStatus(screen) {
+  const total = screen.blocks.filter(block => !block.same).length;
+  const chosen = view.merge.choices.filter(Boolean).length;
+  const text = document.getElementById('mergeresult').value;
+  const marked = text.split('\n').some(line => line.startsWith(MERGE_MARKS[0]) || line === MERGE_MARKS[1] || line.startsWith(MERGE_MARKS[2]));
+  const note = document.getElementById('mergeresultnote');
+  if (note) note.textContent = (view.merge.edited ? 'Edited by you. ' : view.merge.dropped ? 'Rebuilt from your choices (your edits to it dropped). ' : '') + (marked ? 'Blocks not chosen yet are in it with both versions, between <<<<<<< and >>>>>>> marks.' : 'No conflict marks left.');
+  document.getElementById('status').replaceChildren(chosen + ' of ' + total + ' differing block' + (total === 1 ? '' : 's') + ' chosen' +
+    (view.merge.edited ? '; the result edited' : ''));
+}
+
+function renderMergeAI(screen) {
+  const box = document.getElementById('mergeai');
+  if (!box) return;
+  const ai = screen.ai;
+  if (!ai) {
+    box.replaceChildren(el('button', {onclick: () => act('merge', {merge: {action: 'suggest'}})}, icon('ai'), ' Ask AI to merge them'));
+    return;
+  }
+  if (ai.status === 'asking') { box.replaceChildren(el('div', {class: 'note'}, 'Claude is merging them', el('span', {class: 'dots'}))); return; }
+  if (ai.status === 'failed') {
+    box.replaceChildren(el('div', {class: 'note c-red'}, "The AI couldn't merge them: " + ai.error),
+      el('button', {class: 'small', onclick: () => act('merge', {merge: {action: 'suggest'}})}, 'Ask again'));
+    return;
+  }
+  const use = () => {
+    view.merge.dropped = false;
+    document.getElementById('mergeresult').value = ai.lines.join('\n');
+    view.merge.edited = true;
+    view.merge.aiShown = true;
+    mergeStatus(screen);
+    document.getElementById('mergeresult').scrollIntoView({block: 'start', behavior: 'smooth'});
+  };
+  box.replaceChildren(el('div', {class: 'mergeainotes'}, el('b', {}, "The AI's merge"), ' (' + ai.lines.length + ' lines): ', ai.notes || ''),
+    el('button', {class: 'small primary', onclick: use}, 'Put it in the result, to review'));
+}
 
 function renderMessages(screen, isNew) {
   setTop(screen.title, screen.labels);

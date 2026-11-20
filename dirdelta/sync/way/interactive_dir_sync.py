@@ -11,6 +11,7 @@ from dirdelta.sync.way.copying import Copying
 from dirdelta.sync.way.keys import Keys
 from dirdelta.sync.way.lists import Lists
 from dirdelta.sync.way.menu import Menu
+from dirdelta.sync.way.merging import Merging
 from dirdelta.sync.way.renames import Renames
 from dirdelta.ui import filescreen
 from dirdelta.ui import opening
@@ -18,7 +19,7 @@ from dirdelta.ui import renaming
 from dirdelta.ui import sidetree
 
 
-class InteractiveDirSync(Browsing, Keys, Lists, Menu, Copying, AskAI, Renames,
+class InteractiveDirSync(Browsing, Keys, Lists, Menu, Copying, Merging, AskAI, Renames,
                          filescreen.FilesScreen):
 
     """The files in src that aren't in dst, which the user picks and then copies to dst, removes
@@ -41,6 +42,8 @@ class InteractiveDirSync(Browsing, Keys, Lists, Menu, Copying, AskAI, Renames,
     EXPLORE = 'explore'
     # Renaming the one picked file (cc's, on the selected one), to a name the user gives
     RENAME_IT = 'rename it'
+    # Merging the one picked file that differs: its two versions into one, written to both (merging.py)
+    MERGE = 'merge'
     # The picker's keys that do an option of the menu, shown before it
     # (Ctrl-X opens the selected one, not the picked ones: Open has no key)
     SHORTCUTS = {READ_ANEW: 'Ctrl-R', ASK_AI: aiplan_screen.KEY_NAME, EXPLORE: archive_screen.KEY_NAME,
@@ -48,7 +51,7 @@ class InteractiveDirSync(Browsing, Keys, Lists, Menu, Copying, AskAI, Renames,
     # The label of each action's confirmation, so what it's for shows at a glance (magenta, not
     # red: red is LIVE's)
     LABELS = {COPY: ('COPY', 'blue'), COPY_BACK: ('COPY', 'blue'), REMOVE: ('REMOVE', 'magenta'),
-              RENAME_IN_DST: ('RENAME', 'cyan'), RENAME_IN_SRC: ('RENAME', 'cyan')}
+              RENAME_IN_DST: ('RENAME', 'cyan'), RENAME_IN_SRC: ('RENAME', 'cyan'), MERGE: ('MERGE', 'blue')}
 
     # The action menu's first option, so it's the one selected at first: doing nothing
     NOTHING = "Nothing: back to the files"

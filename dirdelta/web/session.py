@@ -7,6 +7,7 @@ import itertools
 import threading
 
 from dirdelta.known import users
+from dirdelta.web import merging as web_merging
 from dirdelta.web import messages as web_messages
 from dirdelta.web import picker as web_picker
 
@@ -177,6 +178,12 @@ class Session(object):
                 on_stop()
             if wait or is_stopped:
                 screen.wait_continue(("Stopped" if is_stopped else "Done") if is_stoppable else "")
+
+    def merge(self, title, names, lines_a, lines_b, label, suggest):
+        """As merging.merge(): the merge window, until the page saves it (its lines) or goes back (None)"""
+        with self._shown(web_merging.MergeScreen(next(self._ids), title, names, lines_a, lines_b, label, suggest,
+                                                 self.bump)) as screen:
+            return screen.run()
 
     def ask(self, title, lines, prompt, default, label):
         labels = [label] if label else []
