@@ -1320,6 +1320,9 @@ own), given with the replicas: the terminal's dashboard has an option for each r
 mounted or there: what its path is on now isn't its disk), running `label_screen.run()`; the web version's Replicas tab
 a Name... in each card (`/api/replicas/name`), that tab being its dashboard (the sync and start menus have none there).
 The sync menu no longer has one.
+Each replica has a look too, given with its name in the web version: what it's on, as an icon (laptop, desktop, external
+disk, USB stick, NAS, phone, cloud; else as found), and a color, shown on its card and wherever its name is said
+(`Replicas.looks`, by the same key as its label; `replicaLabel()`).
 
 ## The file pickers' `:` menu: `contextmenu.py`
 

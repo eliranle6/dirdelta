@@ -85,7 +85,11 @@ class HomeTest(WebTest):
             self.call('POST', '/api/replicas/name', {'path': 'cloud/photos', 'name': ''})
             self.assertNotIn('desktop', replicas.load().labels.values())
             self.assertFalse(self.call('POST', '/api/replicas/name', {'path': '/etc', 'name': 'x'})['ok'])
-        self.assertEqual(2, save.call_count)
+            # Its look, given with it, is on the dashboard
+            self.call('POST', '/api/replicas/name', {'path': 'cloud/photos', 'name': 'desktop', 'color': 'teal', 'icon': 'nas'})
+            found = next(replica for replica in self.call('GET', '/api/home')['replicas'] if replica['path'] == 'cloud/photos')
+            self.assertEqual(found['look'], {'color': 'teal', 'icon': 'nas'})
+        self.assertEqual(3, save.call_count)
 
     def test_only_a_known_local_replica_is_hashed_from_the_dashboard(self):
         with mock.patch('dirdelta.screens.hashes_screen.dashboard_actions.start_hashing') as start_hashing:

@@ -43,7 +43,8 @@ def load():
                         _known(content.get('known', {})), _compared(content.get('compared', [])),
                         {str(key): str(label) for key, label in content.get('labels', {}).items()},
                         _followers(content.get('followers', {})), _paths(content.get('replicas', [])),
-                        _paths(content.get('inboxes', [])))
+                        _paths(content.get('inboxes', [])),
+                        {str(key): dict(look) for key, look in content.get('looks', {}).items() if isinstance(look, dict)})
     except FileNotFoundError:
         return Replicas()
     except (OSError, ValueError, AttributeError, TypeError) as error:
@@ -63,7 +64,8 @@ def save(replicas):
                'labels': replicas.labels,
                'followers': replicas.followers,
                'replicas': replicas.added_replicas,
-               'inboxes': replicas.added_inboxes}
+               'inboxes': replicas.added_inboxes,
+               'looks': replicas.looks}
     try:
         os.makedirs(os.path.dirname(path), exist_ok=True)
         temp_path = path + '.tmp'

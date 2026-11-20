@@ -12,13 +12,17 @@ MAX_RECENT_DIRS = 10
 MAX_PATHS_KEPT = 5
 
 
+# The colors and icons a replica can be shown in (the web version's names of them)
+LOOK_COLORS = ('blue', 'green', 'orange', 'purple', 'red', 'teal', 'pink', 'grey')
+LOOK_ICONS = ('laptop', 'desktop', 'disk', 'usb', 'nas', 'phone', 'drive')
+
 # One way for all (see paths.normalized())
 normalized = paths.normalized
 
 
 class Replicas(ReplicaLists):
     def __init__(self, history=None, favorites=None, sorts=None, recent_dirs=None, known=None, compared=None,
-                 labels=None, followers=None, added_replicas=None, added_inboxes=None):
+                 labels=None, followers=None, added_replicas=None, added_inboxes=None, looks=None):
         # Pairs (tuples of 2 normalized paths), the latest first
         self.history = list(history or [])
         # Pairs, in the order they were added
@@ -45,6 +49,9 @@ class Replicas(ReplicaLists):
         # The replicas and inboxes the user added (normalized), in the order they were (see replica_lists.py)
         self.added_replicas = list(added_replicas or [])
         self.added_inboxes = list(added_inboxes or [])
+        # {what a label is of (label_key()): how the user has the replica shown: {'color': one of LOOK_COLORS,
+        # 'icon': one of LOOK_ICONS}, either left out for the default}
+        self.looks = {key: dict(look) for key, look in (looks or {}).items()}
 
     def set_label(self, key, label):
         """Label what key is of (None: it has no label now)"""
@@ -52,6 +59,19 @@ class Replicas(ReplicaLists):
             self.labels[key] = label
         else:
             self.labels.pop(key, None)
+
+    def set_look(self, key, color=None, icon=None):
+        """How what key is of is shown: its color and icon (None: the default), each one of LOOK_COLORS and
+        LOOK_ICONS (another is left out)"""
+        look = {}
+        if color in LOOK_COLORS:
+            look['color'] = color
+        if icon in LOOK_ICONS:
+            look['icon'] = icon
+        if look:
+            self.looks[key] = look
+        else:
+            self.looks.pop(key, None)
 
     def note_compared(self, path_a, path_b, only_a, only_b, when, totals=None):
         """Note that a sync just found (when, a datetime) that a had only_a files b lacked, and b

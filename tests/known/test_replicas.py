@@ -98,6 +98,8 @@ class ReplicasFileTest(unittest.TestCase):
         known.record_followers('cloud/me', ['/mnt/win'])
         known.add_replica('/disk/me/')
         known.add_inbox('cloud/phone')
+        known.set_look('disk-key', 'teal', 'usb')
+        known.set_look('other-key', 'no such color', 'no such icon')
         # Its dir is made
         replicas.save(known)
         loaded = replicas.load()
@@ -107,6 +109,8 @@ class ReplicasFileTest(unittest.TestCase):
         self.assertEqual(loaded.dirs_of('cloud/me'), ['photos/2026'])
         self.assertEqual(loaded.followers, {'cloud/me': ['/mnt/win']})
         self.assertEqual((['/disk/me'], ['cloud/phone']), (loaded.added_replicas, loaded.added_inboxes))
+        # (A look of neither a known color nor icon isn't kept)
+        self.assertEqual(loaded.looks, {'disk-key': {'color': 'teal', 'icon': 'usb'}})
         with open(self.path) as f:
             self.assertEqual(json.load(f), {'favorites': [['/mnt/win', 'cloud/me']],
                                             'history': [['/a', 'cloud/b']],
@@ -114,7 +118,8 @@ class ReplicasFileTest(unittest.TestCase):
                                             'recent_dirs': {'cloud/me': ['photos/2026']},
                                             'known': {}, 'compared': [], 'labels': {},
                                             'followers': {'cloud/me': ['/mnt/win']},
-                                            'replicas': ['/disk/me'], 'inboxes': ['cloud/phone']})
+                                            'replicas': ['/disk/me'], 'inboxes': ['cloud/phone'],
+                                            'looks': {'disk-key': {'color': 'teal', 'icon': 'usb'}}})
 
     def test_a_pairs_comparison_loads_back_either_way_around(self):
         known = replicas.Replicas()

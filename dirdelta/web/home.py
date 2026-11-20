@@ -41,7 +41,8 @@ def replica_info(path, known_replicas):
     is_cloud = paths.is_cloud_path(path)
     found = {'path': path, 'name': naming.own_name(path), 'place': naming.place(path), 'fullName': naming.name(path),
              'kind': 'drive' if is_cloud else 'local', 'disk': replicanames.disk_name(path),
-             'device': 'drive' if is_cloud else _device(path), 'named': replicanames.label(path)}
+             'device': 'drive' if is_cloud else _device(path), 'named': replicanames.label(path),
+             'look': known_replicas.looks.get(replicanames.label_key(path)) or {}}
     if is_cloud:
         found['there'], found['why'] = True, ''
         found['reading'] = next((one for one in freshening.reading() if one['path'] == path), None)
@@ -160,7 +161,8 @@ def routes(session):
                 'tab': session.tab if session.is_running else None}
 
     def name_replica(query, body):
-        """Name the replica at body['path'] (body['name']; empty: none, it's called by its folder again), as the
+        """Name the replica at body['path'] (body['name']; empty: none, it's called by its folder again), and set
+        how it's shown (body['color'], body['icon'], if given: one of LOOK_COLORS and LOOK_ICONS, '' the default), as the
         terminal's dashboard does (kept by its identity: its disk and the path on it, so not one not there)"""
         path, name = body.get('path', ''), (body.get('name') or '').strip()
         known_replicas = replicas.load()
@@ -168,7 +170,11 @@ def routes(session):
             return {'ok': False, 'error': "That's not one of your replicas."}
         if not paths.is_cloud_path(path) and mounts.unmounted(path) is not None:
             return {'ok': False, 'error': "Its disk isn't mounted: plug it in to name it."}
-        known_replicas.set_label(replicanames.label_key(path), name or None)
+        key = replicanames.label_key(path)
+        known_replicas.set_label(key, name or None)
+        # (Its look too, if the page says it: its color and icon, '' the default)
+        if 'color' in body or 'icon' in body:
+            known_replicas.set_look(key, body.get('color') or None, body.get('icon') or None)
         replicas.save(known_replicas)
         return {'ok': True, 'name': naming.own_name(path)}
 

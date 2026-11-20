@@ -64,3 +64,9 @@ button.item { border: 0; border-radius: 0; background: none; }
 .namer label { font-size: 12px; font-weight: 600; color: var(--muted); }
 .namer input { font: inherit; padding: 7px 9px; border-radius: 8px; border: 1px solid var(--line); background: var(--card); color: var(--fg); }
 .card.replica .filecount { font-size: 14px; }
+/* A replica's look: its color on the card's edge; the editor's rows of icons and color swatches */
+.card.replica[style*="--rcolor"] { border-left: 5px solid var(--rcolor); }
+.lookrow { display: flex; flex-wrap: wrap; gap: 6px; }
+.lookrow button.look { display: inline-flex; align-items: center; gap: 4px; }
+.lookrow button.look.on { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
+.lookrow .swatch { width: 14px; height: 14px; border-radius: 50%; background: var(--swatch, transparent); border: 1px solid var(--line); }

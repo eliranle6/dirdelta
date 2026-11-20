@@ -507,6 +507,9 @@ const ICONS = {
   onlyhere: '<path d="M3 6.5h6l2 2h10v10.5H3z"/><path d="M12 11v5M9.5 13.5h5"/>',
   differ: '<rect x="3" y="4" width="8" height="16" rx="1.5"/><rect x="13" y="4" width="8" height="16" rx="1.5"/><path d="M6 9h2M16 9h2M16 13h2"/>',
   star: '<path d="M12 3.5l2.6 5.3 5.8.8-4.2 4.1 1 5.8L12 16.8l-5.2 2.7 1-5.8-4.2-4.1 5.8-.8z"/>',
+  desktop: '<rect x="3" y="4" width="18" height="12" rx="1.5"/><path d="M9 20h6M12 16v4"/>',
+  usb: '<rect x="8" y="9" width="8" height="12" rx="1.5"/><path d="M9.5 9V4h5v5M11 6h0M13 6h0"/>',
+  nas: '<rect x="4" y="3" width="16" height="7" rx="1.5"/><rect x="4" y="14" width="16" height="7" rx="1.5"/><path d="M8 6.5h.01M8 17.5h.01M12 6.5h4M12 17.5h4"/>',
   skip: '<circle cx="12" cy="12" r="9"/><path d="M6 18L18 6"/>',
   person: '<circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/>',
 };
@@ -536,7 +539,24 @@ function chip(tone, text) {
 }
 
 // A replica's name after its icon: Drive's (its 'cloud/' then left out) or a disk's
+// How the user has each replica shown (its color and icon, see LOOK_COLORS), by its path: set as the page loads
+// (setReplicaLooks()), so its name is shown so wherever it's said
+const LOOK_COLORS = {blue: '#2563eb', green: '#16a34a', orange: '#ea580c', purple: '#7c3aed', red: '#dc2626',
+  teal: '#0d9488', pink: '#db2777', grey: '#6b7280'};
+const LOOK_ICONS = {laptop: 'Laptop', desktop: 'Desktop', disk: 'External disk', usb: 'USB stick', nas: 'NAS',
+  phone: 'Phone', drive: 'Cloud'};
+let replicaLooks = {};
+
+function setReplicaLooks(replicas) {
+  replicaLooks = Object.fromEntries((replicas || []).map(replica => [replica.path, replica.look || {}]));
+}
+
+function lookColor(look) { return (look && LOOK_COLORS[look.color]) || ''; }
+
 function replicaLabel(path, name, isInbox) {
   const isDrive = path.startsWith('cloud/') || path === 'cloud';
-  return el('span', {class: 'rname'}, icon(isInbox ? 'inbox' : isDrive ? 'drive' : 'disk'), name);
+  const look = replicaLooks[path] || {};
+  const color = lookColor(look);
+  return el('span', {class: 'rname', style: color ? 'color:' + color : ''},
+    icon(isInbox ? 'inbox' : look.icon || (isDrive ? 'drive' : 'disk')), name);
 }

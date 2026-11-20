@@ -72,20 +72,36 @@ function readShare(reading) {
 function nameButton(replica) {
   const button = el('button', {class: 'small', disabled: !replica.there && replica.kind === 'local',
     title: replica.there || replica.kind !== 'local' ? '' : "Its disk isn't mounted: plug it in to name it"},
-    replica.named ? 'Rename…' : 'Name…');
+    'Name and look…');
   button.onclick = () => {
     const card = button.closest('.card');
     const input = el('input', {type: 'text', value: replica.named || '', placeholder: 'e.g. desktop, blue external disk',
       'aria-label': 'Its name'});
     const note = el('div', {class: 'note'});
+    // (Its icon, what it's on, and its color: one of each, or the default, as it was found)
+    const look = Object.assign({}, replica.look || {});
+    const pickRow = (kind, options) => {
+      const row = el('div', {class: 'lookrow'});
+      const draw = () => row.replaceChildren(...[['', kind === 'icon' ? 'As found' : 'None']].concat(options).map(([value, text]) =>
+        el('button', {class: 'small look' + ((look[kind] || '') === value ? ' on' : ''), title: text,
+          style: kind === 'color' && value ? '--swatch:' + LOOK_COLORS[value] : '',
+          onclick: () => { look[kind] = value; draw(); }},
+          kind === 'icon' ? [value ? icon(value) : '', ' ' + text] : el('span', {class: 'swatch'}), kind === 'color' ? ' ' + text : '')));
+      draw();
+      return row;
+    };
+    const icons = pickRow('icon', Object.entries(LOOK_ICONS));
+    const colors = pickRow('color', Object.keys(LOOK_COLORS).map(name => [name, name]));
     let namer;
     const done = () => { namer.remove(); load(); };
     const save = async () => {
-      const answer = await api('POST', '/api/replicas/name', {path: replica.path, name: input.value});
+      const answer = await api('POST', '/api/replicas/name', {path: replica.path, name: input.value,
+        color: look.color || '', icon: look.icon || ''});
       if (answer.ok) done(); else note.textContent = answer.error;
     };
     input.addEventListener('keydown', event => { if (event.key === 'Enter') save(); if (event.key === 'Escape') done(); });
-    namer = el('div', {class: 'namer'}, el('label', {}, 'Its name'), input,
+    namer = el('div', {class: 'namer'}, el('label', {}, 'Its name'), input, el('label', {}, 'What it is on'), icons,
+      el('label', {}, 'Its color'), colors,
       el('div', {class: 'row2'}, el('button', {class: 'small primary', onclick: save}, 'Save'),
         el('button', {class: 'small', onclick: done}, 'Cancel')), note);
     card.append(namer);
@@ -106,8 +122,10 @@ function replicaCard(replica) {
   actions.push(nameButton(replica));
   actions.push(forgetButton(replica.path, 'replica'));
   const entry = replica.lastEntry ? (replica.lastEntry.date ? replica.lastEntry.date + ': ' : '') + replica.lastEntry.text : '';
-  return el('div', {class: 'card replica' + (replica.there ? '' : ' away')},
-    el('div', {class: 'head'}, icon(replica.device), el('b', {}, replica.fullName)),
+  // (In the look the user gave it: its icon, and its color on the icon, the name and the card's edge)
+  const color = lookColor(replica.look);
+  return el('div', {class: 'card replica' + (replica.there ? '' : ' away'), style: color ? '--rcolor:' + color : ''},
+    el('div', {class: 'head', style: color ? 'color:' + color : ''}, icon((replica.look || {}).icon || replica.device), el('b', {}, replica.fullName)),
     el('div', {class: 'note'}, replica.kind === 'drive' ? 'In Google Drive' : 'On ' + replica.place),
     // (How many files, and their size: a local one's once its hashing listed them, a Drive one's as its list has them)
     replica.files ? el('div', {class: 'filecount'}, el('b', {}, replica.files.count.toLocaleString() + ' file' + (replica.files.count === 1 ? '' : 's')),
@@ -399,6 +417,7 @@ async function load() {
     return;
   }
   document.getElementById('labels').replaceChildren(labelChip(data.label));
+  setReplicaLooks(data.replicas);
   const parts = PAGE === 'replicas' ? replicasPage(data) : homePage(data);
   const open = [...document.querySelectorAll('.pathbutton')].filter(path => path.textContent === path.title).map(path => path.title);
   document.getElementById('main').replaceChildren(...parts);
