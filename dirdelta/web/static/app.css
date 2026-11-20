@@ -64,7 +64,9 @@ input[type=search], input[type=text] { font: inherit; width: 100%; padding: 8px 
 .row { display: flex; align-items: center; gap: 6px; padding: 6px 10px; border-bottom: 1px solid var(--line); cursor: pointer; min-height: 38px; }
 .row:last-child { border-bottom: 0; }
 .row.sel { background: var(--sel); }
-.row.picked .name { color: var(--red); }
+/* Checked: green (its checkbox, a tint); selected: blue (--sel), with a green edge when it's checked too */
+.row.picked { background: color-mix(in srgb, var(--green) 11%, var(--card)); }
+.row.sel.picked { box-shadow: inset 4px 0 0 var(--green); }
 .row .twisty { width: 18px; text-align: center; color: var(--muted); flex: none; }
 .row .name { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .row .dir { font-weight: 600; }
@@ -365,3 +367,18 @@ footer#bottom { max-height: 50vh; overflow-y: auto; overscroll-behavior: contain
 .preview .previewhead { font-size: 12px; color: var(--muted); margin: -2px 0 6px; padding-bottom: 5px; border-bottom: 1px solid var(--line);
   overflow-wrap: anywhere; }
 .preview .previewhead b { color: var(--fg); }
+
+/* What an action acts on, in its color: the checked files green, the selected one blue (as the rows) */
+.row input[type=checkbox] { accent-color: var(--green); }
+.target { display: inline-block; padding: 0 7px; border-radius: 6px; font-weight: 600; border: 1px solid; line-height: 1.5;
+  overflow-wrap: anywhere; }
+.target.checked { color: var(--green); border-color: var(--green); background: color-mix(in srgb, var(--green) 12%, var(--card)); }
+.target.selected { color: var(--accent); border-color: var(--accent); background: var(--sel); }
+button.primary .target { background: var(--card); }
+.checkedline { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 13px; }
+.acton { flex-basis: 100%; font-size: 12px; color: var(--muted); }
+.preview .previewhead .target { font-size: 12px; }
+button.tiny { font-size: 12px; padding: 2px 8px; border-radius: 10px; color: var(--muted); }
+/* (The main row on one line: the main button's text wraps rather than ? going to a line of its own) */
+.actsec.main { flex-wrap: nowrap; }
+.actsec.main > .primary, .actsec.main .splitbutton > button:first-child { min-width: 0; white-space: normal; text-align: left; }

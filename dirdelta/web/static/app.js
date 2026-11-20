@@ -502,7 +502,12 @@ function row({path, depth, flat, guides}) {
   } else if (screen.multi) {
     const count = info.t === 'f' ? (view.picked.has(path) ? 1 : 0) : pickedUnder(path);
     const total = info.t === 'f' ? 1 : (view.fileCounts.get(path) || 0);
-    const box = el('input', {type: 'checkbox', onclick: event => { event.stopPropagation(); act('pick', {paths: [path], on: event.target.checked}); }});
+    // (Checking a row selects it too: what was just touched is what the details show)
+    const box = el('input', {type: 'checkbox', onclick: event => {
+      event.stopPropagation();
+      const on = event.target.checked;
+      act('select', {path: path === '.' ? '' : path}).then(() => act('pick', {paths: [path], on}));
+    }});
     box.checked = total > 0 && count === total;
     box.indeterminate = count > 0 && count < total;
     parts.push(box);
@@ -531,7 +536,7 @@ async function loadPreview() {
   const content = [];
   // (Which node it's of: the selected one, the row tapped, not the ones checked)
   if (lines.length || found.image) {
-    content.push(el('div', {class: 'previewhead'}, 'Selected: ', el('b', {}, view.selected ? baseName(view.selected) : screen.root)));
+    content.push(el('div', {class: 'previewhead'}, 'Selected: ', el('span', {class: 'target selected'}, view.selected ? baseName(view.selected) : screen.root)));
   }
   if (lines.length) content.push(el('pre', {}, lines.map(line => [plainOf(line).startsWith('Diff: ') ? diffToggle(line) : previewLine(line), '\n'])));
   if (found.image) { const canvas = pictureCanvas(found.image); if (canvas) content.push(canvas); }
@@ -671,9 +676,9 @@ function setActionsOpen(open) { kept('dirdelta_actions', open ? 'open' : ''); }
 // and that option chosen, not shown; what it asks then (a confirmation) shown as ever. One greyed out there shows
 // the menu, which says why
 const QUICK_ACTIONS = [
-  ['copy', '>', (screen, it) => 'Copy ' + it + ' to ' + screen.side.root],
-  ['swap', '<', (screen, it) => 'Replace with ' + screen.side.root + "'s"],
-  ['trash', 'd', (screen, it) => 'Remove ' + it],
+  ['copy', '>', screen => 'Copy to ' + screen.side.root],
+  ['swap', '<', screen => 'Replace with ' + screen.side.root + "'s"],
+  ['trash', 'd', () => 'Remove'],
   ['pencil', 'cc', () => 'Rename…'],
   ['pencil', 'm', () => 'Rename the match there'],
   ['pencil', 'M', () => 'Rename to the match'],
@@ -684,10 +689,24 @@ const QUICK_ACTIONS = [
 ];
 
 function quickActions(screen, selected) {
-  const it = view.picked.size ? view.picked.size + ' checked' : selected;
-  return QUICK_ACTIONS.filter(([, key]) => key !== 'e' || /\.zip$/i.test(view.selected || '')).map(([glyph, key, text]) =>
-    el('button', {class: 'quick', onclick: () => { view.pendingKey = key; act('enter'); }},
-      icon(glyph), text(screen, it), el('small', {class: 'keyname'}, key)));
+  return [el('div', {class: 'acton'}, 'These act on ', targetChip(screen, selected))].concat(
+    QUICK_ACTIONS.filter(([, key]) => key !== 'e' || /\.zip$/i.test(view.selected || '')).map(([glyph, key, text]) =>
+      el('button', {class: 'quick', onclick: () => { view.pendingKey = key; act('enter'); }},
+        icon(glyph), text(screen), el('small', {class: 'keyname'}, key))));
+}
+
+// What an action acts on, in its color: the checked files (green, as their checkboxes), or else the selected one
+// (blue, as its row and the details' header)
+function targetChip(screen, selected) {
+  if (screen.multi && view.picked.size) return el('span', {class: 'target checked'}, '✓ ' + view.picked.size + ' checked');
+  return el('span', {class: 'target selected'}, selected);
+}
+
+// With files checked: how many, and unchecking them all (checks left over are how the wrong files get acted on)
+function checkedLine(screen) {
+  if (!screen.multi || screen.states.length || !view.picked.size) return '';
+  return el('div', {class: 'checkedline'}, targetChip(screen, ''),
+    el('button', {class: 'tiny', onclick: () => act('pick', {paths: ['.'], on: false})}, '✕ Uncheck all'));
 }
 
 function renderPickerActions() {
@@ -699,10 +718,11 @@ function renderPickerActions() {
   if (screen.mode !== 'list') {
     const enter = screen.hints.find(([key]) => key === 'Enter');
     const what = enter ? capitalized(enter[1]) : 'Choose';
-    let label = what + (screen.multi ? '' : ' ' + selected);
+    // (Named for what it acts on, in that one's color: the checked files, green, or else the selected one, blue)
+    let label = [what + ' ', screen.multi ? '' : targetChip(screen, selected)];
     if (screen.states.length) label = 'Done';
-    else if (screen.multi) label = view.picked.size ? what + ' with ' + view.picked.size + ' checked' :
-      screen.enterPicksSelection ? what + ' with ' + selected : 'Check some first';
+    else if (screen.multi) label = view.picked.size || screen.enterPicksSelection ? [what + ' with ', targetChip(screen, selected)] :
+      'Check some first';
     const enterButton = el('button', {class: 'primary', disabled: screen.multi && !screen.states.length && !view.picked.size && !screen.enterPicksSelection,
       onclick: () => { if (opensMenu(screen)) openingPanel(); act('enter'); }}, label);
     // (A sync's file tree: ▾ beside it shows its menu's actions as buttons, see quickActions())
@@ -734,7 +754,7 @@ function renderPickerActions() {
   }
   const section = (title, buttons, extra) => buttons.length ?
     el('div', {class: 'actsec' + (extra ? ' ' + extra : '')}, title ? el('div', {class: 'seclabel'}, title) : '', buttons) : '';
-  document.getElementById('actions').replaceChildren(section('', main, 'main'),
+  document.getElementById('actions').replaceChildren(checkedLine(screen), section('', main, 'main'),
     isSyncFilesTree(screen) && actionsOpen() ? section('', quickActions(screen, selected), 'quick') : '',
     section(screen.mode === 'list' ? '' : 'On ' + selected, onSelection),
     section(screen.side ? 'In ' + screen.side.root : '', side), section('Misc', general));
