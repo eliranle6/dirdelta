@@ -233,6 +233,7 @@ function renderPickerFrame() {
     return;
   }
   main.dataset.shows = screen.mode;
+  document.body.style.minHeight = '';
   main.replaceChildren(...parts);
 }
 
@@ -259,6 +260,9 @@ WIDE.addEventListener('change', () => {
 function showPanel(main, parts) {
   let sheet = main.querySelector('.panelwrap .sheet');
   if (!sheet) {
+    // (The page keeps its height while the panel's open: the bar under it shrinks, and the page's scrollbar would go
+    // and come back, a jolt)
+    document.body.style.minHeight = document.documentElement.scrollHeight + 'px';
     // (The tree as it was, inert: its ids gone, so the panel's parts have them)
     const under = el('div', {class: 'under', inert: true}, [...main.childNodes]);
     under.querySelectorAll('[id]').forEach(node => node.removeAttribute('id'));
@@ -758,7 +762,7 @@ function renderMessages(screen, isNew) {
   setTop(screen.title, screen.labels);
   const main = document.getElementById('main');
   if (isNew) placePreview(false);
-  if (isNew) { main.dataset.shows = 'messages'; main.replaceChildren(el('div', {class: 'lines', id: 'lines'}), el('div', {id: 'ask'})); }
+  if (isNew) { main.dataset.shows = 'messages'; document.body.style.minHeight = ''; main.replaceChildren(el('div', {class: 'lines', id: 'lines'}), el('div', {id: 'ask'})); }
   const lines = document.getElementById('lines');
   lines.replaceChildren(...screen.lines.map(([text, color]) => el('div', {class: color ? 'c-' + color : ''}, segmentsSpan(text))));
   const ask = document.getElementById('ask');
