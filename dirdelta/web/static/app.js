@@ -54,15 +54,51 @@ function apply(data) {
   if (isNew) newScreen(screen);
   if (screen.kind === 'picker') updatePicker(screen, isNew);
   else renderMessages(screen, isNew);
+  if (isNew && view.scrollTo) {
+    // (Back where the page was before it was refreshed, once it's drawn, and again once a dir's lists came)
+    const top = view.scrollTo;
+    view.scrollTo = 0;
+    requestAnimationFrame(() => window.scrollTo(0, top));
+    setTimeout(() => { if (Math.abs(window.scrollY - top) > 2) window.scrollTo(0, top); }, 600);
+  }
 }
 
 function newScreen(screen) {
   Object.assign(view, {screen, items: [], info: new Map(), children: new Map(), fileCounts: new Map(),
     picked: new Set(), search: '', tab: 0, showHelp: false, previewVersion: -1, lazy: new Map(),
-    expanded: new Set(['.'])});
+    expanded: new Set(['.']), scrollTo: 0});
+  // (Each screen its own address, and what this tab showed of it kept: a refresh stays where it was)
+  history.replaceState(null, '', '#screen=' + screen.id);
+  const kept = keptView(screen);
+  if (kept) Object.assign(view, {expanded: new Set(kept.expanded), tab: kept.tab, search: kept.search, scrollTo: kept.scroll});
   if (screen.items) setItems(screen.items);
-  if (screen.mode === 'dir') loadChildren('.');
+  if (screen.mode === 'dir') [...view.expanded].forEach(loadChildren);
 }
+
+// What this tab showed of a screen (its open folders, tab, search and scroll), kept in its session's storage
+// as the page goes (a refresh, or another app): the server keeps the rest (the selection, the picks)
+function screenName(screen) { return screen.root || screen.title || ''; }
+
+function keepView() {
+  if (!view.screen) return;
+  try {
+    sessionStorage.setItem('dirdelta_screen_' + view.screen.id, JSON.stringify({name: screenName(view.screen),
+      expanded: [...view.expanded], tab: view.tab, search: view.search, scroll: Math.round(window.scrollY)}));
+  } catch (error) { /* (nothing kept: a refresh starts at the top) */ }
+}
+
+function keptView(screen) {
+  try {
+    const kept = JSON.parse(sessionStorage.getItem('dirdelta_screen_' + screen.id) || 'null');
+    // (The daemon restarted: the same number may be another screen)
+    return kept && kept.name === screenName(screen) ? kept : null;
+  } catch (error) { return null; }
+}
+
+// (The page's own scroll, not the browser's: it would scroll before the screen is drawn)
+history.scrollRestoration = 'manual';
+addEventListener('pagehide', keepView);
+document.addEventListener('visibilitychange', () => { if (document.hidden) keepView(); });
 
 function setItems(items) {
   view.items = items.map(item => item.p);
@@ -132,7 +168,7 @@ function renderPickerFrame() {
   if (screen.tabs.length) parts.push(el('div', {class: 'tabs', id: 'pickertabs'}));
   if (screen.mode !== 'list') {
     parts.push(el('input', {type: 'search', id: 'search', placeholder: 'Search', autocomplete: 'off',
-      oninput: event => { view.search = event.target.value; renderTree(); }}));
+      value: view.search, oninput: event => { view.search = event.target.value; renderTree(); }}));
   }
   const body = el('div', {class: 'split'}, el('div', {id: 'tree'}),
     el('div', {}, el('div', {id: 'preview'}), el('div', {id: 'side'})));
