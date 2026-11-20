@@ -7,7 +7,7 @@ const MAX_ROWS = 1500;
 const view = {
   version: 0, screen: null, items: [], info: new Map(), children: new Map(), fileCounts: new Map(),
   picked: new Set(), selected: null, sideSelected: null, status: '', previewVersion: -1,
-  expanded: new Set(['.']), sideExpanded: new Set(), search: '', tab: 0, showHelp: false, lazy: new Map(), running: false, log: [],
+  expanded: new Set(['.']), sideExpanded: new Set(), wentBack: false, search: '', tab: 0, showHelp: false, lazy: new Map(), running: false, log: [],
 };
 
 async function api(method, path, body) {
@@ -64,11 +64,20 @@ function apply(data) {
 }
 
 function newScreen(screen) {
+  // (What was shown of the screen before, kept: coming back to it, as the flow does, finds it as it was)
+  keepView();
+  // (Whether this page showed one before: between two screens the flow may show none for a moment)
+  const previous = view.shownOne;
+  view.shownOne = true;
   Object.assign(view, {screen, items: [], info: new Map(), children: new Map(), fileCounts: new Map(),
     picked: new Set(), search: '', tab: 0, showHelp: false, previewVersion: -1, lazy: new Map(),
     expanded: new Set(['.']), sideExpanded: null, scrollTo: 0, isKept: false});
-  // (Each screen its own address, and what this tab showed of it kept: a refresh stays where it was)
-  history.replaceState(null, '', '#screen=' + screen.id);
+  // Each screen its own address: a new picker a step of the browser's history (its Back is the screen's
+  // Back, see goBack()); one shown on going back, or on a refresh, or a messages screen in its place
+  const address = '#screen=' + screen.id;
+  if (previous && screen.kind === 'picker' && !view.wentBack && location.hash !== address) history.pushState({step: true}, '', address);
+  else history.replaceState(null, '', address);
+  view.wentBack = false;
   const kept = keptView(screen);
   if (kept) {
     Object.assign(view, {expanded: new Set(kept.expanded), tab: kept.tab, search: kept.search, scrollTo: kept.scroll, isKept: true,
@@ -78,23 +87,42 @@ function newScreen(screen) {
   if (screen.mode === 'dir') [...view.expanded].forEach(loadChildren);
 }
 
+// The browser's Back (a phone's back gesture) on a flow's screen: the screen's own Back (q), the flow then
+// showing what came before it. On a messages screen, which has none, it stays
+function goBack() {
+  // (A step the browser has: its Back, the same, so the two agree; else the screen's own)
+  if (history.state && history.state.step) history.back();
+  else act('quit');
+}
+
+addEventListener('popstate', () => {
+  const screen = view.screen;
+  if (!screen) return;
+  if (screen.kind !== 'picker') { history.pushState(null, '', '#screen=' + screen.id); return; }
+  if (location.hash === '#screen=' + screen.id) return;
+  view.wentBack = true;
+  act('quit');
+});
+
 // What this tab showed of a screen (its open folders, tab, search and scroll), kept in its session's storage
-// as the page goes (a refresh, or another app): the server keeps the rest (the selection, the picks)
-function screenName(screen) { return screen.root || screen.title || ''; }
+// as it's left (another screen, a refresh, another app), by what the screen is (the flow shows a picker again
+// as a new one): the server keeps the rest (the selection, the picks)
+function screenName(screen) {
+  return [screen.kind, screen.root || screen.title || '', (screen.header || '').split('\n')[0]].join('|');
+}
 
 function keepView() {
   if (!view.screen) return;
   try {
-    sessionStorage.setItem('dirdelta_screen_' + view.screen.id, JSON.stringify({name: screenName(view.screen),
-      expanded: [...view.expanded], sideExpanded: view.sideExpanded ? [...view.sideExpanded] : null, tab: view.tab, search: view.search, scroll: Math.round(window.scrollY)}));
-  } catch (error) { /* (nothing kept: a refresh starts at the top) */ }
+    sessionStorage.setItem('dirdelta_view_' + screenName(view.screen), JSON.stringify({
+      expanded: [...view.expanded], sideExpanded: view.sideExpanded ? [...view.sideExpanded] : null, tab: view.tab,
+      search: view.search, scroll: Math.round(window.scrollY)}));
+  } catch (error) { /* (nothing kept: it starts at the top) */ }
 }
 
 function keptView(screen) {
   try {
-    const kept = JSON.parse(sessionStorage.getItem('dirdelta_screen_' + screen.id) || 'null');
-    // (The daemon restarted: the same number may be another screen)
-    return kept && kept.name === screenName(screen) ? kept : null;
+    return JSON.parse(sessionStorage.getItem('dirdelta_view_' + screenName(screen)) || 'null');
   } catch (error) { return null; }
 }
 
@@ -438,7 +466,7 @@ function renderPickerActions() {
   const screen = view.screen;
   const main = [];
   const back = screen.hints.find(([key]) => key === 'q');
-  main.push(el('button', {onclick: () => act('quit')}, back ? capitalized(back[1]) : 'Back'));
+  main.push(el('button', {onclick: goBack}, back ? capitalized(back[1]) : 'Back'));
   const selected = view.selected ? baseName(view.selected) : screen.root;
   if (screen.mode !== 'list') {
     const enter = screen.hints.find(([key]) => key === 'Enter');

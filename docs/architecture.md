@@ -1227,8 +1227,10 @@ every link carries, then a cookie), and a watcher.
   (its trees, the picker's and the side's, with branch lines as treepicker's: │ ├ └, `visibleRows()`'s guides; each opened
   at first as treepicker's, a level at a time while the next one fits the tree's height, `openToFit()`, and down to the selection;
   the side tree's folders opened and closed by their ▸ ▾ too)
-  (each screen at an address of its own, `/run#screen=N`, and what the tab showed of it, its open folders, tab, search
-  and scroll, kept in its sessionStorage as the page goes: a refresh stays where it was, `keepView()`)
+  (each screen at an address of its own, `/run#screen=N`, a picker a step of the browser's history, whose Back (a phone's back
+  gesture) is the screen's own, q, and so is the page's Back button, `goBack()`: the flow then shows what came before, e.g. the
+  file picker again from its action menu; and what the tab showed of a screen, its open folders, tab, search and scroll, kept in
+  its sessionStorage as it's left, by what the screen is: a refresh, or coming back to it, finds it as it was, `keepView()`)
   a menu as a list, a tree with checkboxes or state marks, the preview column (pictures from
   treepicker's pixels), the keys as buttons (named by the keys row, or the `?` help's lines) in sections: Back, the main action (Enter's hint and what it's on: "Choose what to do with food.txt") and ?; what acts on the selection ("On food.txt"); on the side tree's ("In Cloud(...)"); and More, folded, the picker's own keys (`GENERAL_KEYS`: dashboard, menu, pictures); labels whole, wrapped; the key names hidden on a touch screen; the bar at most half the screen, and
   messages screens.
