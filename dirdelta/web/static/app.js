@@ -318,6 +318,58 @@ const ACTION_ICONS = [[/^Nothing/, 'back'], [/^Ask AI/, 'ai'], [/^Copy/, 'copy']
   [/^(Read .* anew|See what changed|Refresh|Rescan)/, 'refresh'], [/^Explore/, 'zip'], [/^Move/, 'move'],
   [/^(Skip|Leave)/, 'skip']];
 
+async function chooseOption(path) {
+  if (view.screen.previewBelow && view.selected !== path) { await act('select', {path}); return; }
+  await act('select', {path});
+  await act('enter');
+}
+
+// A menu option's key, as the flow writes it before the text ('[a] Ask AI...'): the key, and the text without it
+const KEY_PREFIX = /^(?:\x02[^\x02]*\x02)?\[([^\]]+)\](?:\x02[^\x02]*\x02)?\s*/;
+function withoutKeyPrefix(label) { return label.replace(KEY_PREFIX, '').replace(/^\s+/, ''); }
+
+// The keys of a files' menu's options: the flow's own (a picker's key that does it too: a, cc, e, Ctrl-R), else
+// one as the sync's screens have it (> to the other replica and < from it, as the combined tree's; d removes,
+// as in the tree on the right; m and M rename to match, there and here; Esc goes back; Ctrl-X opens), else
+// 1-9, in their order: {path: key}
+const INVENTED_KEYS = [[/^Nothing/, 'Esc'], [/^Copy/, '>'], [/^Replace/, '<'], [/^(Remove|Delete|Trash)/, 'd'],
+  [/^Rename the files matching/, 'm'], [/^Rename .* their matches/, 'M'], [/^Open/, 'Ctrl-X'], [/^Ask AI/, 'a'],
+  [/^Explore/, 'e'], [/^(Read .* anew|See what changed)/, 'Ctrl-R']];
+
+function optionKeys() {
+  const found = new Map(), used = new Set();
+  const options = view.items.filter(path => !view.info.get(path).s);
+  for (const path of options) {
+    const own = KEY_PREFIX.exec(plainOf(shown(path)).replace(/^\s+/, ''));
+    if (own) { found.set(path, own[1]); used.add(own[1]); }
+  }
+  for (const path of options) {
+    if (found.has(path)) continue;
+    const text = withoutKeyPrefix(plainOf(shown(path)));
+    const hit = INVENTED_KEYS.find(([pattern, key]) => pattern.test(text) && !used.has(key));
+    if (hit) { found.set(path, hit[1]); used.add(hit[1]); }
+  }
+  let digit = 1;
+  for (const path of options) {
+    if (!found.has(path) && digit <= 9) found.set(path, String(digit++));
+  }
+  return found;
+}
+
+// A key pressed on a files' menu: its option chosen (cc: c twice, quickly)
+document.addEventListener('keydown', event => {
+  if (!view.optionKeys || !view.optionKeys.size || document.getElementById('main').dataset.shows !== 'panel') return;
+  if (event.target.closest && event.target.closest('input, textarea')) return;
+  let name = event.key === 'Escape' ? 'Esc' : event.ctrlKey && event.key.length === 1 ? 'Ctrl-' + event.key.toUpperCase() : event.key;
+  if (name === 'c' && !event.ctrlKey) {
+    const now = Date.now();
+    if (view.lastC && now - view.lastC < 800) { name = 'cc'; view.lastC = 0; } else { view.lastC = now; return; }
+  }
+  for (const [path, key] of view.optionKeys) {
+    if (key === name && !view.info.get(path).d) { event.preventDefault(); chooseOption(path); return; }
+  }
+});
+
 function actionIcon(label) {
   const text = label.replace(/^\s*\[[^\]]*\]\s*/, '').trim();
   const found = ACTION_ICONS.find(([pattern]) => pattern.test(text));
@@ -327,6 +379,8 @@ function actionIcon(label) {
 function menuList() {
   const screen = view.screen;
   const inPanel = document.getElementById('main').dataset.shows === 'panel';
+  const keys = inPanel ? optionKeys() : new Map();
+  view.optionKeys = keys;
   return el('div', {class: 'list'}, view.items.map(path => {
     const info = view.info.get(path);
     // (A line that isn't an option: a section's heading (── Name ──), a blank line, or what to read, e.g. the
@@ -337,11 +391,11 @@ function menuList() {
     }
     const classes = ['option', path === view.selected ? 'sel' : '', info.d ? 'disabled' : '', info.c ? 'c-' + info.c : ''];
     const glyph = inPanel ? actionIcon(plainOf(shown(path))) : null;
-    return el('button', {class: classes.join(' ') + (glyph ? ' withicon' : ''), disabled: info.d, onclick: async () => {
-      if (screen.previewBelow && view.selected !== path) { await act('select', {path}); return; }
-      await act('select', {path});
-      await act('enter');
-    }}, glyph ? icon(glyph) : '', segmentsSpan(shown(path)));
+    // (A files' menu: its key on the right, not before the text)
+    const key = inPanel ? keys.get(path) : null;
+    const text = inPanel ? withoutKeyPrefix(shown(path)) : shown(path);
+    return el('button', {class: classes.join(' ') + (glyph ? ' withicon' : ''), disabled: info.d, onclick: () => chooseOption(path)},
+      glyph ? icon(glyph) : '', segmentsSpan(text), key ? el('kbd', {}, key) : '');
   }));
 }
 
