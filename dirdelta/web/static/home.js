@@ -200,7 +200,8 @@ function inStepTile(data, tile) {
   }
   const share = either ? both / either : 1;
   const percent = share === 1 ? '100%' : Math.min(99.9, Math.floor(share * 1000) / 10) + '%';
-  return tile(share >= 0.99 ? 'ok' : share >= 0.9 ? 'warn' : 'bad', 'equal', 'Replicas in step', percent,
+  // (Green only all in step: short of it, even at 99%, yellow)
+  return tile(share === 1 ? 'ok' : share >= 0.9 ? 'warn' : 'bad', 'equal', 'Replicas in step', percent,
     'Files in both as of the last sync, newer ones not counted (' + counted + ' of ' + data.pairs.length + ' pair' + (data.pairs.length === 1 ? '' : 's') + ')' +
       (changed ? '; changed since' : ''), '/replicas');
 }

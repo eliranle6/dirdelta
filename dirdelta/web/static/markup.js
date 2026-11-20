@@ -324,10 +324,12 @@ function forgetButton(path, what) {
   return box;
 }
 
-// A progress bar, share (0-100) filled (in tone's color: '' blue, 'sure' green), with the share beside it
+// A progress bar, share (0-100) filled (in tone's color: '' blue, 'sure' green), with the share beside it. Green
+// only once it's all done: short of it, even at 99%, it's blue
 function bar(share, tone = '') {
   const shown = Math.max(0, Math.min(100, Math.floor(share || 0)));
-  return el('div', {class: 'bar'}, el('div', {class: 'meter'}, el('div', {class: tone, style: 'width:' + shown + '%'})), el('b', {}, shown + '%'));
+  const color = tone === 'sure' && shown < 100 ? '' : tone;
+  return el('div', {class: 'bar'}, el('div', {class: 'meter'}, el('div', {class: color, style: 'width:' + shown + '%'})), el('b', {}, shown + '%'));
 }
 
 // How many inboxes of a kind are there now, out of how many the user has (a phone: plugged in, of the
