@@ -423,6 +423,9 @@ async function loadPreview() {
   if (!screen.hasPreviews && !screen.previewBelow) { box.replaceChildren(); return; }
   const found = await api('GET', '/api/preview?screen=' + screen.id + '&path=' + encodeURIComponent(view.selected || ''));
   const lines = found.lines || [];
+  // (Whether it shows a diff, whose views a button goes through: see KEY_APPLIES)
+  const hasDiff = lines.some(line => line.includes('Ctrl-T: the changes'));
+  if (hasDiff !== view.previewHasDiff) { view.previewHasDiff = hasDiff; renderPickerActions(); }
   const content = [];
   if (lines.length) content.push(el('pre', {}, lines.map(line => [previewLine(line), '\n'])));
   if (found.image) { const canvas = pictureCanvas(found.image); if (canvas) content.push(canvas); }
@@ -510,6 +513,12 @@ const GENERAL_KEYS = new Set(['i', '?']);
 // Keys the page has no button for: the menu (:) lists what's selected can have done, each with its key, as the
 // buttons here do (with files picked, it's Enter's); the replicas dashboard (#) is the Replicas tab's
 const NO_BUTTON_KEYS = new Set([':', '#']);
+// Keys whose buttons are shown only where they do something: exploring a zip on one, a diff's views on a diff
+const KEY_APPLIES = {
+  'e': () => /\.zip$/i.test(view.selected || ''),
+  'Ctrl-T': () => view.previewHasDiff,
+};
+const applies = key => !NO_BUTTON_KEYS.has(key.name) && (!KEY_APPLIES[key.name] || KEY_APPLIES[key.name]());
 
 // The bottom bar, in sections: going back and the main action (Enter's, named for what it's on); what acts
 // on the selection; on the side tree's; and Misc (the picker's own keys: the pictures)
@@ -541,7 +550,7 @@ function renderPickerActions() {
         (state.mark.trim() || '·') + ' ', el('small', {}, state.name)));
     }
   }
-  for (const key of screen.keys.filter(key => !NO_BUTTON_KEYS.has(key.name))) {
+  for (const key of screen.keys.filter(applies)) {
     (GENERAL_KEYS.has(key.name) ? general : onSelection).push(keyButton(key, () => act('press', {key: key.key})));
   }
   const side = [];

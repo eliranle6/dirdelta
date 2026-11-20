@@ -8,7 +8,7 @@ from dirdelta.ui import opening
 from dirdelta.ui import picker
 
 # Ctrl-T: the next view, its hint (for the keys' help)
-KEY_HINT = (diffview.KEY_NAME, "the diff's next view")
+KEY_HINT = (diffview.KEY_NAME, "show the changes, or either whole version")
 
 
 def views():
@@ -36,7 +36,7 @@ def lines(replicas, relpath, names, view):
     view = view if view in views() else views()[0]
     if len(replicas) == 2:
         title = picker.styled([("Diff, %s" % (diffview.view_name(view, names[0], names[1]),), 'bold'),
-                               ("  (%s: next view)" % (diffview.KEY_NAME,), 'grey')])
+                               ("  (%s: the changes, or either whole version)" % (diffview.KEY_NAME,), 'grey')])
     else:
         title = picker.styled([("Its contents", 'bold')])
     versions = []

@@ -39,8 +39,8 @@ class KeysHelp(object):
                 "  %-24s%s" % (ai_showing.LOOKING, "the AI is working out what to do with it"),
                 "  %-24s%s" % ("[ai: ⇒ %s]" % (self.name_b,), "what the AI suggests (Ctrl-A sets it)"),
                 "Diff:",
-                "  %-17s%s" % (diffview.KEY_NAME, "the next view of the right column's diff of the selected differing "
-                               "text file: side by side, as diff -u, %s's version, %s's version (Ctrl-W l scrolls it, "
+                "  %-17s%s" % (diffview.KEY_NAME, "show the changes, or either whole version: the next view of the right "
+                               "column's diff of the selected differing text file, side by side, as diff -u, %s's version, %s's version (Ctrl-W l scrolls it, "
                                "Ctrl-P hides the column)" % (self.name_a, self.name_b)),
                 "  %-17s%s" % (diffing.KEY_NAME, "the selected file's whole diff, %s's version against %s's, in less "
                                "(q: back); text files only" % (self.name_a, self.name_b))]
