@@ -150,7 +150,8 @@ def hash_state(root):
     if job is None:
         return {'state': None}
     progress = job.progress()
-    return {'state': progress.state, 'started': progress.is_started, 'files': progress.nr_files, 'done': progress.nr_done}
+    return {'state': progress.state, 'started': progress.is_started, 'files': progress.nr_files, 'done': progress.nr_done,
+            'withMedia': job.with_media, 'leftOut': progress.nr_left_out}
 
 
 def synced_with(path):

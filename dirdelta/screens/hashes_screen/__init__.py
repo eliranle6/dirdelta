@@ -1,10 +1,12 @@
 """The screens of hashing local replicas' files (hashing.py): whether to hash a replica's files
-when it's opened (offer()), and waiting for it (wait()); the dashboard (dashboard()): each replica's
+when it's opened (offer()), and waiting for it (wait()); a sync's menu's choice of it (choose()); the dashboard (dashboard()): each replica's
 progress, pausing and resuming it, and its files, hashed or not; and what the file pickers show of it
 (Marks): a label for each replica on the bottom line, in a color by how far it got (red, orange,
 yellow, then green once it's all hashed), and a mark before each file's name.
 
 Its parts are in the modules here; the names the rest of dirdelta uses are here too."""
+from dirdelta.screens.hashes_screen.choosing import choose  # noqa: F401
+from dirdelta.screens.hashes_screen.choosing import TITLE as CHOOSE_TITLE  # noqa: F401
 from dirdelta.screens.hashes_screen.dashboard_screen import dashboard  # noqa: F401
 from dirdelta.screens.hashes_screen.files import view_files  # noqa: F401
 from dirdelta.screens.hashes_screen.marks import Marks, picker_status  # noqa: F401

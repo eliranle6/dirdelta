@@ -22,12 +22,14 @@ def is_there(name):
     return mounts.unmounted(name) is None and os.path.isdir(name)
 
 
-def start_hashing(name):
+def start_hashing(name, with_media=True):
     """Hash the local replica named name in the background, its files listed first (as a sync's are,
-    but without keeping the dashboard waiting), its hashes kept in it (see hashcache.use_replica())"""
+    but without keeping the dashboard waiting), its hashes kept in it (see hashcache.use_replica());
+    with_media: its media files too (after the others), else they're left out (see Job.set_media())"""
     hashcache.use_replica(name)
     # As deep as a sync of it goes, by default, so that sync's listings can be shared with it
     job = hashing.job(name, localscan.DEFAULT_MAX_DEPTH)
+    job.set_media(with_media)
     job.scan_in_background()
     job.start()
 

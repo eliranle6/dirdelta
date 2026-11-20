@@ -146,7 +146,9 @@ def routes(session):
                 'inboxes': importing.inboxes()}
 
     def hash_replica(query, body):
-        """Hash the local replica body['path'] asks for (as the replicas dashboard does), or pause it"""
+        """Hash the local replica body['path'] asks for (as the replicas dashboard does), all its files or
+        (body['media'] False) all but its media files, or pause it (body['pause']); or (body['media'] given
+        alone, body['only_media']) hash its media files too, or leave them out, as it goes on"""
         path = body.get('path', '')
         known_replicas = replicas.load()
         if path not in known_replicas.replica_paths() or paths.is_cloud_path(path) or not os.path.isdir(path):
@@ -154,9 +156,11 @@ def routes(session):
         job = hashing.job_for(path)
         if body.get('pause') and job is not None:
             job.pause()
+        elif body.get('only_media') and job is not None:
+            job.set_media(body.get('media', True) is not False)
         else:
             from dirdelta.screens.hashes_screen import dashboard_actions
-            dashboard_actions.start_hashing(path)
+            dashboard_actions.start_hashing(path, body.get('media', True) is not False)
         return {'ok': True}
 
     def running(query, body):

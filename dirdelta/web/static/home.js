@@ -30,9 +30,10 @@ function hashChip(replica) {
   if (!replica.there) return '';
   if (!job || !job.state) return chip('none', replica.hashesKept.toLocaleString() + ' hashes kept');
   if (job.state === 'not scanned' || job.state === 'scanning') return chip('warn', waiting('Listing its files'));
-  if (job.state === 'done') return chip('ok', 'All hashed');
+  if (job.state === 'done') return job.leftOut ? chip('warn', 'All hashed but ' + job.leftOut.toLocaleString() + ' media files') : chip('ok', 'All hashed');
   const share = job.files ? Math.floor(100 * job.done / job.files) : 0;
-  return chip('warn', job.started ? waiting('Hashing ' + share + '%') : share + '% hashed (paused)');
+  const withoutMedia = job.withMedia === false ? ' (not the media files)' : '';
+  return chip('warn', job.started ? waiting('Hashing ' + share + '%' + withoutMedia) : share + '% hashed (paused)' + withoutMedia);
 }
 
 // Each replica's status chips: there, synced, hashed (a local one), its list read (a Drive one)
@@ -115,11 +116,23 @@ function nameButton(replica) {
 
 function replicaCard(replica) {
   const job = replica.hashing;
-  const act = pause => async () => { await api('POST', '/api/home/hash', {path: replica.path, pause}); load(); };
+  const hash = body => async () => { await api('POST', '/api/home/hash', Object.assign({path: replica.path}, body)); load(); };
   const actions = [];
-  if (replica.kind === 'local' && replica.there && !(job && job.state === 'done')) {
-    actions.push(el('button', {class: 'small', onclick: act(!!(job && job.started))},
-      job && job.started ? 'Pause' : job && job.state ? 'Resume hashing' : 'Hash its files'));
+  // Hashing it: all its files, or all but its media files (images, audio, video: the least likely to change, and the
+  // slowest), paused; and while it hashes, its media files left out or added back
+  if (replica.kind === 'local' && replica.there) {
+    const done = job && job.state === 'done', started = job && job.started, resumed = job && job.state;
+    // (Done, it's still started, for files that come later: nothing to pause)
+    if (done) {
+      if (job.leftOut) actions.push(el('button', {class: 'small', onclick: hash({media: true})}, 'Hash the media files too'));
+    } else if (started) {
+      actions.push(el('button', {class: 'small', onclick: hash({pause: true})}, 'Pause'));
+      actions.push(el('button', {class: 'small', onclick: hash({only_media: true, media: !job.withMedia})},
+        job.withMedia ? 'Leave out the media files' : 'Hash the media files too'));
+    } else {
+      actions.push(el('button', {class: 'small', onclick: hash({media: true})}, resumed ? 'Resume hashing' : 'Hash its files'));
+      actions.push(el('button', {class: 'small', onclick: hash({media: false})}, (resumed ? 'Resume' : 'Hash') + ' all but the media files'));
+    }
   }
   // (The main replica: every other is synced with it)
   actions.push(el('button', {class: 'small', onclick: async () => {

@@ -1,5 +1,5 @@
 """The sync menu of a pair of replicas (SyncMenu): each way's files, the files that differ, reading
-the replicas anew, the dashboard (the terminal's: the browser's is its Replicas tab) and favorites"""
+the replicas anew, hashing the local ones' files (all, or all but the media files), the dashboard (the terminal's: the browser's is its Replicas tab) and favorites"""
 import concurrent.futures
 import datetime
 
@@ -92,7 +92,8 @@ class SyncMenu(object):
                 [picker.Option(line, line, picker.Skipped(line)) for line in (STATE,) + STATE_POINTS],
                 [picker.Skipped(SYNC_SECTION), SYNC_ALL],
                 [picker.Skipped(KINDS_SECTION)] + list(self.actions),
-                [picker.Skipped(UPDATE_SECTION), comparing.COMPARE] + list(self.rescans) + list(self.refreshes),
+                [picker.Skipped(UPDATE_SECTION), comparing.COMPARE] + list(self.rescans) + list(self.refreshes) +
+                ([hashes_screen.CHOOSE_TITLE] if self.jobs else []),
                 # (In the browser the Replicas tab is the dashboard, where they're named too)
                 [picker.Skipped(PAIR_SECTION)] + ([self.DASHBOARD] if frontend.current is None else []) + favorite_options,
                 [BACK]])
@@ -104,6 +105,9 @@ class SyncMenu(object):
             if option in (None, BACK):
                 # Back to the start menu (q too)
                 return None
+            if option == hashes_screen.CHOOSE_TITLE:
+                hashes_screen.choose(self.jobs)
+                continue
             if option == self.DASHBOARD:
                 hashes_screen.dashboard([self.replica_a, self.replica_b], self.known_replicas)
                 continue

@@ -1,6 +1,8 @@
+import io
 import os
 import shutil
 import stat
+import struct
 import sys
 import tempfile
 import unittest
@@ -17,6 +19,19 @@ def decoded(image):
     width, height, pixels = image.split(' ')
     data = bytes.fromhex(pixels)
     return int(width), int(height), [tuple(data[i:i + 3]) for i in range(0, len(data), 3)]
+
+
+def with_exif_thumbnail(thumbnail, orientation=1):
+    """A JPEG's EXIF (as PIL's save() takes it) with orientation, and thumbnail (a PIL image) as its own
+    thumbnail, in IFD1, as a camera writes it"""
+    data = io.BytesIO()
+    thumbnail.save(data, 'JPEG')
+    jpeg = data.getvalue()
+    # Little-endian TIFF: IFD0 at 8 (the orientation), IFD1 at 26 (where the thumbnail is: 56, and its length)
+    tiff = (b'II*\x00' + struct.pack('<I', 8) +
+            struct.pack('<HHHIHHI', 1, 0x0112, 3, 1, orientation, 0, 26) +
+            struct.pack('<HHHIIHHIII', 2, 0x0201, 4, 1, 56, 0x0202, 4, 1, len(jpeg), 0) + jpeg)
+    return b'Exif\x00\x00' + tiff
 
 
 class ImagesTest(unittest.TestCase):
@@ -54,6 +69,27 @@ class ImagesTest(unittest.TestCase):
         path = self.write('turned.jpg', image, exif=exif)
         width, height, _ = decoded(images.of_local_file(path, 100, 100))
         self.assertEqual((width, height), (20, 40))
+
+    def test_a_photos_own_thumbnail_is_shown_if_its_big_enough_and_of_its_shape(self):
+        red = Image.new('RGB', (400, 300), (255, 0, 0))
+        path = self.write('photo.jpg', red, exif=with_exif_thumbnail(Image.new('RGB', (80, 60), (0, 0, 255))))
+        width, height, pixels = decoded(images.of_local_file(path, 40, 40))
+        self.assertEqual((width, height), (40, 30))
+        self.assertGreater(pixels[0][2], 240)
+        # Too small for the box: the photo itself
+        width, height, pixels = decoded(images.of_local_file(path, 200, 200))
+        self.assertEqual((width, height), (200, 150))
+        self.assertGreater(pixels[0][0], 240)
+        # With bars (a square one of a 4:3 photo): the photo itself
+        path = self.write('barred.jpg', red, exif=with_exif_thumbnail(Image.new('RGB', (80, 80), (0, 0, 255))))
+        self.assertGreater(decoded(images.of_local_file(path, 40, 40))[2][0][0], 240)
+
+    def test_a_photos_own_thumbnail_is_turned_as_the_photo_is(self):
+        path = self.write('turned.jpg', Image.new('RGB', (400, 300), (255, 0, 0)),
+                          exif=with_exif_thumbnail(Image.new('RGB', (80, 60), (0, 0, 255)), orientation=6))
+        width, height, pixels = decoded(images.of_local_file(path, 40, 40))
+        self.assertEqual((width, height), (30, 40))
+        self.assertGreater(pixels[0][2], 240)
 
     def test_what_isnt_a_picture_has_none(self):
         text = os.path.join(self.dir, 'notes.txt')

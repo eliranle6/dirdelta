@@ -147,5 +147,29 @@ class WaitTest(unittest.TestCase):
         self.assertEqual(job.paused, 0)
 
 
+
+class ChooseTest(unittest.TestCase):
+    """Hashing a sync's replicas, chosen from its menu"""
+
+    def test_all_but_the_media_files_are_hashed_and_then_the_media_too(self):
+        jobs = [FakeJob('/a/photos', progress_of()), FakeJob('/b/photos', progress_of(nr_left_out=30, size_left_out=3 * 1024 ** 2))]
+        with helpers.answering_option_picker([hashes_screen.choosing.HASH_BUT_MEDIA]) as pick:
+            hashes_screen.choose(jobs)
+        self.assertIn("4 of 10 files hashed (not started); 30 media files (3.0 MB) left out", pick.call_args.kwargs['header'])
+        self.assertEqual([(job.started, job.with_media) for job in jobs], [(1, False), (1, False)])
+        with helpers.answering_option_picker([hashes_screen.choosing.HASH_ALL]):
+            hashes_screen.choose(jobs)
+        self.assertTrue(all(job.with_media for job in jobs))
+
+    def test_hashing_is_paused_only_while_it_goes_on(self):
+        job = FakeJob('/photos', progress_of())
+        with helpers.answering_option_picker([hashes_screen.choosing.BACK]) as pick:
+            hashes_screen.choose([job])
+        self.assertNotIn(hashes_screen.choosing.PAUSE, pick.call_args.args[0])
+        job.start()
+        with helpers.answering_option_picker([hashes_screen.choosing.PAUSE]):
+            hashes_screen.choose([job])
+        self.assertEqual(job.paused, 1)
+
 if __name__ == '__main__':
     unittest.main()

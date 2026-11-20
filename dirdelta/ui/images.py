@@ -10,9 +10,9 @@ import subprocess
 import tempfile
 
 try:
-    from PIL import Image, ImageOps
+    from PIL import ExifTags, Image, ImageOps
 except ImportError:  # Without Pillow, no pictures (the rest is the same)
-    Image = ImageOps = None
+    ExifTags = Image = ImageOps = None
 
 from dirdelta.util import media
 
@@ -30,6 +30,14 @@ VIDEO_FRAME_AT = 1
 IMAGE_EXTENSIONS = ('.jpg', '.jpeg', '.jpe', '.png', '.gif', '.webp', '.bmp', '.tif', '.tiff', '.ico',
                     '.ppm', '.pgm', '.pbm', '.tga', '.jfif')
 HEIF_EXTENSIONS = ('.heic', '.heif')
+# A photo's EXIF thumbnail (see exif_thumbnail()): where its JPEG is (IFD1's tags), what's before the TIFF
+# data in Pillow's info['exif'], the photo's orientation tag and the ones that turn it a quarter, and how far
+# the thumbnail's shape may be from the photo's (a 4:3 one of a 3:2 photo has bars)
+JPEG_OFFSET, JPEG_LENGTH = 0x0201, 0x0202
+EXIF_HEADER = b'Exif\x00\x00'
+ORIENTATION = 0x0112
+TURNED_SIDEWAYS = (5, 6, 7, 8)
+SHAPE_TOLERANCE = 0.02
 
 _heif_checked = False
 
@@ -87,11 +95,46 @@ def of_local_file(path, max_width, max_height):
         if path.lower().endswith(PDF_EXTENSIONS):
             return _of_pdf(path, max_width, max_height)
         with Image.open(path) as image:
+            # The photo's own thumbnail, if it's big enough: nothing decoded, and only its start read
+            embedded = exif_thumbnail(image, max_width, max_height)
+            if embedded is not None:
+                return encoded(embedded, max_width, max_height)
             # A JPEG decoded at a fraction of its size, which is much faster for a photo
             image.draft('RGB', (max_width, max_height))
             return encoded(image, max_width, max_height)
     except (OSError, ValueError, SyntaxError, Image.DecompressionBombError):
         return None
+
+
+def exif_thumbnail(image, max_width, max_height):
+    """The thumbnail a photo carries in its EXIF (a camera's or a phone's: 160x120, or a Pixel's 510x384), if
+    it's as big as the photo would be made to fit in max_width x max_height and of the photo's shape (not one
+    with bars), turned as the photo is; else None"""
+    try:
+        exif = image.getexif()
+        thumbnail = exif.get_ifd(ExifTags.IFD.IFD1)
+        offset, length = thumbnail.get(JPEG_OFFSET), thumbnail.get(JPEG_LENGTH)
+        raw = image.info.get('exif')
+        if not offset or not length or not raw:
+            return None
+        # (raw is its APP1's: 'Exif\0\0' before the TIFF data the offset is in)
+        start = len(EXIF_HEADER) if raw.startswith(EXIF_HEADER) else 0
+        embedded = Image.open(io.BytesIO(raw[start + offset:start + offset + length]))
+        embedded.load()
+    except (OSError, ValueError, SyntaxError, KeyError, TypeError):
+        return None
+    width, height = image.size
+    if abs(embedded.width / embedded.height - width / height) > SHAPE_TOLERANCE * width / height:
+        return None
+    # The size it'd be shown at (as Image.thumbnail() makes it, before it's turned: the box turned instead)
+    orientation = exif.get(ORIENTATION, 1)
+    box = (max_height, max_width) if orientation in TURNED_SIDEWAYS else (max_width, max_height)
+    scale = min(1, box[0] / width, box[1] / height)
+    if embedded.width + 1 < width * scale or embedded.height + 1 < height * scale:
+        return None
+    # (It has no EXIF of its own: the photo's orientation is given to it, for encoded()'s exif_transpose())
+    embedded.getexif()[ORIENTATION] = orientation
+    return embedded
 
 
 def _of_pdf(path, max_width, max_height):

@@ -162,7 +162,16 @@ class HomeTest(WebTest):
             self.assertFalse(self.call('POST', '/api/home/hash', {'path': '/etc'})['ok'])
             self.assertFalse(self.call('POST', '/api/home/hash', {'path': 'cloud/photos'})['ok'])
             self.assertTrue(self.call('POST', '/api/home/hash', {'path': self.local})['ok'])
-        start_hashing.assert_called_once_with(self.local)
+        start_hashing.assert_called_once_with(self.local, True)
+
+    def test_a_replica_is_hashed_without_its_media_files_and_they_are_added_back_as_it_goes(self):
+        with mock.patch('dirdelta.screens.hashes_screen.dashboard_actions.start_hashing') as start_hashing:
+            self.call('POST', '/api/home/hash', {'path': self.local, 'media': False})
+        start_hashing.assert_called_once_with(self.local, False)
+        job = mock.Mock()
+        with mock.patch('dirdelta.hashes.hashing.job_for', return_value=job):
+            self.call('POST', '/api/home/hash', {'path': self.local, 'only_media': True, 'media': True})
+        job.set_media.assert_called_once_with(True)
 
 
 class FlowTest(unittest.TestCase):

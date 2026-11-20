@@ -340,7 +340,7 @@ const ACTION_ICONS = [[/^(Nothing|Back)/, 'back'], [/^Ask AI/, 'ai'], [/^Copy/, 
   [/^(Read .* anew|See what changed|Refresh|Rescan)/, 'refresh'], [/^Explore/, 'zip'], [/^Move/, 'move'],
   [/^(Skip|Leave)/, 'skip'], [/^Sync: /, 'sync'], [/^Files only in /, 'onlyhere'], [/^Files that differ/, 'differ'],
   [/^Compare/, 'equal'], [/^(Add to|Remove from) favorites/, 'star'], [/^Not now/, 'clock'], [/^(Name|Label)/, 'pencil'],
-  [/^Replicas dashboard/, 'replicas']];
+  [/^Replicas dashboard/, 'replicas'], [/^Hash/, 'hash'], [/^Pause/, 'clock']];
 
 async function chooseOption(path) {
   if (view.screen.previewBelow && view.selected !== path) { await act('select', {path}); return; }

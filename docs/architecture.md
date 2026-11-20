@@ -198,6 +198,7 @@ The map (each module's docstring's first line; generated from the code):
     - `files.py`: A job's files, each with its tag and hash
     - `marks.py`: What the file pickers show of hashing: their key, each file's tag, and the status line
     - `names.py`: The hashing screens' key, and the dashboard's options (what each is, by replica) and headings
+    - `choosing.py`: Hashing a sync's local replicas, chosen from its menu: all their files, all but the media files, or pausing it
     - `offering.py`: Whether to hash a replica's files when it's opened
     - `status.py`: What's shown of the hashing jobs (hashing.py): each file's tag, and how far each job got
     - `waiting.py`: Waiting for the hashing, and whether it's all right to quit meanwhile
@@ -225,7 +226,7 @@ The map (each module's docstring's first line; generated from the code):
   - `dirsync_main.py`: Sync mode: the menu of a pair of replicas, until it goes back to the start menu
   - `options.py`: The sync menu's lines: whether the two are in sync, and each way's option
   - `replica_ops.py`: What a sync does to its replicas outside its screens: what one lacks of the other, reading them anew, and whet...
-  - `sync_menu.py`: The sync menu of a pair of replicas (SyncMenu): each way's files, the files that differ, reading the replicas ...
+  - `sync_menu.py`: The sync menu of a pair of replicas (SyncMenu): each way's files, the files that differ, reading the replicas anew, hashing the local ones' files (Hash the replicas' files...: all, or all but the media files, or pausing it), ...
   - `ways.py`: A sync's two ways (src's files that dst lacks), and the files that differ, found in the background
   - `way/`: A way of a sync (InteractiveDirSync) and its parts, as mixins
     - `ask_ai.py`: Asking the AI what to do with the picked files (see aiplan.py)
@@ -1164,8 +1165,10 @@ round-trip. Tests (`tests/test_picker.py`) run a fake treepicker script.
 
 ### `images.py`
 The selected file's picture, below the preview column's text in the sync's and the inbox's file
-pickers (`images.of_replica()`, their `pick_files(images=...)`): a local image by Pillow (decoded at a
-fraction of its size with `draft()`, turned by its EXIF orientation, transparency on black), a PDF's
+pickers (`images.of_replica()`, their `pick_files(images=...)`): a local image by Pillow (the thumbnail a photo carries in its EXIF, when it's as big as the box needs and of
+the photo's shape, `exif_thumbnail()`: nothing decoded, only the file's start read, e.g. a Pixel's 510x384, which
+fits the import page's 360px thumbnails of portrait photos; else decoded at a fraction of its size with `draft()`;
+turned by its EXIF orientation, transparency on black), a PDF's
 first page by `pdftoppm`, a local video's frame by `ffmpeg` (a second in, seeking to it without
 decoding up to it, else its first, for a shorter one; whatever the video's size, as it's not read
 whole; `VIDEO_TIMEOUT`), a Drive file's thumbnail (`CloudDirTree.thumbnail()`: its `thumbnailLink`,
@@ -1211,7 +1214,7 @@ every link carries, then a cookie), and a watcher.
   with a jump to each on top, as Inboxes' (`kindJump()`, `kindBlock()`, laid out by `kindParts()` in `markup.js`; or as sub-tabs (the top bar's menu's Layout chooses for this browser: `layout()`, in its localStorage): one part shown at a time, the one a link's # names first, kept across the page's redraws; by default a rounded row, the one shown tinted and underlined in its color, its part a box under it; or folder tabs, the one shown joined to its part in one solid outline of its color, the others level with it, outlined dashed in their own color), each jump with a status dot (green, yellow, red: on Inboxes, all sorted, files left to sort, none there and nothing to sort, `inboxesTone()`; on Replicas, all in step or not, or a pair branched or none; all there, some, none): Sync status (cyan,
   first: what's done here) and Replicas (indigo). "+ Add a replica" (`web/adding.py`), each replica's card
   (icon, disk, how many files and their size: a local one's as its hashing listed them, a Drive one's as its list has them,
-  `drivecache.totals_under()`, worked out again once the cache changed; status chips: mounted, synced, hashed, its list read; log entry; hashing to start or pause;
+  `drivecache.totals_under()`, worked out again once the cache changed; status chips: mounted, synced, hashed (all but N media files, when they're left out), its list read; log entry; hashing to start (all its files, or all but the media files: `/api/home/hash`'s media) or pause, and while it hashes its media files left out or added back (`only_media`);
   Forget), every pair's sync status (`syncstate`'s mark, ≡ » « ≠ ?; how much was in
   step, the files both had of all either had, by the totals a sync notes with its comparison since
   2026-11-18; and how stale that is: when it was compared, and which replica changed since) with Sync
