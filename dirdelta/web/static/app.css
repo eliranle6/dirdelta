@@ -323,3 +323,13 @@ header#top > #crumbs:has(> #where:empty) { display: none; }
 /* (At most half the screen, scrolling in itself: the tree above it stays in sight) */
 footer#bottom { max-height: 50vh; overflow-y: auto; overscroll-behavior: contain; }
 .side .tree { border: 0; border-radius: 0; }
+/* A tree's menu (what to do with its picks) as a panel over it: the tree dimmed under it, the panel from the
+   bottom bar up (at most most of the height, scrolling in itself); a tap outside it is Back */
+.under { pointer-events: none; }
+.panelwrap { position: fixed; left: 0; right: 0; top: var(--panel-top, 0); bottom: var(--panel-bottom, 0); z-index: 2; }
+.panelwrap .backdrop { position: absolute; inset: 0; background: color-mix(in srgb, #000 35%, transparent); }
+.panelwrap .sheet { position: absolute; left: 0; right: 0; bottom: 0; margin: 0 auto; max-width: var(--page-width, 1040px);
+  max-height: 85%; overflow-y: auto; overscroll-behavior: contain; background: var(--bg); padding: 14px 16px 12px;
+  border-radius: 14px 14px 0 0; box-shadow: 0 -6px 24px color-mix(in srgb, #000 25%, transparent);
+  display: flex; flex-direction: column; gap: 10px; }
+.panelwrap .sheet .split { display: block; }

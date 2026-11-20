@@ -45,9 +45,12 @@ function apply(data) {
   view.running = data.running;
   view.log = data.log;
   const screen = data.screen;
+  clearTimeout(view.noScreen);
   if (!screen) {
-    if (view.screen !== null || !document.querySelector('.home')) { view.screen = null; renderHome(); }
-    else renderHome();
+    // (While a run goes on, it's often between two screens for a moment: what was shown stays for a second,
+    // rather than flashing this page, so e.g. a tree's menu is still shown over the tree)
+    if (data.running && view.screen) view.noScreen = setTimeout(() => { view.screen = null; renderHome(); }, 1000);
+    else { view.screen = null; renderHome(); }
     return;
   }
   const isNew = !view.screen || view.screen.id !== screen.id;
@@ -209,8 +212,45 @@ function renderPickerFrame() {
   const body = el('div', {class: 'split'}, el('div', {id: 'tree'}),
     el('div', {}, el('div', {id: 'preview'}), el('div', {id: 'side'})));
   parts.push(body, el('div', {class: 'footer', id: 'footer'}), el('div', {class: 'help', id: 'help'}));
+  // A menu right after a tree (what to do with its picks, then its confirmations): a panel over that tree,
+  // dimmed under it, rather than a page of its own; the flow is the same (the panel is this menu's screen)
+  const shown = main.dataset.shows;
+  if (screen.mode === 'list' && (shown === 'tree' || shown === 'dir' || shown === 'panel')) {
+    showPanel(main, parts);
+    return;
+  }
+  main.dataset.shows = screen.mode;
   main.replaceChildren(...parts);
 }
+
+function showPanel(main, parts) {
+  let sheet = main.querySelector('.panelwrap .sheet');
+  if (!sheet) {
+    // (The tree as it was, inert: its ids gone, so the panel's parts have them)
+    const under = el('div', {class: 'under', inert: true}, [...main.childNodes]);
+    under.querySelectorAll('[id]').forEach(node => node.removeAttribute('id'));
+    sheet = el('div', {class: 'sheet', role: 'dialog', 'aria-modal': 'true'});
+    main.replaceChildren(under, el('div', {class: 'panelwrap'}, el('div', {class: 'backdrop', onclick: goBack}), sheet));
+    placePanel();
+  }
+  main.dataset.shows = 'panel';
+  sheet.replaceChildren(...parts);
+  sheet.scrollTop = 0;
+}
+
+// The panel between the top bar and the bottom bar (whose heights change)
+function placePanel() {
+  const top = document.getElementById('top'), bottom = document.getElementById('bottom');
+  const root = document.documentElement.style;
+  root.setProperty('--panel-top', (top ? top.getBoundingClientRect().bottom : 0) + 'px');
+  root.setProperty('--panel-bottom', (bottom ? window.innerHeight - bottom.getBoundingClientRect().top : 0) + 'px');
+}
+
+if (window.ResizeObserver) {
+  const watch = new ResizeObserver(placePanel);
+  for (const id of ['top', 'bottom']) { const node = document.getElementById(id); if (node) watch.observe(node); }
+}
+addEventListener('resize', placePanel);
 
 function renderPickerParts() {
   renderTabs();
@@ -533,7 +573,7 @@ function short(text) {
 function renderMessages(screen, isNew) {
   setTop(screen.title, screen.labels);
   const main = document.getElementById('main');
-  if (isNew) main.replaceChildren(el('div', {class: 'lines', id: 'lines'}), el('div', {id: 'ask'}));
+  if (isNew) { main.dataset.shows = 'messages'; main.replaceChildren(el('div', {class: 'lines', id: 'lines'}), el('div', {id: 'ask'})); }
   const lines = document.getElementById('lines');
   lines.replaceChildren(...screen.lines.map(([text, color]) => el('div', {class: color ? 'c-' + color : ''}, segmentsSpan(text))));
   const ask = document.getElementById('ask');
@@ -559,6 +599,7 @@ function renderMessages(screen, isNew) {
 function renderHome() {
   setTop('Running', []);
   const log = view.log.map(([text, color]) => el('div', {class: color ? 'c-' + color : ''}, segmentsSpan(text)));
+  document.getElementById('main').dataset.shows = 'home';
   document.getElementById('main').replaceChildren(el('div', {class: 'card'},
     el('h2', {}, view.running ? 'Starting' : 'Nothing is running'),
     el('p', {class: 'note'}, view.running ? waitingDots() : 'Sync two replicas from Replicas, or sort an inbox from Inboxes.'),

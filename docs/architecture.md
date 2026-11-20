@@ -1229,7 +1229,9 @@ every link carries, then a cookie), and a watcher.
   the side tree's folders opened and closed by their ▸ ▾ too)
   (each screen at an address of its own, `/run#screen=N`, a picker a step of the browser's history, whose Back (a phone's back
   gesture) is the screen's own, q, and so is the page's Back button, `goBack()`: the flow then shows what came before, e.g. the
-  file picker again from its action menu; and what the tab showed of a screen, its open folders, tab, search and scroll, kept in
+  file picker again from its action menu, which is shown as a panel over the tree it's about, dimmed under it (a menu right after
+  a tree, and those after it, `showPanel()`; a tap outside it is Back; the flow's the same, only drawn so), the page kept a second
+  between two screens rather than flashing the running page; and what the tab showed of a screen, its open folders, tab, search and scroll, kept in
   its sessionStorage as it's left, by what the screen is: a refresh, or coming back to it, finds it as it was, `keepView()`)
   a menu as a list, a tree with checkboxes or state marks, the preview column (pictures from
   treepicker's pixels), the keys as buttons (named by the keys row, or the `?` help's lines) in sections: Back, the main action (Enter's hint and what it's on: "Choose what to do with food.txt") and ?; what acts on the selection ("On food.txt"); on the side tree's ("In Cloud(...)"); and More, folded, the picker's own keys (`GENERAL_KEYS`: dashboard, menu, pictures); labels whole, wrapped; the key names hidden on a touch screen; the bar at most half the screen, and
