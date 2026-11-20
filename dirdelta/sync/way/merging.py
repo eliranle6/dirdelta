@@ -43,7 +43,7 @@ class Merging(object):
     def _merge(self, relpath):
         """Merge the file's two versions and write the merge to both. Returns [relpath] once it's written (in a
         dry run, would have been), or None"""
-        title = "Merge %s" % (relpath,)
+        title = "Merge %s" % (os.path.basename(relpath),)
         # (Named as the diff names them: 'eliran on LocalDisk(07B)')
         names = replicanames.told_apart([self._path_of(self._src), self._path_of(self._dst)])
         src_name, dst_name = names[self._path_of(self._src)], names[self._path_of(self._dst)]

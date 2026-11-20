@@ -5,6 +5,7 @@ its answer sent as it comes"""
 import threading
 
 from dirdelta.ui import merging
+from dirdelta.ui.picker import places
 
 
 class MergeScreen(object):
@@ -13,6 +14,8 @@ class MergeScreen(object):
     def __init__(self, screen_id, title, names, lines_a, lines_b, label, suggest, bump):
         self.id = screen_id
         self.title = title
+        # (Where the flow is: the page's breadcrumbs end with the title after them)
+        self.crumbs = places.trail(title)
         self.names = list(names)
         self.blocks = merging.blocks(lines_a, lines_b)
         self.labels = [list(label)] if label else []
@@ -63,7 +66,7 @@ class MergeScreen(object):
         self._finish(None)
 
     def meta(self):
-        return {'kind': self.kind, 'id': self.id, 'title': self.title, 'labels': self.labels, 'names': self.names,
+        return {'kind': self.kind, 'id': self.id, 'title': self.title, 'crumbs': self.crumbs, 'labels': self.labels, 'names': self.names,
                 'blocks': [{'same': block[1]} if block[0] == 'same' else {'a': block[1], 'b': block[2]}
                            for block in self.blocks],
                 'canSuggest': self._suggest is not None}

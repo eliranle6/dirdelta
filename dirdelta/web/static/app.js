@@ -810,7 +810,7 @@ const MERGE_MARKS = ['<<<<<<< ', '=======', '>>>>>>> '];
 const MERGE_CHOICES = [['a', 'This one'], ['b', 'That one'], ['ab', 'Both'], ['ba', 'Both, that first']];
 
 function renderMerge(screen, isNew) {
-  setTop(screen.title, screen.labels);
+  setTop(screen.crumbs || screen.title, screen.labels);
   if (isNew) {
     placePreview(false);
     document.body.style.minHeight = '';
@@ -932,7 +932,7 @@ function renderMergeAI(screen) {
 }
 
 function renderMessages(screen, isNew) {
-  setTop(screen.title, screen.labels);
+  setTop(screen.crumbs || screen.title, screen.labels);
   const main = document.getElementById('main');
   if (isNew) placePreview(false);
   if (isNew) { main.dataset.shows = 'messages'; document.body.style.minHeight = ''; main.replaceChildren(el('div', {class: 'lines', id: 'lines'}), el('div', {id: 'ask'})); }

@@ -3,6 +3,8 @@ shown while an action runs (Stop stops it, as Ctrl-C does) and then until Contin
 asking for a line of text"""
 import threading
 
+from dirdelta.ui.picker import places
+
 # How many lines a screen keeps (the first ones go)
 MAX_LINES = 2000
 
@@ -13,6 +15,8 @@ class MessagesScreen(object):
     def __init__(self, screen_id, title, label, is_stoppable, bump):
         self.id = screen_id
         self.title = title
+        # (Where the flow is: the page's breadcrumbs end with the title after them)
+        self.crumbs = places.trail(title)
         self.label = label
         self.is_stoppable = is_stoppable
         self._bump = bump
@@ -68,7 +72,7 @@ class MessagesScreen(object):
         self.answer(None)
 
     def meta(self):
-        return {'kind': self.kind, 'id': self.id, 'title': self.title,
+        return {'kind': self.kind, 'id': self.id, 'title': self.title, 'crumbs': self.crumbs,
                 'labels': [list(label) for label in self.label], 'stoppable': self.is_stoppable}
 
     def state(self, since):
