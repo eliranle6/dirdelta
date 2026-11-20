@@ -104,7 +104,8 @@ def routes(session):
         screen = session.screen()
         names = {path: naming.name(path) for path in all_paths}
         return {'label': list(dryrun.label()),
-                'running': {'title': _title(screen), 'user': session.user, 'tab': session.tab} if session.is_running else None,
+                'running': {'title': _title(screen), 'user': session.user, 'tab': session.tab, 'what': session.what}
+                if session.is_running else None,
                 'user': users.current(),
                 # (Signed in to Drive: its login is kept; whether it's still good is known when it's used)
                 'drive': {'connected': os.path.exists(driveapi.TOKEN_PATH), 'reading': freshening.reading()},

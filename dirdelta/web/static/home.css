@@ -39,3 +39,8 @@ button.item { border: 0; border-radius: 0; background: none; }
 
 .tile .tile-lines { display: flex; flex-direction: column; }
 .tiles .tile.wide { grid-column: 1 / -1; }
+/* The pair being synced now: marked, its button back to the run (any other's offers to open what runs) */
+.item.pair.syncing { box-shadow: inset 4px 0 0 var(--accent); }
+.item.pair .insync { color: var(--accent); font-weight: 600; font-size: 14px; }
+.item.pair:has(> a.button) { flex-wrap: wrap; }
+.item.pair > a.button { flex: 1 0 100%; text-align: center; margin-top: 4px; }

@@ -3,6 +3,7 @@ import datetime
 import os
 import shutil
 import tempfile
+import threading
 import unittest
 from unittest import mock
 
@@ -55,6 +56,14 @@ class HomeTest(WebTest):
         self.assertAlmostEqual(990 / 1030, pair['synced']['share'])
         self.assertEqual('2026-11-01 09:00', pair['state']['when'])
         self.assertEqual(1, len(pair['changedSince']))
+
+    def test_while_a_pairs_sync_runs_the_dashboard_says_which_pair_it_is(self):
+        self.assertIsNone(self.call('GET', '/api/home')['running'])
+        release = threading.Event()
+        self.addCleanup(release.set)
+        asked = {'kind': 'pair', 'a': self.local, 'b': 'cloud/photos'}
+        self.session.start(lambda: release.wait(5), 'replicas', asked)
+        self.assertEqual(asked, self.call('GET', '/api/home')['running']['what'])
 
     def test_only_a_known_local_replica_is_hashed_from_the_dashboard(self):
         with mock.patch('dirdelta.screens.hashes_screen.dashboard_actions.start_hashing') as start_hashing:

@@ -48,7 +48,8 @@ def routes(session, start_flow):
 
     def start(query, body):
         # (What it's about: a sync (or the start menu) is the replicas', a sort the inboxes')
-        return {'ok': session.start(lambda: start_flow(body), 'inboxes' if body.get('kind') == 'sort' else 'replicas')}
+        return {'ok': session.start(lambda: start_flow(body), 'inboxes' if body.get('kind') == 'sort' else 'replicas',
+                                   dict(body))}
 
     return {('GET', '/api/state'): state, ('GET', '/api/preview'): preview, ('GET', '/api/children'): children,
             ('POST', '/api/act'): act, ('POST', '/api/start'): start}

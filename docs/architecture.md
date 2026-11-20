@@ -1212,7 +1212,7 @@ every link carries, then a cookie), and a watcher.
   Forget), every pair's sync status (`syncstate`'s mark, ≡ » « ≠ ?; how much was in
   step, the files both had of all either had, by the totals a sync notes with its comparison since
   2026-11-18; and how stale that is: when it was compared, and which replica changed since) with Sync
-  (`daemon.flow()`, `main.run_pair()`), and the start menu
+  (`daemon.flow()`, `main.run_pair()`; while a run goes on, one at a time, the pair it's syncing says "Sync in progress" with "Go back to ongoing sync", and any other pair's button opens what runs: `Session.what`, what was asked to start it, `isSyncing()`), and the start menu
   for any other two folders. Inboxes (`/inboxes`, `import.js`; `/import` and `/unsorted`, the old tabs'
   addresses, too): its two kinds each in a block of its own, in a color of its own, with a jump to each on
   top (so neither is missed): Unsorted folders (the user's inboxes, "+ Add an unsorted folder") and

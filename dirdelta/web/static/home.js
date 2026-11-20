@@ -93,8 +93,16 @@ function replicaCard(replica) {
 // replica changed since (then it may not be so anymore)
 const STATE_WORDS = {'in sync': 'In sync', 'a ahead': 'Out of step', 'b ahead': 'Out of step', 'branched': 'Out of step both ways', 'unknown': ''};
 
-function pairRow(pair, isRunning) {
+// Whether what's running is this pair's sync (started from its Sync, by this user)
+function isSyncing(pair, running, user) {
+  const what = running && running.what;
+  return !!what && what.kind === 'pair' && running.user === user &&
+    ((what.a === pair.a && what.b === pair.b) || (what.a === pair.b && what.b === pair.a));
+}
+
+function pairRow(pair, running, user) {
   const synced = pair.synced;
+  const syncing = isSyncing(pair, running, user);
   const compared = age(pair.state.when);
   const parts = [];
   if (!synced) parts.push(el('span', {class: 'note'}, 'Never compared: sync them to know.'));
@@ -117,10 +125,16 @@ function pairRow(pair, isRunning) {
   const fresh = [];
   if (pair.state.when) fresh.push(chip(compared.tone, 'Compared ' + compared.text));
   if (pair.changedSince.length) fresh.push(chip('bad', pair.changedSince.join(' and ') + ' changed since: may be out of date'));
-  return el('div', {class: 'item pair'}, el('span', {class: 'syncmark c-' + pair.state.color}, pair.state.mark),
+  // (While a run goes on, one at a time: this pair's sync is gone back to; any other run is offered to open)
+  const button = syncing ? el('a', {class: 'button small primary', href: '/run'}, 'Go back to ongoing sync') :
+    running ? el('a', {class: 'button small', href: '/run', title: 'One runs at a time: finish or leave it to sync these'},
+      'Another sync is running: open it') :
+    el('button', {class: 'small', onclick: () => start({kind: 'pair', a: pair.a, b: pair.b})}, 'Sync');
+  return el('div', {class: 'item pair' + (syncing ? ' syncing' : '')}, el('span', {class: 'syncmark c-' + pair.state.color}, pair.state.mark),
     el('span', {class: 'what'}, el('b', {class: 'pairline'}, pair.favorite ? '★' : '', replicaLabel(pair.a, pair.nameA), '⇄',
-      replicaLabel(pair.b, pair.nameB)), parts, fresh.length ? el('div', {class: 'chips-row'}, fresh) : ''),
-    el('button', {class: 'small', disabled: isRunning, onclick: () => start({kind: 'pair', a: pair.a, b: pair.b})}, 'Sync'));
+      replicaLabel(pair.b, pair.nameB)), syncing ? el('div', {class: 'insync'}, waiting('Sync in progress')) : '',
+      parts, fresh.length ? el('div', {class: 'chips-row'}, fresh) : ''),
+    button);
 }
 
 // The whole picture, in three sections of tiles, two to a row, the replicas' left and the inboxes' right
@@ -273,7 +287,7 @@ function replicasPage(data) {
   const there = data.replicas.filter(replica => replica.there).length;
   const apart = data.pairs.filter(pair => ['a ahead', 'b ahead', 'branched'].includes(pair.state.kind)).length;
   const unknown = data.pairs.filter(pair => pair.state.kind === 'unknown').length;
-  const pairs = data.pairs.length ? el('div', {class: 'list'}, data.pairs.map(pair => pairRow(pair, !!data.running))) :
+  const pairs = data.pairs.length ? el('div', {class: 'list'}, data.pairs.map(pair => pairRow(pair, data.running, data.user))) :
     el('p', {class: 'note'}, data.replicas.length ? 'Add another replica: any two are a pair to sync.' : 'Add two replicas: any two are a pair to sync.');
   const other = el('div', {class: 'list'}, el('a', {class: 'item', href: '#', onclick: event => { event.preventDefault(); start({}); }},
     el('span', {class: 'what'}, el('b', {}, 'Sync two other folders once…'), el('span', {class: 'note'}, 'Any two, chosen on the terminal\'s screens')),
