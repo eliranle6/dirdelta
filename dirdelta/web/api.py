@@ -5,6 +5,9 @@ from dirdelta.web.picker import PickerScreen
 
 # How long a poll waits for a change, in seconds (under what a phone's browser lets a request take)
 POLL_WAIT = 20
+# How long it waits for the next screen while the flow's between two (one closed, the next coming): rather than
+# say there's none, and the page ask again (a round trip, slow on a phone's Wi-Fi)
+NEXT_SCREEN_WAIT = 0.4
 
 
 def routes(session, start_flow):
@@ -15,6 +18,7 @@ def routes(session, start_flow):
         if since > 0:
             # (A page's first ask is answered at once: nothing may change for a while)
             session.wait(since, POLL_WAIT)
+            session.wait_for_screen(NEXT_SCREEN_WAIT)
         screen = session.screen()
         found = {'version': session.version, 'running': session.is_running, 'tab': session.tab,
                  'log': [list(line) for line in session.log], 'screen': None}

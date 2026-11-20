@@ -634,6 +634,19 @@ const applies = key => !NO_BUTTON_KEYS.has(key.name) && (!KEY_APPLIES[key.name] 
 
 // The bottom bar, in sections: going back and the main action (Enter's, named for what it's on); what acts
 // on the selection; on the side tree's; and Misc (the picker's own keys: the pictures)
+// Whether the tree's Enter opens a menu of what to do with its files (a sync's, an inbox's): its panel's shown at
+// once, before the menu comes (openingPanel()), so the tap shows something, however slow the network
+function opensMenu(screen) {
+  const enter = screen.hints.find(([key]) => key === 'Enter');
+  return screen.mode !== 'list' && !screen.states.length && !!enter && /what to do/i.test(enter[1]);
+}
+
+function openingPanel() {
+  const main = document.getElementById('main');
+  if (main.dataset.shows !== 'tree' && main.dataset.shows !== 'dir') return;
+  showPanel(main, [el('p', {class: 'note'}, 'Opening', el('span', {class: 'dots'}))]);
+}
+
 // A sync's file tree (what one replica lacks, or has otherwise): its Enter's menu is what to do with the files
 function isSyncFilesTree(screen) {
   return screen.mode === 'tree' && screen.multi && !screen.states.length && !!screen.side && screen.side.enterPicks &&
@@ -683,7 +696,7 @@ function renderPickerActions() {
     else if (screen.multi) label = view.picked.size ? what + ' with ' + view.picked.size + ' picked' :
       screen.enterPicksSelection ? what + ' with ' + selected : 'Pick some first';
     const enterButton = el('button', {class: 'primary', disabled: screen.multi && !screen.states.length && !view.picked.size && !screen.enterPicksSelection,
-      onclick: () => act('enter')}, label);
+      onclick: () => { if (opensMenu(screen)) openingPanel(); act('enter'); }}, label);
     // (A sync's file tree: ▾ beside it shows its menu's actions as buttons, see quickActions())
     main.push(isSyncFilesTree(screen) ? el('span', {class: 'splitbutton'}, enterButton,
       el('button', {class: 'primary more' + (actionsOpen() ? ' on' : ''), title: actionsOpen() ? 'Hide the actions' : 'Show all the actions',

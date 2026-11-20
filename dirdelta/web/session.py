@@ -53,6 +53,11 @@ class Session(object):
             self._condition.wait_for(lambda: self._version > since, timeout)
             return self._version
 
+    def wait_for_screen(self, timeout):
+        """While the flow runs between two screens (none shown), wait up to timeout seconds for the next"""
+        with self._condition:
+            self._condition.wait_for(lambda: self._screens or not self.is_running, timeout)
+
     def screen(self, screen_id=None):
         """The screen on top (or the one of screen_id, if it's still shown), or None"""
         with self._condition:
