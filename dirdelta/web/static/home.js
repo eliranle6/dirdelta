@@ -106,6 +106,9 @@ function replicaCard(replica) {
   return el('div', {class: 'card replica' + (replica.there ? '' : ' away')},
     el('div', {class: 'head'}, icon(replica.device), el('b', {}, replica.fullName)),
     el('div', {class: 'note'}, replica.kind === 'drive' ? 'In Google Drive' : 'On ' + replica.place),
+    // (How many files, and their size: a local one's once its hashing listed them, a Drive one's as its list has them)
+    replica.files ? el('div', {class: 'filecount'}, el('b', {}, replica.files.count.toLocaleString() + ' file' + (replica.files.count === 1 ? '' : 's')),
+      ' · ' + size(replica.files.size)) : '',
     pathLine(replica.path),
     statusChips(replica),
     workBar(replica),

@@ -324,6 +324,14 @@ function forgetButton(path, what) {
   return box;
 }
 
+// A size in bytes, as people read it: 1.4 KB, 80 GB
+function size(bytes) {
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  let at = 0;
+  while (bytes >= 1024 && at < units.length - 1) { bytes /= 1024; at++; }
+  return (at ? bytes.toFixed(bytes < 10 ? 1 : 0) : bytes) + ' ' + units[at];
+}
+
 // A progress bar, share (0-100) filled (in tone's color: '' blue, 'sure' green), with the share beside it. Green
 // only once it's all done: short of it, even at 99%, it's blue
 function bar(share, tone = '') {

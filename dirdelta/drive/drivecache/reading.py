@@ -83,6 +83,32 @@ def count_under(folder_path):
         return None
 
 
+def totals_under(folder_path):
+    """(how many files, their size in bytes) the cache has under folder_path (a path in Drive), Google files
+    counted without a size; or None if it can't say. Worked out again only once the cache changed"""
+    try:
+        parsed = parsefile()
+    except (OSError, DriveCacheError):
+        return None
+    key = (folder_path, id(parsed[1]))
+    if key not in _totals:
+        try:
+            nr_files = size = 0
+            for entry in entries(folder_path):
+                if not entry.is_dir:
+                    nr_files += 1
+                    size += entry.size or 0
+        except (OSError, DriveCacheError):
+            return None
+        _totals.clear() if len(_totals) > 64 else None
+        _totals[key] = (nr_files, size)
+    return _totals[key]
+
+
+# totals_under()'s answers, by folder and the cache's parse
+_totals = {}
+
+
 # One answer for all (see paths.is_at_or_under()): the root has all
 is_at_or_under = paths.is_at_or_under
 

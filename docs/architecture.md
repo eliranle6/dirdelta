@@ -1209,7 +1209,8 @@ every link carries, then a cookie), and a watcher.
   script; `/sync`, the old tab's address, too), in two parts, each a block of its own in a color of its own
   with a jump to each on top, as Inboxes' (`kindJump()`, `kindBlock()`, laid out by `kindParts()` in `markup.js`; or as sub-tabs (the top bar's menu's Layout chooses for this browser: `layout()`, in its localStorage): one part shown at a time, the one a link's # names first, kept across the page's redraws; by default a rounded row, the one shown tinted and underlined in its color, its part a box under it; or folder tabs, the one shown joined to its part in one solid outline of its color, the others level with it, outlined dashed in their own color), each jump with a status dot (green, yellow, red: on Inboxes, all sorted, files left to sort, none there and nothing to sort, `inboxesTone()`; on Replicas, all in step or not, or a pair branched or none; all there, some, none): Sync status (cyan,
   first: what's done here) and Replicas (indigo). "+ Add a replica" (`web/adding.py`), each replica's card
-  (icon, disk, status chips: mounted, synced, hashed, its list read; log entry; hashing to start or pause;
+  (icon, disk, how many files and their size: a local one's as its hashing listed them, a Drive one's as its list has them,
+  `drivecache.totals_under()`, worked out again once the cache changed; status chips: mounted, synced, hashed, its list read; log entry; hashing to start or pause;
   Forget), every pair's sync status (`syncstate`'s mark, ≡ » « ≠ ?; how much was in
   step, the files both had of all either had, by the totals a sync notes with its comparison since
   2026-11-18; and how stale that is: when it was compared, and which replica changed since) with Sync

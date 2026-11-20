@@ -63,3 +63,4 @@ button.item { border: 0; border-radius: 0; background: none; }
 .namer { display: flex; flex-direction: column; gap: 6px; border-top: 1px solid var(--line); padding-top: 8px; }
 .namer label { font-size: 12px; font-weight: 600; color: var(--muted); }
 .namer input { font: inherit; padding: 7px 9px; border-radius: 8px; border: 1px solid var(--line); background: var(--card); color: var(--fg); }
+.card.replica .filecount { font-size: 14px; }

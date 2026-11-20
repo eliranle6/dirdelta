@@ -85,6 +85,14 @@ class EntriesTest(unittest.TestCase):
         with mock.patch('dirdelta.drive.drivecache.names.LINES_FILE', self.cache + '-missing.txt'):
             self.assertIsNone(drivecache.count_under('/mein'))
 
+    def test_a_folders_files_are_totaled_again_once_the_cache_changed(self):
+        expected = [entry for entry in drivecache.entries('/mein') if not entry.is_dir]
+        self.assertEqual(drivecache.totals_under('/mein'), (len(expected), sum(entry.size or 0 for entry in expected)))
+        drivecache.trash('album')
+        fewer = [entry for entry in drivecache.entries('/mein') if not entry.is_dir]
+        self.assertEqual(drivecache.totals_under('/mein')[0], len(fewer))
+        self.assertIsNone(drivecache.totals_under('/nowhere'))
+
     def test_with_no_cache_a_replace_makes_one_with_the_root(self):
         helpers.remove_drive_cache(self.cache)
         drivecache.replace_under('mein', [{'id': 'mein', 'name': 'mein', 'parents': ['ROOT'],

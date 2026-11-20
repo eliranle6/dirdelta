@@ -179,12 +179,6 @@ function waiting(text) {
 
 function percent(part, whole) { return whole ? Math.floor(100 * part / whole) + '%' : ''; }
 
-function size(bytes) {
-  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
-  let at = 0;
-  while (bytes >= 1024 && at < units.length - 1) { bytes /= 1024; at++; }
-  return (at ? bytes.toFixed(bytes < 10 ? 1 : 0) : bytes) + ' ' + units[at];
-}
 
 function ago(seconds) {
   if (seconds === null) return '';

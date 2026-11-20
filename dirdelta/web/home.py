@@ -5,6 +5,7 @@ pausing it; and the users (users.py)"""
 import os
 
 from dirdelta.drive import driveapi
+from dirdelta.drive import drivecache
 from dirdelta.drive import freshening
 from dirdelta.hashes import hashcache
 from dirdelta.hashes import hashing
@@ -54,7 +55,21 @@ def replica_info(path, known_replicas):
         found['hashesKept'] = hashcache.count_under(path) if found['there'] else 0
     info = known_replicas.info_at(path) or {}
     found.update(lastEntry=info.get('last_entry'), seen=info.get('seen'), changed=info.get('changed'))
+    found['files'] = _files_of(path, is_cloud)
     return found
+
+
+def _files_of(path, is_cloud):
+    """{'count', 'size'} of the replica's files, as the dashboard says them: a Drive one's as its list has them, a
+    local one's as its hashing listed them (None until it has)"""
+    if is_cloud:
+        totals = drivecache.totals_under(paths.path_in_cloud(path))
+    else:
+        job = hashing.job_for(path)
+        progress = job.progress() if job is not None else None
+        totals = (progress.nr_files, progress.size) if progress is not None and progress.state not in (
+            hashing.NOT_SCANNED, hashing.SCANNING) else None
+    return {'count': totals[0], 'size': totals[1]} if totals is not None else None
 
 
 def _title(screen):

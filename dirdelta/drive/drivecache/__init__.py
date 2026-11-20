@@ -17,7 +17,7 @@ from dirdelta.drive.drivecache.metadata import (DriveCacheError, date_taken, has
                                                 is_google_file, modified_time, path_name, rfc3339)
 from dirdelta.drive.drivecache.names import (FILE_FIELDS, FOLDER_MIME_TYPE, GOOGLE_APPS_MIME_PREFIX,  # noqa: F401
                                              HASH_FIELDS, ROOT_ID_KEY, TRASHED_ID_KEY)
-from dirdelta.drive.drivecache.reading import Entry, count_under, entries, root_id  # noqa: F401
+from dirdelta.drive.drivecache.reading import Entry, count_under, entries, root_id, totals_under  # noqa: F401
 from dirdelta.drive.drivecache.stale import changing, mark_fresh, mark_stale, stale_paths, unmark_stale  # noqa: F401
 from dirdelta.drive.drivecache.times import (note_updated, note_uploaded, note_user, updated,  # noqa: F401
                                              uploaded, user)
