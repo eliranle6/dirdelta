@@ -1300,6 +1300,14 @@ every link carries, then a cookie), and a watcher.
   in the user's `replicas.json` (`replicas`, `inboxes`). Forgetting one (`/api/forget`) drops it, and the
   pairs and sorts it's in, keeping the others; nothing in it is touched.
 
+## Each replica's sync history: `synchistory.py`
+
+A replica says itself when it was last synced, on any computer: `meta/history.jsonl` in it (left out of the sync, as the
+rest of `meta/`), a line of JSON a sync, appended once it's done (`dirsync_main.note_in_history()`): when, with which
+replica (its path and name), what it changed in this one (`log_entries.Changes.summary()`), and what each lacked as last
+compared. Live only: a dry run writes nothing. A Drive replica's is read and written through Drive's API in its `meta`
+folder (`drivemeta/files.py`), as its file list is; one that can't be written is said not to be, the sync done all the same.
+
 ## What replicas are called: `replicanames.py`, `label_screen.py`
 
 `replicanames.full()` says which disk or account a replica is on (`LocalDisk(ABC):/path`, `Cloud(user):/path`), or

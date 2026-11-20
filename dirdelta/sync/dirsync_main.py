@@ -3,6 +3,7 @@ from dirdelta.drive import drivemeta
 from dirdelta.hashes import hashcache
 from dirdelta.known import replicanames
 from dirdelta.known import replicas
+from dirdelta.known import synchistory
 from dirdelta.screens import hashes_screen
 from dirdelta.sync import replica_ops
 from dirdelta.sync.sync_menu import BACK, SyncMenu  # noqa: F401 (BACK: the menu's, for its callers)
@@ -59,7 +60,27 @@ def _run(args):
     with drivemeta.kept([(args.dir_a_path, dirtree_a), (args.dir_b_path, dirtree_b)]):
         result = _sync(dirtree_a, dirtree_b, args.dir_a_path, args.dir_b_path, known_replicas, changes)
     log_entries.offer_entries(changes, trees, known_replicas)
+    note_in_history(trees, changes, known_replicas)
     return result
+
+
+def note_in_history(trees, changes, known_replicas):
+    """Each replica's own sync history (kept in it, synchistory.py) notes this sync: when, with which, what it
+    changed there, and what each lacked as last compared. Live only: a dry run notes nothing. A replica that
+    can't be written (read-only, Drive unreachable) is said not to be, and the sync's done all the same."""
+    if dryrun.DRYRUN:
+        return
+    names = replicanames.told_apart([path for _, path in trees])
+    for (tree, path), (_, other_path) in ((trees[0], trees[1]), (trees[1], trees[0])):
+        item = synchistory.entry(other_path, names[other_path], changes.summary(tree.displayname()))
+        comparison = known_replicas.comparison(path, other_path)
+        if comparison is not None:
+            item['only'] = {'here': comparison['only'][0], 'there': comparison['only'][1], 'when': comparison['when']}
+        try:
+            synchistory.record(path, item)
+        except Exception as error:
+            messages.print_line("Couldn't note this sync in %s's history (%s): %s" %
+                                (names[path], synchistory.HISTORY_NAME, error), 'red')
 
 
 def _sync(replica_a, replica_b, replica_a_path, replica_b_path, known_replicas=None, changes=None):
