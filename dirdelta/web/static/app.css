@@ -361,3 +361,7 @@ footer#bottom { max-height: 50vh; overflow-y: auto; overscroll-behavior: contain
   border-left: 1px solid color-mix(in srgb, var(--accent-fg) 35%, transparent); }
 .actsec.quick button.quick { display: inline-flex; align-items: center; gap: 6px; }
 .actsec.quick button.quick .icon { color: var(--muted); }
+/* What the preview is of: a small header above it */
+.preview .previewhead { font-size: 12px; color: var(--muted); margin: -2px 0 6px; padding-bottom: 5px; border-bottom: 1px solid var(--line);
+  overflow-wrap: anywhere; }
+.preview .previewhead b { color: var(--fg); }

@@ -525,6 +525,10 @@ async function loadPreview() {
   // (Only blank lines, as a folder's may be: no box for them)
   const lines = (found.lines || []).some(line => plainOf(line).trim()) ? found.lines : [];
   const content = [];
+  // (Which node it's of: the selected one, the row tapped, not the ones checked)
+  if (lines.length || found.image) {
+    content.push(el('div', {class: 'previewhead'}, 'Selected: ', el('b', {}, view.selected ? baseName(view.selected) : screen.root)));
+  }
   if (lines.length) content.push(el('pre', {}, lines.map(line => [plainOf(line).startsWith('Diff: ') ? diffToggle(line) : previewLine(line), '\n'])));
   if (found.image) { const canvas = pictureCanvas(found.image); if (canvas) content.push(canvas); }
   box.replaceChildren(content.length ? el('div', {class: 'preview'}, content) : '');
