@@ -213,16 +213,21 @@ function visibleRows() {
   const rows = [{path: '.', depth: 0}];
   const kids = path => (screen.mode === 'dir' ? view.lazy.get(path) : view.children.get(path)) || [];
   const tabFiles = view.screen.tabs.length ? new Set(view.items.filter(p => view.info.get(p).t === 'f' && inTab(p)).flatMap(ancestors)) : null;
-  const walk = (path, depth) => {
-    for (const child of kids(path)) {
+  // (Each row's branch lines, as treepicker draws them: for each level above it, whether that ancestor has
+  // more below it (a line down, │), then its own (├, or └ for the last))
+  const walk = (path, depth, above) => {
+    const shownKids = kids(path).filter(child => {
       const info = view.info.get(child);
-      if (!inTab(child) || (tabFiles && info.t === 'd' && !tabFiles.has(child))) continue;
-      rows.push({path: child, depth});
-      if (info.t === 'd' && view.expanded.has(child)) walk(child, depth + 1);
+      return inTab(child) && !(tabFiles && info.t === 'd' && !tabFiles.has(child));
+    });
+    shownKids.forEach((child, index) => {
       if (rows.length > MAX_ROWS) return;
-    }
+      const last = index === shownKids.length - 1;
+      rows.push({path: child, depth, guides: [...above, last ? 'elbow' : 'tee']});
+      if (view.info.get(child).t === 'd' && view.expanded.has(child)) walk(child, depth + 1, [...above, last ? 'blank' : 'pipe']);
+    });
   };
-  walk('.', 1);
+  walk('.', 1, []);
   return rows;
 }
 
@@ -259,12 +264,12 @@ function nextState(path) {
   return allowed[(at + 1) % allowed.length];
 }
 
-function row({path, depth, flat}) {
+function row({path, depth, flat, guides}) {
   const screen = view.screen;
   const info = view.info.get(path) || {t: 'd'};
   const isDir = info.t === 'd';
-  const parts = [];
-  parts.push(el('span', {class: 'twisty', onclick: event => {
+  const parts = flat ? [] : (guides || []).map(kind => el('span', {class: 'guide ' + kind}));
+  parts.push(el('span', {class: 'twisty' + (!isDir && !flat && guides && guides.length ? ' leaf' : ''), onclick: event => {
     event.stopPropagation();
     if (!isDir || path === '.') return;
     if (view.expanded.has(path)) view.expanded.delete(path);
@@ -289,7 +294,6 @@ function row({path, depth, flat}) {
   parts.push(el('span', {class: 'name' + (isDir ? ' dir' : '') + (info.c ? ' c-' + info.c : '')}, segmentsSpan(text)));
   const picked = info.t === 'f' && view.picked.has(path);
   return el('div', {class: 'row' + (path === view.selected || (path === '.' && view.selected === '') ? ' sel' : '') + (picked ? ' picked' : ''),
-    style: 'padding-left:' + (10 + (flat ? 0 : depth) * 16) + 'px',
     onclick: () => {
       if (isDir && path !== '.' && view.selected === path) {
         if (view.expanded.has(path)) view.expanded.delete(path); else { view.expanded.add(path); if (screen.mode === 'dir') loadChildren(path); }
@@ -317,11 +321,27 @@ function renderSide() {
   const side = view.screen.side;
   if (!box) return;
   if (!side) { box.replaceChildren(); return; }
-  const rows = side.items.filter(item => item.t === 'd').slice(0, MAX_ROWS).map(item => el('div', {
-    class: 'row' + (item.p === view.sideSelected ? ' sel' : ''), style: 'padding-left:' + (10 + item.p.split('/').length * 12) + 'px',
-    onclick: () => act('sideSelect', {path: item.p}).then(() => { view.sideSelected = item.p; renderSide(); renderPickerActions(); })},
-    el('span', {class: 'name dir'}, baseName(item.p))));
-  box.replaceChildren(el('div', {class: 'side'}, el('h3', {}, side.root), el('div', {}, rows)));
+  // (Its folders in a tree, with branch lines as the picker's: each one's under its parent, in their order)
+  const dirs = side.items.filter(item => item.t === 'd').map(item => item.p);
+  const known = new Set(dirs), under = new Map();
+  for (const path of dirs) {
+    const cut = path.lastIndexOf('/'), parent = cut > 0 && known.has(path.slice(0, cut)) ? path.slice(0, cut) : '';
+    if (!under.has(parent)) under.set(parent, []);
+    under.get(parent).push(path);
+  }
+  const ordered = [];
+  const walk = (parent, above) => (under.get(parent) || []).forEach((path, index, all) => {
+    if (ordered.length >= MAX_ROWS) return;
+    const last = index === all.length - 1;
+    ordered.push({path, guides: [...above, last ? 'elbow' : 'tee']});
+    walk(path, [...above, last ? 'blank' : 'pipe']);
+  });
+  walk('', []);
+  const rows = ordered.map(({path, guides}) => el('div', {
+    class: 'row' + (path === view.sideSelected ? ' sel' : ''),
+    onclick: () => act('sideSelect', {path}).then(() => { view.sideSelected = path; renderSide(); renderPickerActions(); })},
+    ...guides.map(kind => el('span', {class: 'guide ' + kind})), el('span', {class: 'name dir'}, baseName(path))));
+  box.replaceChildren(el('div', {class: 'side'}, el('h3', {}, side.root), el('div', {class: 'tree'}, rows)));
 }
 
 function renderPickerActions() {

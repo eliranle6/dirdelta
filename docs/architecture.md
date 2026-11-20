@@ -1224,6 +1224,7 @@ every link carries, then a cookie), and a watcher.
   is under its tab (a sync's Replicas', a sort's Inboxes': `Session.tab`), which has a pulsing dot while
   it runs, and "Running" in the top bar leads there. The
   Running page (`web/static/app.js`) polls `/api/state` (a long poll: each change is numbered) and draws
+  (its trees, the picker's and the side's, with branch lines as treepicker's: │ ├ └, `visibleRows()`'s guides)
   a menu as a list, a tree with checkboxes or state marks, the preview column (pictures from
   treepicker's pixels), the keys as buttons (named by the keys row, or the `?` help's lines), and
   messages screens.

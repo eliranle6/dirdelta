@@ -296,3 +296,14 @@ header#top > #crumbs { order: 10; flex: 1 0 100%; margin: 9px -16px -8px; paddin
 header#top > #crumbs > a { color: var(--accent); }
 header#top > #crumbs #where { color: var(--fg); }
 header#top > #crumbs:has(> #where:empty) { display: none; }
+/* A tree's branch lines, as the terminal's: a cell a level, through the row's height (its padding too):
+   │ an ancestor with more below it, ├ a row with more after it, └ the last */
+.tree .row { padding-left: 6px; gap: 0; }
+.tree .row > * + * { margin-left: 6px; } .tree .row > .guide + *, .tree .row > .guide + .guide { margin-left: 0; }
+.row .guide { flex: none; width: 18px; align-self: stretch; margin: -6px 0 -7px; position: relative; }
+.row .guide::before, .row .guide::after { content: ''; position: absolute; border-color: var(--muted); opacity: .55; }
+.row .guide.pipe::before, .row .guide.tee::before { left: 8px; top: 0; bottom: 0; border-left: 1.5px solid; }
+.row .guide.elbow::before { left: 8px; top: 0; height: 50%; border-left: 1.5px solid; }
+.row .guide.tee::after, .row .guide.elbow::after { left: 8px; right: 0; top: 50%; border-top: 1.5px solid; }
+.tree .row .twisty.leaf { height: 0; border-top: 1.5px solid var(--muted); opacity: .55; }
+.tree .row > .guide + .name { margin-left: 4px; }
