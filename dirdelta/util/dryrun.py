@@ -12,3 +12,10 @@ NOTE = "(A dry run: nothing on disk will change. DRYRUN=0 changes files.)"
 def label():
     """The mode's label for the screens, and its color: green for a dry run, red for a live one."""
     return ("DRY RUN", "green") if DRYRUN else ("LIVE", "red")
+
+
+def set_live(live):
+    """Change files from now on (live), or only say what would be done: the web version's DRY RUN label
+    switches it, while nothing's running (until the daemon restarts, which starts as DRYRUN says)"""
+    global DRYRUN
+    DRYRUN = not live

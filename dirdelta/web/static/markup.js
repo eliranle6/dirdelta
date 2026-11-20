@@ -87,18 +87,36 @@ const LABEL_NOTES = {
   'LIVE': 'Live: buttons really copy, move and remove files.',
 };
 
+// The mode's label: tapping it switches the mode (a dry run to live after saying what that means and asking;
+// live back to a dry run at once), and says why not while a run is open
 function labelChip([text, color]) {
   const chipped = el('span', {class: 'label b-' + (COLORS.includes(color) ? color : 'grey'), title: LABEL_NOTES[text] || ''}, text);
   if (LABEL_NOTES[text]) {
     chipped.classList.add('tappable');
     chipped.addEventListener('click', () => {
-      const header = document.getElementById('top');
       const shown = document.getElementById('modenote');
-      if (shown) shown.remove();
-      else header.append(el('div', {id: 'modenote', class: 'modenote c-' + color}, LABEL_NOTES[text]));
+      if (shown) { shown.remove(); return; }
+      if (text === 'LIVE') { setMode(false); return; }
+      modeNote(color, LABEL_NOTES[text] + ' Switch to live? Copy, Remove and Rename will then really change files, on ' +
+        'this computer\'s disks and in Google Drive, until you switch back (or the daemon restarts).',
+        el('div', {class: 'row2'}, el('button', {class: 'danger sure', onclick: () => setMode(true)}, 'Switch to live'),
+          el('button', {onclick: () => document.getElementById('modenote').remove()}, 'Stay in dry run')));
     });
   }
   return chipped;
+}
+
+function modeNote(color, text, extra) {
+  const old = document.getElementById('modenote');
+  if (old) old.remove();
+  document.getElementById('top').append(el('div', {id: 'modenote', class: 'modenote c-' + color}, text, extra || ''));
+}
+
+async function setMode(live) {
+  const answer = await (await fetch('/api/mode', {method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({live})})).json();
+  if (answer.ok) location.reload();
+  else modeNote('red', answer.error);
 }
 
 // A path, shortened to its last parts, the whole shown on a tap (and hidden on the next)

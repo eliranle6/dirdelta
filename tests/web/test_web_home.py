@@ -65,6 +65,19 @@ class HomeTest(WebTest):
         self.session.start(lambda: release.wait(5), 'replicas', asked)
         self.assertEqual(asked, self.call('GET', '/api/home')['running']['what'])
 
+    def test_the_mode_switches_to_live_and_back_while_nothing_runs(self):
+        with mock.patch('dirdelta.util.dryrun.DRYRUN', True):
+            self.assertEqual(['LIVE', 'red'], self.call('POST', '/api/mode', {'live': True})['label'])
+            self.assertEqual(['DRY RUN', 'green'], self.call('POST', '/api/mode', {'live': False})['label'])
+
+    def test_the_mode_stays_while_a_run_is_open(self):
+        release = threading.Event()
+        self.addCleanup(release.set)
+        self.session.start(lambda: release.wait(5), 'replicas', {'kind': 'pair'})
+        with mock.patch('dirdelta.util.dryrun.DRYRUN', True):
+            self.assertFalse(self.call('POST', '/api/mode', {'live': True})['ok'])
+            self.assertEqual(['DRY RUN', 'green'], self.call('GET', '/api/home')['label'])
+
     def test_only_a_known_local_replica_is_hashed_from_the_dashboard(self):
         with mock.patch('dirdelta.screens.hashes_screen.dashboard_actions.start_hashing') as start_hashing:
             self.assertFalse(self.call('POST', '/api/home/hash', {'path': '/etc'})['ok'])

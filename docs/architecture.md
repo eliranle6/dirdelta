@@ -1280,7 +1280,7 @@ every link carries, then a cookie), and a watcher.
   cookie, else the owner); a flow runs as whoever started it, and so do the threads it starts (the
   run's user while it runs). The top bar (`markup.js`'s userBar()) changes the user, adds one, or sets
   the address links are emailed to them (`/api/users`, `/api/users/add`, `/api/users/email`); a new
-  user's Home offers to add their first replica. It holds the mode's label (DRY RUN or LIVE) too: the breadcrumbs
+  user's Home offers to add their first replica. It holds the mode's label (DRY RUN or LIVE) too, which switches it: a dry run to live once the user says yes to what that means, live back at once; not while a run is open, whose screens were opened in the mode before (`/api/mode`, `dryrun.set_live()`; a restart starts as `DRYRUN` says): the breadcrumbs
   are a row under the tabs (what's shown is a page of its tab's): the tab first, then the part shown, or a flow's
   screen (a tree's the flow's places, `places.trail()` as it's shown, e.g. Sync eliran ⇄ cloud/eliran > Only in eliran on LocalDisk(07B)) (its tab, a sync's Replicas or a sort's Inboxes, for dirdelta's own name: `setTop()`); Home, a tab's page
   alone, has none. Its menu also

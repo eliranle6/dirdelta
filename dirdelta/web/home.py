@@ -144,6 +144,15 @@ def routes(session):
         return {'running': session.is_running, 'user': session.user if session.is_running else None,
                 'tab': session.tab if session.is_running else None}
 
+    def set_mode(query, body):
+        """Live (body['live']) or a dry run, from the top bar's label: not while a run's screens are open,
+        which were opened in the mode before (their labels would say otherwise)"""
+        if session.is_running:
+            return {'ok': False, 'error': "Finish or leave what's running first: it was opened as a %s." %
+                    ('dry run' if dryrun.DRYRUN else 'live run')}
+        dryrun.set_live(bool(body.get('live')))
+        return {'ok': True, 'label': list(dryrun.label())}
+
     def user_list(query, body):
         return {'users': users.all_users(), 'current': users.current(), 'owner': users.OWNER,
                 'email': settings.email_address()}
@@ -165,4 +174,4 @@ def routes(session):
 
     return {('GET', '/api/home'): home, ('POST', '/api/home/hash'): hash_replica,
             ('GET', '/api/running'): running, ('GET', '/api/users'): user_list, ('POST', '/api/users/add'): add_user,
-            ('POST', '/api/users/email'): set_email}
+            ('POST', '/api/users/email'): set_email, ('POST', '/api/mode'): set_mode}
