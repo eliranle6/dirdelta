@@ -61,9 +61,14 @@ class CloudDirTreeFactoryTest(unittest.TestCase):
         self.make_cache()
         when = time.mktime((2026, 10, 26, 9, 33, 0, 0, 0, -1))
         clouddirtreefactory.drivecache.note_updated('/mein', when)
-        self.assertEqual(self.header().splitlines()[:3], [
+        with mock.patch('time.time', return_value=when + 3 * 86400 + 600):
+            header = self.header()
+        self.assertEqual(clouddirtreefactory.picker.unstyled(header).splitlines()[:3], [
             "Refresh cloud/mein from Google Drive?", "",
-            "Its file list is from 2026-10-26 09:33. Refreshing shows changes made elsewhere, but takes a while."])
+            "Its file list was read 3 days ago (2026-10-26 09:33). Refreshing shows changes made elsewhere, "
+            "but takes a while."])
+        # How long ago, in bold
+        self.assertIn(clouddirtreefactory.picker.styled([("3 days ago", 'bold')]), header)
 
     def test_the_refresh_prompt_says_if_the_cache_is_stale_in_the_folder(self):
         self.make_cache()

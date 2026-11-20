@@ -5,6 +5,7 @@ from dirdelta.drive import clouddirtree
 from dirdelta.drive import drivecache
 from dirdelta.trees import paths
 from dirdelta.ui import picker
+from dirdelta.util import text
 
 
 # The refresh question's options: the first, selected at first, does nothing
@@ -33,10 +34,11 @@ def _ask_whether_to_refresh(rootpath):
     options = [OPTION_NOTHING, OPTION_NO_REFRESH, OPTION_REFRESH]
     folder = paths.path_in_cloud(rootpath)
     updated = drivecache.updated(folder)
+    refreshing = " Refreshing shows changes made elsewhere, but takes a while."
     lines = ["Refresh %s from Google Drive?" % (rootpath,), "",
-             ("Its file list is from %s." % (time.strftime('%Y-%m-%d %H:%M', time.localtime(updated)),)
-              if updated is not None else "Its file list is from an earlier run.") +
-             " Refreshing shows changes made elsewhere, but takes a while."]
+             picker.styled([("Its file list was read ", None), (text.format_age(time.time() - updated), 'bold'),
+                            (" (%s)." % (time.strftime('%Y-%m-%d %H:%M', time.localtime(updated)),) + refreshing, None)])
+             if updated is not None else "Its file list is from an earlier run." + refreshing]
     stale = [path for path in drivecache.stale_paths() if _overlap(path, folder)]
     if stale:
         lines.append("It may be out of date in %s: dirdelta was cut off there." %

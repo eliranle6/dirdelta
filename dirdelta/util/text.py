@@ -44,3 +44,17 @@ def format_duration(seconds):
     if seconds < 3600:
         return "%d min" % (seconds // 60,)
     return "%d h %d min" % (seconds // 3600, seconds % 3600 // 60)
+
+
+# The units an age is said in (see format_age()), each with how many seconds it is
+AGE_UNITS = (('year', 365 * 86400), ('month', 30 * 86400), ('week', 7 * 86400), ('day', 86400),
+             ('hour', 3600), ('minute', 60))
+
+
+def format_age(seconds):
+    """How long ago, for people, in its largest whole unit: 'just now' (under a minute), '3 minutes
+    ago', '1 day ago', '6 months ago', '2 years ago'"""
+    for unit, length in AGE_UNITS:
+        if seconds >= length:
+            return "%s ago" % (counted(int(seconds // length), unit),)
+    return "just now"
