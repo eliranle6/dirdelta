@@ -415,3 +415,6 @@ button.tiny { font-size: 12px; padding: 2px 8px; border-radius: 10px; color: var
 .mergesame.blank { font-size: 12px; font-style: italic; }
 #mergeai .mergecontext { width: 100%; font: inherit; font-size: 14px; padding: 7px 9px; border-radius: 8px; border: 1px solid var(--line);
   background: var(--card); color: var(--fg); resize: vertical; }
+/* A menu's option chosen: marked, with the dots, while the next screen comes */
+.option.chosen { background: var(--sel); font-weight: 600; opacity: 1 !important; }
+#tree.choosing button.option { pointer-events: none; } #tree.choosing button.option:not(.chosen) { opacity: .6; }

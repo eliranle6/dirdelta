@@ -228,11 +228,14 @@ function renderPickerFrame() {
   placePreview(inBar);
   // A menu right after a tree (what to do with its picks, then its confirmations): a panel over that tree,
   // dimmed under it, rather than a page of its own; the flow is the same (the panel is this menu's screen)
+  // (Only a menu the tree's own buttons asked for (Enter, an action, Merge): Back from the tree to the menu before
+  // it isn't one, nor is any other)
   const shown = main.dataset.shows;
-  if (screen.mode === 'list' && (shown === 'tree' || shown === 'dir' || shown === 'panel')) {
+  if (screen.mode === 'list' && (view.menuAsked && (shown === 'tree' || shown === 'dir') || shown === 'panel')) {
     showPanel(main, parts);
     return;
   }
+  view.menuAsked = false;
   main.dataset.shows = screen.mode;
   document.body.style.minHeight = '';
   main.replaceChildren(...parts);
@@ -325,14 +328,25 @@ function renderTree() {
   box.replaceChildren(list);
 }
 
-// A files' menu's option's icon (the menus shown over a tree, what to do with its files), by what it does
-const ACTION_ICONS = [[/^Nothing/, 'back'], [/^Ask AI/, 'ai'], [/^Copy/, 'copy'], [/^Replace/, 'swap'], [/^Merge/, 'merge'],
+// A menu's option's icon, by what it does: a files' menu's (what to do with them), the sync menu's (all of it in one
+// tree, a kind of difference at a time, reading the replicas anew, the pair's own), and going back
+const ACTION_ICONS = [[/^(Nothing|Back)/, 'back'], [/^Ask AI/, 'ai'], [/^Copy/, 'copy'], [/^Replace/, 'swap'], [/^Merge/, 'merge'],
   [/^(Remove|Delete|Trash)/, 'trash'], [/^Rename/, 'pencil'], [/^Open/, 'open'],
   [/^(Read .* anew|See what changed|Refresh|Rescan)/, 'refresh'], [/^Explore/, 'zip'], [/^Move/, 'move'],
-  [/^(Skip|Leave)/, 'skip']];
+  [/^(Skip|Leave)/, 'skip'], [/^Sync: /, 'sync'], [/^Files only in /, 'onlyhere'], [/^Files that differ/, 'differ'],
+  [/^Compare/, 'equal'], [/^(Add to|Remove from) favorites/, 'star'], [/^Not now/, 'clock'], [/^(Name|Label)/, 'pencil'],
+  [/^Replicas dashboard/, 'replicas']];
 
 async function chooseOption(path) {
   if (view.screen.previewBelow && view.selected !== path) { await act('select', {path}); return; }
+  // (Chosen: it says so, with the dots, until the next screen comes; the menu's other options off meanwhile)
+  const box = document.getElementById('tree');
+  const button = box && [...box.querySelectorAll('button.option')].find(one => one.dataset.path === path);
+  if (button) {
+    box.classList.add('choosing');
+    button.classList.add('chosen');
+    button.append(el('span', {class: 'dots'}));
+  }
   await act('select', {path});
   await act('enter');
 }
@@ -403,11 +417,11 @@ function menuList() {
       return el('div', {class: 'option ' + (!plain ? 'blank' : plain.startsWith('\u2500') ? 'heading' : 'info')}, segmentsSpan(shown(path)));
     }
     const classes = ['option', path === view.selected ? 'sel' : '', info.d ? 'disabled' : '', info.c ? 'c-' + info.c : ''];
-    const glyph = inPanel ? actionIcon(plainOf(shown(path))) : null;
+    const glyph = actionIcon(plainOf(shown(path)));
     // (A files' menu: its key on the right, not before the text)
     const key = inPanel ? keys.get(path) : null;
     const text = inPanel ? withoutKeyPrefix(shown(path)) : shown(path);
-    return el('button', {class: classes.join(' ') + (glyph ? ' withicon' : ''), disabled: info.d, onclick: () => chooseOption(path)},
+    return el('button', {class: classes.join(' ') + (glyph ? ' withicon' : ''), disabled: info.d, 'data-path': path, onclick: () => chooseOption(path)},
       glyph ? icon(glyph) : '', segmentsSpan(text), key ? el('kbd', {}, key) : '');
   }));
 }
@@ -678,6 +692,7 @@ function opensMenu(screen) {
 }
 
 function openingPanel() {
+  view.menuAsked = true;
   const main = document.getElementById('main');
   if (main.dataset.shows !== 'tree' && main.dataset.shows !== 'dir') return;
   showPanel(main, [el('p', {class: 'note'}, 'Opening', el('span', {class: 'dots'}))]);
@@ -715,7 +730,7 @@ const QUICK_ACTIONS = [
 function quickActions(screen, selected) {
   return [el('div', {class: 'acton'}, view.picked.size ? ['These act on ', targetChip(screen, selected)] : 'These act on the checked files: check some first')].concat(
     QUICK_ACTIONS.filter(([, key]) => key !== 'e' || /\.zip$/i.test(view.selected || '')).map(([glyph, key, text]) =>
-      el('button', {class: 'quick', disabled: !view.picked.size, onclick: () => { view.pendingKey = key; act('enter'); }},
+      el('button', {class: 'quick', disabled: !view.picked.size, onclick: () => { view.pendingKey = key; view.menuAsked = true; act('enter'); }},
         icon(glyph), text(screen), el('small', {class: 'keyname'}, key))));
 }
 

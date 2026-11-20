@@ -504,6 +504,9 @@ const ICONS = {
   zip: '<rect x="4" y="3" width="16" height="18" rx="1.5"/><path d="M12 3v2M12 7v2M12 11v2"/><rect x="10.5" y="14" width="3" height="4" rx=".8"/>',
   move: '<path d="M3 6.5h6l2 2h10v10.5H3z"/><path d="M8 14h7M12.5 11.5L15 14l-2.5 2.5"/>',
   merge: '<path d="M6 3v6a6 6 0 0 0 6 6h0a6 6 0 0 1 6 6M18 3v6a6 6 0 0 1-3 5.2"/><path d="M3 6l3-3 3 3M15 6l3-3 3 3"/>',
+  onlyhere: '<path d="M3 6.5h6l2 2h10v10.5H3z"/><path d="M12 11v5M9.5 13.5h5"/>',
+  differ: '<rect x="3" y="4" width="8" height="16" rx="1.5"/><rect x="13" y="4" width="8" height="16" rx="1.5"/><path d="M6 9h2M16 9h2M16 13h2"/>',
+  star: '<path d="M12 3.5l2.6 5.3 5.8.8-4.2 4.1 1 5.8L12 16.8l-5.2 2.7 1-5.8-4.2-4.1 5.8-.8z"/>',
   skip: '<circle cx="12" cy="12" r="9"/><path d="M6 18L18 6"/>',
   person: '<circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/>',
 };
