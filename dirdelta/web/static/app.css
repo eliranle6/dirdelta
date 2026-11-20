@@ -47,7 +47,14 @@ input[type=search], input[type=text] { font: inherit; width: 100%; padding: 8px 
 .option { text-align: left; border: 0; border-radius: 0; border-bottom: 1px solid var(--line); padding: 11px 14px; background: transparent; }
 .option:last-child { border-bottom: 0; }
 .option.sel { background: var(--sel); }
-.option.disabled { color: var(--disabled); }
+.option.disabled { color: var(--muted); font-style: italic; cursor: not-allowed; background: var(--bg); opacity: .75; }
+/* (Can't be picked: marked so, not only fainter) */
+.option.disabled::before { content: '\2298'; font-style: normal; margin-right: 6px; }
+/* What a menu has to read, not to pick (e.g. the sync state and its points): plain text, close together */
+.option.info { cursor: default; white-space: pre-wrap; padding: 3px 14px; border-bottom: 0; }
+.option.info:first-child { padding-top: 12px; }
+.option.info + .option:not(.info) { border-top: 1px solid var(--line); }
+.option.info:has(+ .option.blank), .option.info:last-child { padding-bottom: 12px; border-bottom: 1px solid var(--line); }
 .option.heading { font-weight: 700; color: var(--muted); padding: 14px 14px 4px; cursor: default; font-size: 13px; text-transform: uppercase; letter-spacing: .03em; }
 .option.blank { display: none; }
 .tabs { display: flex; gap: 6px; overflow-x: auto; }
@@ -156,7 +163,10 @@ nav#tabs .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--g
 #userbar .userpick .whose { white-space: nowrap; }
 @media (max-width: 480px) { #userbar .userpick .whose { display: none; } }
 /* (A page's title only if it says more than its tab: an import's, a flow's) */
-#crumbs:has(> #where:empty) { display: none; }
+/* (Every tab's page has its breadcrumbs: the tab, then the part shown or what's open in it; the tab's a
+   link back only when there's more after it) */
+#crumbs:not(:has(> #where:empty)) > a { color: var(--accent); }
+#crumbs:has(> #where:empty) > a { pointer-events: none; }
 #userbar .userpick { display: flex; align-items: center; gap: 6px; min-width: 0; color: var(--muted); }
 #userbar select { font: inherit; font-weight: 700; color: var(--fg); background: var(--bg); border: 1px solid var(--line);
   border-radius: 6px; padding: 3px 6px; width: auto; max-width: 45vw; min-width: 0; }
@@ -271,3 +281,11 @@ button.danger { background: var(--red); border-color: var(--red); color: #fff; }
 .kindtabbed .kindhead > .icon, .kindtabbed .kindhead h2 { display: none; }
 /* (A part with no words of its own, as a sub-tab: no head at all) */
 .kindtabbed .kindhead:not(:has(p)) { display: none; }
+/* On a wide screen the page keeps a column's width, centered: the top bar, the page and the bottom bar
+   capped at --page-width (a phone's narrower anyway); their backgrounds and lines still go edge to edge
+   (painted by border-image beyond the box, which takes no room and scrolls nothing) */
+:root { --page-width: 1040px; }
+header#top, main, footer#bottom { width: 100%; max-width: var(--page-width); margin-left: auto; margin-right: auto; }
+header#top { border-image: linear-gradient(to top, var(--line) 1px, var(--bg) 1px) fill 0 / 0 / 0 100vmax; }
+footer#bottom { border-image: linear-gradient(to bottom, var(--line) 1px, var(--bg) 1px) fill 0 / 0 / 0 100vmax; }
+#userbar { border-image: linear-gradient(to top, var(--line) 1px, var(--card) 1px) fill 0 / 0 / 0 100vmax; }

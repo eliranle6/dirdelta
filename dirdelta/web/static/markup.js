@@ -413,6 +413,9 @@ function kindParts(parts, aliases = {}) {
     blocks.forEach(block => { block.hidden = block.id !== id; });
     // (The row draws the shown part's top edge, in its color: the tab shown covers it, joined to the part)
     row.className = 'kindtabs kind-' + id;
+    // (The breadcrumbs end in the part shown)
+    const where = document.getElementById('where'), title = blocks[ids.indexOf(id)].querySelector('h2');
+    if (where) where.replaceChildren(title ? ' > ' + title.textContent : '');
   };
   jumps.forEach((jump, index) => {
     jump.onclick = event => { event.preventDefault(); show(ids[index]); };

@@ -127,7 +127,7 @@ function renderPickerFrame() {
   const main = document.getElementById('main');
   const parts = [];
   if (screen.header) parts.push(el('div', {class: 'header'}, segmentsSpan(screen.header)));
-  if (screen.tabs.length) parts.push(el('div', {class: 'tabs', id: 'tabs'}));
+  if (screen.tabs.length) parts.push(el('div', {class: 'tabs', id: 'pickertabs'}));
   if (screen.mode !== 'list') {
     parts.push(el('input', {type: 'search', id: 'search', placeholder: 'Search', autocomplete: 'off',
       oninput: event => { view.search = event.target.value; renderTree(); }}));
@@ -150,7 +150,7 @@ function renderPickerParts() {
 }
 
 function renderTabs() {
-  const tabs = document.getElementById('tabs');
+  const tabs = document.getElementById('pickertabs');
   if (!tabs) return;
   tabs.replaceChildren(...view.screen.tabs.map((tab, i) => el('button', {class: i === view.tab ? 'on' : '',
     onclick: () => { view.tab = i; renderPickerParts(); }}, tab.title)));
@@ -177,7 +177,12 @@ function menuList() {
   const screen = view.screen;
   return el('div', {class: 'list'}, view.items.map(path => {
     const info = view.info.get(path);
-    if (info.s) return el('div', {class: 'option ' + (shown(path).trim() ? 'heading' : 'blank')}, segmentsSpan(shown(path)));
+    // (A line that isn't an option: a section's heading (── Name ──), a blank line, or what to read, e.g. the
+    // sync state and its points)
+    if (info.s) {
+      const plain = shown(path).replace(/[\x01\x02][^\x01\x02]*[\x01\x02]/g, '').trim();
+      return el('div', {class: 'option ' + (!plain ? 'blank' : plain.startsWith('\u2500') ? 'heading' : 'info')}, segmentsSpan(shown(path)));
+    }
     const classes = ['option', path === view.selected ? 'sel' : '', info.d ? 'disabled' : '', info.c ? 'c-' + info.c : ''];
     return el('button', {class: classes.join(' '), disabled: info.d, onclick: async () => {
       if (screen.previewBelow && view.selected !== path) { await act('select', {path}); return; }
