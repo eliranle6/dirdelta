@@ -23,7 +23,7 @@ from dirdelta.known import mounts
 from dirdelta.util import dryrun
 
 # The sync menu's last option: it doesn't quit dirdelta, the start menu shows again (as with q)
-BACK = "Back to the start menu"
+BACK = "Back to the start menu (end the sync)"
 # The menu's sections' headings (in grey, skipped when moving), as the start menu's: the sync of all
 # the differences, a kind of them at a time, what makes the comparison up to date, and the pair's
 # own things
