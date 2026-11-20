@@ -217,7 +217,14 @@ function driveTile(data, tile, listed) {
 // How alike the replicas are, as far as is known: of the files either replica of a pair had when it was
 // last compared, the share both had, over every pair compared (by files, so a big pair counts more). A
 // guess: it's as of each comparison, and a replica may have changed since
+// How many there are of a thing, said first in a tile's line ('2 replicas', '1 phone · 2 folders')
+function countOf(count, one, many) { return count.toLocaleString() + ' ' + (count === 1 ? one : many); }
+
+function withCount(count, hint) { return [el('b', {class: 'tilecount'}, count), hint ? ' · ' : '', hint]; }
+
 function inStepTile(data, tile) {
+  const tileOf = tile, replicaCount = countOf(data.replicas.length, 'replica', 'replicas');
+  tile = (tone, glyph, title, value, hint, href) => tileOf(tone, glyph, title, value, withCount(replicaCount, hint), href);
   let both = 0, either = 0, counted = 0, changed = false, apart = null;
   for (const pair of data.pairs) {
     const synced = pair.synced;
@@ -270,6 +277,10 @@ function lastSyncTile(data, tile) {
 // How much of the inboxes' files are sorted (moved into the tree, or skipped) or in a replica already (as
 // last checked), of the ones being sorted
 function sortedTile(data, tile) {
+  // (How many inboxes of each kind: the phones, and the folders, on a disk or in Drive)
+  const phones = data.inboxes.filter(inbox => inbox.kind === 'phone').length, folders = data.inboxes.length - phones;
+  const tileOf = tile, inboxCount = countOf(phones, 'phone', 'phones') + ' · ' + countOf(folders, 'folder', 'folders');
+  tile = (tone, glyph, title, value, hint, href) => tileOf(tone, glyph, title, value, withCount(inboxCount, hint), href);
   const sum = tallies(data.inboxes.flatMap(inbox => inbox.imports));
   if (!sum.total) return tile('none', 'check', 'Inboxes sorted', 'Not started', 'Sort one on Inboxes', '/inboxes');
   const share = (sum.sorted + sum.there) / sum.total;
