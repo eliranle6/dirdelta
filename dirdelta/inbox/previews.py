@@ -71,13 +71,15 @@ class Previews(object):
         """Send the picker the files' previews, and again as they change (Claude's descriptions
         coming in), until it's gone"""
         sent = {}
+        # (The picker's pause, which ends as soon as it's gone: its closing doesn't wait for it)
+        pause = getattr(send, 'pause', time.sleep)
         while True:
             changed = {relpath: lines for relpath, lines in self._previews(relpaths).items()
                        if sent.get(relpath) != lines}
             # Sent even with nothing to send: it raises PickerClosed once the picker is gone
             send(changed, default=[] if not sent else None)
             sent.update(changed)
-            time.sleep(PREVIEWS_INTERVAL)
+            pause(PREVIEWS_INTERVAL)
 
     def _previews(self, relpaths):
         """{relpath: lines} beside the picker: the file's size, what Claude said of it, where the

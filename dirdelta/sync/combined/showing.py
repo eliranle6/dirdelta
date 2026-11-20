@@ -11,6 +11,8 @@ from dirdelta.ui import picker
 
 # How often the previews are looked at again, to send what changed (as the sort's)
 PREVIEWS_INTERVAL = 0.3
+# (In steps, between which it looks whether the picker is gone)
+STEPS = 6
 
 
 class Showing(object):
@@ -69,6 +71,8 @@ class Showing(object):
         """Send the files' and dirs' previews, and again as they change (the AI's suggestions coming
         in, the selection moving to a differing file, whose diff is shown), until the picker is gone"""
         sent, seen = {}, None
+        # (Woken by what changes, or the picker gone: its closing doesn't wait out the interval)
+        pause = getattr(send, 'pause', None)
         while True:
             now = (self.suggestions.generation, self._diff_relpath, self.diff_view)
             if now != seen:
@@ -83,7 +87,11 @@ class Showing(object):
             else:
                 # Sent even with nothing to send: it raises PickerClosed once the picker is gone
                 send({})
-            self._wake.wait(PREVIEWS_INTERVAL)
+            for _ in range(STEPS):
+                if self._wake.wait(PREVIEWS_INTERVAL / STEPS):
+                    break
+                if pause is not None:
+                    pause(0)
             self._wake.clear()
 
     def _dir_previews(self):

@@ -49,8 +49,10 @@ def find_previews(relpaths, src, index, send, checked=None, src_index=None):
     for relpath in relpaths:
         for key in src_index.known(relpath).items():
             by_hash[key].add(relpath)
+    # (The picker's pause, which ends as soon as it's gone, rather than its closing waiting for the sleep)
+    pause = getattr(send, 'pause', time.sleep)
     while True:
-        time.sleep(HASHED_INTERVAL)
+        pause(HASHED_INTERVAL)
         changed = src_index.take_new() & missing
         for relpath in changed:
             for key in src_index.known(relpath).items():

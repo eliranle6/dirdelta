@@ -41,6 +41,16 @@ class PreviewsTest(PickerTest):
         # pick_files() waited for it
         self.assertEqual(stopped, [True])
 
+    def test_a_previews_pause_ends_once_the_picker_is_gone_not_holding_it_up(self):
+        self.answer('a/1.txt')
+
+        def previews(send):
+            send(default=['sent'])
+            send.pause(60)
+        started = time.monotonic()
+        picker.pick_files('/r', ['a/1.txt'], previews=previews)
+        self.assertLess(time.monotonic() - started, 10)
+
     def test_on_selection_follows_the_selection_and_sends_previews(self):
         os.environ['FAKE_PICKER_SELECTIONS'] = 'a/1.txt|.|a'
         os.environ['FAKE_PICKER_PREVIEW_WAIT_FOR'] = 'done'

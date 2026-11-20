@@ -38,10 +38,21 @@ class PreviewSender(object):
         """Show image (see pick_files()'s images) below relpath's lines"""
         self._write(null_terminated(['\x03' + (relpath or '.') + '\t' + _one_line(image)]))
 
+    def __call__(self, found=None, default=None):
+        """send(): what previews() gets, which can pause() too"""
+        self.send(found, default)
+
+    def pause(self, seconds):
+        """Wait seconds, or until the picker is gone (then raises PickerClosed at once: a loop that waits
+        between sends doesn't hold up the picker's closing)"""
+        if self._is_done.wait(seconds):
+            raise PickerClosed()
+
     def run(self, previews):
-        """Call previews(send), until it returns, or treepicker is gone"""
+        """Call previews(send), until it returns, or treepicker is gone: send is this sender, called as
+        send(), which has pause() too"""
         try:
-            previews(self.send)
+            previews(self)
         except PickerClosed:
             pass
 
