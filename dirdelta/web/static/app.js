@@ -436,7 +436,8 @@ async function loadPreview() {
   const screen = view.screen;
   if (!screen.hasPreviews && !screen.previewBelow) { box.replaceChildren(); return; }
   const found = await api('GET', '/api/preview?screen=' + screen.id + '&path=' + encodeURIComponent(view.selected || ''));
-  const lines = found.lines || [];
+  // (Only blank lines, as a folder's may be: no box for them)
+  const lines = (found.lines || []).some(line => plainOf(line).trim()) ? found.lines : [];
   const content = [];
   if (lines.length) content.push(el('pre', {}, lines.map(line => [plainOf(line).startsWith('Diff: ') ? diffToggle(line) : previewLine(line), '\n'])));
   if (found.image) { const canvas = pictureCanvas(found.image); if (canvas) content.push(canvas); }
