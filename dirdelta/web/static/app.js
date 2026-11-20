@@ -718,6 +718,14 @@ function quickActions(screen, selected) {
 // (blue, as its row and the details' header)
 function targetChip(screen, selected) {
   if (screen.multi && view.picked.size) return el('span', {class: 'target checked'}, '✓ ' + view.picked.size + ' checked');
+  // (A dir, or the top, selected: what's acted on is all its files, so it says so, not the dir's name alone)
+  const path = view.selected === null || view.selected === '' ? '.' : view.selected;
+  const info = view.info.get(path);
+  if (screen.multi && (path === '.' || (info && info.t === 'd'))) {
+    const count = view.fileCounts.get(path) || 0;
+    const files = count.toLocaleString() + ' file' + (count === 1 ? '' : 's');
+    return el('span', {class: 'target selected'}, path === '.' ? 'all ' + files : baseName(path) + ' (' + files + ')');
+  }
   return el('span', {class: 'target selected'}, selected);
 }
 
