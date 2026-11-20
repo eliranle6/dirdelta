@@ -320,7 +320,8 @@ header#top > #crumbs:has(> #where:empty) { display: none; }
 .actsec button { white-space: normal; text-align: left; }
 @media (hover: none) and (pointer: coarse) { #actions .keyname { display: none; } }
 /* (At most half the screen, scrolling in itself: the tree above it stays in sight) */
-footer#bottom { max-height: 50vh; overflow-y: auto; overscroll-behavior: contain; }
+footer#bottom { max-height: var(--bar-h); overflow-y: auto; overscroll-behavior: contain; }
+footer#bottom.sized { height: var(--bar-h); }
 .side .tree { border: 0; border-radius: 0; }
 /* A tree's menu (what to do with its picks) as a panel over it: the tree dimmed under it, the panel from the
    bottom bar up (at most most of the height, scrolling in itself); a tap outside it is Back */
@@ -346,11 +347,12 @@ footer#bottom { max-height: 50vh; overflow-y: auto; overscroll-behavior: contain
    diff, the AI's suggestion) in the bottom bar, right of its buttons, scrolling in themselves */
 @media (min-width: 900px) {
   .split { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
-  footer#bottom.withpreview { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr); grid-template-rows: auto 1fr;
-    column-gap: 14px; align-items: start; max-height: 45vh; overflow: hidden; }
-  footer#bottom.withpreview > #status { grid-column: 1; grid-row: 1; }
-  footer#bottom.withpreview > #actions { grid-column: 1; grid-row: 2; overflow-y: auto; max-height: calc(45vh - 50px); }
-  footer#bottom.withpreview > #preview { grid-column: 2; grid-row: 1 / span 2; overflow-y: auto; max-height: calc(45vh - 18px); }
+  .split.single { grid-template-columns: minmax(0, 1fr); }
+  footer#bottom.withpreview { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr); grid-template-rows: 1fr auto;
+    column-gap: 14px; row-gap: 6px; align-items: start; max-height: var(--bar-h); overflow: hidden; }
+  footer#bottom.withpreview > #actions { grid-column: 1; grid-row: 1; overflow-y: auto; max-height: calc(var(--bar-h) - 50px); }
+  footer#bottom.withpreview > #status { grid-column: 1; grid-row: 2; }
+  footer#bottom.withpreview > #preview { grid-column: 2; grid-row: 1 / span 2; overflow-y: auto; max-height: calc(var(--bar-h) - 18px); }
 }
 /* A files' menu's option's key, on its right */
 .option kbd { margin-left: auto; flex: none; font: 600 12px ui-monospace, monospace; color: var(--muted); border: 1px solid var(--line);
@@ -418,3 +420,34 @@ button.tiny { font-size: 12px; padding: 2px 8px; border-radius: 10px; color: var
 /* A menu's option chosen: marked, with the dots, while the next screen comes */
 .option.chosen { background: var(--sel); font-weight: 600; opacity: 1 !important; }
 #tree.choosing button.option { pointer-events: none; } #tree.choosing button.option:not(.chosen) { opacity: .6; }
+
+/* A sync's tree of what to do with each file: its two replicas above it (A left, B right) with what each arrow does,
+   the plan so far, each file's badge (where it is) and what's planned for it */
+.pairlegend { display: flex; align-items: center; gap: 10px 14px; flex-wrap: wrap; }
+.pairside { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; color: var(--side); padding: 6px 12px;
+  border: 2px solid var(--side); border-radius: 10px; background: color-mix(in srgb, var(--side) 9%, var(--card)); min-width: 0; overflow-wrap: anywhere; }
+.pairways { display: flex; flex-direction: column; gap: 3px; font-size: 13px; color: var(--muted); flex: 0 1 auto; min-width: 0; }
+.pairways .way b { color: var(--blue); font-size: 15px; }
+.pairways .tip { color: var(--muted); }
+.pairname { display: inline-flex; align-items: center; gap: 3px; font-weight: 600; vertical-align: bottom; }
+.pairname .icon svg, .gbadge .icon svg { width: 15px; height: 15px; }
+.pairname .icon, .gbadge .icon { display: inline-flex; }
+.pairplan { font-size: 13px; overflow-wrap: anywhere; }
+.pairplan .pairname { font-size: 13px; }
+.gbadge { flex: none; display: inline-flex; align-items: center; justify-content: center; gap: 3px; min-width: 66px; font-size: 12px;
+  font-weight: 600; padding: 1px 7px; border: 1px solid currentColor; border-radius: 999px; white-space: nowrap; }
+.row .namewrap { flex: 1; min-width: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 3px 8px; }
+.row .namewrap > .name { flex: 1 1 180px; }
+.planned { flex: 0 1 auto; margin-left: auto; font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 6px;
+  background: color-mix(in srgb, currentColor 10%, transparent); overflow-wrap: anywhere; }
+.planned.dirplan { color: var(--muted); font-weight: 500; }
+@media (max-width: 600px) { .pairways { order: 3; flex-basis: 100%; } }
+/* The bottom bar: two thirds of the height it had (24vh on a phone, 28vh beside the details), taller or shorter by
+   dragging its top edge (--bar-h, set by the page then) */
+:root { --bar-h: 24vh; }
+@media (min-width: 900px) { :root { --bar-h: 28vh; } }
+.barhandle { position: absolute; top: 0; left: 0; right: 0; height: 12px; cursor: ns-resize; touch-action: none; z-index: 4; }
+.barhandle::after { content: ''; position: absolute; left: 50%; top: 3px; width: 44px; height: 4px; margin-left: -22px;
+  border-radius: 2px; background: var(--line); }
+.barhandle:hover::after, .barhandle.dragging::after { background: var(--accent); }
+footer#bottom { padding-top: 12px; }

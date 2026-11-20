@@ -2,6 +2,8 @@
 import collections
 import tempfile
 
+from dirdelta.ui.picker.files import key_help_sections
+from dirdelta.ui.picker.pictures import IMAGES_KEY
 from dirdelta.ui.picker.running import header_args, help_args, run_treepicker
 from dirdelta.ui.picker.updates import null_terminated
 
@@ -23,14 +25,16 @@ StatesPicked = collections.namedtuple('StatesPicked', ['selected', 'states', 'ke
 
 def pick_states(rootpath, entries, states, tabs=(), header='', label=None, selected=None, shown_as=None,
                 previews=None, key_hints=(), help_lines=(), footer='', keys='', on_selection=None, notify_keys='',
-                on_notify=None):
+                on_notify=None, images=None):
     """Let the user put each of the files of entries (StateEntry, relative to rootpath, as pick_files() takes
     relpaths) in one of states (State, the first, e.g. skip, being "nothing"): Space puts the selected
     file (a dir's files) in the next state it allows, and a state's key in that one. tabs: Tab, each
     showing some groups of the files. Returns a StatesPicked once the user is done (Enter, with a file
     in a state other than the first, or one of keys, which end it too, with the states so far), or None
     if they quit. selected, shown_as, previews, label, key_hints, help_lines, footer, on_selection,
-    notify_keys and on_notify (called with the key and the selected relpath): as pick_files()'s."""
+    notify_keys, on_notify (called with the key and the selected relpath) and images: as pick_files()'s."""
+    if images is not None:
+        help_lines = list(help_lines) + key_help_sections([("Pictures", [(IMAGES_KEY, "show or hide the files' pictures (and from now on)")])])
     args = (['--typed', '--root', rootpath, '-m', '--print-selection'] + header_args(header) +
             help_args(key_hints, help_lines))
     for state in states:
@@ -55,7 +59,8 @@ def pick_states(rootpath, entries, states, tabs=(), header='', label=None, selec
         if notify_keys and on_notify is not None:
             notify = (notify_keys, lambda key, selected, picked: on_notify(key, selected))
         printed = run_treepicker(args + ['-'], ('f ' + entry.relpath for entry in entries), shown_as=shown_as,
-                                 label=label, previews=previews, on_selection=on_selection, notify=notify)
+                                 label=label, previews=previews, on_selection=on_selection, notify=notify,
+                                 images=images)
     if printed is None:
         return None
     key = ''

@@ -34,6 +34,8 @@ class Session(object):
         self.tab = None
         # (What was asked to start it: e.g. {'kind': 'pair', 'a': ..., 'b': ...}, so a page can tell which)
         self.what = None
+        # The two replicas the flow's screens are about, as it says (frontend.show_replicas()): [(path, name)] or None
+        self.replicas = None
 
     # Changes, and waiting for them
 
@@ -93,6 +95,7 @@ class Session(object):
         self.log = []
         self.tab = tab
         self.what = what
+        self.replicas = None
         self.user = users.current()
         self._flow = threading.Thread(target=self._run, args=(flow,), daemon=True)
         self._flow.start()

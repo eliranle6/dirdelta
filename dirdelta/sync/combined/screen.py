@@ -16,6 +16,8 @@ from dirdelta.sync.combined import keys_help
 from dirdelta.sync.combined import showing
 from dirdelta.sync.combined import suggestions
 from dirdelta.sync.combined import plan as plans
+from dirdelta.ui import frontend
+from dirdelta.ui import images
 from dirdelta.ui import messages
 from dirdelta.ui import picker
 from dirdelta.util import dryrun
@@ -36,6 +38,7 @@ class CombinedSync(showing.Showing, keys_help.KeysHelp, ai_showing.AIShowing, as
 
     def __init__(self, replica_a, replica_b, path_a, path_b, only_a, only_b, changes, changes_log=None, moved=None):
         self.replica_a, self.replica_b = replica_a, replica_b
+        self.path_a, self.path_b = path_a, path_b
         names = replicanames.short_names([path_a, path_b])
         self.name_a, self.name_b = names[path_a], names[path_b]
         self.changes = changes
@@ -65,6 +68,7 @@ class CombinedSync(showing.Showing, keys_help.KeysHelp, ai_showing.AIShowing, as
                 lines += ["", picker.unstyled(unverified)]
             messages.show("Nothing to do", lines, dryrun.label())
             return False
+        frontend.show_replicas([(self.path_a, self.name_a), (self.path_b, self.name_b)])
         while True:
             # The states the tree starts in are the ones it ended in: what Ctrl-A set is in them
             self._applied.clear()
@@ -75,7 +79,7 @@ class CombinedSync(showing.Showing, keys_help.KeysHelp, ai_showing.AIShowing, as
                 key_hints=self._key_hints(),
                 help_lines=self._help_lines(), footer=self._footer(), keys=ask_ai.KEY + diffing.KEY,
                 on_selection=self._follow, notify_keys=ask_ai.SUGGEST_KEY + ask_ai.APPLY_KEY + diffview.KEY,
-                on_notify=self._on_key)
+                on_notify=self._on_key, images=self._pictures())
             if picked is None:
                 return False
             self.chosen, self.selected = picked.states, picked.selected
@@ -90,6 +94,18 @@ class CombinedSync(showing.Showing, keys_help.KeysHelp, ai_showing.AIShowing, as
                 continue
             doing.do(plan, self.replica_a, self.replica_b, self.changes_log)
             return True
+
+    def _pictures(self):
+        """The tree's pictures (see pick_files()'s images): each file's from the replica that has it (A's, but
+        for a file only in B), or None if neither replica's can be made"""
+        of_a, of_b = images.of_replica(self.replica_a), images.of_replica(self.replica_b)
+        if of_a is None and of_b is None:
+            return None
+
+        def picture(relpath, max_width, max_height):
+            made = of_b if self.grouped.get(relpath) == plans.ONLY_B else of_a
+            return made(relpath, max_width, max_height) if made is not None else None
+        return picture
 
     def _on_key(self, key, selected):
         """A key that doesn't end the tree (on a thread of its own): Ctrl-I asks the AI about the

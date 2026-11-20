@@ -209,11 +209,11 @@ def routes(session):
         return change
 
     def set_mode(query, body):
-        """Live (body['live']) or a dry run, from the top bar's label: not while a run's screens are open,
-        which were opened in the mode before (their labels would say otherwise)"""
-        if session.is_running:
-            return {'ok': False, 'error': "Finish or leave what's running first: it was opened as a %s." %
-                    ('dry run' if dryrun.DRYRUN else 'live run')}
+        """Live (body['live']) or a dry run, from the top bar's label: any time but while files are being
+        changed (a progress screen): a run's screens then show the mode as it is now (api.with_mode_now()),
+        and a question asked in the mode before is asked again (picker.pick_option())"""
+        if session.is_running and not _is_waiting(session.screen()):
+            return {'ok': False, 'error': "Wait for what's being done now to finish, then switch."}
         dryrun.set_live(bool(body.get('live')))
         return {'ok': True, 'label': list(dryrun.label())}
 

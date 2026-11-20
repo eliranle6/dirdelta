@@ -1,7 +1,14 @@
 """The web version's API for the session's screens (routes()): what the page polls for (what's shown,
 and what changed since it last asked) and what it does there (the picker's moves and keys, a messages
 screen's Continue or answer, Stop, and starting dirdelta's start menu)"""
+from dirdelta.known import replicanames
+from dirdelta.known import replicas as known_replicas
+from dirdelta.trees import paths
+from dirdelta.util import dryrun
 from dirdelta.web.picker import PickerScreen
+
+# The mode's labels (dryrun.label()'s): a screen's is shown as the mode is now, which may have been switched since
+MODE_LABELS = ('DRY RUN', 'LIVE')
 
 # How long a poll waits for a change, in seconds (under what a phone's browser lets a request take)
 POLL_WAIT = 20
@@ -25,6 +32,9 @@ def routes(session, start_flow):
         if screen is not None:
             is_new = str(screen.id) != query.get('screen')
             found['screen'] = dict(screen.meta(), **screen.state(0 if is_new else since))
+            found['screen']['labels'] = with_mode_now(found['screen'].get('labels') or [])
+            if isinstance(screen, PickerScreen) and screen.spec.states and session.replicas:
+                found['screen']['replicas'] = replicas_shown(session.replicas)
             if is_new and isinstance(screen, PickerScreen):
                 found['screen']['items'] = screen.items.listed()
         return found
@@ -76,3 +86,20 @@ def _act_on_picker(screen, action, body):
         screen.side_selected = body['path']
     elif action == 'quit':
         screen.quit()
+
+
+def with_mode_now(labels):
+    """A screen's labels, the mode's (DRY RUN or LIVE) as it is now: the top bar's switch may have changed it
+    since the screen was opened"""
+    return [list(dryrun.label()) if label[0] in MODE_LABELS else list(label) for label in labels]
+
+
+def replicas_shown(pair):
+    """The two replicas a screen is about ([(path, name)], see frontend.show_replicas()), as the page shows
+    them: [{'path', 'name', 'drive', 'look': how the user has it shown (its color and icon, see replicas.looks)}]"""
+    try:
+        looks = known_replicas.load().looks
+    except known_replicas.ReplicasError:
+        looks = {}
+    return [{'path': path, 'name': name, 'drive': paths.is_cloud_path(path),
+             'look': looks.get(replicanames.label_key(path)) or {}} for path, name in pair]

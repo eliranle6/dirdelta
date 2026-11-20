@@ -3,6 +3,10 @@ from dirdelta.ui.picker.kinds import Option, Skipped
 from dirdelta.ui.picker.places import trail
 from dirdelta.ui.picker.running import header_args, help_args, run_treepicker
 from dirdelta.ui.picker.styles import unstyled
+from dirdelta.util import dryrun
+
+# Said above a menu asked again since the mode was switched to live while it was shown (see pick_option())
+SWITCHED_TO_LIVE = "Switched to live while this was shown: it's asked again, now meaning it."
 
 
 def pick_option(options, header='', shown_as=None, label=None, selected=None, title=None, key_hints=(),
@@ -19,7 +23,18 @@ def pick_option(options, header='', shown_as=None, label=None, selected=None, ti
     with selected (else the first). title: what the menu is, after the breadcrumbs (see place()).
     key_hints, help_lines: as pick_files()'s. previews_below: {option: lines} shown below the
     menu, above its status bar, while the option is selected (e.g. what it would do), each line
-    plain, or in colored parts (see segments()). shown_as's options may be Colored too."""
+    plain, or in colored parts (see segments()). shown_as's options may be Colored too.
+    A menu shown in a dry run whose mode was switched to live meanwhile (the web version's switch) is asked
+    again, so a confirmation that said nothing would change isn't taken as one that does."""
+    was_dry_run = dryrun.DRYRUN
+    picked = _pick_option(options, header, shown_as, label, selected, title, key_hints, help_lines, previews_below)
+    if picked is not None and was_dry_run and not dryrun.DRYRUN:
+        header = '\n'.join([SWITCHED_TO_LIVE] + [line for line in header.split('\n') if line != dryrun.NOTE])
+        return pick_option(options, header, shown_as, label, picked, title, key_hints, help_lines, previews_below)
+    return picked
+
+
+def _pick_option(options, header, shown_as, label, selected, title, key_hints, help_lines, previews_below):
     lines, line_of, shown_first = _menu_lines(options)
     args = ['--list', '--root', trail(title)] + header_args(header) + help_args(key_hints, help_lines)
     if selected in line_of:

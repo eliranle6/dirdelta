@@ -4,12 +4,18 @@ import os
 import shutil
 import tempfile
 import threading
+import time
 import unittest
 from unittest import mock
 
 from dirdelta.known import replicalog
+from dirdelta.known import replicanames
 from dirdelta.known import replicas
-from dirdelta.web import daemon, home
+from dirdelta.ui import frontend
+from dirdelta.ui import messages
+from dirdelta.ui import picker
+from dirdelta.util import dryrun
+from dirdelta.web import api, daemon, home
 from web_support import WebTest
 
 
@@ -27,6 +33,12 @@ class HomeTest(WebTest):
         patcher.start()
         self.addCleanup(patcher.stop)
         self.routes = home.routes(self.session)
+
+    def wait_for(self, condition):
+        deadline = time.monotonic() + 5
+        while not condition():
+            self.assertLess(time.monotonic(), deadline, "It didn't happen")
+            time.sleep(0.01)
 
     def call(self, method, path, body=None):
         return self.routes[(method, path)]({}, body or {})
@@ -70,13 +82,54 @@ class HomeTest(WebTest):
             self.assertEqual(['LIVE', 'red'], self.call('POST', '/api/mode', {'live': True})['label'])
             self.assertEqual(['DRY RUN', 'green'], self.call('POST', '/api/mode', {'live': False})['label'])
 
-    def test_the_mode_stays_while_a_run_is_open(self):
+    def test_the_mode_stays_while_files_are_being_changed(self):
         release = threading.Event()
         self.addCleanup(release.set)
-        self.session.start(lambda: release.wait(5), 'replicas', {'kind': 'pair'})
+
+        def working():
+            with messages.progress_screen("Copying", dryrun.label()):
+                release.wait(5)
+        self.session.start(working, 'replicas', {'kind': 'pair'})
+        self.wait_for(lambda: self.session.screen() is not None)
         with mock.patch('dirdelta.util.dryrun.DRYRUN', True):
             self.assertFalse(self.call('POST', '/api/mode', {'live': True})['ok'])
             self.assertEqual(['DRY RUN', 'green'], self.call('GET', '/api/home')['label'])
+
+    def test_switched_to_live_in_the_middle_of_a_sync_its_screen_says_so_and_its_question_is_asked_again(self):
+        answers = []
+        self.session.start(lambda: answers.append(picker.pick_option(
+            ["No", "Yes, do it"], header="Do this?\n" + dryrun.NOTE, label=('SYNC', 'blue'))), 'replicas', {'kind': 'pair'})
+        self.wait_for(lambda: self.session.screen() is not None)
+        asked = self.session.screen()
+        state = api.routes(self.session, None)[('GET', '/api/state')]
+        with mock.patch('dirdelta.util.dryrun.DRYRUN', True):
+            self.assertTrue(self.call('POST', '/api/mode', {'live': True})['ok'])
+            self.assertIn(['LIVE', 'red'], state({}, {})['screen']['labels'])
+            asked.select("Yes, do it")
+            asked.enter()
+            self.wait_for(lambda: self.session.screen() not in (None, asked))
+            again = self.session.screen()
+            self.assertTrue(again.spec.header.startswith(picker.menus.SWITCHED_TO_LIVE))
+            self.assertNotIn(dryrun.NOTE, again.spec.header)
+            self.assertEqual([], answers)
+            again.select("Yes, do it")
+            again.enter()
+            self.wait_for(lambda: answers)
+        self.assertEqual(["Yes, do it"], answers)
+
+    def test_a_syncs_tree_of_states_says_its_two_replicas_with_their_looks(self):
+        known = replicas.load()
+        known.set_look(replicanames.label_key('cloud/photos'), 'teal', None)
+        self.session.start(lambda: picker.pick_states('photos ⇄ Drive', [picker.StateEntry('a.jpg', 'only-a')],
+                                                      [picker.State('skip', ' ', 'grey'), picker.State('to-b', '⇒', 'blue', '>')]),
+                           'replicas', {'kind': 'pair'})
+        # (Said by the flow, once it's started: starting one forgets the last one's)
+        frontend.show_replicas([(self.local, 'photos'), ('cloud/photos', 'Drive')])
+        self.wait_for(lambda: self.session.screen() is not None)
+        shown = api.routes(self.session, None)[('GET', '/api/state')]({}, {})['screen']['replicas']
+        self.assertEqual([('photos', False), ('Drive', True)], [(replica['name'], replica['drive']) for replica in shown])
+        self.assertEqual({'color': 'teal'}, shown[1]['look'])
+        self.session.screen().cancel()
 
     def test_a_replica_is_named_and_unnamed_from_its_card(self):
         with mock.patch('dirdelta.known.replicas.save') as save:

@@ -75,7 +75,7 @@ function newScreen(screen) {
   view.shownOne = true;
   Object.assign(view, {screen, items: [], info: new Map(), children: new Map(), fileCounts: new Map(),
     picked: new Set(), search: '', tab: 0, showHelp: false, previewVersion: -1, lazy: new Map(),
-    expanded: new Set(['.']), sideExpanded: null, sideFollowed: undefined, scrollTo: 0, isKept: false});
+    expanded: new Set(['.']), sideExpanded: null, sideFollowed: undefined, scrollTo: 0, isKept: false, sides: null});
   // Each screen its own address: a new picker a step of the browser's history (its Back is the screen's
   // Back, see goBack()); one shown on going back, or on a refresh, or a messages screen in its place
   const address = '#screen=' + screen.id;
@@ -182,6 +182,7 @@ function updatePicker(screen, isNew) {
   view.selected = screen.selected;
   view.sideSelected = screen.sideSelected;
   view.status = screen.status;
+  view.sides = pairSides(screen);
   if (isNew && screen.mode === 'list' && view.pendingKey) {
     // (An action's button pressed (quickActions()): its option chosen, the menu not shown, the tree left as it is;
     // unless it's greyed out there, then the menu's shown, saying why)
@@ -213,7 +214,9 @@ function renderPickerFrame() {
   setTop(screen.mode !== 'list' && screen.crumbs ? screen.crumbs : screen.root, screen.labels);
   const main = document.getElementById('main');
   const parts = [];
-  if (screen.header) parts.push(el('div', {class: 'header'}, segmentsSpan(screen.header)));
+  const sides = pairSides(screen);
+  if (sides && screen.states.length) parts.push(pairLegend(sides), el('div', {class: 'pairplan', id: 'pairplan'}));
+  else if (screen.header) parts.push(el('div', {class: 'header'}, segmentsSpan(screen.header)));
   if (screen.tabs.length) parts.push(el('div', {class: 'tabs', id: 'pickertabs'}));
   if (screen.mode !== 'list') {
     parts.push(el('input', {type: 'search', id: 'search', placeholder: 'Search', autocomplete: 'off',
@@ -222,7 +225,8 @@ function renderPickerFrame() {
   // On a wide screen the trees side by side, and what's shown of the selection (its details, a diff, the AI's
   // suggestion) in the bottom bar, right of the buttons (placePreview()); on a phone, under the tree
   const inBar = isWide() && screen.mode !== 'list';
-  const body = el('div', {class: 'split'}, el('div', {id: 'tree'}),
+  // (No side tree: the tree takes the whole width, its details in the bottom bar)
+  const body = el('div', {class: 'split' + (inBar && !screen.side ? ' single' : '')}, el('div', {id: 'tree'}),
     el('div', {}, inBar ? '' : el('div', {id: 'preview'}), el('div', {id: 'side'})));
   parts.push(body, el('div', {class: 'footer', id: 'footer'}), el('div', {class: 'help', id: 'help'}));
   placePreview(inBar);
@@ -294,6 +298,7 @@ if (window.ResizeObserver) {
 addEventListener('resize', placePanel);
 
 function renderPickerParts() {
+  renderPlan();
   renderTabs();
   renderTree();
   renderSide();
@@ -463,6 +468,116 @@ function visibleRows() {
   return rows;
 }
 
+// A sync's tree of what to do with each file (the combined tree): its two replicas, as the flow says them (A first),
+// each with its icon and color, so what ⇒ and ⇐ do is plain: ⇒ changes B (to be like A), ⇐ changes A. Neither colored
+// (or both alike), A's blue and B's orange, so the two are told apart
+const PAIR_COLORS = ['#2563eb', '#ea580c'];
+function pairSides(screen) {
+  const replicas = screen.replicas;
+  if (!replicas || replicas.length !== 2) return null;
+  const sides = replicas.map((replica, i) => ({name: replica.name, icon: replica.drive ? 'drive' : (replica.look.icon || 'disk'),
+    color: lookColor(replica.look) || PAIR_COLORS[i]}));
+  if (sides[0].color === sides[1].color) sides.forEach((side, i) => { side.color = PAIR_COLORS[i]; });
+  return sides;
+}
+
+function sideName(side) {
+  return el('span', {class: 'pairname', style: 'color:' + side.color}, icon(side.icon), side.name);
+}
+
+// A title naming the pair ('A ⇄ B', as the tree's root and the breadcrumbs say it): each name with its icon in its
+// color, or null if it doesn't name them
+function pairTitle(text, sides) {
+  const [a, b] = sides, pair = a.name + ' ⇄ ' + b.name, at = text.indexOf(pair);
+  if (at < 0) return null;
+  return el('span', {}, text.slice(0, at), sideName(a), ' ⇄ ', sideName(b), text.slice(at + pair.length));
+}
+
+// Above the tree: A on the left, B on the right, and between them what each arrow does
+function pairLegend(sides) {
+  const [a, b] = sides;
+  const box = side => el('div', {class: 'pairside', style: '--side:' + side.color}, icon(side.icon), el('span', {}, side.name));
+  return el('div', {class: 'pairlegend'}, box(a),
+    el('div', {class: 'pairways'},
+      el('div', {class: 'way'}, el('b', {}, '⇒'), ' changes ', sideName(b), ' to match ', sideName(a), el('span', {class: 'tip'}, ' ⟶')),
+      el('div', {class: 'way'}, el('span', {class: 'tip'}, '⟵ '), el('b', {}, '⇐'), ' changes ', sideName(a), ' to match ', sideName(b))),
+    box(b));
+}
+
+// The tag after a file's name that says it's only in one replica: its badge says so instead
+const ONLY_IN_TAG = /\x02grey\x02  only in [^\x01\x02]*/;
+
+// Where a file is: only in A (A's icon and color), only in B, in both but differing, or moved
+function groupBadge(group, sides) {
+  const [a, b] = sides;
+  const badge = (content, color, title) => el('span', {class: 'gbadge', style: 'color:' + color, title}, content);
+  if (group === 'only-a') return badge([icon(a.icon), 'only'], a.color, 'Only in ' + a.name);
+  if (group === 'only-b') return badge([icon(b.icon), 'only'], b.color, 'Only in ' + b.name);
+  if (group === 'differ') return badge('≠ differ', 'var(--yellow)', 'Both have it, and their versions differ');
+  if (group === 'moved') return badge('↔ moved', 'var(--cyan)', 'Both have it, at other paths');
+  return '';
+}
+
+// What a file's arrow will do (see plan.py's plan_of()): ⇒ changes B, ⇐ changes A: a copy into it, a removal from
+// it, its version replaced, or its file moved to the other's path. {kind, color, parts} or null (left as is)
+const PLANNED = {copy: ['Copy to ', 'green'], remove: ['Remove from ', 'red'], replace: ['Replace in ', 'yellow'], move: ['Move in ', 'cyan']};
+function plannedKind(group, state) {
+  if (state !== 'to-b' && state !== 'to-a') return null;
+  if (group === 'differ') return 'replace';
+  if (group === 'moved') return 'move';
+  if (group === 'only-a') return state === 'to-b' ? 'copy' : 'remove';
+  if (group === 'only-b') return state === 'to-a' ? 'copy' : 'remove';
+  return null;
+}
+
+function plannedChip(group, state, sides) {
+  const kind = plannedKind(group, state);
+  if (!kind) return '';
+  const changed = state === 'to-b' ? sides[1] : sides[0];
+  return el('span', {class: 'planned c-' + PLANNED[kind][1]}, PLANNED[kind][0], sideName(changed));
+}
+
+// The plan so far: {kind|changed side (0 A, 1 B): how many} under path ('.' all of it)
+function plannedCounts(path) {
+  const counts = new Map();
+  const prefix = path === '.' ? '' : path + '/';
+  for (const p of view.items) {
+    const info = view.info.get(p);
+    if (info.t !== 'f' || !p.startsWith(prefix)) continue;
+    const kind = plannedKind(info.g, info.st);
+    if (!kind) continue;
+    const key = kind + '|' + (info.st === 'to-b' ? 1 : 0);
+    counts.set(key, (counts.get(key) || 0) + 1);
+  }
+  return counts;
+}
+
+function plannedParts(counts, sides, long) {
+  return [...counts].map(([key, count]) => {
+    const [kind, side] = key.split('|');
+    const files = count + (long ? (count === 1 ? ' file' : ' files') : '');
+    const verb = PLANNED[kind][0].trim().split(' ');
+    return el('span', {class: 'c-' + PLANNED[kind][1]}, verb[0] + ' ' + files + ' ' + verb.slice(1).join(' ') + ' ', sideName(sides[+side]));
+  });
+}
+
+// A folder's row: what's planned under it, in short
+function plannedUnder(path, sides) {
+  const counts = plannedCounts(path);
+  if (!counts.size) return '';
+  return el('span', {class: 'planned dirplan'}, plannedParts(counts, sides, false).flatMap((part, i) => i ? [' · ', part] : [part]));
+}
+
+// Under the legend: the whole plan, as it is now
+function renderPlan() {
+  const box = document.getElementById('pairplan');
+  if (!box || !view.sides) return;
+  const counts = plannedCounts('.');
+  box.replaceChildren(counts.size ? el('b', {}, 'Planned: ') : '',
+    ...(counts.size ? plannedParts(counts, view.sides, true).flatMap((part, i) => i ? [' · ', part] : [part]) :
+      [el('span', {class: 'note'}, 'Nothing planned yet: tap a file\'s mark (·) for ⇒ or ⇐, or choose it below. Nothing changes until Done, and you confirm.')]));
+}
+
 function pickedUnder(path) {
   let count = 0;
   const prefix = path === '.' ? '' : path + '/';
@@ -514,6 +629,7 @@ function row({path, depth, flat, guides}) {
       event.stopPropagation();
       act('state', {paths: [path], name: nextState(path)});
     }}, mark.trim() || '·'));
+    if (view.sides && info.t === 'f') parts.push(groupBadge(info.g, view.sides));
   } else if (screen.multi) {
     const count = info.t === 'f' ? (view.picked.has(path) ? 1 : 0) : pickedUnder(path);
     const total = info.t === 'f' ? 1 : (view.fileCounts.get(path) || 0);
@@ -527,8 +643,17 @@ function row({path, depth, flat, guides}) {
     box.indeterminate = count > 0 && count < total;
     parts.push(box);
   }
-  const text = flat && path !== '.' ? path : shown(path);
-  parts.push(el('span', {class: 'name' + (isDir ? ' dir' : '') + (info.c ? ' c-' + info.c : '')}, segmentsSpan(text)));
+  let text = flat && path !== '.' ? path : shown(path);
+  // (The root of a sync's tree: its two replicas, each with its icon in its color)
+  if (path === '.' && view.sides) text = pairTitle(plainOf(text), view.sides) || text;
+  // (Where a file is, said by its badge: not again in grey after its name)
+  if (view.sides && screen.states.length && info.t === 'f') text = text.replace(ONLY_IN_TAG, '');
+  const name = el('span', {class: 'name' + (isDir ? ' dir' : '') + (info.c ? ' c-' + info.c : '')}, typeof text === 'string' ? segmentsSpan(text) : text);
+  // What's planned for it, on its right, or under its name where there's no room (a phone); the root's is the plan
+  // line above the tree
+  const planned = view.sides && screen.states.length && path !== '.' ?
+    (info.t === 'f' ? plannedChip(info.g, info.st, view.sides) : plannedUnder(path, view.sides)) : '';
+  parts.push(planned ? el('span', {class: 'namewrap'}, name, planned) : name);
   const picked = info.t === 'f' && view.picked.has(path);
   return el('div', {class: 'row' + (path === view.selected || (path === '.' && view.selected === '') ? ' sel' : '') + (picked ? ' picked' : ''),
     onclick: () => {
@@ -779,8 +904,9 @@ function renderPickerActions() {
   const onSelection = [], general = [];
   if (screen.states.length && view.selected !== null) {
     for (const state of screen.states) {
+      const changed = view.sides && {'to-b': view.sides[1], 'to-a': view.sides[0]}[state.name];
       onSelection.push(el('button', {class: 'c-' + state.color, onclick: () => act('state', {paths: [view.selected || '.'], name: state.name})},
-        (state.mark.trim() || '·') + ' ', el('small', {}, state.name)));
+        (state.mark.trim() || '·') + ' ', view.sides ? (changed ? ['Change ', sideName(changed)] : el('small', {}, 'Leave as is')) : el('small', {}, state.name)));
     }
   }
   for (const key of screen.keys.filter(applies)) {
@@ -995,11 +1121,57 @@ function waitingDots() { return el('span', {class: 'dots', style: 'animation-del
 function setTop(title, labels) {
   const rest = (title || '').replace(/^dirdelta(?: > |$)/, '');
   const tab = runningTab === 'inboxes' ? ['/inboxes', 'Inboxes'] : ['/replicas', 'Replicas'];
+  // (A sync's tree: its two replicas named with their icons and colors)
+  const where = view.sides && view.screen && view.screen.kind === 'picker' && pairTitle(plainOf(rest), view.sides);
   document.getElementById('crumbs').replaceChildren(el('a', {href: tab[0]}, tab[1]),
-    rest ? el('span', {id: 'where'}, ' > ', segmentsSpan(rest)) : el('span', {id: 'where'}));
+    rest ? el('span', {id: 'where'}, ' > ', where || segmentsSpan(rest)) : el('span', {id: 'where'}));
   document.getElementById('labels').replaceChildren(...(labels || []).map(labelChip));
   document.title = (title || 'dirdelta').split(' > ').pop();
 }
 
+// The bottom bar's height: at most a third of the screen (CSS's --bar-h), or as tall as it's dragged by its top edge
+// (a double-click puts it back), kept for this browser
+const BAR_KEY = 'dirdelta_bar_height';
+let barHeight = 0;
+function setBarHeight(px) {
+  barHeight = px;
+  const bottom = document.getElementById('bottom');
+  if (px) document.documentElement.style.setProperty('--bar-h', px + 'px');
+  else document.documentElement.style.removeProperty('--bar-h');
+  bottom.classList.toggle('sized', !!px);
+  placePanel();
+}
+
+function barHandle() {
+  const bottom = document.getElementById('bottom');
+  const handle = el('div', {class: 'barhandle', title: 'Drag to make this bar taller or shorter (double-click: back to its size)'});
+  bottom.prepend(handle);
+  try {
+    const kept = Number(localStorage.getItem(BAR_KEY));
+    if (kept) setBarHeight(Math.min(kept, Math.round(innerHeight * 0.85)));
+  } catch (error) { /* (its own size) */ }
+  handle.addEventListener('pointerdown', event => {
+    event.preventDefault();
+    handle.setPointerCapture(event.pointerId);
+    handle.classList.add('dragging');
+    const move = moved => setBarHeight(Math.round(Math.max(90, Math.min(innerHeight * 0.85, innerHeight - moved.clientY))));
+    const up = () => {
+      handle.classList.remove('dragging');
+      handle.removeEventListener('pointermove', move);
+      handle.removeEventListener('pointerup', up);
+      handle.removeEventListener('pointercancel', up);
+      try { localStorage.setItem(BAR_KEY, String(barHeight)); } catch (error) { /* (not kept) */ }
+    };
+    handle.addEventListener('pointermove', move);
+    handle.addEventListener('pointerup', up);
+    handle.addEventListener('pointercancel', up);
+  });
+  handle.addEventListener('dblclick', () => {
+    setBarHeight(0);
+    try { localStorage.removeItem(BAR_KEY); } catch (error) { /* (nothing kept) */ }
+  });
+}
+
+barHandle();
 tabBar('run');
 poll();
