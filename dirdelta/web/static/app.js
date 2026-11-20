@@ -181,6 +181,14 @@ function updatePicker(screen, isNew) {
   view.selected = screen.selected;
   view.sideSelected = screen.sideSelected;
   view.status = screen.status;
+  if (isNew && screen.mode === 'list' && view.pendingKey) {
+    // (An action's button pressed (quickActions()): its option chosen, the menu not shown, the tree left as it is;
+    // unless it's greyed out there, then the menu's shown, saying why)
+    const key = view.pendingKey;
+    view.pendingKey = null;
+    const path = [...optionKeys()].find(([, one]) => one === key);
+    if (path && !view.info.get(path[0]).d) { chooseOption(path[0]); return; }
+  }
   if (isNew) {
     // Started on a node deep in the tree (--select): its dirs open, so it's seen
     if (view.selected && view.selected !== '.') ancestors(view.selected).forEach(dir => view.expanded.add(dir));
@@ -626,6 +634,41 @@ const applies = key => !NO_BUTTON_KEYS.has(key.name) && (!KEY_APPLIES[key.name] 
 
 // The bottom bar, in sections: going back and the main action (Enter's, named for what it's on); what acts
 // on the selection; on the side tree's; and Misc (the picker's own keys: the pictures)
+// A sync's file tree (what one replica lacks, or has otherwise): its Enter's menu is what to do with the files
+function isSyncFilesTree(screen) {
+  return screen.mode === 'tree' && screen.multi && !screen.states.length && !!screen.side && screen.side.enterPicks &&
+    /(^|> )Sync /.test(screen.crumbs || '');
+}
+
+function actionsOpen() {
+  try { return localStorage.getItem('dirdelta_actions') === 'open'; } catch (error) { return false; }
+}
+
+function setActionsOpen(open) { kept('dirdelta_actions', open ? 'open' : ''); }
+
+// The menu's actions as buttons, each choosing its option at once (by its key, see optionKeys()): the menu opened
+// and that option chosen, not shown; what it asks then (a confirmation) shown as ever. One greyed out there shows
+// the menu, which says why
+const QUICK_ACTIONS = [
+  ['copy', '>', (screen, it) => 'Copy ' + it + ' to ' + screen.side.root],
+  ['swap', '<', (screen, it) => 'Replace with ' + screen.side.root + "'s"],
+  ['trash', 'd', (screen, it) => 'Remove ' + it],
+  ['pencil', 'cc', () => 'Rename…'],
+  ['pencil', 'm', () => 'Rename the match there'],
+  ['pencil', 'M', () => 'Rename to the match'],
+  ['ai', 'a', () => 'Ask AI'],
+  ['open', 'Ctrl-X', () => 'Open'],
+  ['refresh', 'Ctrl-R', () => 'Read anew'],
+  ['zip', 'e', () => 'Explore the zip'],
+];
+
+function quickActions(screen, selected) {
+  const it = view.picked.size ? view.picked.size + ' picked' : selected;
+  return QUICK_ACTIONS.filter(([, key]) => key !== 'e' || /\.zip$/i.test(view.selected || '')).map(([glyph, key, text]) =>
+    el('button', {class: 'quick', onclick: () => { view.pendingKey = key; act('enter'); }},
+      icon(glyph), text(screen, it), el('small', {class: 'keyname'}, key)));
+}
+
 function renderPickerActions() {
   const screen = view.screen;
   const main = [];
@@ -639,8 +682,13 @@ function renderPickerActions() {
     if (screen.states.length) label = 'Done';
     else if (screen.multi) label = view.picked.size ? what + ' with ' + view.picked.size + ' picked' :
       screen.enterPicksSelection ? what + ' with ' + selected : 'Pick some first';
-    main.push(el('button', {class: 'primary', disabled: screen.multi && !screen.states.length && !view.picked.size && !screen.enterPicksSelection,
-      onclick: () => act('enter')}, label));
+    const enterButton = el('button', {class: 'primary', disabled: screen.multi && !screen.states.length && !view.picked.size && !screen.enterPicksSelection,
+      onclick: () => act('enter')}, label);
+    // (A sync's file tree: ▾ beside it shows its menu's actions as buttons, see quickActions())
+    main.push(isSyncFilesTree(screen) ? el('span', {class: 'splitbutton'}, enterButton,
+      el('button', {class: 'primary more' + (actionsOpen() ? ' on' : ''), title: actionsOpen() ? 'Hide the actions' : 'Show all the actions',
+        'aria-expanded': String(actionsOpen()), onclick: () => { setActionsOpen(!actionsOpen()); renderPickerActions(); }}, actionsOpen() ? '▴' : '▾')) :
+      enterButton);
   }
   if (screen.hints.length || screen.help.length) {
     main.push(el('button', {class: 'help', title: 'What the keys do', onclick: () => { view.showHelp = !view.showHelp; renderHelp(); }}, '?'));
@@ -666,6 +714,7 @@ function renderPickerActions() {
   const section = (title, buttons, extra) => buttons.length ?
     el('div', {class: 'actsec' + (extra ? ' ' + extra : '')}, title ? el('div', {class: 'seclabel'}, title) : '', buttons) : '';
   document.getElementById('actions').replaceChildren(section('', main, 'main'),
+    isSyncFilesTree(screen) && actionsOpen() ? section('', quickActions(screen, selected), 'quick') : '',
     section(screen.mode === 'list' ? '' : 'On ' + selected, onSelection),
     section(screen.side ? 'In ' + screen.side.root : '', side), section('Misc', general));
 }

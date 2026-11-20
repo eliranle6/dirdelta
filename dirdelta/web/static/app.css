@@ -354,3 +354,10 @@ footer#bottom { max-height: 50vh; overflow-y: auto; overscroll-behavior: contain
 .option kbd { margin-left: auto; flex: none; font: 600 12px ui-monospace, monospace; color: var(--muted); border: 1px solid var(--line);
   border-bottom-width: 2px; border-radius: 5px; padding: 1px 6px; background: var(--bg); align-self: center; }
 .option:not(.withicon):has(kbd) { display: flex; align-items: flex-start; gap: 10px; }
+/* The main action and its ▾, joined: ▾ shows the menu's actions as buttons under them */
+.splitbutton { display: inline-flex; flex: 1 1 auto; min-width: 0; }
+.splitbutton > button:first-child { flex: 1 1 auto; border-top-right-radius: 0; border-bottom-right-radius: 0; }
+.splitbutton > button.more { flex: none; border-top-left-radius: 0; border-bottom-left-radius: 0; padding: 0 12px;
+  border-left: 1px solid color-mix(in srgb, var(--accent-fg) 35%, transparent); }
+.actsec.quick button.quick { display: inline-flex; align-items: center; gap: 6px; }
+.actsec.quick button.quick .icon { color: var(--muted); }
