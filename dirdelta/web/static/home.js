@@ -223,7 +223,9 @@ function lastSyncTile(data, tile) {
   const everyone = replicas.every(replica => latest[replica.path] === when);
   const hint = everyone ? (replicas.length === 2 ? 'Both replicas' : 'All ' + replicas.length + ' replicas') :
     'The one longest ago: ' + stalest.fullName + (when ? '' : ' was never synced') + (newest && newest !== when ? '; the latest ' + age(newest).text : '');
-  return tile(when ? found.tone : 'bad', 'sync', 'Last sync', when ? found.text : 'never', hint, '/replicas');
+  const syncing = data.pairs.some(pair => isSyncing(pair, data.running, data.user));
+  return tile(when ? found.tone : 'bad', 'sync', 'Last sync', when ? found.text : 'never',
+    syncing ? [el('b', {class: 'c-accent'}, 'Syncing now. '), hint] : hint, '/replicas');
 }
 
 // How much of the inboxes' files are sorted (moved into the tree, or skipped) or in a replica already (as
@@ -271,13 +273,27 @@ function homePage(data) {
         'Add two, and they\'re kept in step.')),
       el('a', {class: 'button primary', href: '/replicas#add'}, 'Add a replica')));
   }
-  if (data.running) {
-    parts.push(el('div', {class: 'card banner running'}, el('div', {}, el('b', {}, 'Running now' + (data.running.user && data.running.user !== data.user ? ' (for ' + data.running.user + ')' : '')),
-      data.running.title ? el('div', {class: 'note'}, data.running.title) : ''),
-      el('a', {class: 'button primary', href: '/run'}, 'Open it')));
-  }
+  if (data.running) parts.push(runningBanner(data));
   // (Each pair's sync status is on Replicas)
   return parts.concat(summary(data));
+}
+
+// What's running, on top of Home, so it's not missed: a sync (which pair), a sort (which inbox) or the
+// start menu; where it is, and whether it waits for the user; and the way back to it
+function runningBanner(data) {
+  const running = data.running, what = running.what || {};
+  const pair = what.kind === 'pair' && data.pairs.find(one => isSyncing(one, running, data.user));
+  const inbox = what.kind === 'sort' && data.inboxes.find(one => one.path === what.inbox);
+  const kind = what.kind === 'pair' ? 'sync' : what.kind === 'sort' ? 'sort' : 'run';
+  const head = {sync: 'Sync in progress', sort: 'Sort in progress', run: 'dirdelta is running'}[kind] +
+    (running.user && running.user !== data.user ? ' (for ' + running.user + ')' : '');
+  const which = pair ? el('div', {class: 'which'}, replicaLabel(pair.a, pair.nameA), '⇄', replicaLabel(pair.b, pair.nameB)) :
+    inbox ? el('div', {class: 'which'}, inbox.name) : '';
+  const now = running.title ? el('div', {class: 'note'}, (running.waiting ? 'Waiting for you: ' : 'Now: ') + running.title) : '';
+  return el('a', {class: 'card banner running', href: '/run'},
+    el('span', {class: 'pulse'}),
+    el('div', {class: 'what'}, el('b', {class: 'big'}, head), which, now),
+    el('span', {class: 'button primary'}, kind === 'run' ? 'Go back to it' : 'Go back to ongoing ' + kind));
 }
 
 // The user's replicas: each one's status, adding one; and every two of them, a pair, its sync status and Sync

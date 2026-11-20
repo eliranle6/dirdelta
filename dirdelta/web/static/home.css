@@ -10,7 +10,19 @@ button.tiny { font-size: 11px; padding: 1px 7px; border-radius: 10px; color: var
 button.small, a.button.small { font-size: 13px; padding: 4px 10px; }
 .row2.end { justify-content: flex-end; }
 .banner { flex-direction: row; justify-content: space-between; align-items: center; }
-.banner.running { border-left: 5px solid var(--green); }
+/* What's running, on top of Home: tinted in the accent, a pulsing dot, the whole of it a link back to it */
+a.banner.running { border: 2px solid var(--accent); border-left-width: 6px; background: var(--sel); color: var(--fg);
+  text-decoration: none; gap: 12px; flex-wrap: wrap; justify-content: flex-start; }
+.banner.running .what { flex: 1 1 200px; display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.banner.running .big { font-size: 18px; color: var(--accent); }
+.banner.running .which { font-weight: 600; display: flex; gap: 6px; flex-wrap: wrap; align-items: center; overflow-wrap: anywhere; }
+.banner.running .note { color: var(--fg); opacity: .8; overflow-wrap: anywhere; }
+.banner.running .button { flex: 1 0 100%; text-align: center; }
+.banner.running .pulse { width: 14px; height: 14px; border-radius: 50%; background: var(--accent); flex: none; align-self: flex-start;
+  margin-top: 5px; animation: ring 1.6s ease-in-out infinite; }
+@keyframes ring { 0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 60%, transparent); }
+  50% { box-shadow: 0 0 0 7px transparent; } }
+.c-accent { color: var(--accent); }
 .tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .tile .bar { margin-top: 4px; }
 .tile { background: var(--card); border: 1px solid var(--line); border-top: 4px solid var(--grey); border-radius: 10px; padding: 8px 12px;
@@ -44,3 +56,4 @@ button.item { border: 0; border-radius: 0; background: none; }
 .item.pair .insync { color: var(--accent); font-weight: 600; font-size: 14px; }
 .item.pair:has(> a.button) { flex-wrap: wrap; }
 .item.pair > a.button { flex: 1 0 100%; text-align: center; margin-top: 4px; }
+.banner.running span.button { display: block; padding: 8px 12px; border-radius: 8px; background: var(--accent); color: var(--accent-fg); font-weight: 600; }

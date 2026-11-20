@@ -63,7 +63,18 @@ def _title(screen):
         return ''
     meta = screen.meta()
     title = meta.get('title') or meta.get('crumbs') or ''
-    return title.replace('\x01', ' ').split(' > ')[-1].strip() if isinstance(title, str) else ''
+    if isinstance(title, str) and title:
+        return title.replace('\x01', ' ').split(' > ')[-1].strip()
+    # (A picker's: its question, its header's first line, without its styles' marks)
+    header = meta.get('header') or ''
+    return header.split('\n', 1)[0].replace('\x01', ' ').replace('\x02', '').strip() if isinstance(header, str) else ''
+
+
+def _is_waiting(screen):
+    """Whether what's shown waits for the user: a picker, or a messages screen's Continue or question"""
+    if screen is None:
+        return False
+    return screen.kind == 'picker' or bool(getattr(screen, 'waiting', False) or getattr(screen, 'asking', False))
 
 
 def pair_info(path_a, path_b, names, known_replicas):
@@ -104,7 +115,8 @@ def routes(session):
         screen = session.screen()
         names = {path: naming.name(path) for path in all_paths}
         return {'label': list(dryrun.label()),
-                'running': {'title': _title(screen), 'user': session.user, 'tab': session.tab, 'what': session.what}
+                'running': {'title': _title(screen), 'waiting': _is_waiting(screen), 'user': session.user, 'tab': session.tab,
+                            'what': session.what}
                 if session.is_running else None,
                 'user': users.current(),
                 # (Signed in to Drive: its login is kept; whether it's still good is known when it's used)
