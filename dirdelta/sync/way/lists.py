@@ -5,13 +5,37 @@ from dirdelta.matching import differing
 from dirdelta.matching import elsewhere
 from dirdelta.sync import comparing
 from dirdelta.sync import replica_ops
+from dirdelta.sync.combined import versions
 from dirdelta.ui import messages
 from dirdelta.ui import picker
 from dirdelta.util import dryrun
 
 
 class Lists(object):
-    """The picker's files (InteractiveDirSync's)"""
+    """The picker's files (InteractiveDirSync's). _diff_view: the view of a file that differs' diff, as
+    Ctrl-T left it (None: the first, see versions.views()); _diff_at: (the file that differs selected, the
+    send() its diff went by)"""
+    _diff_view = None
+    _diff_at = None
+
+    def _send_diff(self, relpath, send):
+        """A file that differs, selected (check_contents()'s on_other): its preview again, with its diff
+        below (in the view Ctrl-T chose, a Drive version downloaded for it)"""
+        change = self.differs.get(relpath)
+        if change is None:
+            return
+        self._diff_at = (relpath, send)
+        shown = differing.preview_lines(change, self._dst.displayname(), replica_ops.can_copy(self._src, self._dst))
+        if not (replica_ops.is_local(self._src) and replica_ops.is_local(self._dst)):
+            send({relpath: shown + ["", picker.styled([("Getting its versions for their diff...", 'grey')])]})
+        send({relpath: shown + versions.lines((self._src, self._dst), relpath,
+                                              (self._src.displayname(), self._dst.displayname()), self._diff_view)})
+
+    def _next_diff_view(self, selected):
+        """Ctrl-T: the diff's next view, and the selected file's sent again in it"""
+        self._diff_view = versions.next_view(self._diff_view)
+        if self._diff_at is not None and self._diff_at[0] == selected:
+            self._send_diff(*self._diff_at)
 
     def _side_items(self):
         """dst's dirs and files, for the tree beside the picker (see sidetree.py)"""

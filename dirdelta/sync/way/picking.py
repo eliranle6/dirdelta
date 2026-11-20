@@ -13,6 +13,8 @@ from dirdelta.screens import archive_screen
 from dirdelta.screens import hashes_screen
 from dirdelta.sync import comparing
 from dirdelta.sync import replica_ops
+from dirdelta.sync.combined import diffview
+from dirdelta.sync.combined import versions
 from dirdelta.ui import contextmenu
 from dirdelta.ui import filescreen
 from dirdelta.ui import images
@@ -40,7 +42,8 @@ class Picking(object):
         key_hints = [('Enter', 'choose what to do'), contextmenu.KEY_HINT]
         # The keys that aren't in the keys row, by what they're about, for ?
         more_keys = [
-            ("The files", [aiplan_screen.KEY_HINT, archive_screen.KEY_HINT, opening.KEY_HINT, renaming.KEY_HINT]),
+            ("The files", [aiplan_screen.KEY_HINT, archive_screen.KEY_HINT, opening.KEY_HINT, renaming.KEY_HINT] +
+             ([versions.KEY_HINT] if self.differs else [])),
             ("%s, on the right" % (dst_name,), [
                 ('Ctrl-W l', 'move to %s, on the right (Ctrl-W h: back)' % (dst_name,)),
                 (self.SIDE_REMOVE_KEY + ' there', 'remove what\'s selected there'),
@@ -84,7 +87,7 @@ class Picking(object):
             chosen = picker.pick_files(
                 screen.src_name, missing, header=screen.header, picked=picked,
                 keys=screen.keys, selected=selected, key_hints=screen.key_hints,
-                shown_as=shown_as, notify_keys=opening.KEY, twice_keys=renaming.KEY,
+                shown_as=shown_as, notify_keys=opening.KEY + (diffview.KEY if differs else ''), twice_keys=renaming.KEY,
                 # dst beside it, to look through (e.g. for a newer version of a file)
                 side=picker.Side(screen.dst_name, self._side_items(), True, self._side_follow,
                                  self.SIDE_REMOVE_KEY + contextmenu.KEY + self.REFRESH_KEY,
@@ -93,12 +96,14 @@ class Picking(object):
                                  side_start),
                 enter_picks_selection=True,
                 none_picked_key_hints=[('Enter', 'Pick & choose what to do')],
-                # Ctrl-X opens the selected one (the picked ones: the menu's Open)
-                on_notify=lambda key, selected, picked: self._opener.press([selected], files),
+                # Ctrl-X opens the selected one (the picked ones: the menu's Open); Ctrl-T, a diff's next view
+                on_notify=lambda key, selected, picked: (self._next_diff_view(selected) if key == diffview.KEY else
+                                                         self._opener.press([selected], files)),
                 help_lines=picker.key_help_sections(screen.more_keys) + (hashes_screen.HELP_LINES if screen.jobs else []),
                 previews=functools.partial(self._find_previews, only_missing, differs),
+                # (A file that differs gets its diff)
                 on_selection=functools.partial(elsewhere.check_contents, only_missing, self._src,
-                                               self.src_index, self.dst_index, self.checked),
+                                               self.src_index, self.dst_index, self.checked, on_other=self._send_diff),
                 # A photo's picture below that
                 images=images.of_replica(self._src),
                 # That some files both have are taken as the same, unverified

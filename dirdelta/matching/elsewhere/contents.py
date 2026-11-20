@@ -12,14 +12,16 @@ from dirdelta.trees import dirtree
 INDEX_WAIT_INTERVAL = 0.2
 
 
-def check_contents(relpaths, src, src_index, index, checked, selection, send, sends_previews=True):
+def check_contents(relpaths, src, src_index, index, checked, selection, send, sends_previews=True, on_other=None):
     """For each of src's missing files at relpaths as it's selected in the picker (selection, a
     picker.Selection), once index is built: send its preview at once (rather than when
     find_previews() gets to it), then compare its contents with those of its candidates of its size
     (_check()), and send its preview again. Each file once: checked has it then. Reading a local
     file may take a while, so it's stopped when the selection moves on, for the file it's on now.
-    Without sends_previews, it sends nothing (its caller sends its own previews, from checked).
-    Lets picker.PickerClosed go up, once the picker is gone."""
+    Without sends_previews, it sends nothing (its caller sends its own previews, from checked). on_other,
+    if given, is called with any other file selected (not one of relpaths) and send, at once (e.g. a file
+    that differs, for its diff). Lets picker.PickerClosed go up, once the picker is gone."""
+    other_send = send
     if not sends_previews:
         send = lambda found=None, default=None: None
     missing = set(relpaths)
@@ -29,7 +31,10 @@ def check_contents(relpaths, src, src_index, index, checked, selection, send, se
     while True:
         if pending is None or not index.is_built():
             moved_to = selection.wait_next(INDEX_WAIT_INTERVAL if pending is not None else None)
-            if moved_to is not None:
+            if moved_to is not None and moved_to not in missing and on_other is not None:
+                pending = None
+                on_other(moved_to, other_send)
+            elif moved_to is not None:
                 pending = moved_to
             continue
         relpath, pending = pending, None

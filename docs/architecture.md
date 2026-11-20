@@ -211,7 +211,8 @@ The map (each module's docstring's first line; generated from the code):
     - `ask_ai.py`: Asking AI: a, what the user types, whose plan's steps set the arrows; Ctrl-I, the selection's files, in the background (suggestions.py); Ctrl-A, setting the arrows it suggests in the tree that's shown (picker.Stated, treepicker's state= update)
     - `diffpane.py`: The selected differing file's diff in the right column, below its preview (on_selection), in the view v chose
     - `diffview.py`: The diff's views: side by side, as diff -u, either version (difflib), colored, as wide as the column
-    - `diffing.py`: d: the selected file's diff (A's version against B's, a Drive one downloaded), in less, if they're text
+    - `diffing.py`: d: the selected file's diff (A's version against B's, a Drive one downloaded), in less, if they're text (in the browser, on a page of its own)
+    - `versions.py`: A file's diff for a preview, in any tree with files that differ (this one's column, a way's picker: `Lists._send_diff()`, through `check_contents()`'s on_other): its versions read, a Drive one downloaded (up to 1 MB); the views Ctrl-T goes through (in the browser one column only: as diff -u, then each version)
     - `keys_help.py`: The keys row, and the ? help: what the marks, the keys and the tags mean
     - `doing.py`: Doing a combined tree's plan, on one progress screen: moves, copies, replacements, then removals
     - `moved.py`: The moved pairs: a file only in A and one only in B with the same contents, as far as is known

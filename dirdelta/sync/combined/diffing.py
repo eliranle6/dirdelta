@@ -1,11 +1,15 @@
 """Ctrl-O in the combined tree: the selected file's diff, A's version against B's (a file only one has:
-against nothing), in less over the screen, if they're text"""
+against nothing), in less over the screen (in the browser, on a page of its own), if they're text"""
 import os
+import re
 import subprocess
 
+from dirdelta.sync.combined import diffview
 from dirdelta.sync.combined import plan as plans
+from dirdelta.ui import frontend
 from dirdelta.ui import messages
 from dirdelta.ui import opening
+from dirdelta.ui import picker
 from dirdelta.util import dryrun
 from dirdelta.util import text
 
@@ -77,8 +81,24 @@ def show(sync, relpath):
     if not diff.stdout:
         messages.show(title, ["Their contents are the same."], dryrun.label())
         return
+    if frontend.current is not None:
+        # (In the browser: on a page of its own, colored as less shows it; Continue goes back to the tree)
+        messages.show(title, _styled(_without_colors(diff.stdout.decode(errors='replace')).splitlines()), dryrun.label())
+        return
     try:
         # q goes back to the tree
         subprocess.run(['less', '-R', '-c'], input=diff.stdout)
     except OSError:
         messages.show(title, diff.stdout.decode(errors='replace').splitlines(), dryrun.label())
+
+
+def _without_colors(text):
+    """diff's output without the escape codes of its colors"""
+    return re.sub(r'\x1b\[[0-9;]*m', '', text)
+
+
+def _styled(lines):
+    """diff -u's lines styled as the column's (diffview's colors)"""
+    return [picker.styled([(line, diffview.HUNK_STYLE if line.startswith('@@') else 'bold' if line.startswith(('---', '+++')) else
+                            diffview.A_STYLE if line.startswith('-') else diffview.B_STYLE)])
+            if line.startswith(('@@', '-', '+')) else line for line in lines]

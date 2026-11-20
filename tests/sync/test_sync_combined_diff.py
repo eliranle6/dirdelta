@@ -11,13 +11,15 @@ from dirdelta.matching import differing
 from dirdelta.sync.combined import diffing
 from dirdelta.sync.combined import diffview
 from dirdelta.sync.combined import screen
+from dirdelta.sync.combined import versions
 from dirdelta.trees import localdiskdirtree
 from dirdelta.ui import picker
 
 REAL_RUN = subprocess.run
 
 
-class DiffTest(unittest.TestCase):
+class DiffFixture(unittest.TestCase):
+    """Two replicas with a text file that differs, one only A has, and a binary one"""
     def setUp(self):
         self.root = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, self.root)
@@ -49,6 +51,8 @@ class DiffTest(unittest.TestCase):
             diffing.show(self.sync, relpath)
         return paged[0] if paged else None
 
+
+class DiffTest(DiffFixture):
     def test_a_differing_files_versions_are_diffed(self):
         paged = self.paged('notes.txt')
         self.assertIn('-two', paged)
@@ -78,6 +82,36 @@ class IsTextTest(unittest.TestCase):
             with open(path, 'wb') as f:
                 f.write(data)
             self.assertEqual(diffing.is_text(path), is_text, name)
+
+
+class InTheBrowserTest(DiffFixture):
+    """The same, in the web version: no less there, and the column's diff one column wide"""
+    def setUp(self):
+        super().setUp()
+        patcher = mock.patch('dirdelta.ui.frontend.current', object())
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def test_the_diff_is_on_a_page_of_its_own_not_in_less(self):
+        self.assertIsNone(self.paged('notes.txt'))
+        lines = [picker.unstyled(line) for line in self.show.call_args[0][1]]
+        self.assertIn('-two', lines)
+        self.assertIn('+three', lines)
+
+    def test_the_columns_diff_is_as_diff_u_first_then_each_version(self):
+        lines = [picker.unstyled(line) for line in versions.lines((self.a, self.b), 'notes.txt', ('a', 'b'), None)]
+        self.assertIn('-two', lines)
+        self.assertIn('+three', lines)
+        self.assertEqual(versions.next_view(None), diffview.UNIFIED)
+        self.assertEqual(versions.next_view(versions.next_view(versions.next_view(diffview.UNIFIED))), diffview.UNIFIED)
+
+    def test_a_version_not_on_this_machine_is_got_for_the_diff(self):
+        drive = mock.Mock()
+        with mock.patch('dirdelta.ui.opening.Opener.local_path', autospec=True, side_effect=lambda opener, relpath, max_size=None:
+                        os.path.join(self.root, 'b' if opener._tree is drive else 'a', relpath)) as local_path:
+            lines = [picker.unstyled(line) for line in versions.lines((self.a, drive), 'notes.txt', ('a', 'b'), None)]
+        self.assertIn('+three', lines)
+        self.assertEqual(2, local_path.call_count)
 
 
 class DiffViewTest(unittest.TestCase):
