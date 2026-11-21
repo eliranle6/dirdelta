@@ -2,9 +2,11 @@
 import collections
 import time
 
+from dirdelta.known import replicanames
 from dirdelta.matching.elsewhere.candidates import Matcher
 from dirdelta.matching.elsewhere.constants import SEND_INTERVAL
 from dirdelta.matching.elsewhere.preview_lines import preview_of
+from dirdelta.ui import picker
 
 
 # How often find_previews() looks for files hashed meanwhile, whose previews change, in seconds
@@ -20,11 +22,15 @@ def find_previews(relpaths, src, index, send, checked=None, src_index=None):
     ones of the hash of a file of index's hashed. Lets picker.PickerClosed go up, once the picker is
     gone. checked, src_index: as _Matcher's."""
     dst_name = index.replica.displayname()
-    title = ["Looking for files of the same", "names in %s..." % (dst_name,)]
+    # (A status, in grey, by the replica's one name: e.g. "Finding where Grey HD has them: 4,223 of its files listed")
+    title = "Finding where %s has them" % (replicanames.name(dst_name),)
+
+    def status(how_far):
+        return [picker.styled([("%s: %s..." % (title, how_far), 'grey')])]
     is_due = _Throttle(SEND_INTERVAL)
-    send(default=title + ["Listing its files"])
+    send(default=status("listing its files"))
     try:
-        index.build(lambda count: is_due() and send(default=title + ["Listed %d of its files" % (count,)]))
+        index.build(lambda count: is_due() and send(default=status("{:,} of its files listed".format(count))))
         matcher = Matcher(relpaths, src, index, checked, src_index)
         if src_index is not None:
             # What's hashed from now on changes the previews (what was is in them)
@@ -34,10 +40,10 @@ def find_previews(relpaths, src, index, send, checked=None, src_index=None):
         for i, relpath in enumerate(relpaths):
             found[relpath] = preview_of(relpath, src, dst_name, matcher)
             if is_due():
-                send(found, default=title + ["Matched %d of %d files" % (i + 1, len(relpaths))])
+                send(found, default=status("{:,} of {:,} files matched".format(i + 1, len(relpaths))))
                 found = {}
     except (OSError, ValueError) as error:
-        send(default=["Couldn't look for files of", "the same names in %s:" % (dst_name,), str(error)])
+        send(default=["Couldn't find where %s has them:" % (replicanames.name(dst_name),), str(error)])
         return
     # Dirs show nothing
     send(found, default=[])

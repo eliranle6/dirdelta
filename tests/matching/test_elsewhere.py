@@ -53,7 +53,8 @@ class FindPreviewsTest(unittest.TestCase):
     def test_says_how_far_it_got_then_nothing_for_the_rest(self):
         src = SizedTree('/src', {'a': 1, 'b': 1})
         sent = previews_of(['a', 'b'], src, SizedTree('/dst', {}))
-        self.assertEqual(sent.defaults[0][-1], "Listing its files")
+        # (A status, by the replica's name, not its path)
+        self.assertEqual(picker.unstyled(sent.defaults[0][-1]), "Finding where LocalDisk has them: listing its files...")
         self.assertEqual(sent.defaults[-1], [])
         self.assertEqual(sorted(sent.previews), ['a', 'b'])
 

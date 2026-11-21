@@ -2,6 +2,7 @@
 import os
 
 from dirdelta.drive import clouddirtree
+from dirdelta.known import replicanames
 from dirdelta.matching import elsewhere
 from dirdelta.sync import replica_ops
 from dirdelta.ui import filescreen
@@ -30,7 +31,7 @@ class Menu(object):
         may_be_there = []
         if only_here:
             if not self.dst_index.is_built():
-                messages.print_line("Looking for files of the same names in %s..." % (self._dst.displayname(),))
+                messages.print_line("Finding where %s has them..." % (replicanames.name(self._dst.displayname()),))
             # The ones that may be in dst, moved or renamed: their contents are compared before a Rename
             may_be_there = elsewhere.may_be_elsewhere(only_here, self._src, self.dst_index, self.checked,
                                                       self.src_index)
