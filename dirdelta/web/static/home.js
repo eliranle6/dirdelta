@@ -180,7 +180,7 @@ function replicaCard(replica) {
   // (In the look the user gave it: its icon, and its color on the icon, the name and the card's edge)
   const color = lookColor(replica.look);
   return el('div', {class: 'card replica' + (replica.there ? '' : ' away'), style: color ? '--rcolor:' + color : ''},
-    el('div', {class: 'head', style: color ? 'color:' + color : ''}, icon((replica.look || {}).icon || replica.device), el('b', {}, replica.fullName),
+    el('div', {class: 'head'}, el('b', {class: 'rname' + (color ? ' rtag' : ''), style: color ? '--rc:' + color : ''}, icon((replica.look || {}).icon || replica.device), replica.fullName),
       replica.isMain ? el('span', {class: 'mainbadge', title: 'Every other replica is synced with it'}, 'Main') : ''),
     el('div', {class: 'note'}, replica.kind === 'drive' ? 'In Google Drive' : 'On ' + replica.place),
     // (How many files, and their size: a local one's once its hashing listed them, a Drive one's as its list has them)

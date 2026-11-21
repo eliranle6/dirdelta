@@ -516,3 +516,24 @@ footer#bottom { padding-top: 12px; }
 .row .twisty:not(:empty), .mark, .row input[type=checkbox] { cursor: pointer; }
 /* A picker's Back, first in the row of where it is (setTop()) */
 #crumbs .crumbback { font-size: 13px; font-weight: 600; padding: 3px 10px; margin-right: 10px; border-radius: 6px; vertical-align: middle; }
+/* A replica's color: a box around its name (a tint, and an edge in it), its icon in it; the name's text as any's, so it
+   doesn't read as a link */
+.rtag { color: var(--fg); background: color-mix(in srgb, var(--rc) 15%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--rc) 60%, transparent);
+  border-radius: 5px; padding: 0 5px; display: inline-flex; align-items: center; gap: 3px; }
+.rtag .icon { color: var(--rc); }
+.pairname.rtag { font-weight: 600; }
+.gbadge { color: var(--fg); border-color: var(--rc); background: color-mix(in srgb, var(--rc) 14%, transparent); }
+.gbadge .icon { color: var(--rc); }
+.pairside { color: var(--fg); }
+.pairside .icon { color: var(--side); }
+/* On a phone: a tree as wide as its longest name (each name on one row), scrolled sideways in its box, not the page;
+   at most TREE_MAX wide, past which a name wraps */
+@media (max-width: 600px) {
+  #tree, .side { overflow-x: auto; overscroll-behavior-x: contain; }
+  #tree > .tree, .side > .tree { width: max-content; min-width: 100%; max-width: 1000px; }
+  #tree .row .namewrap { flex-wrap: nowrap; }
+  #tree .row .namewrap > .name { flex: 0 1 auto; }
+}
+/* (The details' "Selected:" kept whole; a long name wraps instead) */
+.preview .previewhead { white-space: nowrap; }
+.preview .previewhead .target { white-space: normal; min-width: 0; overflow-wrap: anywhere; }

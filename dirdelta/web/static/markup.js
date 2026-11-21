@@ -558,6 +558,7 @@ function replicaLabel(path, name, isInbox) {
   const isDrive = path.startsWith('cloud/') || path === 'cloud';
   const look = replicaLooks[path] || {};
   const color = lookColor(look);
-  return el('span', {class: 'rname', style: color ? 'color:' + color : ''},
+  // (Its color as a box around its name, not its text's: a colored text reads as a link)
+  return el('span', {class: 'rname' + (color ? ' rtag' : ''), style: color ? '--rc:' + color : ''},
     icon(isInbox ? 'inbox' : look.icon || (isDrive ? 'drive' : 'disk')), name);
 }

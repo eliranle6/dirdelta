@@ -532,7 +532,8 @@ function pairSides(screen) {
 }
 
 function sideName(side) {
-  return el('span', {class: 'pairname', style: 'color:' + side.color}, icon(side.icon), side.name);
+  // (Its color as a box around its name, its text as any's: a colored text reads as a link)
+  return el('span', {class: 'pairname rtag', style: '--rc:' + side.color}, icon(side.icon), side.name);
 }
 
 // A title naming the pair ('A ⇄ B', as the tree's root and the breadcrumbs say it): each name with its icon in its
@@ -548,8 +549,8 @@ function pairLegend(sides) {
   const [a, b] = sides;
   const box = side => el('span', {class: 'pairside', style: '--side:' + side.color}, icon(side.icon), el('span', {}, side.name));
   return el('div', {class: 'pairlegend', title: '⇒ changes ' + b.name + ' to match ' + a.name + '; ⇐ changes ' + a.name + ' to match ' + b.name},
-    box(a), el('span', {class: 'pairways'}, el('b', {}, '⇒'), ' changes ', el('b', {style: 'color:' + b.color}, b.name),
-      el('span', {class: 'tip'}, ' · '), el('b', {}, '⇐'), ' changes ', el('b', {style: 'color:' + a.color}, a.name)), box(b));
+    box(a), el('span', {class: 'pairways'}, el('b', {}, '⇒'), ' changes ', sideName(b),
+      el('span', {class: 'tip'}, ' · '), el('b', {}, '⇐'), ' changes ', sideName(a)), box(b));
 }
 
 // The tag after a file's name that says it's only in one replica: its badge says so instead
@@ -558,7 +559,7 @@ const ONLY_IN_TAG = /\x02grey\x02  only in [^\x01\x02]*/;
 // Where a file is: only in A (A's icon and color), only in B, in both but differing, or moved
 function groupBadge(group, sides) {
   const [a, b] = sides;
-  const badge = (content, color, title) => el('span', {class: 'gbadge', style: 'color:' + color, title}, content);
+  const badge = (content, color, title) => el('span', {class: 'gbadge', style: '--rc:' + color, title}, content);
   if (group === 'only-a') return badge([icon(a.icon), 'only'], a.color, 'Only in ' + a.name);
   if (group === 'only-b') return badge([icon(b.icon), 'only'], b.color, 'Only in ' + b.name);
   if (group === 'differ') return badge('≠ differ', 'var(--yellow)', 'Both have it, and their versions differ');
