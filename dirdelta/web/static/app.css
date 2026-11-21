@@ -591,11 +591,29 @@ footer#bottom { padding-top: 12px; }
   footer#bottom { padding-top: 4px; }
   .barsteps { display: flex; justify-content: center; gap: 10px; margin: -2px 0 2px; }
   .barsteps button { padding: 0 18px; font-size: 16px; line-height: 1.3; }
-  footer#bottom[data-level="0"] > #actions, footer#bottom[data-level="0"] > #status,
-  footer#bottom[data-level="1"] > #status, footer#bottom[data-level="2"] > #status { display: none; }
-  /* (Its rows: the main action (with the checked files' line), then each part after it) */
-  footer#bottom[data-level="1"] > #actions > :not(.main):not(.checkedline),
-  footer#bottom[data-level="2"] > #actions > .main ~ * ~ * { display: none; }
+  /* (Its rows, in this order: the main action (with the checked files' line), what acts on the selection, the
+     selection's details, the rest of the actions, the status line) */
+  footer#bottom > #actions { display: contents; }
+  footer#bottom > .barsteps { order: 0; }
+  footer#bottom > #actions > .checkedline, footer#bottom > #actions > .main { order: 1; }
+  footer#bottom > #actions > .main + * { order: 2; }
+  footer#bottom > #preview { order: 3; }
+  footer#bottom > #actions > .main + * ~ * { order: 4; }
+  footer#bottom > #status { order: 5; }
+  footer#bottom[data-level="0"] > #actions > *, footer#bottom[data-level="0"] > #preview,
+  footer#bottom[data-level="1"] > #actions > :not(.main):not(.checkedline), footer#bottom[data-level="1"] > #preview,
+  footer#bottom[data-level="2"] > #actions > .main + * ~ *, footer#bottom[data-level="2"] > #preview,
+  footer#bottom[data-level="3"] > #actions > .main + * ~ *,
+  footer#bottom:not([data-level="4"]) > #status { display: none; }
 }
 /* (On a phone, as tall as the rows chosen show, up to most of the screen) */
 @media (max-width: 600px) { footer#bottom { max-height: 70vh; } }
+/* (On a phone the selection's details, a row of the bottom bar, at most 40% of the screen, scrolled in themselves) */
+@media (max-width: 600px) { footer#bottom > #preview:not(.max) { max-height: 40vh; overflow-y: auto; } }
+/* (On a phone the two rows above a sync's tree packed close: less space around and between them, slimmer controls) */
+@media (max-width: 600px) {
+  main:has(> .statehead) { padding-top: 4px; gap: 6px; }
+  .statehead { gap: 4px; padding: 2px 0 4px; margin-top: 0; }
+  .statehead .pairside { padding: 1px 8px; }
+  .statehead #search, .tabselect select { padding-top: 5px; padding-bottom: 5px; }
+}

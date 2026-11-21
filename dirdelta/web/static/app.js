@@ -238,9 +238,9 @@ function renderPickerFrame() {
     if (screen.tabs.length) parts.push(el('div', {class: 'tabs', id: 'pickertabs'}));
     if (search) parts.push(search);
   }
-  // On a wide screen the trees side by side, and what's shown of the selection (its details, a diff, the AI's
-  // suggestion) in the bottom bar, right of the buttons (placePreview()); on a phone, under the tree
-  const inBar = isWide() && screen.mode !== 'list';
+  // What's shown of the selection (its details, a diff, the AI's suggestion) in the bottom bar (placePreview()): on a
+  // wide screen right of its buttons, the trees side by side; on a phone a row of it, after the selection's (setBarLevel())
+  const inBar = screen.mode !== 'list';
   // (No side tree: the tree (or the menu) takes the whole width, a tree's details in the bottom bar)
   const body = el('div', {class: 'split' + (!screen.side && (inBar || screen.mode === 'list') ? ' single' : '')}, el('div', {id: 'tree'}),
     el('div', {}, inBar ? '' : el('div', {id: 'preview'}), el('div', {id: 'side'})));
@@ -1401,8 +1401,9 @@ function setBarHeight(px) {
 }
 
 // On a phone, the bottom bar's size in steps rather than dragged: hidden (only these buttons), its first row (the main
-// action), its first two (and what acts on the selection), or all of it; kept for this browser
-const BAR_LEVEL_KEY = 'dirdelta_bar_level', BAR_LEVELS = 4;
+// action), its first two (and what acts on the selection), three (and the selection's details), or all of it; kept for
+// this browser
+const BAR_LEVEL_KEY = 'dirdelta_bar_level', BAR_LEVELS = 5;
 function setBarLevel(level) {
   const bottom = document.getElementById('bottom');
   level = Math.max(0, Math.min(BAR_LEVELS - 1, level));
