@@ -6,8 +6,10 @@ import threading
 from dirdelta.known import replicanames
 from dirdelta.sync import comparing
 from dirdelta.sync import replica_ops
+from dirdelta.sync import view
 from dirdelta.sync.combined import ai_showing
 from dirdelta.sync.combined import ask_ai
+from dirdelta.sync.combined import confirming
 from dirdelta.sync.combined import diffing
 from dirdelta.sync.combined import diffpane
 from dirdelta.sync.combined import diffview
@@ -23,10 +25,7 @@ from dirdelta.ui import picker
 from dirdelta.util import dryrun
 from dirdelta.util import text
 
-# The most files of each thing the confirmation lists
-MAX_FILES_LISTED = 5
-
-CONFIRM_NO, CONFIRM_YES, CONFIRM_SURE = "Back to the tree", "Apply", "Yes, remove them"
+CONFIRM_NO, CONFIRM_YES, CONFIRM_SURE = confirming.CONFIRM_NO, confirming.CONFIRM_YES, confirming.CONFIRM_SURE
 
 
 class CombinedSync(showing.Showing, keys_help.KeysHelp, ai_showing.AIShowing, ask_ai.AskAI, diffpane.DiffPane):
@@ -49,6 +48,8 @@ class CombinedSync(showing.Showing, keys_help.KeysHelp, ai_showing.AIShowing, as
         # What the user chose so far, kept when they go back to the tree from the confirmation (and, given,
         # from before: the sync menu keeps it while they go back to it), of the files still here
         self.chosen = {relpath: state for relpath, state in (chosen or {}).items() if relpath in self.grouped}
+        # The view of the differences its switch asked for, if it ended so (view.py), else None
+        self.switch = None
         self.selected = None
         self._shown = None
         self.allowed = plans.allowed(self.replica_a, self.replica_b)
@@ -79,13 +80,18 @@ class CombinedSync(showing.Showing, keys_help.KeysHelp, ai_showing.AIShowing, as
                 plans.STATES, tabs=self._tabs(), header=self._header(), selected=self.selected,
                 shown_as=self._shown_as, previews=self._send_previews,
                 key_hints=self._key_hints(),
-                help_lines=self._help_lines(), footer=self._footer(), keys=ask_ai.KEY + diffing.KEY + keys_help.BACK_KEY,
+                help_lines=self._help_lines(), footer=self._footer(),
+                keys=ask_ai.KEY + diffing.KEY + keys_help.BACK_KEY + view.SWITCH_KEY,
                 on_selection=self._follow, notify_keys=ask_ai.SUGGEST_KEY + ask_ai.APPLY_KEY + diffview.KEY,
                 on_notify=self._on_key, images=self._pictures())
             if picked is None:
                 return False
             self.chosen, self.selected = picked.states, picked.selected
             if picked.key == keys_help.BACK_KEY:
+                return False
+            if picked.key == view.SWITCH_KEY:
+                # Another view of the differences asked for (the page's, else all of them, acted on): viewing.py
+                self.switch = view.requested(view.ALL, view.PLAN)
                 return False
             if picked.key == diffing.KEY:
                 diffing.show(self, self.selected)
@@ -124,30 +130,5 @@ class CombinedSync(showing.Showing, keys_help.KeysHelp, ai_showing.AIShowing, as
         self._wake.set()
 
     def _is_confirmed(self, plan):
-        """Whether the user says yes to the plan (removing files: and is sure)"""
-        nr_changes = sum(len(items) for items in plan)
-        lines = ["Apply %s?" % ("these %d changes" % (nr_changes,) if nr_changes > 1 else "this change",)]
-        for line, items in plans.summary(plan, self.name_a, self.name_b):
-            lines.append("  " + line + ":")
-            lines += text.listed(["      %s" % (item,) for item in items], MAX_FILES_LISTED)
-        for replica, name, relpaths in ((self.replica_b, self.name_b, plan.replace_b),
-                                        (self.replica_a, self.name_a, plan.replace_a)):
-            if relpaths:
-                lines.append("%s's versions replaced go %s." % (name, replica_ops.discarded_to(replica)
-                                                                if replica_ops.is_local(replica) else "to Drive's older versions"))
-        if dryrun.DRYRUN:
-            lines.append(dryrun.note())
-        label = ('SYNC', 'blue')
-        # (Live, Apply is red: it changes files)
-        apply = picker.Option(CONFIRM_YES, CONFIRM_YES, None if dryrun.DRYRUN else picker.Colored(CONFIRM_YES, 'red'))
-        if picker.pick_option([CONFIRM_NO, apply], header='\n'.join(lines), title="Apply?", label=label) != CONFIRM_YES:
-            return False
-        nr_removed = plans.removals(plan)
-        if not nr_removed:
-            return True
-        removed_from = [(replica, name) for replica, name, relpaths in (
-            (self.replica_a, self.name_a, plan.remove_from_a), (self.replica_b, self.name_b, plan.remove_from_b)) if relpaths]
-        sure = "Are you sure? %s will be removed (%s)." % (text.files(nr_removed), "; ".join(
-            "%s's %s" % (name, replica_ops.discarded_to(replica)) for replica, name in removed_from))
-        sure_option = picker.Option(CONFIRM_SURE, CONFIRM_SURE, None if dryrun.DRYRUN else picker.Colored(CONFIRM_SURE, 'red'))
-        return picker.pick_option([CONFIRM_NO, sure_option], header=sure, title="Sure?", label=label) == CONFIRM_SURE
+        """Whether the user says yes to the plan (removing files: and is sure): confirming.confirm()"""
+        return confirming.confirm(plan, self.replica_a, self.replica_b, self.name_a, self.name_b)

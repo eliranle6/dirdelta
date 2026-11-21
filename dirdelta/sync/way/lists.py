@@ -78,7 +78,7 @@ class Lists(object):
         differ (see _differs(), kept in differs), each dir's together"""
         missing = [] if self._only_differing else self._missing()
         self.differs = self._differs()
-        if not self.differs:
+        if not self.differs or not self._with_differing:
             return missing
         return sorted(set(missing) | set(self.differs), key=lambda relpath: relpath.split('/'))
 

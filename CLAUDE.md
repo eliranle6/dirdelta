@@ -7,7 +7,7 @@ where the other replica may have a file, moved or renamed. For each file present
 other, the user can choose to copy it across, delete it or rename it to match. The files both have at
 the same path that differ (by size, or by hashes known on both sides: `differing/`) are shown with
 them, tagged `>`, `<` (newer or older here) or `≠`, to copy either way over the other's version (to the trash, or a new Drive version).
-The sync menu's first option shows all of it in one tree instead (`sync/combined/`, plan C): each file
+The sync menu's Sync shows all of it in one screen (`sync/view.py`: which files, and how they're chosen, apart: Plan, the combined tree, `sync/combined/`, plan C, or Act, checked and acted on at once, a side's files tree or both sides', `sync/bothsides.py`); in Plan: each file
 marked `⇒` (make B like A: copy, replace, move or remove) or `⇐`, a dir's files at once, with tabs for each
 kind (moved pairs too, by known hashes), `Ctrl-I` asking AI about the selection's in the background, as the sort does, `Ctrl-A` setting what it suggests (or `a`, anything), then one plan to confirm, done in one go
 (treepicker's `--state` and `--tab`).
@@ -188,7 +188,7 @@ them by name. A big class's tests are split by topic into modules of their own, 
 prefix), which a test module imports by name: the runner puts its folder and the ones above it, up to
 `tests/` (helpers.py), on the path.
 
-Modules are tested where it's worth it, not for the sake of a test file each (984 tests, all passing as of 2026-11-21; 150 were removed on 2026-11-06 as redundant, white-box or pinning styling) except
+Modules are tested where it's worth it, not for the sake of a test file each (987 tests, all passing as of 2026-11-21; 150 were removed on 2026-11-06 as redundant, white-box or pinning styling) except
 the thin wiring in `main.py`/`dirsync_main.py`, covered only by running the
 app. A test is worth keeping if it says what the code does for whoever uses it: not one that sets
 or reads private state, counts calls to an inner function, restates a constant or a style (colors,

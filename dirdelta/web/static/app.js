@@ -205,6 +205,7 @@ function updatePicker(screen, isNew) {
     const path = [...optionKeys()].find(([, one]) => one === key);
     if (path && !view.info.get(path[0]).d) { chooseOption(path[0]); return; }
   }
+  if (isNew && screen.syncView && screen.states.length) view.tab = scopeTab(screen.syncView.scope);
   if (isNew) {
     // Started on a node deep in the tree (--select): its dirs open, so it's seen
     if (view.selected && view.selected !== '.') ancestors(view.selected).forEach(dir => view.expanded.add(dir));
@@ -248,7 +249,7 @@ function renderPickerFrame() {
       rootRow(sides)));
   } else {
     if (screen.header) parts.push(el('div', {class: 'header'}, segmentsSpan(screen.header)));
-    if (screen.tabs.length) parts.push(el('div', {class: 'tabs', id: 'pickertabs'}));
+    if (screen.tabs.length || screen.syncView) parts.push(el('div', {class: 'tabs', id: 'pickertabs'}));
     // (A tree that can read its files again (Ctrl-R, "Read anew"): ⟳ beside the search)
     const reread = screen.keys.find(key => key.name === 'Ctrl-R');
     if (search && reread) {
@@ -383,9 +384,33 @@ function colorNames(root) {
   }
 }
 
+// A sync's view of its differences (sync/view.py): which files (the dropdown) and how they're chosen (⇒⇐ Plan, ✓ Act),
+// apart. The plan's tree filters its own files as the dropdown says; a change of mode, or of the files acted on, asks the
+// flow for that view (the switch key, with the view: switchView())
+function tabScope(tab) { return tab && tab.groups.length ? tab.groups[0] : 'all'; }
+function scopeTab(scope) { return Math.max(0, view.screen.tabs.findIndex(tab => tabScope(tab) === scope)); }
+function switchView(scope, mode) { act('press', {key: '\x02', view: {scope, mode}}); }
+
+function renderViewRow(box) {
+  const screen = view.screen, sync = screen.syncView, isPlan = !!screen.states.length;
+  const scope = isPlan ? tabScope(screen.tabs[view.tab]) : sync.scope;
+  const pick = el('select', {'aria-label': 'Which files to show', onchange: event => {
+    if (isPlan) { view.tab = scopeTab(event.target.value); renderPickerParts(); } else switchView(event.target.value, 'act');
+  }}, sync.scopes.map(one => el('option', {value: one.scope}, one.title + ' (' + one.count + ')')));
+  pick.value = scope;
+  const mode = (name, glyph, title) => el('button', {class: 'small' + ((name === 'plan') === isPlan ? ' on' : ''), title,
+    'aria-pressed': String((name === 'plan') === isPlan), onclick: () => { if ((name === 'plan') !== isPlan) switchView(scope, name); }},
+    glyph, el('span', {class: 'modeword'}, ' ' + capitalized(name)));
+  box.classList.add('tabselect');
+  box.replaceChildren(el('label', {}, 'Show ', pick), el('span', {class: 'modeswitch', role: 'group', 'aria-label': 'How to choose'},
+    mode('plan', '⇒⇐', 'Mark each file ⇒ or ⇐, then do the plan in one go'),
+    mode('act', '✓', 'Check files, then act on them at once')));
+}
+
 function renderTabs() {
   const tabs = document.getElementById('pickertabs');
   if (!tabs) return;
+  if (view.screen.syncView) { renderViewRow(tabs); return; }
   // (Each with how many files it shows)
   const count = tab => view.items.filter(path => { const info = view.info.get(path); return info.t === 'f' && (!tab.groups.length || tab.groups.includes(info.g)); }).length;
   // (A sync's tree: a dropdown beside the search, "Show: All (13)", rather than a row of tabs of its own)
@@ -425,11 +450,18 @@ function renderTree() {
 // A tap's check or mark shown at once, before the server says it (it does, a moment later, the same), so a tap never
 // waits on the network: the files it's on changed here, their rows drawn again, then it's sent. With order (the paths
 // in the order shown) and a check before (view.lastChecked), Shift checks every one between too, as a desktop's list does
+// Whether a file is in the tab shown (a filtered tree's folder marks, counts and notes are of its files shown alone)
+function shownFile(path) {
+  const info = view.info.get(path) || {}, tab = view.screen.tabs[view.tab];
+  return info.t === 'f' && (!tab || !tab.groups.length || tab.groups.includes(info.g));
+}
+function isFiltered() { const tab = view.screen.tabs[view.tab]; return !!(tab && tab.groups.length); }
+
 function filesUnder(path) {
   const info = view.info.get(path) || {};
   if (info.t === 'f') return [path];
   const prefix = path === '.' ? '' : path + '/';
-  return view.items.filter(p => p.startsWith(prefix) && (view.info.get(p) || {}).t === 'f');
+  return view.items.filter(p => (path === '.' || p.startsWith(prefix)) && shownFile(p));
 }
 
 function checkNow(path, on, order) {
@@ -455,8 +487,10 @@ function markNow(path, name) {
   }
   const before = view.selected;
   view.selected = path === '.' ? '' : path;
-  redrawNow([path].concat(filesUnder(path)), before);
-  act('state', {paths: [path], name});
+  const files = filesUnder(path);
+  redrawNow([path].concat(files), before);
+  // (Filtered: the files shown, not the folder, whose hidden files stay as they are)
+  act('state', {paths: isFiltered() && files[0] !== path ? files : [path], name});
   act('select', {path: view.selected});
 }
 
@@ -693,8 +727,7 @@ function rootRow(sides) {
     el('span', {class: 'roottwisty'}, '▾'),
     el('button', {class: 'mark rootmark', id: 'rootmark', title: 'All the files: the next mark', onclick: event => {
       event.stopPropagation();
-      const next = nextState('.');
-      act('select', {path: ''}).then(() => act('state', {paths: ['.'], name: next}));
+      markNow('.', nextState('.'));
     }}),
     box(a), el('span', {class: 'pairarrows'}), box(b));
 }
@@ -752,7 +785,7 @@ function plannedCounts(path) {
   const prefix = path === '.' ? '' : path + '/';
   for (const p of view.items) {
     const info = view.info.get(p);
-    if (info.t !== 'f' || !p.startsWith(prefix)) continue;
+    if (!shownFile(p) || !p.startsWith(prefix)) continue;
     const kind = plannedKind(info.g, info.st);
     if (!kind) continue;
     const key = kind + '|' + (info.st === 'to-b' ? 1 : 0);
@@ -956,16 +989,14 @@ function stateMark(path) {
   };
   const info = view.info.get(path) || {};
   if (info.t === 'f') return markOf(info.st || screen.states[0].name, info.g || '');
-  const names = new Set(view.items.filter(p => (p.startsWith(path === '.' ? '' : path + '/')) && view.info.get(p).t === 'f')
-    .map(p => view.info.get(p).st || screen.states[0].name));
+  const names = new Set(filesUnder(path).map(p => view.info.get(p).st || screen.states[0].name));
   return names.size === 1 ? markOf([...names][0], '') : {mark: '·', color: 'grey'};
 }
 
 function nextState(path) {
   const screen = view.screen;
   const names = screen.states.map(s => s.name);
-  const files = path === '.' || (view.info.get(path) || {}).t !== 'f'
-    ? view.items.filter(p => view.info.get(p).t === 'f' && (path === '.' || p.startsWith(path + '/'))) : [path];
+  const files = filesUnder(path);
   if (!files.length) return names[0];
   const first = view.info.get(files[0]);
   const allowed = first.a && first.a.length ? first.a : names;
@@ -1169,7 +1200,7 @@ function renderSide() {
 const GENERAL_KEYS = new Set(['i', '?']);
 // Keys the page has no button for: the menu (:) lists what's selected can have done, each with its key, as the
 // buttons here do (with files picked, it's Enter's); the replicas dashboard (#) is the Replicas tab's
-const NO_BUTTON_KEYS = new Set([':', '#', 'Ctrl-T', 'g', 'Ctrl-Q', 'Ctrl-R']);  // (Ctrl-R: the ⟳ beside a tree's search)  // (Ctrl-Q: the combined tree's Back, keeping its marks, quitScreen())  // (g: the diff's Merge..., diffToggle())  // (Ctrl-T: the diff's views, in its title, diffToggle())
+const NO_BUTTON_KEYS = new Set([':', '#', 'Ctrl-T', 'g', 'Ctrl-Q', 'Ctrl-R', 'Ctrl-B']);  // (Ctrl-B: the view's switch, renderViewRow())  // (Ctrl-R: the ⟳ beside a tree's search)  // (Ctrl-Q: the combined tree's Back, keeping its marks, quitScreen())  // (g: the diff's Merge..., diffToggle())  // (Ctrl-T: the diff's views, in its title, diffToggle())
 // Keys whose buttons are shown only where they do something: exploring a zip on one, a diff's views on a diff
 const KEY_APPLIES = {
   'e': () => /\.zip$/i.test(view.selected || ''),
@@ -1254,7 +1285,9 @@ function renderPickerActions() {
     let label = [what + ' ', screen.multi ? '' : targetChip(screen, selected)];
     // (A tree of states: what Enter does next is showing the plan of what's marked, to confirm)
     const marked = screen.states.length ? markedCount() : 0;
-    if (screen.states.length) label = marked ? 'Review plan (' + marked + ')' : 'Nothing marked yet';
+    // (The plan is of all the marked files: the ones the filter hides said apart)
+    const hidden = marked && isFiltered() ? marked - markedCount(shownFile) : 0;
+    if (screen.states.length) label = marked ? 'Review plan (' + marked + (hidden ? ', ' + hidden + ' not shown' : '') + ')' : 'Nothing marked yet';
     // (With nothing checked it's off: what it acts on is the checked files, an empty set then, never the selection,
     // which the terminal's Enter takes then, but which surprised: the whole tree, with the top selected)
     else if (screen.multi) label = view.picked.size ? [what + ' with ', targetChip(screen, selected)] : 'Check files first';
@@ -1332,9 +1365,9 @@ function markRow(screen) {
 }
 
 // How many files are marked (in a state but the first, "leave as is")
-function markedCount() {
+function markedCount(only = () => true) {
   const first = view.screen.states[0].name;
-  return view.items.filter(path => { const info = view.info.get(path); return info.t === 'f' && info.st && info.st !== first; }).length;
+  return view.items.filter(path => { const info = view.info.get(path); return info.t === 'f' && info.st && info.st !== first && only(path); }).length;
 }
 
 // A mark's button, named for what it does to the selection: on a file, what its arrow will do ("⇒ Copy to D");

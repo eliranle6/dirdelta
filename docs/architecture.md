@@ -207,6 +207,7 @@ The map (each module's docstring's first line; generated from the code):
   - `link.py`: Handing the user a page's address, to open on their phone: on a screen as a QR code to scan, and in an email to them (share())
   - `qr.py`: A QR code drawn in the terminal (lines()), to scan from the screen with a phone's camera: in half blocks, two of its rows a line, so it's about square
 - `sync/`: Sync mode: the menu of a pair of replicas, its two ways, and what it does to the replicas
+  - `view.py`, `viewing.py`, `bothsides.py`: The sync's one screen of its differences, which files and how they're chosen apart (see "The sync's views")
   - `combined/`: The combined tree of a sync (CombinedSync): everything that differs in one tree, each file in a state, one plan
     - `ai_showing.py`: What's shown of the AI's suggestions, as the sort shows Claude's: a tag after a file's name, the status, the recommendation in the right column (a file's, a dir's)
     - `ask_ai.py`: Asking AI: a, what the user types, whose plan's steps set the arrows; Ctrl-I, the selection's files, in the background (suggestions.py); Ctrl-A, setting the arrows it suggests in the tree that's shown (picker.Stated, treepicker's state= update)
@@ -892,6 +893,23 @@ it, moves the old one to the trash (`gio trash`), then renames the copy over it;
 `_upload()` with the file's id does `files.update` with the new media (a new version). Either tells
 its listeners remove then add. Copy back (`COPY_BACK`, "Replace it with its version in B") is the
 same into src (`_copy_back()`); which were done is what an `_Added` listener heard.
+
+### The sync's views: `sync/view.py`, `sync/viewing.py`, `sync/bothsides.py`
+
+The sync menu has one entry for the differences, Sync (2026-11-21; before, the combined tree and "one kind at a time":
+each side's files, and the ones that differ, apart). It shows them in one screen, seen two ways chosen apart
+(`view.py`): which files (All, Only in A, Only in B, Differ, Moved) and how they're chosen: Plan, the combined tree
+below (each marked ⇒ ⇐, the plan done in one go), or Act, checked and acted on at once: one side's files tree
+(`sync/way/`, an `Action`'s) for Only in A, Only in B and Differ, and both sides' files at once (`BothSides`) for All
+and Moved, its menu copying each checked file to where it's missing, removing each from where it is, or moving the moved
+ones to match, as one plan (`combined/confirming.py`'s confirmation, `doing.do()`). `SyncMenu.sync_view()` (`viewing.py`)
+shows a view, and the next: each of the trees has `view.SWITCH_KEY` (Ctrl-B), which ends it asking for another view,
+the web page's (`/api/act`'s press with a `view`, kept as the session's `view_request`, `view.requested()`), else the
+other mode; the plan's tree and both sides' are shown again after they've done something, while anything still differs.
+The page is told the view shown and the scopes there are (`view.show()`, the session's `sync_view`, sent with a tree
+that has the switch key) and shows them as the tree's header: Show [the files ▾] and ⇒⇐ Plan | ✓ Act (`renderViewRow()`);
+in Plan the dropdown filters the tree there (a folder's mark then marks its files shown alone, and Review plan says how many marked ones are hidden), in Act it asks for that view; an Act side's Only in shows the files missing alone (the ones that differ are Differ's), its moved ones too, counted there. The moved files are found only for the
+views that show them (finding them builds both replicas' indexes).
 
 ### `sync/combined/` (plan C)
 `CombinedSync(replica_a, replica_b, path_a, path_b, only_a, only_b, changes)`, run from the sync menu's

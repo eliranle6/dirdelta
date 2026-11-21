@@ -4,6 +4,7 @@ screen's Continue or answer, Stop, and starting dirdelta's start menu)"""
 from dirdelta.known import replicanames
 from dirdelta.known import replicas as known_replicas
 from dirdelta.trees import paths
+from dirdelta.sync.view import SWITCH_KEY
 from dirdelta.util import dryrun
 from dirdelta.web import server
 from dirdelta.web.picker import PickerScreen
@@ -38,6 +39,9 @@ def routes(session, start_flow):
             found['screen']['labels'] = with_mode_now(found['screen'].get('labels') or [])
             if session.replicas:
                 found['screen']['replicas'] = replicas_shown(session.replicas)
+            # (Only a tree that can switch the view: a sync's plan, its sides' or both sides' files, not a folder chooser)
+            if isinstance(screen, PickerScreen) and session.sync_view and SWITCH_KEY in screen.spec.expect:
+                found['screen']['syncView'] = session.sync_view
             if is_new and isinstance(screen, PickerScreen):
                 found['screen']['items'] = screen.items.listed()
         return found
@@ -69,6 +73,9 @@ def routes(session, start_flow):
         elif screen.kind == 'merge':
             screen.act(body.get('merge') or {})
         else:
+            # (A sync's switch: the view asked for with it, which the flow reads as the key ends its tree, view.py)
+            if action == 'press' and isinstance(body.get('view'), dict):
+                session.view_request = body['view']
             _act_on_picker(screen, action, body)
         return {'ok': True}
 

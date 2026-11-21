@@ -13,6 +13,7 @@ from dirdelta.screens import archive_screen
 from dirdelta.screens import hashes_screen
 from dirdelta.sync import comparing
 from dirdelta.sync import replica_ops
+from dirdelta.sync import view
 from dirdelta.sync.combined import diffview
 from dirdelta.sync.combined import versions
 from dirdelta.ui import contextmenu
@@ -40,12 +41,13 @@ class Picking(object):
         header = ("%s has other versions of these. Check some, then choose what to do with them." % (dst_name,)
                   if self._only_differing else
                   "%s lacks these. Check some, then choose what to do with them." % (dst_name,))
-        keys = self.REFRESH_KEY + hashes_screen.KEY + aiplan_screen.KEY + contextmenu.KEY + archive_screen.KEY + self.MERGE_KEY
+        # (And the key that ends it asking for another view of the differences: view.py)
+        keys = self.REFRESH_KEY + hashes_screen.KEY + aiplan_screen.KEY + contextmenu.KEY + archive_screen.KEY + self.MERGE_KEY + view.SWITCH_KEY
         # (In the browser, what's done to the selection is in Enter's menu, a panel over the tree, all of it:
         # no buttons for those keys beside it)
         if frontend.current is not None:
             # (And reading the files anew: the page's ⟳ beside the search)
-            keys = hashes_screen.KEY + contextmenu.KEY + self.MERGE_KEY + self.REFRESH_KEY
+            keys = hashes_screen.KEY + contextmenu.KEY + self.MERGE_KEY + self.REFRESH_KEY + view.SWITCH_KEY
         # The keys row has little room: the rest are in the menu (:), and ?
         key_hints = [('Enter', 'choose what to do'), contextmenu.KEY_HINT]
         # The keys that aren't in the keys row, by what they're about, for ?

@@ -713,3 +713,16 @@ button[class*="tone-"]:disabled { color: var(--disabled); }
 .searchrow { display: flex; gap: 6px; align-items: center; }
 .searchrow > #search { flex: 1 1 auto; min-width: 0; }
 .searchrow > .reread { flex: none; padding: 6px 10px; display: inline-flex; }
+/* A sync's view: Plan ⇒⇐ | Act ✓, joined, the one shown on */
+.modeswitch { display: inline-flex; flex: none; }
+.modeswitch > button { border-radius: 0; margin: 0; white-space: nowrap; }
+.modeswitch > button:first-child { border-radius: 8px 0 0 8px; }
+.modeswitch > button:last-child { border-radius: 0 8px 8px 0; border-left: 0; }
+.modeswitch > button.on { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
+.tabs.tabselect { display: flex; align-items: center; gap: 8px; flex-wrap: nowrap; }
+@media (max-width: 600px) { .modeswitch .modeword { display: none; } }
+/* The view's row shrinks its dropdown, never the switch or the 🔍 beside it, so none of them overlaps another */
+#pickertabs.tabselect { flex: 1 1 auto; min-width: 0; }
+.tabs.tabselect label { min-width: 0; flex: 1 1 auto; display: flex; align-items: center; gap: 4px; }
+.tabs.tabselect select { min-width: 0; flex: 1 1 auto; max-width: 100%; text-overflow: ellipsis; }
+.statehead .searchtoggle { flex: none; }

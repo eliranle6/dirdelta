@@ -2,6 +2,7 @@
 from dirdelta.screens import aiplan_screen
 from dirdelta.screens import hashes_screen
 from dirdelta.sync import replica_ops
+from dirdelta.sync import view
 from dirdelta.sync.way.picking import Picking
 from dirdelta.ui import contextmenu
 from dirdelta.ui import filescreen
@@ -29,6 +30,10 @@ class Browsing(Picking):
             shown_before = missing
             chosen, only_missing = self._pick(screen, missing, picked, selected, side_start)
             if chosen is None:
+                return
+            if chosen.key == view.SWITCH_KEY:
+                # Another view of the differences asked for (the page's, else all of them, planned): viewing.py
+                self.switch = view.requested(view.ALL, view.ACT)
                 return
             selected = chosen.selected
             side_start = chosen.side_selected if chosen.key == picker.SIDE_KEY else None

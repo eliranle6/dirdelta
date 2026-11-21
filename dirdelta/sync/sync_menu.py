@@ -15,6 +15,8 @@ from dirdelta.screens import hashes_screen
 from dirdelta.sync import comparing
 from dirdelta.sync import replica_ops
 from dirdelta.sync import combined
+from dirdelta.sync import view
+from dirdelta.sync import viewing
 from dirdelta.sync.options import STATE, STATE_POINTS, SYNC_ALL, Action, state_lines, sync_all_shown_as
 from dirdelta.sync.ways import DIFFER, Way, find_all, find_differing
 from dirdelta.trees import localdiskdirtree
@@ -30,12 +32,11 @@ BACK = "End the sync"
 # the differences, a kind of them at a time, what makes the comparison up to date, and the pair's
 # own things
 SYNC_SECTION = '\u2500\u2500 Sync \u2500\u2500'
-KINDS_SECTION = '\u2500\u2500 Or one kind of difference at a time \u2500\u2500'
 UPDATE_SECTION = '\u2500\u2500 Bring the comparison up to date \u2500\u2500'
 PAIR_SECTION = '\u2500\u2500 This pair \u2500\u2500'
 
 
-class SyncMenu(object):
+class SyncMenu(viewing.Viewing):
     """The main menu of a sync of replica_a and replica_b (at their paths), until the user goes back.
     With known_replicas (a Replicas, saved when changed), it also makes the pair a favorite, or not.
     changes: where the files changed live are noted (a log_entries.Changes), if anywhere."""
@@ -58,10 +59,13 @@ class SyncMenu(object):
         self.indexes = {replica: elsewhere.Index(replica) for replica in (self.replica_a, self.replica_b)}
         self.ways = [Way(self.replica_a, self.replica_b, self.indexes), Way(self.replica_b, self.replica_a, self.indexes)]
         self.actions = {}
-        for way, src_path, dst_path in ((self.ways[0], self.replica_a_path, self.replica_b_path),
-                                        (self.ways[1], self.replica_b_path, self.replica_a_path)):
+        self.action_labels = {}
+        for way, src_path, dst_path, scope in ((self.ways[0], self.replica_a_path, self.replica_b_path, view.ONLY_A),
+                                               (self.ways[1], self.replica_b_path, self.replica_a_path, view.ONLY_B)):
             label = "Files only in %s" % (src_path,)
             self.actions[label] = Action(src_path, dst_path, way, self.changes)
+            self.action_labels[scope] = label
+        self.action_labels[view.DIFFER] = DIFFER
         # The files both have that differ (differing.py), alone, a's way (Copy replaces b's, Copy back a's)
         self.actions[DIFFER] = Action(self.replica_a_path, self.replica_b_path, self.ways[0], self.changes, only_differing=True)
         # A cloud replica's folder can be read anew from Drive, if Drive changed since the cache was made
@@ -99,8 +103,8 @@ class SyncMenu(object):
                 favorite_options = [self.REMOVE_FAVORITE if is_favorite else self.ADD_FAVORITE]
             options = picker.grouped([
                 [picker.Option(line, line, picker.Skipped(line)) for line in (STATE,) + STATE_POINTS],
+                # (One entry: which files, and how they're chosen, are chosen in it: view.py)
                 [picker.Skipped(SYNC_SECTION), SYNC_ALL],
-                [picker.Skipped(KINDS_SECTION)] + list(self.actions),
                 [picker.Skipped(UPDATE_SECTION), comparing.COMPARE] + list(self.rescans) + list(self.refreshes) +
                 ([hashes_screen.CHOOSE_TITLE] if self.jobs else []),
                 # (In the browser the Replicas tab is the dashboard, where they're named too)
@@ -161,52 +165,13 @@ class SyncMenu(object):
                 self._find_all()
             return
         if option == SYNC_ALL:
-            # Done (something changed): the tree again, of what still differs, until nothing does or the user
-            # goes back to the menu
-            while self._sync_all():
-                self._find_all()
-                for job in self.jobs:
-                    job.scan_in_background()
-                if not self._still_differ():
-                    return
+            # Its differences in one screen, in the view chosen there (viewing.py), until the user goes back
+            self.sync_view()
             return
-        # Copying, removing and renaming change the files (unless it's a dry run), and so what each
-        # lacks, and so does reading a replica anew from Drive (in the file picker)
-        if self.actions[option].run():
-            for way in self.ways:
-                # The way shown cleared its own; its files may have other contents for this one too
-                if self.actions[option].was_read_anew:
-                    way.checked.clear()
-            if self.actions[option].was_read_anew:
-                self.compared.clear()
-            self._find_all()
-            # Files copied into a local replica (or moved in it) are hashed too
-            for job in self.jobs:
-                job.scan_in_background()
-
-    def _sync_all(self):
-        """The combined tree (see sync/combined/); returns whether the replicas' files changed"""
-        try:
-            missing = [way.missing.result() for way in self.ways]
-            changes = self.ways[0].differs.result()
-        except Exception as error:
-            messages.show("Couldn't compare them", [str(error)], dryrun.label(), 'red')
-            return False
-        # (Both ways may say the same)
-        warnings = list(dict.fromkeys(line for found in missing for line in (found.warning or [])))
-        if warnings:
-            messages.show("Warning: couldn't read everything", warnings, dryrun.label(), 'red')
-        # The moved files, by the hashes known (or what was compared before): nothing's read
-        messages.print_line("Finding the moved files...")
-        moved = combined.find_moved(missing[0].relpaths, missing[1].relpaths, self.replica_a,
-                                    self.indexes[self.replica_a], self.indexes[self.replica_b], self.ways[0].checked)
-        sync = combined.CombinedSync(self.replica_a, self.replica_b, self.replica_a_path, self.replica_b_path,
-                                     missing[0].relpaths, missing[1].relpaths, changes, self.changes, moved,
-                                     chosen=self.combined_chosen)
-        with picker.place("Sync"):
-            changed = sync.run()
-        self.combined_chosen = {} if changed else sync.chosen
-        return changed
+        # (One side's files tree, by its label: opened by its view, ACT, in the sync's screen; not offered in the menu)
+        scope = next((scope for scope, label in self.action_labels.items() if label == option), None)
+        if scope is not None:
+            self.sync_view(scope, view.ACT)
 
     def _still_differ(self):
         """Whether the replicas still differ, once each way's found again (False if that failed)"""

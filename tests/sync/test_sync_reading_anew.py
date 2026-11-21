@@ -3,6 +3,7 @@ import unittest
 from unittest import mock
 
 import helpers
+from dirdelta.sync import view
 from dirdelta.drive import clouddirtree
 from dirdelta.hashes import hashing
 from dirdelta.trees import dirtree
@@ -46,7 +47,7 @@ class RefreshKeyTest(unittest.TestCase):
         # Its files by name are listed again, when they're next needed
         self.assertFalse(self.sync.src_index.is_built())
         # And the replicas dashboard's
-        self.assertEqual(calls[0].kwargs['keys'], Sync.REFRESH_KEY + '#a:eg')
+        self.assertEqual(calls[0].kwargs['keys'], Sync.REFRESH_KEY + '#a:eg' + view.SWITCH_KEY)
         self.assertIn("  %-17s%s" % ('Ctrl-R', 'read the folder anew from Drive'), calls[0].kwargs['help_lines'])
         self.assertIsNone(calls[0].kwargs['selected'])
         # What's still missing, what's still picked of it, where it was
@@ -80,7 +81,7 @@ class RefreshKeyTest(unittest.TestCase):
         self.assertEqual(listed.call_count, 3)
         self.assertEqual(len(calls), 4)
         self.refresh.assert_not_called()
-        self.assertEqual(calls[0].kwargs['keys'], Sync.REFRESH_KEY + '#a:eg')
+        self.assertEqual(calls[0].kwargs['keys'], Sync.REFRESH_KEY + '#a:eg' + view.SWITCH_KEY)
         self.assertIn(Sync.REFRESH_KEY, calls[0].kwargs['side'].keys)
         self.assertEqual(calls[1].kwargs['picked'], ['a.mp3'])
         # After the key in the side tree, it's where the picker starts; only then

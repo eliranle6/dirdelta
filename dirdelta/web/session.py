@@ -36,6 +36,10 @@ class Session(object):
         self.what = None
         # The two replicas the flow's screens are about, as it says (frontend.show_replicas()): [(path, name)] or None
         self.replicas = None
+        # A sync's view of its differences, as the flow says it (sync/view.py's show()), and the one the page asked for
+        # with its switch (view.requested())
+        self.sync_view = None
+        self.view_request = None
 
     # Changes, and waiting for them
 
@@ -96,6 +100,7 @@ class Session(object):
         self.tab = tab
         self.what = what
         self.replicas = None
+        self.sync_view = self.view_request = None
         self.user = users.current()
         self._flow = threading.Thread(target=self._run, args=(flow,), daemon=True)
         self._flow.start()

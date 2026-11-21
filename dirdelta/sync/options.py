@@ -96,6 +96,9 @@ class Action(object):
         self.way = way
         self.changes = changes
         self.only_differing = only_differing
+        # (Whether its tree shows the files that differ too: not in the sync's Only in view, viewing.py)
+        self.with_differing = True
+        self.switch = None
 
     def shown_as(self):
         """The label, with how many files it's about, or that they're still being found. With none,
@@ -139,10 +142,12 @@ class Action(object):
         sync = interactive_dir_sync.InteractiveDirSync(way.src, way.dst, way.missing,
                                                        way.indexes[way.src], way.indexes[way.dst],
                                                        way.checked, self.changes, way.differs,
-                                                       self.only_differing, way.compared)
+                                                       self.only_differing, way.compared, with_differing=self.with_differing)
         # (Named for what it shows: e.g. 'Only in laptop', the files the other lacks)
         only_in = self._names()[self.src_path]
         with picker.place(DIFFER if self.only_differing else "Only in %s" % (only_in,)):
             sync.browse()
         self.was_read_anew = sync.was_read_anew
+        # (The view its switch asked for, if it ended so: viewing.py)
+        self.switch = sync.switch
         return sync.has_changed

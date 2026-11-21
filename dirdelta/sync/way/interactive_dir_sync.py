@@ -64,7 +64,7 @@ class InteractiveDirSync(Browsing, Keys, Lists, Menu, Copying, Merging, AskAI, R
     SIDE_REMOVE_KEY = 'd'
 
     def __init__(self, src, dst, missing=None, src_index=None, dst_index=None, checked=None, changes=None,
-                 differs=None, only_differing=False, compared=None):
+                 differs=None, only_differing=False, compared=None, with_differing=True):
         """missing: a future (concurrent.futures.Future) of find_missing(src, dst), e.g. found in
         the background, to use rather than finding it again; differs, likewise, of
         differing.find(src, dst). With only_differing, only the files that differ are shown. src_index, dst_index: the replicas'
@@ -77,6 +77,8 @@ class InteractiveDirSync(Browsing, Keys, Lists, Menu, Copying, Merging, AskAI, R
         self._missing_future = missing
         self._differs_future = differs
         self._only_differing = only_differing
+        # (Without with_differing, the files missing alone: the sync's Only in view, the ones that differ in a view of their own)
+        self._with_differing = with_differing or only_differing
         self._compared = compared
         # The files shown that differ ({relpath: differing.Change}), as of the last diff
         self.differs = {}
@@ -96,6 +98,8 @@ class InteractiveDirSync(Browsing, Keys, Lists, Menu, Copying, Merging, AskAI, R
         # Whether a replica was read anew: what's known of its files' contents may be wrong, also
         # the other way's (dirsync_main)
         self.was_read_anew = False
+        # The view of the differences its switch asked for, if it ended so (view.py), else None
+        self.switch = None
         # Opens src's files (Ctrl-X, or Open in the action menu)
         self._opener = opening.Opener(src)
         # What the AI was last asked (see _ask_ai()), to start from next time
