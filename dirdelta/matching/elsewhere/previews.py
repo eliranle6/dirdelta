@@ -13,24 +13,31 @@ from dirdelta.ui import picker
 HASHED_INTERVAL = 1
 
 
-def find_previews(relpaths, src, index, send, checked=None, src_index=None):
+def find_previews(relpaths, src, index, send, checked=None, src_index=None, on_status=None):
     """Find, for each of src's files at relpaths (which the other replica, index's, lacks at those
     paths), where the other replica may have it, and send() them (picker.pick_files()'s previews)
     as they're found (see preview_of()). Until a file's are sent, the picker shows how far it's got:
     building the index (if it isn't), then matching. Then, while either replica is being hashed
     (hashing.py), send again the previews of the files that it changes: the ones hashed, and the
     ones of the hash of a file of index's hashed. Lets picker.PickerClosed go up, once the picker is
-    gone. checked, src_index: as _Matcher's."""
+    gone. checked, src_index: as _Matcher's. on_status, if given, is told how far it's got, a text (None once
+    it's done), rather than the previews saying it: the picker's status bar says it then, not the column
+    that's about the selection."""
     dst_name = index.replica.displayname()
-    # (A status, in grey, by the replica's one name: e.g. "Finding where Grey HD has them: 4,223 of its files listed")
+    # (By the replica's one name: e.g. "Finding where Grey HD has them: 4,223 of its files listed...")
     title = "Finding where %s has them" % (replicanames.name(dst_name),)
 
-    def status(how_far):
-        return [picker.styled([("%s: %s..." % (title, how_far), 'grey')])]
+    def status(how_far, files=None):
+        text = "%s: %s..." % (title, how_far) if how_far else None
+        if on_status is not None:
+            on_status(text)
+            send(files or {}, default=[])
+        elif text is not None:
+            send(files or {}, default=[picker.styled([(text, 'grey')])])
     is_due = _Throttle(SEND_INTERVAL)
-    send(default=status("listing its files"))
+    status("listing its files")
     try:
-        index.build(lambda count: is_due() and send(default=status("{:,} of its files listed".format(count))))
+        index.build(lambda count: is_due() and status("{:,} of its files listed".format(count)))
         matcher = Matcher(relpaths, src, index, checked, src_index)
         if src_index is not None:
             # What's hashed from now on changes the previews (what was is in them)
@@ -40,11 +47,13 @@ def find_previews(relpaths, src, index, send, checked=None, src_index=None):
         for i, relpath in enumerate(relpaths):
             found[relpath] = preview_of(relpath, src, dst_name, matcher)
             if is_due():
-                send(found, default=status("{:,} of {:,} files matched".format(i + 1, len(relpaths))))
+                status("{:,} of {:,} files matched".format(i + 1, len(relpaths)), found)
                 found = {}
     except (OSError, ValueError) as error:
+        status(None)
         send(default=["Couldn't find where %s has them:" % (replicanames.name(dst_name),), str(error)])
         return
+    status(None)
     # Dirs show nothing
     send(found, default=[])
     if src_index is None or (src_index.job() is None and index.job() is None):

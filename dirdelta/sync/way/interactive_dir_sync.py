@@ -82,6 +82,8 @@ class InteractiveDirSync(Browsing, Keys, Lists, Menu, Copying, Merging, AskAI, R
         # The action menu's last action done (see browse())
         self._last_action = None
         self.checked = checked if checked is not None else {}
+        # How far finding where dst has the missing files got, for the status bar (None: done; see lists.py)
+        self.finding = None
         # Where what's changed live is noted (a log_entries.Changes, by the replicas' displaynames),
         # for the entries of their logs, if anywhere
         self.changes = changes

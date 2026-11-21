@@ -58,6 +58,14 @@ class FindPreviewsTest(unittest.TestCase):
         self.assertEqual(sent.defaults[-1], [])
         self.assertEqual(sorted(sent.previews), ['a', 'b'])
 
+    def test_how_far_it_got_can_go_to_the_status_bar_not_the_previews(self):
+        src = SizedTree('/src', {'a': 1, 'b': 1})
+        said = []
+        sent = previews_of(['a', 'b'], src, SizedTree('/dst', {}), on_status=said.append)
+        self.assertEqual(said[0], "Finding where LocalDisk has them: listing its files...")
+        self.assertIsNone(said[-1])
+        self.assertTrue(all(default == [] for default in sent.defaults))
+
     def test_stops_when_the_picker_is_gone(self):
         def send(found=None, default=None):
             raise picker.PickerClosed()

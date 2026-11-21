@@ -81,6 +81,9 @@ class Picking(object):
             """The hashing tags (Marks), the downloads' to open the files (opening.py), and the
             files that differ's (differing.py)"""
             shown = marks() if marks is not None else {'': picker.segments(self._opener.status_parts())}
+            # How far finding where dst has them got, first on the status bar (not in the column about the selection)
+            if self.finding:
+                shown[''] = picker.segments([(self.finding, 'grey'), ('   ', None)]) + shown.get('', '')
 
             def name_of(relpath):
                 return marks.text(relpath) if marks is not None else os.path.basename(relpath)

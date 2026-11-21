@@ -105,7 +105,11 @@ class Lists(object):
             send(default=[])
             return
         elsewhere.find_previews(missing, self._src, self.dst_index, send, checked=self.checked,
-                                src_index=self.src_index)
+                                src_index=self.src_index, on_status=self._set_finding)
+
+    def _set_finding(self, text):
+        """How far finding where dst has the files got (None: done), for the status bar (see picking.py)"""
+        self.finding = text
 
     def _missing(self):
         """The relpaths of src's files that dst lacks (see replica_ops.find_missing()), warning if scanning

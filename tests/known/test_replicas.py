@@ -58,6 +58,23 @@ class ReplicasTest(unittest.TestCase):
 
 
 class ReplicasFileLabelsTest(unittest.TestCase):
+    def test_a_name_given_while_a_sync_goes_on_stays_when_the_sync_saves(self):
+        # The sync loaded the file before; the web page names a replica; the sync saves what it compared
+        with tempfile.TemporaryDirectory() as tmpdir, mock.patch('dirdelta.known.replicas.REPLICAS_FILE',
+                                                                 os.path.join(tmpdir, 'replicas.json')):
+            replicas.save(replicas.Replicas(history=[('/a', '/b')]))
+            sync = replicas.load()
+            page = replicas.load()
+            page.set_label('uuid:1', 'laptop')
+            replicas.save(page)
+            sync.note_compared('/a', '/b', 1, 2, datetime.datetime(2026, 11, 21, 9, 0))
+            replicas.save(sync)
+            found = replicas.load()
+            self.assertEqual(found.labels, {'uuid:1': 'laptop'})
+            self.assertEqual(found.comparison('/a', '/b')['only'], [1, 2])
+            # (And the sync has it too, so its next save keeps it)
+            self.assertEqual(sync.labels, {'uuid:1': 'laptop'})
+
     def test_labels_are_kept(self):
         with tempfile.TemporaryDirectory() as tmpdir, mock.patch('dirdelta.known.replicas.REPLICAS_FILE',
                                                                  os.path.join(tmpdir, 'replicas.json')):

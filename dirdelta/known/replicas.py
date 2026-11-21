@@ -12,8 +12,10 @@ last used. Local paths are kept absolute and cloud ones cleaned (see normalized(
 typed twice differently is one pair.
 
 The file is this module's (load(), save()); what's kept in it is replica_history.py's."""
+import copy
 import json
 import os
+import threading
 
 from dirdelta.known import users
 from dirdelta.known.replica_history import Replicas, pair_of, normalized
@@ -27,36 +29,71 @@ class ReplicasError(Exception):
     pass
 
 
+# (One save at a time: each reads the file, then writes it)
+_saving = threading.Lock()
+
+
 def replicas_file():
     """The current user's file"""
     return users.own(REPLICAS_FILE)
 
 
 def load():
-    """The current user's Replicas (none if there's no file yet)"""
+    """The current user's Replicas (none if there's no file yet), knowing what the file had (see save())"""
     path = replicas_file()
     try:
         with open(path) as opened:
             content = json.load(opened)
-        return Replicas(_pairs(content.get('history', [])), _pairs(content.get('favorites', [])),
-                        _pairs(content.get('sorts', [])), _recent_dirs(content.get('recent_dirs', {})),
-                        _known(content.get('known', {})), _compared(content.get('compared', [])),
-                        {str(key): str(label) for key, label in content.get('labels', {}).items()},
-                        _followers(content.get('followers', {})), _paths(content.get('replicas', [])),
-                        _paths(content.get('inboxes', [])),
-                        {str(key): dict(look) for key, look in content.get('looks', {}).items() if isinstance(look, dict)},
-                        content.get('main') or None, _pairs(content.get('pairs', [])))
+        found = _from(content)
     except FileNotFoundError:
-        return Replicas()
+        found = Replicas()
     except (OSError, ValueError, AttributeError, TypeError) as error:
         # Not overwritten with an empty one: it may be favorites edited by hand, with a typo
         raise ReplicasError("Cannot read %s (fix or remove it): %s" % (path, error))
+    found.as_read = copy.deepcopy(_content(found))
+    return found
+
+
+def _from(content):
+    """The Replicas of what the file has (content, its JSON)"""
+    return Replicas(_pairs(content.get('history', [])), _pairs(content.get('favorites', [])),
+                    _pairs(content.get('sorts', [])), _recent_dirs(content.get('recent_dirs', {})),
+                    _known(content.get('known', {})), _compared(content.get('compared', [])),
+                    {str(key): str(label) for key, label in content.get('labels', {}).items()},
+                    _followers(content.get('followers', {})), _paths(content.get('replicas', [])),
+                    _paths(content.get('inboxes', [])),
+                    {str(key): dict(look) for key, look in content.get('looks', {}).items() if isinstance(look, dict)},
+                    content.get('main') or None, _pairs(content.get('pairs', [])))
 
 
 def save(replicas):
-    """Write replicas to the current user's file, replacing it at once (so it's never half-written)"""
+    """Write replicas to the current user's file, replacing it at once (so it's never half-written). What it
+    didn't change since it was loaded is the file's as it is now: what another one saved meanwhile stays (e.g. a
+    replica named on the web page while a sync that loaded the file before goes on, and saves what it compared)"""
     path = replicas_file()
-    content = {'favorites': [list(pair) for pair in replicas.favorites],
+    with _saving:
+        content = _content(replicas)
+        as_read = getattr(replicas, 'as_read', None)
+        if as_read is not None:
+            try:
+                with open(path) as opened:
+                    now = _content(_from(json.load(opened)))
+            except FileNotFoundError:
+                now = None
+            except (OSError, ValueError, AttributeError, TypeError) as error:
+                raise ReplicasError("Cannot read %s (fix or remove it): %s" % (path, error))
+            if now is not None:
+                content = {key: now[key] if value == as_read.get(key) else value for key, value in content.items()}
+                # (And it has them too, from now on)
+                replicas.__dict__.update(_from(content).__dict__)
+        _write(path, content)
+        # (A copy: what it has changes as it's changed)
+        replicas.as_read = copy.deepcopy(content)
+
+
+def _content(replicas):
+    """What the file has of replicas (its JSON)"""
+    return {'favorites': [list(pair) for pair in replicas.favorites],
                'history': [list(pair) for pair in replicas.history],
                'sorts': [list(pair) for pair in replicas.sorts],
                'recent_dirs': replicas.recent_dirs,
@@ -69,6 +106,9 @@ def save(replicas):
                'looks': replicas.looks,
                'main': replicas.main_replica,
                'pairs': [list(pair) for pair in replicas.extra_pairs]}
+
+
+def _write(path, content):
     try:
         os.makedirs(os.path.dirname(path), exist_ok=True)
         temp_path = path + '.tmp'

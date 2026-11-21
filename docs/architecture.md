@@ -366,7 +366,7 @@ changes the system, not files), never done without asking.
 
 ### `replicas.py` / `choose_replicas.py`
 `replicas.py` keeps the pairs of replicas synced (`history`, the latest
-first, at most `MAX_HISTORY`) and the favorite pairs, in
+first, at most `MAX_HISTORY`; a save keeps, of what its Replicas didn't change since it was loaded, the file's as it is now (`save()`, `as_read`), so a sync's save doesn't undo a replica named on the web page meanwhile, 2026-11-21) and the favorite pairs, in
 `~/.config/dirdelta/replicas.json` (`REPLICAS_FILE`; JSON, hand-editable,
 written whole with `os.replace`). A pair is the same either way around, and
 a pair used again moves to the top rather than being added twice. Paths are

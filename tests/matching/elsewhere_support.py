@@ -58,9 +58,9 @@ class Sent(object):
             self.defaults.append(default)
 
 
-def previews_of(relpaths, src, dst):
+def previews_of(relpaths, src, dst, on_status=None):
     sent = Sent()
-    elsewhere.find_previews(relpaths, src, elsewhere.Index(dst), sent)
+    elsewhere.find_previews(relpaths, src, elsewhere.Index(dst), sent, on_status=on_status)
     return sent
 
 
