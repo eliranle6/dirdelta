@@ -9,6 +9,7 @@ import time
 from dirdelta.hashes import hashing
 from dirdelta.known import replicanames
 from dirdelta.known import replicas
+from dirdelta.known.mounts import volumes
 from dirdelta.phoneimport import known, suggest
 from dirdelta.trees import paths
 from dirdelta.ui.picker import updates
@@ -155,9 +156,11 @@ def hash_state(root):
 
 
 def synced_with(path):
-    """The user's other replicas than the one at path (copies of one tree, see replica_lists.py)"""
+    """The user's other replicas than the one at path (copies of one tree, see replica_lists.py) that can be looked in
+    now: a disk that isn't mounted (at its placeholder, see volumes.py) isn't, nor said not to be there"""
     path = paths.normalized(path)
-    return [other for other in replicas.load().replica_paths() if other != path]
+    return [other for other in replicas.load().replica_paths() if other != path and
+            (paths.is_cloud_path(other) or (volumes.of_placeholder(other) is None and os.path.isdir(other)))]
 
 
 def destinations(source=None):

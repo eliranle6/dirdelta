@@ -9,7 +9,7 @@ import shutil
 import threading
 import time
 
-from dirdelta.phoneimport import store
+from dirdelta.phoneimport import sources, store
 from dirdelta.trees import paths
 
 SOURCES_DIR = 'sources'
@@ -81,9 +81,10 @@ class Pool(object):
                     _remove(self.local_path(relpath))
                     _remove(self.thumb_path(relpath))
                 self.files[relpath] = {'size': size, 'mtime': mtime, 'sha1': sha1, 'copied': False}
-            if is_whole:
-                for relpath in [relpath for relpath, info in self.files.items() if relpath not in listed and not info['copied']]:
-                    del self.files[relpath]
+            # (Not a photo or video, not copied: listed before such files were left out, e.g. audio)
+            for relpath in [relpath for relpath, info in self.files.items() if not info['copied'] and (
+                    (is_whole and relpath not in listed) or not sources.is_photo(os.path.basename(relpath)))]:
+                del self.files[relpath]
             self._tree = None
             self.listed_at = time.time()
             self.save()

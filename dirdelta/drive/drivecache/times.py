@@ -1,11 +1,15 @@
 """When each folder's list was last read from Drive, and uploaded to it; and whose Drive it is"""
 import json
 import os
+import threading
 import time
 
 from dirdelta.drive.drivecache import names
 from dirdelta.drive.drivecache.changes import clean_path
 from dirdelta.drive.drivecache.reading import is_at_or_under
+
+# (One change at a time: each reads the file, then writes it, so none is lost to another made meanwhile)
+_changing = threading.Lock()
 
 
 def _times_path():
@@ -31,7 +35,8 @@ def _times():
 
 
 def _save_times(times):
-    tmp_path = _times_path() + '.tmp'
+    # (A temporary file of this thread's own: two threads saving at once each replace the file whole)
+    tmp_path = '%s.%d.%d.tmp' % (_times_path(), os.getpid(), threading.get_ident())
     os.makedirs(os.path.dirname(tmp_path), exist_ok=True)
     with open(tmp_path, 'w') as times_file:
         json.dump(times, times_file, indent=1)
@@ -40,9 +45,10 @@ def _save_times(times):
 
 def note_user(name):
     """Note the Drive account's user name, to say it on the screens"""
-    times = _times()
-    times['user'] = name
-    _save_times(times)
+    with _changing:
+        times = _times()
+        times['user'] = name
+        _save_times(times)
 
 
 def user():
@@ -53,9 +59,10 @@ def user():
 def note_updated(folder_path, when=None):
     """Note that the cache has what's under folder_path (a path in Drive) as Drive had it at when
     (seconds since the epoch; default: now): read anew, or changed by dirdelta"""
-    times = _times()
-    times['updated'][clean_path(folder_path)] = time.time() if when is None else when
-    _save_times(times)
+    with _changing:
+        times = _times()
+        times['updated'][clean_path(folder_path)] = time.time() if when is None else when
+        _save_times(times)
 
 
 def updated(folder_path):
@@ -72,9 +79,10 @@ def note_uploaded(folder_path, modified, as_of):
     """Note that the copy of folder_path's list in Drive (see drivemeta.py) has Drive's modifiedTime
     modified, the one this cache made (or used), when the cache's list was updated as of as_of (see
     updated())"""
-    times = _times()
-    times['uploaded'][clean_path(folder_path)] = {'modified': modified, 'as_of': as_of}
-    _save_times(times)
+    with _changing:
+        times = _times()
+        times['uploaded'][clean_path(folder_path)] = {'modified': modified, 'as_of': as_of}
+        _save_times(times)
 
 
 def uploaded(folder_path):
