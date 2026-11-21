@@ -878,6 +878,7 @@ async function loadPreview() {
   box.replaceChildren(content.length ? el('div', {class: 'preview'}, content) : '');
   box.classList.toggle('max', !!view.previewMax && content.length > 0);
   colorNames(box);
+  if (document.querySelector('.barsteps')) updateSteps();
 }
 
 // The selection's details filling the screen (under the top bar), to read a long diff, or back in their place; it
@@ -1124,7 +1125,20 @@ function renderPickerActions() {
     isSyncFilesTree(screen) && actionsOpen() ? section('', quickActions(screen, selected), 'quick') : '',
     section(screen.mode === 'list' ? '' : 'On ' + selected, onSelection),
     section(screen.side ? 'In ' + screen.side.root : '', side), section('Misc', general));
+  placeSteps();
 }
+
+// The bottom bar's ︾ ︽ (a phone's): at the end of the main action's row, taking no row of their own; where there's
+// none (a messages screen), on the bar's top
+function placeSteps() {
+  const steps = document.querySelector('.barsteps');
+  if (!steps) return;
+  const main = document.querySelector('#actions > .actsec.main');
+  if (NARROW.matches && main) main.append(steps);
+  else if (steps.parentElement !== document.getElementById('bottom')) document.getElementById('bottom').prepend(steps);
+  updateSteps();
+}
+NARROW.addEventListener('change', placeSteps);
 
 // The selection's way in a sync's tree, in one short row (it fits a phone's 360px), in the bottom bar's part about the
 // selection, which names it: · Leave, ⇒ B, ⇐ A, each saying all of what it does as its tooltip (stateButtonLabel())
@@ -1217,6 +1231,7 @@ function renderMerge(screen, isNew) {
     el('button', {onclick: () => act('merge', {merge: {action: 'cancel'}})}, 'Cancel'),
     el('button', {class: 'primary', onclick: () => act('merge', {merge: {action: 'save', text: document.getElementById('mergeresult').value}})},
       'Save the merge to both')));
+  placeSteps();
 }
 
 function sameBlock(lines) {
@@ -1333,6 +1348,7 @@ function renderMessages(screen, isNew) {
   } else if (screen.waiting) buttons.push(el('button', {class: 'primary', onclick: () => act('continue')}, 'Continue'));
   else if (screen.stoppable) buttons.push(el('button', {onclick: () => act('stop')}, 'Stop'));
   document.getElementById('actions').replaceChildren(...buttons);
+  placeSteps();
   colorNames(main);
   if (!screen.asking) window.scrollTo(0, document.body.scrollHeight);
 }
@@ -1352,6 +1368,7 @@ function renderHome() {
     log.length ? el('div', {class: 'section-title'}, 'What the last run printed') : '', log.length ? el('div', {class: 'lines'}, log) : '');
   document.getElementById('status').replaceChildren();
   document.getElementById('actions').replaceChildren();
+  placeSteps();
 }
 
 function waitingDots() { return el('span', {class: 'dots', style: 'animation-delay:-' + (Date.now() % 1600) + 'ms'}); }
@@ -1403,24 +1420,52 @@ function setBarHeight(px) {
 // On a phone, the bottom bar's size in steps rather than dragged: hidden (only these buttons), its first row (the main
 // action), its first two (and what acts on the selection), three (and the selection's details), or all of it; kept for
 // this browser
-const BAR_LEVEL_KEY = 'dirdelta_bar_level', BAR_LEVELS = 5;
+// Its steps: gone (a floating ︽ brings it back), only ︾ ︽, the main action, the selection's row, its details, all
+const BAR_LEVEL_KEY = 'dirdelta_bar_level2', BAR_GONE = 0, BAR_LEVELS = 6;
+
+// The steps that show something the one before doesn't, on this screen (a step adding nothing is skipped)
+function barLevels() {
+  const found = [0, 1];
+  const main = document.querySelector('#actions > .main');
+  if (main && [...main.children].some(child => !child.classList.contains('barsteps'))) found.push(2);
+  if (document.querySelector('#actions > .main + *')) found.push(3);
+  const preview = document.getElementById('preview');
+  if (preview && preview.textContent.trim()) found.push(4);
+  if (document.querySelector('#actions > .main + * ~ *') || document.getElementById('status').textContent.trim()) found.push(5);
+  return found;
+}
+
 function setBarLevel(level) {
   const bottom = document.getElementById('bottom');
   level = Math.max(0, Math.min(BAR_LEVELS - 1, level));
   bottom.dataset.level = String(level);
-  bottom.querySelectorAll('.barsteps button').forEach(button => {
-    button.disabled = button.dataset.step === 'up' ? level === BAR_LEVELS - 1 : level === 0;
-  });
   try { localStorage.setItem(BAR_LEVEL_KEY, String(level)); } catch (error) { /* (not kept) */ }
+  updateSteps();
   placePanel();
+}
+
+// ︾ ︽ off where there's no step that changes anything their way
+function updateSteps() {
+  const bottom = document.getElementById('bottom'), level = Number(bottom.dataset.level), levels = barLevels();
+  for (const button of document.querySelectorAll('.barsteps button')) {
+    button.disabled = button.dataset.step === 'up' ? !levels.some(one => one > level) : !levels.some(one => one < level);
+  }
+  document.body.classList.toggle('bargone', level === BAR_GONE);
+}
+
+function barStep(up) {
+  const level = Number(document.getElementById('bottom').dataset.level), levels = barLevels();
+  const next = up ? levels.find(one => one > level) : [...levels].reverse().find(one => one < level);
+  if (next !== undefined) setBarLevel(next);
 }
 
 function barSteps() {
   const bottom = document.getElementById('bottom');
-  const step = by => () => setBarLevel(Number(bottom.dataset.level) + by);
   bottom.prepend(el('div', {class: 'barsteps'},
-    el('button', {class: 'small', 'data-step': 'down', title: 'Show less of this bar', 'aria-label': 'Show less of this bar', onclick: step(-1)}, '\ufe3e'),
-    el('button', {class: 'small', 'data-step': 'up', title: 'Show more of this bar', 'aria-label': 'Show more of this bar', onclick: step(1)}, '\ufe3d')));
+    el('button', {class: 'small', 'data-step': 'down', title: 'Show less of this bar', 'aria-label': 'Show less of this bar', onclick: () => barStep(false)}, '\ufe3e'),
+    el('button', {class: 'small', 'data-step': 'up', title: 'Show more of this bar', 'aria-label': 'Show more of this bar', onclick: () => barStep(true)}, '\ufe3d')));
+  // (The bar gone: this alone, floating in the corner, brings it back)
+  document.body.append(el('button', {class: 'barshow', title: 'Show the bar', 'aria-label': 'Show the bar', onclick: () => barStep(true)}, '\ufe3d'));
   let level = BAR_LEVELS - 1;
   try { const kept = localStorage.getItem(BAR_LEVEL_KEY); if (kept !== null) level = Number(kept); } catch (error) { /* (all of it) */ }
   setBarLevel(level);
