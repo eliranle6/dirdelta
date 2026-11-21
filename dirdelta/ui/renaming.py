@@ -20,7 +20,7 @@ def rename(tree, relpath, label=None):
     the ones done; in a dry run, the ones it would do); or None if it wasn't renamed (no name, the
     same name, or one that can't be; the root)."""
     if not relpath:
-        messages.show("Can't rename it", ["%s is the tree's root: rename a file or dir in it." % (tree.displayname(),)],
+        messages.show("Can't rename it", ["%s is the tree's root: rename a file or dir in it." % (tree.screen_name(),)],
                       label or dryrun.label())
         return None
     if not tree.exists(relpath):
@@ -37,7 +37,7 @@ def rename(tree, relpath, label=None):
     if reason is not None and not is_dir:
         messages.show("Can't rename it", ["%s can't be renamed: %s." % (relpath, reason)], label or dryrun.label(), 'red')
         return None
-    where = posixpath.join(tree.displayname(), posixpath.dirname(relpath))
+    where = posixpath.join(tree.screen_name(), posixpath.dirname(relpath))
     new_name = messages.ask("Rename %s%s" % (name, '/' if is_dir else ''),
                             ["Renaming %s %s in %s/" % ("the dir" if is_dir else "the file", name, where),
                              "Its new name (Enter keeps it; an empty one, or Ctrl-C, goes back):"],

@@ -1,7 +1,11 @@
 """Opening from a menu (confirmed on a screen of its own), and a picker's tags with opening's"""
+import subprocess
+
+from dirdelta.ui import messages
 from dirdelta.ui import picker
 from dirdelta.ui.opening import names
 from dirdelta.ui.opening.names import CONFIRM_NO, CONFIRM_YES, files_text, tag_style
+from dirdelta.util import dryrun
 from dirdelta.util import text
 
 
@@ -25,3 +29,13 @@ def with_tags(shown, opener, name_of):
         text = shown.get(relpath) or name_of(relpath)
         shown[relpath] = text + picker.styled([("  ", None), (tag, tag_style(tag))]) if tag else text
     return shown
+
+
+def open_path(path):
+    """Open the local path (a folder: in the desktop's file manager) as if double-clicked, in its own session (it outlives
+    dirdelta, and says nothing on its screen); a failure is said"""
+    try:
+        subprocess.Popen(['xdg-open', path], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                         start_new_session=True)
+    except OSError as error:
+        messages.show("Can't open it", ["%s: %s" % (path, error.strerror or error)], dryrun.label(), 'red')

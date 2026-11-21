@@ -317,6 +317,16 @@ Ordered by how easy they are, easiest first (2026-10-30). Ideas 3, 2.1 and 6 hav
          an edit on both sides from one on one side.
     Effort: medium (10.1: the record's file, written after a sync and checked before the
     next; the combined tree's initial states from it, `picker.StateEntry`'s state).
+    10.3 Learning from the user's previous syncs (asked for 2026-11-21): each plan applied (what was done to each
+         file: its path, its hashes or size, the replica it came from and went to, copied, removed, replaced, moved)
+         kept, in dirdelta's file and in the replicas' own history (`synchistory.py`). A later sync whose
+         differences match an earlier plan's (the same paths and contents) starts with the same arrows, saying so
+         ("as in Laptop ⇄ Grey HD, 21.11"), for the user to review; e.g. the same set of changes applied to two
+         external disks that hold the same tree, the second synced as the first was. The AI's suggestions (Ctrl-I)
+         could also be told the user's earlier choices for similar files (by folder or kind), as examples. What it
+         misses: a decision that was right for one pair but not the other (it's a suggestion, reviewed in the tree as
+         ever); files that changed since (their contents don't match, so nothing's suggested). Effort: medium (the
+         plan's record written by `combined/doing.py`, looked up as the combined tree starts).
 
 ## Refactors (no behavior change)
 

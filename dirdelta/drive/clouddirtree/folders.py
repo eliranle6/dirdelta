@@ -25,7 +25,7 @@ class Folders(object):
                 relpath = os.path.dirname(relpath)
         if not needed:
             return
-        messages.print_line("Making %d folders in %s" % (len(needed), self.displayname()))
+        messages.print_line("Making %d folders in %s" % (len(needed), self.screen_name()))
         levels = collections.defaultdict(list)
         for relpath in sorted(needed):
             levels[relpath.count('/')].append(relpath)

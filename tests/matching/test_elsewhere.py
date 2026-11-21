@@ -54,7 +54,7 @@ class FindPreviewsTest(unittest.TestCase):
         src = SizedTree('/src', {'a': 1, 'b': 1})
         sent = previews_of(['a', 'b'], src, SizedTree('/dst', {}))
         # (A status, by the replica's name, not its path)
-        self.assertEqual(picker.unstyled(sent.defaults[0][-1]), "Finding where LocalDisk has them: listing its files...")
+        self.assertEqual(picker.unstyled(sent.defaults[0][-1]), "Finding where /dst has them: listing its files...")
         self.assertEqual(sent.defaults[-1], [])
         self.assertEqual(sorted(sent.previews), ['a', 'b'])
 
@@ -62,7 +62,7 @@ class FindPreviewsTest(unittest.TestCase):
         src = SizedTree('/src', {'a': 1, 'b': 1})
         said = []
         sent = previews_of(['a', 'b'], src, SizedTree('/dst', {}), on_status=said.append)
-        self.assertEqual(said[0], "Finding where LocalDisk has them: listing its files...")
+        self.assertEqual(said[0], "Finding where /dst has them: listing its files...")
         self.assertIsNone(said[-1])
         self.assertTrue(all(default == [] for default in sent.defaults))
 

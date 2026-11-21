@@ -258,6 +258,12 @@ class SyncMenu(object):
         dashboard's and the refreshes' notes"""
         if self.as_hashed.is_due(self.ways[0].differs):
             self._find_differing()
+        # (What each way found, noted as soon as it's found, not only once the user picks an option: one leaving the
+        # menu first left the pair's status as it was before)
+        try:
+            self.note_compared()
+        except replicas.ReplicasError:
+            pass
         shown = {label: action.shown_as() for label, action in self.actions.items()}
         shown[SYNC_ALL] = sync_all_shown_as(self.ways, self.replica_a_path, self.replica_b_path)
         shown[comparing.COMPARE] = comparing.shown_as(self.ways[0].differs)

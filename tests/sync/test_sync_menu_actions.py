@@ -35,7 +35,7 @@ class ActionsTest(MainMenuTest):
                 mock.patch.object(b, 'refresh_from_drive', side_effect=OSError('no network')):
             dirsync_main._sync(a, b, '/a', '/b')
         title, lines, _, _ = self.show.call_args.args
-        self.assertEqual(title, 'Refresh cloud/b from Google Drive')
+        self.assertEqual(title, 'Refresh Cloud:b from Google Drive')
         self.assertEqual(lines, ["Couldn't refresh it: no network"])
         self.assertEqual(sorted(self.find_missing_calls), ['/a', '/b'])
 

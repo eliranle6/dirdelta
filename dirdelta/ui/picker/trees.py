@@ -13,7 +13,7 @@ def pick_from_tree(tree, header='', dirs_only=False, root_name=None, keys='', ke
     Enter; [the picked or selected node's data]), or None. twice_keys: keys that do so when pressed
     twice in a row (e.g. 'c' for vim's cc), returned doubled ('cc'). excluded: relpaths left out, with
     all in them."""
-    args = (['--typed', '--root', root_name or tree.displayname()] + header_args(header) +
+    args = (['--typed', '--root', root_name or tree.screen_name()] + header_args(header) +
             keys_args(keys, twice_keys) + help_args(key_hints, ()))
     if dirs_only:
         args.append('--dirs-only')

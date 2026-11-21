@@ -22,7 +22,7 @@ class TreesTest(PickerTest):
         args, paths = self.call()
         # Each after its type, so empty dirs show as dirs and picked files are counted
         self.assertEqual(paths, ['d a', 'f a/1.txt', 'd b', 'f b/2.txt', 'd b/sub', 'f b/sub/3.txt', 'f c.txt'])
-        self.assertEqual(args, ['-0', '--typed', '--root', '/some/root', '-'])
+        self.assertEqual(args, ['-0', '--typed', '--root', 'LocalDisk', '-'])
 
     def test_pick_only_dirs(self):
         self.answer('a')

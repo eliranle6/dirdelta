@@ -44,7 +44,8 @@ class Picking(object):
         # (In the browser, what's done to the selection is in Enter's menu, a panel over the tree, all of it:
         # no buttons for those keys beside it)
         if frontend.current is not None:
-            keys = hashes_screen.KEY + contextmenu.KEY + self.MERGE_KEY
+            # (And reading the files anew: the page's ⟳ beside the search)
+            keys = hashes_screen.KEY + contextmenu.KEY + self.MERGE_KEY + self.REFRESH_KEY
         # The keys row has little room: the rest are in the menu (:), and ?
         key_hints = [('Enter', 'choose what to do'), contextmenu.KEY_HINT]
         # The keys that aren't in the keys row, by what they're about, for ?

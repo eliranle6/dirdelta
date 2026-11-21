@@ -16,7 +16,7 @@ class AskAI(object):
         """What to ask the AI about src's files at relpaths, the user being on those of focus (see
         aiplan.py): dst's files are told too, to rename them, and each's copies there, as far as it's
         known"""
-        src_name, dst_name = self._src.displayname(), self._dst.displayname()
+        src_name, dst_name = self._src.screen_name(), self._dst.screen_name()
 
         def can_rename(replica):
             def check(relpath, target):
@@ -59,10 +59,10 @@ class AskAI(object):
         relpaths = [relpath for relpath in relpaths if relpath not in self.differs]
         if not relpaths:
             messages.show("Nothing to ask about", ["AI is asked about the files %s lacks, not those it has other versions of." %
-                                                   (self._dst.displayname(),)], dryrun.label())
+                                                   (self._dst.screen_name(),)], dryrun.label())
             return None
         focus = [relpath for relpath in focus if relpath not in self.differs]
-        messages.print_line("Looking through %s and %s..." % (self._src.displayname(), self._dst.displayname()))
+        messages.print_line("Looking through %s and %s..." % (self._src.screen_name(), self._dst.screen_name()))
         self.src_index.build()
         self.dst_index.build()
         self._last_instruction, steps = aiplan_screen.ask(self._ai_task(relpaths, focus), self._last_instruction)

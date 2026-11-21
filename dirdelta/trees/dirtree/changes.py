@@ -24,8 +24,8 @@ class Changes(object):
             nr_removed += nr_files
 
         self._batch(lambda: self._remove_files(file_entries, starting, removed),
-                    ('Remove', 'removed', 'removes', 'from ' + self.displayname() + self.REMOVED_TO),
-                    lambda: nr_removed, len(file_entries), dry_where='from ' + self.displayname())
+                    ('Remove', 'removed', 'removes', 'from ' + self.screen_name() + self.REMOVED_TO),
+                    lambda: nr_removed, len(file_entries), dry_where='from ' + self.screen_name())
 
     def move_files(self, moves, to=None):
         """Move files within the tree, or to another of its kind (to; a rename there too): each of
@@ -56,7 +56,7 @@ class Changes(object):
 
     def _where(self, to):
         """Where a move or copy goes, to say it"""
-        return 'in ' + self.displayname() if to is self else 'to ' + to.displayname()
+        return 'in ' + self.screen_name() if to is self else 'to ' + to.screen_name()
 
     def _remove_files(self, file_entries, starting, removed):
         """Remove the files (see _remove_file()), or in a dry run only say so, calling

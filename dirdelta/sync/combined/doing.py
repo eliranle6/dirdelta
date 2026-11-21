@@ -14,7 +14,7 @@ def do(plan, replica_a, replica_b, changes=None, names=None):
     """Do the plan (see plan.Plan) to replica_a and replica_b, noting what was done live in changes (a
     log_entries.Changes, if given); names: {replica: what the screens call it} (else their paths)"""
     names = names or {}
-    name_a, name_b = (names.get(replica, replica.displayname()) for replica in (replica_a, replica_b))
+    name_a, name_b = (names.get(replica, replica.screen_name()) for replica in (replica_a, replica_b))
     steps = [(_move, plan.move_in_b, replica_b, None, False), (_move, plan.move_in_a, replica_a, None, False),
              (_copy, plan.copy_to_b, replica_a, replica_b, False), (_copy, plan.copy_to_a, replica_b, replica_a, False),
              (_copy, plan.replace_b, replica_a, replica_b, True), (_copy, plan.replace_a, replica_b, replica_a, True),
@@ -42,7 +42,7 @@ def _entries(relpaths, replica):
 
 
 def _name(replica, names):
-    return (names or {}).get(replica, replica.displayname())
+    return (names or {}).get(replica, replica.screen_name())
 
 
 def _copy(relpaths, src, dst, changes, is_replacing=False, names=None):

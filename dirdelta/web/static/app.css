@@ -694,4 +694,22 @@ footer#bottom { padding-top: 12px; }
 .tree .row .twisty.leaf { height: auto; border-top: 0; opacity: 1; align-self: stretch; position: relative;
   margin-top: calc(-1 * var(--row-pad, 6px)); margin-bottom: calc(-1 * var(--row-pad, 6px) - 1px); }
 .tree .row .twisty.leaf::before { content: ''; position: absolute; left: 0; right: 0; top: 50%; border-top: 1.5px solid var(--treeline); }
-.preview .previewthumb { display: block; max-width: 100%; max-height: 240px; margin-top: 8px; border-radius: 6px; }
+/* (The selection's picture in the details small: a glance, ⤢ fills the screen with it) */
+.preview canvas { max-height: 140px; width: auto !important; }
+#preview.max .preview canvas { max-height: none; }
+/* (Its form controls, scrollbars and the like in the theme shown) */
+:root { color-scheme: light; }
+:root[data-theme="dark"] { color-scheme: dark; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { color-scheme: dark; } }
+/* A menu's option (or an action's button) in the color of what it does (app.js's ACTION_TONES): its icon, text, an edge */
+.tone-green, .tone-green > .icon { color: var(--green); }
+.tone-red, .tone-red > .icon { color: var(--red); }
+.tone-yellow, .tone-yellow > .icon { color: var(--yellow); }
+.tone-cyan, .tone-cyan > .icon { color: var(--cyan); }
+.tone-magenta, .tone-magenta > .icon { color: var(--magenta); }
+.option[class*="tone-"]:not(.disabled) { box-shadow: inset 3px 0 0 currentColor; }
+button[class*="tone-"]:disabled { color: var(--disabled); }
+/* A tree's search with its ⟳ (reading its files anew) beside it */
+.searchrow { display: flex; gap: 6px; align-items: center; }
+.searchrow > #search { flex: 1 1 auto; min-width: 0; }
+.searchrow > .reread { flex: none; padding: 6px 10px; display: inline-flex; }

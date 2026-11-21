@@ -130,9 +130,19 @@ class InteractiveDirSyncTest(unittest.TestCase):
         self.assertEqual(options[0], NOTHING)
         # Each kind apart, after a blank line
         self.assertEqual([option.split(' ')[0] for option in options[1:]],
-                         ['', 'Ask', '', 'Copy', '', 'Remove', '', 'Rename', 'Rename', 'Rename', '', 'Open', 'See'])
+                         ['', 'Ask', '', 'Copy', 'Copy', '', 'Remove', '', 'Rename', 'Rename', 'Rename', '', 'Open', 'Open', 'See'])
         self.assertEqual(self._offered()[1], (['sub/b.txt', 'sub/c.txt'], ['sub/b.txt']))
         self.assertEqual(self.pick_files.call_args.kwargs['selected'], 'sub/c.txt')
+
+    def test_checked_files_are_copied_into_a_folder_chosen_in_dst_by_their_names(self):
+        os.makedirs(os.path.join(self.dst_root, 'elsewhere'))
+        with mock.patch('dirdelta.util.dryrun.DRYRUN', False), \
+                mock.patch('dirdelta.ui.picker.pick_under_dir', return_value=os.path.join(self.dst_root, 'elsewhere')):
+            self._browse([picker.Picked('', 'sub/b.txt', ['sub/b.txt']), None],
+                         [Sync.COPY_ELSEWHERE, YES])
+        self.assertTrue(self.exists(self.dst_root, 'elsewhere/b.txt'))
+        # (Still missing at its own path)
+        self.assertFalse(self.exists(self.dst_root, 'sub/b.txt'))
 
     def test_ctrl_x_opens_the_selected_file(self):
         with mock.patch('dirdelta.ui.opening.Opener.open_in_background') as open_in_background:
@@ -182,7 +192,9 @@ class InteractiveDirSyncTest(unittest.TestCase):
                         side_effect=lambda path, mode: path != self.dst_root and real_access(path, mode)):
             self._browse([['sub/b.txt'], None], [NOTHING])
         texts = sorted(self.disabled())
-        self.assertEqual(len(texts), 3)
+        self.assertEqual(len(texts), 4)
+        self.assertEqual(texts[0], "Copy it into another folder of %s...: can't: it's read-only" % (self.dst_root,))
+        texts = texts[1:]
         self.assertEqual(texts[0], "Copy the 1 file to %s: can't: it's read-only" % (self.dst_root,))
         self.assertEqual(texts[1], "Rename 0 files of these to their matches' paths, in %s: none of "
                                    "these may be there, moved or renamed" % (self.src_root,))

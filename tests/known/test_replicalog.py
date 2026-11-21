@@ -142,39 +142,16 @@ class LogEntriesTest(unittest.TestCase):
         with open(log_path) as log:
             return log.read()
 
-    def offer(self, answers, edited=None):
-        with helpers.answering_option_picker(answers) as pick, \
-                mock.patch('dirdelta.ui.messages.ask', return_value=edited):
+    def test_a_changed_replica_is_noted_and_nothing_is_asked_or_written_to_its_log(self):
+        with mock.patch('dirdelta.ui.picker.pick_option', side_effect=AssertionError('asked')):
             log_entries.offer_entries(self.changes, self.trees, self.known)
-        return pick
-
-    def test_added_to_the_changed_replicas_log(self):
-        pick = self.offer(["Add it to its last_update.txt (%s)" % (self.b,)])
-        line = "%s - copied 2 files from %s; removed 1 file" % (self.today, self.a)
-        self.assertIn(line, pick.call_args.kwargs['header'])
-        self.assertEqual(self.log(self.b), "1.1.2026 - started\n" + line + "\n")
+        self.assertIsNotNone(self.known.known['id:' + self.b]['changed'])
+        self.assertEqual(self.log(self.b), "1.1.2026 - started\n")
         self.assertIsNone(self.log(self.a))
-        info = self.known.known['id:' + self.b]
-        self.assertEqual(info['last_entry']['text'], "copied 2 files from %s; removed 1 file" % (self.a,))
-        self.assertIsNotNone(info['changed'])
         replicas.save.assert_called_with(self.known)
 
-    def test_edited_first_and_only_its_own_log(self):
-        pick = self.offer([log_entries.EDIT_ENTRY, "Add it to its"], edited="copied the trip's photos")
-        self.assertEqual(helpers.labels_of(pick.call_args.args[0]),
-                         [log_entries.NO_ENTRY, "Add it to its last_update.txt (%s)" % (self.b,), log_entries.EDIT_ENTRY])
-        self.assertEqual(self.log(self.b), "1.1.2026 - started\n%s - copied the trip's photos\n" % (self.today,))
-        # The other replica's log isn't of this one's changes
-        self.assertIsNone(self.log(self.a))
-
-    def test_none_added_but_its_change_is_known(self):
-        self.offer([log_entries.NO_ENTRY])
-        self.assertEqual(self.log(self.b), "1.1.2026 - started\n")
-        self.assertIsNotNone(self.known.known['id:' + self.b]['changed'])
-
-    def test_nothing_changed_nothing_offered(self):
-        with mock.patch('dirdelta.ui.picker.pick_option', side_effect=AssertionError('asked')):
-            log_entries.offer_entries(log_entries.Changes(), self.trees, self.known)
+    def test_nothing_changed_nothing_saved(self):
+        log_entries.offer_entries(log_entries.Changes(), self.trees, self.known)
         replicas.save.assert_not_called()
 
 

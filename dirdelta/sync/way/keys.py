@@ -49,14 +49,14 @@ class Keys(object):
             entries.append(contextmenu.Entry(self.REFRESH_KEY_NAME, "Read %s/ anew from Google Drive" % (
                 os.path.dirname(selected) if is_file else selected or '.',), self.REFRESH_KEY))
         entries.append(contextmenu.Entry(hashes_screen.KEY, "Replicas dashboard", hashes_screen.KEY))
-        return contextmenu.choose(entries, contextmenu.nothing_picked(len(missing)), side=self._dst.displayname())
+        return contextmenu.choose(entries, contextmenu.nothing_picked(len(missing)), side=self._dst.screen_name())
 
     def _act_in_dst(self, relpath, is_removed=False):
         """Enter (or :) in the tree beside the picker, dst's, on the file or dir at relpath: choose what
         to do with it there, e.g. to remove a version of a repository that src has another of, then
         copy that one; with is_removed (d there), it's to remove it. Returns the files done (none in a dry run), or None if none were: then dst is diffed anew,
         as its files changed."""
-        name = self._dst.displayname()
+        name = self._dst.screen_name()
         if not relpath:
             messages.show("That's all of %s" % (name,), ["Select a file or dir in it."], dryrun.label())
             return None

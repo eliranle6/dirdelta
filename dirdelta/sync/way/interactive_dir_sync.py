@@ -37,6 +37,9 @@ class InteractiveDirSync(Browsing, Keys, Lists, Menu, Copying, Merging, AskAI, R
     # What the picker's keys do on the selected file, in the menu too: opening it (Ctrl-X), reading
     # its folder anew from Drive (r)
     OPEN = 'open'
+    # Opening the picked files' folder in the desktop's file manager; copying them into a folder of dst the user chooses
+    OPEN_FOLDER = 'open folder'
+    COPY_ELSEWHERE = 'copy elsewhere'
     READ_ANEW = 'read anew'
     ASK_AI = 'ask AI'
     EXPLORE = 'explore'
@@ -52,7 +55,7 @@ class InteractiveDirSync(Browsing, Keys, Lists, Menu, Copying, Merging, AskAI, R
                  RENAME_IT: renaming.KEY_HINT[0]}
     # The label of each action's confirmation, so what it's for shows at a glance (magenta, not
     # red: red is LIVE's)
-    LABELS = {COPY: ('COPY', 'blue'), COPY_BACK: ('COPY', 'blue'), REMOVE: ('REMOVE', 'magenta'),
+    LABELS = {COPY: ('COPY', 'blue'), COPY_ELSEWHERE: ('COPY', 'blue'), COPY_BACK: ('COPY', 'blue'), REMOVE: ('REMOVE', 'magenta'),
               RENAME_IN_DST: ('RENAME', 'cyan'), RENAME_IN_SRC: ('RENAME', 'cyan'), MERGE: ('MERGE', 'blue')}
 
     # The action menu's first option, so it's the one selected at first: doing nothing

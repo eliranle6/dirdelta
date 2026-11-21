@@ -12,4 +12,4 @@ Its parts are in the modules here; the names the rest of dirdelta uses are here 
 from dirdelta.ui.opening.names import (COLOR, CONFIRM_NO, CONFIRM_YES, DOWNLOADING_TAG, KEY, KEY_HINT,  # noqa: F401
                                        OPENED_TAG, WAITING_TAG, tag_style)
 from dirdelta.ui.opening.opener import Opener  # noqa: F401
-from dirdelta.ui.opening.screens import confirm, with_tags  # noqa: F401
+from dirdelta.ui.opening.screens import confirm, open_path, with_tags  # noqa: F401

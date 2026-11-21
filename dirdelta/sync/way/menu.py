@@ -31,16 +31,19 @@ class Menu(object):
         may_be_there = []
         if only_here:
             if not self.dst_index.is_built():
-                messages.print_line("Finding where %s has them..." % (replicanames.name(self._dst.displayname()),))
+                messages.print_line("Finding where %s has them..." % (self._dst.screen_name(),))
             # The ones that may be in dst, moved or renamed: their contents are compared before a Rename
             may_be_there = elsewhere.may_be_elsewhere(only_here, self._src, self.dst_index, self.checked,
                                                       self.src_index)
         nr_renamed_in_src = sum(1 for relpath in may_be_there if self._src.cant_move(relpath) is None)
-        src_name, dst_name = self._src.displayname(), self._dst.displayname()
+        src_name, dst_name = self._src.screen_name(), self._dst.screen_name()
         count = replica_ops.files_text(len(relpaths))
         options = {
             self.COPY: (self._copy_label(relpaths, changed, self._src, self._dst),
                         self._cant_copy(self._src, self._dst)),
+            self.COPY_ELSEWHERE: ("Copy %s into another folder of %s..." % ("it" if len(relpaths) == 1 else "the " + count, dst_name),
+                                  self._cant_copy(self._src, self._dst) or
+                                  (None if replica_ops.is_local(self._src) else "can't: only from a folder on this computer")),
             self.REMOVE: ("Remove the %s from %s" % (count, src_name),
                           None if replica_ops.is_writable(self._src) else "can't: it's read-only"),
             # Each counts the picked files that may be in dst, moved or renamed. The replica last,
@@ -66,6 +69,11 @@ class Menu(object):
             options[self.RENAME_IT] = ("Rename it...", None if replica_ops.is_writable(self._src) else "can't: it's read-only")
         if len(relpaths) == 1 and archives.is_archive(relpaths[0]):
             options[self.EXPLORE] = ("Explore it: what's in the zip", None)
+        folders = sorted({os.path.dirname(relpath) for relpath in relpaths})
+        options[self.OPEN_FOLDER] = ("Open %s folder%s" % ("its" if len(folders) == 1 else "their", "" if len(folders) == 1 else "s"),
+                                     "can't: it's in Google Drive" if not replica_ops.is_local(self._src) else
+                                     None if len(folders) <= opening.names.MAX_OPENED else
+                                     "can't: more than %d at once" % (opening.names.MAX_OPENED,))
         options[self.OPEN] = ("Open %s with %s program%s" %
                               ("it" if len(relpaths) == 1 else "the " + count,
                                "its" if len(relpaths) == 1 else "their", "" if len(relpaths) == 1 else "s"),
@@ -73,7 +81,7 @@ class Menu(object):
                               "can't: more than %d at once" % (opening.names.MAX_OPENED,))
         if clouds:
             options[self.READ_ANEW] = ("Read %s anew from Google Drive" %
-                                       (' and '.join(os.path.join(replica.displayname(), folder).rstrip('/') + '/'
+                                       (' and '.join(os.path.join(replica.screen_name(), folder).rstrip('/') + '/'
                                                      for replica in clouds),), None)
         else:
             options[self.READ_ANEW] = ("See what changed in %s and %s outside dirdelta" % (src_name, dst_name), None)
@@ -86,8 +94,8 @@ class Menu(object):
             return picker.Option(action, label, prefixes[label] + label if reason is None else
                                  picker.Disabled(picker.unstyled(prefixes[label]) + "%s: %s" % (label, reason)))
         # Similar actions together, a blank line between each kind
-        kinds = [[self.ASK_AI], [self.COPY, self.COPY_BACK, self.MERGE], [self.REMOVE], [self.RENAME_IN_DST, self.RENAME_IN_SRC, self.RENAME_IT],
-                 [self.EXPLORE, self.OPEN, self.READ_ANEW]]
+        kinds = [[self.ASK_AI], [self.COPY, self.COPY_ELSEWHERE, self.COPY_BACK, self.MERGE], [self.REMOVE],
+                 [self.RENAME_IN_DST, self.RENAME_IN_SRC, self.RENAME_IT], [self.EXPLORE, self.OPEN, self.OPEN_FOLDER, self.READ_ANEW]]
         choices = picker.grouped([[picker.Option(self.NOTHING, self.NOTHING, prefixes[self.NOTHING] + self.NOTHING)]] +
                                  [[option(action) for action in kind if action in options] for kind in kinds])
         if not changed:
@@ -104,6 +112,12 @@ class Menu(object):
             if opening.confirm(self._opener, relpaths, relpaths):
                 self._opener.open_in_background(relpaths, relpaths)
             return None
+        if action == self.OPEN_FOLDER:
+            for folder in folders:
+                opening.open_path(os.path.join(self._src.fullpath(), folder))
+            return None
+        if action == self.COPY_ELSEWHERE:
+            return self._copy_elsewhere(relpaths)
         if action == self.READ_ANEW:
             return filescreen.READ_ANEW
         if action == self.RENAME_IT:
@@ -128,10 +142,10 @@ class Menu(object):
         other versions of, which it replaces"""
         count = replica_ops.files_text(len(relpaths))
         if not changed:
-            return "Copy the %s to %s" % (count, dst.displayname())
+            return "Copy the %s to %s" % (count, dst.screen_name())
         if len(changed) == len(relpaths):
-            return "Copy these versions of the %s to %s, replacing its" % (count, dst.displayname())
-        return "Copy the %s to %s, replacing its other versions of %d" % (count, dst.displayname(), len(changed))
+            return "Copy these versions of the %s to %s, replacing its" % (count, dst.screen_name())
+        return "Copy the %s to %s, replacing its other versions of %d" % (count, dst.screen_name(), len(changed))
 
     def _cant_copy(self, src, dst):
         """Why src's files can't be copied into dst, or None if they can"""

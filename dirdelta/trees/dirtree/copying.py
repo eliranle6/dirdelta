@@ -40,7 +40,7 @@ class Copying(object):
                     copied(True)
             else:
                 self._copy_files(files, source, starting, copied)
-        self._batch(work, ('Copy', 'copied', 'copies', 'to ' + self.displayname()), lambda: nr_copied, len(files))
+        self._batch(work, ('Copy', 'copied', 'copies', 'to ' + self.screen_name()), lambda: nr_copied, len(files))
 
     @contextlib.contextmanager
     def replacing(self):

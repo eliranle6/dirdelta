@@ -223,8 +223,14 @@ function pairRow(pair, running, user) {
   const syncing = isSyncing(pair, running, user);
   const compared = age(pair.state.when);
   const parts = [];
+  // (A replica changed since they were compared: what was found then isn't how they are now, so it isn't shown as it)
+  const stale = !!synced && pair.changedSince.length > 0;
   if (!synced) parts.push(el('span', {class: 'note'}, 'Never compared: sync them to know.'));
-  else {
+  else if (stale) {
+    parts.push(el('span', {class: 'statename c-grey'}, 'Not known any more'),
+      el('div', {class: 'syncline'}, el('span', {}, pair.changedSince.join(' and ') + ' changed since they were compared.'),
+        el('span', {class: 'note'}, 'Sync them to compare them again.')));
+  } else {
     parts.push(el('span', {class: 'statename c-' + pair.state.color}, STATE_WORDS[pair.state.kind] || ''));
     const {onlyA, onlyB, totalA, share} = synced;
     const either = totalA === null ? null : totalA + onlyB;
@@ -242,7 +248,7 @@ function pairRow(pair, running, user) {
   }
   const fresh = [];
   if (pair.state.when) fresh.push(chip(compared.tone, 'Compared ' + compared.text));
-  if (pair.changedSince.length) fresh.push(chip('bad', pair.changedSince.join(' and ') + ' changed since: may be out of date'));
+
   // (A pair the user added besides the main replica's: it can be taken away)
   if (pair.extra) fresh.push(el('button', {class: 'tiny', onclick: async () => { await api('POST', '/api/pairs/remove', {a: pair.a, b: pair.b}); load(); }}, '✕ Remove this pair'));
   // (While a run goes on, one at a time: this pair's sync is gone back to; any other run is offered to open)
@@ -250,7 +256,7 @@ function pairRow(pair, running, user) {
     running ? el('a', {class: 'button small', href: '/run', title: 'One runs at a time: finish or leave it to sync these'},
       'Another sync is running: open it') :
     el('button', {class: 'small', onclick: () => start({kind: 'pair', a: pair.a, b: pair.b})}, 'Sync');
-  return el('div', {class: 'item pair' + (syncing ? ' syncing' : '')}, el('span', {class: 'syncmark c-' + pair.state.color}, pair.state.mark),
+  return el('div', {class: 'item pair' + (syncing ? ' syncing' : '')}, el('span', {class: 'syncmark c-' + (stale ? 'grey' : pair.state.color)}, stale ? '?' : pair.state.mark),
     el('span', {class: 'what'}, el('b', {class: 'pairline'}, pair.favorite ? '★' : '', replicaLabel(pair.a, pair.nameA), '⇄',
       replicaLabel(pair.b, pair.nameB)), syncing ? el('div', {class: 'insync'}, waiting('Sync in progress')) : '',
       parts, fresh.length ? el('div', {class: 'chips-row'}, fresh) : ''),

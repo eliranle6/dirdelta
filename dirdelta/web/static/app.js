@@ -188,6 +188,9 @@ async function loadChildren(path) {
 // A picker
 
 function updatePicker(screen, isNew) {
+  // (What changed, to draw only its rows again when the tree's shape didn't: see patchTree())
+  const before = {selected: view.selected, picked: view.picked, sideSelected: view.sideSelected,
+    added: (screen.changes || []).some(item => !view.info.has(item.p))};
   for (const item of screen.changes || []) view.info.set(item.p, Object.assign(view.info.get(item.p) || {}, item));
   view.picked = new Set(screen.picked);
   view.selected = screen.selected;
@@ -212,7 +215,7 @@ function updatePicker(screen, isNew) {
         view.expanded, rowsThatFit(document.getElementById('tree')), ['.']);
     }
   }
-  renderPickerParts();
+  if (isNew || !patchTree(screen, before)) renderPickerParts();
   if (screen.previewVersion !== view.previewVersion || isNew) {
     view.previewVersion = screen.previewVersion;
     loadPreview();
@@ -246,7 +249,12 @@ function renderPickerFrame() {
   } else {
     if (screen.header) parts.push(el('div', {class: 'header'}, segmentsSpan(screen.header)));
     if (screen.tabs.length) parts.push(el('div', {class: 'tabs', id: 'pickertabs'}));
-    if (search) parts.push(search);
+    // (A tree that can read its files again (Ctrl-R, "Read anew"): ⟳ beside the search)
+    const reread = screen.keys.find(key => key.name === 'Ctrl-R');
+    if (search && reread) {
+      parts.push(el('div', {class: 'searchrow'}, search, el('button', {class: 'reread', title: capitalized(reread.text || 'read anew'),
+        'aria-label': 'Read the files anew', onclick: () => act('press', {key: reread.key})}, icon('refresh'))));
+    } else if (search) parts.push(search);
   }
   // What's shown of the selection (its details, a diff, the AI's suggestion) in the bottom bar (placePreview()): on a
   // wide screen right of its buttons, the trees side by side; on a phone a row of it, after the selection's (setBarLevel())
@@ -401,13 +409,111 @@ function shown(path) {
 
 function renderTree() {
   const box = document.getElementById('tree');
+  view.rowEls = null;
   if (!box) return;
   const screen = view.screen;
   if (screen.mode === 'list') { box.replaceChildren(menuList()); return; }
-  const rows = visibleRows();
-  const list = el('div', {class: 'tree'}, rows.slice(0, MAX_ROWS).map(row));
-  if (rows.length > MAX_ROWS) list.append(el('div', {class: 'more'}, (rows.length - MAX_ROWS) + ' more: search to find them'));
+  const rows = visibleRows().slice(0, MAX_ROWS + 1);
+  const shown = rows.slice(0, MAX_ROWS).map(data => ({data, el: row(data)}));
+  const list = el('div', {class: 'tree'}, shown.map(one => one.el));
+  if (rows.length > MAX_ROWS) list.append(el('div', {class: 'more'}, 'More: search to find them'));
   box.replaceChildren(list);
+  // (Each row drawn, by its path, so a change draws only its own again: patchTree())
+  view.rowEls = new Map(shown.map(one => [one.data.path, one]));
+}
+
+// A tap's check or mark shown at once, before the server says it (it does, a moment later, the same), so a tap never
+// waits on the network: the files it's on changed here, their rows drawn again, then it's sent. With order (the paths
+// in the order shown) and a check before (view.lastChecked), Shift checks every one between too, as a desktop's list does
+function filesUnder(path) {
+  const info = view.info.get(path) || {};
+  if (info.t === 'f') return [path];
+  const prefix = path === '.' ? '' : path + '/';
+  return view.items.filter(p => p.startsWith(prefix) && (view.info.get(p) || {}).t === 'f');
+}
+
+function checkNow(path, on, order) {
+  let paths = [path];
+  if (order && view.lastChecked && order.includes(view.lastChecked) && order.includes(path)) {
+    const [from, to] = [order.indexOf(view.lastChecked), order.indexOf(path)].sort((one, other) => one - other);
+    paths = order.slice(from, to + 1);
+  }
+  view.lastChecked = path;
+  const files = [...new Set(paths.flatMap(filesUnder))];
+  for (const file of files) { if (on) view.picked.add(file); else view.picked.delete(file); }
+  const before = view.selected;
+  view.selected = path === '.' ? '' : path;
+  redrawNow(paths.concat(files), before);
+  act('pick', {paths, on});
+  act('select', {path: view.selected});
+}
+
+function markNow(path, name) {
+  for (const file of filesUnder(path)) {
+    const info = view.info.get(file);
+    if (!info.a || !info.a.length || info.a.includes(name)) info.st = name;
+  }
+  const before = view.selected;
+  view.selected = path === '.' ? '' : path;
+  redrawNow([path].concat(filesUnder(path)), before);
+  act('state', {paths: [path], name});
+  act('select', {path: view.selected});
+}
+
+// The rows of paths (and their folders, and the selection's old and new rows) drawn again, and what counts them; or
+// the whole tree, if there are too many
+function redrawNow(paths, selectedBefore) {
+  const touched = new Set();
+  for (const path of paths) { touched.add(path); ancestors(path).forEach(dir => touched.add(dir)); }
+  for (const path of [selectedBefore, view.selected]) touched.add(path === '' || path === null ? '.' : path);
+  if (!view.rowEls || touched.size > MAX_PATCHED) { renderPickerParts(); return; }
+  for (const path of touched) {
+    const one = view.rowEls.get(path);
+    if (!one) continue;
+    const fresh = row(one.data);
+    one.el.replaceWith(fresh);
+    one.el = fresh;
+    colorNames(fresh);
+  }
+  renderPlan();
+  renderGrid();
+  renderPickerActions();
+  colorNames(document.getElementById('bottom'));
+}
+
+// A change that leaves the tree's shape as it was (a mark, a check, the selection moving: no file added), drawn on the
+// rows it touches alone (the file, its folders, the selection's old and new rows), not the whole tree again, which
+// takes long on a phone with thousands of files. Whether it could be (else it's all drawn again)
+const MAX_PATCHED = 400;
+function patchTree(screen, before) {
+  if (!view.rowEls || screen.mode === 'list' || before.added) return false;
+  const touched = new Set();
+  const withFolders = path => { touched.add(path); ancestors(path).forEach(dir => touched.add(dir)); };
+  for (const item of screen.changes || []) withFolders(item.p);
+  for (const path of view.picked) if (!before.picked.has(path)) withFolders(path);
+  for (const path of before.picked) if (!view.picked.has(path)) withFolders(path);
+  if (before.selected !== view.selected) {
+    for (const path of [before.selected, view.selected]) touched.add(path === '' || path === null ? '.' : path);
+  }
+  if (touched.size > MAX_PATCHED) return false;
+  for (const path of touched) {
+    const one = view.rowEls.get(path);
+    if (!one) continue;
+    const fresh = row(one.data);
+    one.el.replaceWith(fresh);
+    one.el = fresh;
+    colorNames(fresh);
+  }
+  renderPlan();
+  renderGrid();
+  if (before.sideSelected !== view.sideSelected) renderSide();
+  const footer = document.getElementById('footer');
+  if (footer) footer.replaceChildren(screen.footer ? segmentsSpan(screen.footer) : '');
+  document.getElementById('status').replaceChildren(segmentsSpan(NARROW.matches ? shortStatus(view.status) : view.status));
+  markHashingNow(document.getElementById('status'));
+  renderPickerActions();
+  colorNames(document.getElementById('bottom'));
+  return true;
 }
 
 // A menu's option's icon, by what it does: a files' menu's (what to do with them), the sync menu's (all of it in one
@@ -418,6 +524,8 @@ const ACTION_ICONS = [[/^(Nothing|Back)/, 'back'], [/^Ask AI/, 'ai'], [/^Copy/, 
   [/^(Skip|Leave)/, 'skip'], [/^Sync: /, 'sync'], [/^Files only in /, 'onlyhere'], [/^Files that differ/, 'differ'],
   [/^Compare/, 'equal'], [/^(Add to|Remove from) favorites/, 'star'], [/^Not now/, 'clock'], [/^(Name|Label)/, 'pencil'],
   [/^Replicas dashboard/, 'replicas'], [/^Hash/, 'hash'], [/^Pause/, 'clock']];
+
+const ACTION_TONES = {copy: 'green', trash: 'red', swap: 'yellow', move: 'cyan', pencil: 'cyan', merge: 'magenta', ai: 'magenta'};
 
 async function chooseOption(path) {
   if (view.screen.previewBelow && view.selected !== path) { await act('select', {path}); return; }
@@ -503,7 +611,10 @@ function menuList() {
     // (A files' menu: its key on the right, not before the text)
     const key = inPanel ? keys.get(path) : null;
     const text = inPanel ? withoutKeyPrefix(shown(path)) : shown(path);
-    return el('button', {class: classes.join(' ') + (glyph ? ' withicon' : ''), disabled: info.d, 'data-path': path, onclick: () => chooseOption(path)},
+    // (What it does, in its color: a copy green, a removal red, a replacement yellow, a move or rename cyan, the AI's and
+    // a merge magenta)
+    const tone = ACTION_TONES[glyph] || '';
+    return el('button', {class: classes.join(' ') + (glyph ? ' withicon' : '') + (tone ? ' tone-' + tone : ''), disabled: info.d, 'data-path': path, onclick: () => chooseOption(path)},
       glyph ? icon(glyph) : '', segmentsSpan(text), key ? el('kbd', {}, key) : '');
   }));
 }
@@ -732,11 +843,11 @@ document.addEventListener('keydown', event => {
 });
 
 // A tap on a tile: its mark or check sent first, waiting for nothing; then it's selected (the details show it)
-function toggleTile(path) {
+function toggleTile(path, event) {
   const screen = view.screen;
-  if (screen.states.length) act('state', {paths: [path], name: nextState(path)});
-  else if (screen.multi) act('pick', {paths: [path], on: !view.picked.has(path)});
-  act('select', {path});
+  if (screen.states.length) markNow(path, nextState(path));
+  else if (screen.multi) checkNow(path, !view.picked.has(path), event && event.shiftKey ? gridPhotos(view.gridDir) : null);
+  else act('select', {path});
 }
 
 // The grid's pictures loaded a few at a time (GRID_LOADING), the ones on the screen or near it first: a browser has only
@@ -792,7 +903,7 @@ function renderGrid() {
     view.gridTiles = new Map();
     const tiles = photos.map(path => {
       const mark = el('span', {class: 'tilemark'});
-      const tile = el('div', {class: 'phototile', title: baseName(path), onclick: () => toggleTile(path)},
+      const tile = el('div', {class: 'phototile', title: baseName(path), onclick: event => toggleTile(path, event)},
         gridPicture(path),
         el('button', {class: 'tilewhole', title: 'Show it whole', onclick: event => { event.stopPropagation(); showWhole(path); }}, '⤢'),
         mark, el('div', {class: 'tilename'}, view.sides && screen.states.length ? groupBadge((view.info.get(path) || {}).g, view.sides) : '',
@@ -879,8 +990,7 @@ function row({path, depth, flat, guides}) {
     // (Tapping it selects its row too, so the buttons below act on what was just touched)
     parts.push(el('button', {class: 'mark c-' + color, title: 'Tap for the next: ⇒, ⇐, or leave it', onclick: event => {
       event.stopPropagation();
-      const next = nextState(path);
-      act('select', {path: path === '.' ? '' : path}).then(() => act('state', {paths: [path], name: next}));
+      markNow(path, nextState(path));
     }}, mark.trim() || '·'));
     if (view.sides && info.t === 'f') parts.push(groupBadge(info.g, view.sides));
   } else if (screen.multi) {
@@ -889,8 +999,7 @@ function row({path, depth, flat, guides}) {
     // (Checking a row selects it too: what was just touched is what the details show)
     const box = el('input', {type: 'checkbox', onclick: event => {
       event.stopPropagation();
-      const on = event.target.checked;
-      act('select', {path: path === '.' ? '' : path}).then(() => act('pick', {paths: [path], on}));
+      checkNow(path, event.target.checked, event.shiftKey ? visibleRows().map(one => one.path) : null);
     }});
     box.checked = total > 0 && count === total;
     box.indeterminate = count > 0 && count < total;
@@ -938,10 +1047,8 @@ async function loadPreview() {
         'aria-pressed': String(!!view.previewMax), onclick: () => maximizePreview(!view.previewMax)}, view.previewMax ? '⤡' : '⤢')));
   }
   if (lines.length) content.push(el('pre', {}, lines.map(line => [plainOf(line).startsWith('Diff: ') ? diffToggle(line) : previewLine(line), '\n'])));
-  // (The grid open: the photo's thumbnail, which the grid has already, rather than its picture made anew)
-  if (view.gridDir && view.selected && PHOTO_EXTENSIONS.test(view.selected)) {
-    content.push(el('img', {class: 'previewthumb', src: pictureUrl(view.selected, GRID_SIZE), alt: baseName(view.selected)}));
-  } else if (found.image) { const canvas = pictureCanvas(found.image); if (canvas) content.push(canvas); }
+  // (The grid open: no picture, the grid shows it; else the photo's, small)
+  if (!view.gridDir && found.image) { const canvas = pictureCanvas(found.image); if (canvas) content.push(canvas); }
   box.replaceChildren(content.length ? el('div', {class: 'preview'}, content) : '');
   box.classList.toggle('max', !!view.previewMax && content.length > 0);
   colorNames(box);
@@ -1062,7 +1169,7 @@ function renderSide() {
 const GENERAL_KEYS = new Set(['i', '?']);
 // Keys the page has no button for: the menu (:) lists what's selected can have done, each with its key, as the
 // buttons here do (with files picked, it's Enter's); the replicas dashboard (#) is the Replicas tab's
-const NO_BUTTON_KEYS = new Set([':', '#', 'Ctrl-T', 'g', 'Ctrl-Q']);  // (Ctrl-Q: the combined tree's Back, keeping its marks, quitScreen())  // (g: the diff's Merge..., diffToggle())  // (Ctrl-T: the diff's views, in its title, diffToggle())
+const NO_BUTTON_KEYS = new Set([':', '#', 'Ctrl-T', 'g', 'Ctrl-Q', 'Ctrl-R']);  // (Ctrl-R: the ⟳ beside a tree's search)  // (Ctrl-Q: the combined tree's Back, keeping its marks, quitScreen())  // (g: the diff's Merge..., diffToggle())  // (Ctrl-T: the diff's views, in its title, diffToggle())
 // Keys whose buttons are shown only where they do something: exploring a zip on one, a diff's views on a diff
 const KEY_APPLIES = {
   'e': () => /\.zip$/i.test(view.selected || ''),
@@ -1117,7 +1224,7 @@ const QUICK_ACTIONS = [
 function quickActions(screen, selected) {
   return [el('div', {class: 'acton'}, view.picked.size ? ['These act on ', targetChip(screen, selected)] : 'These act on the checked files: check some first')].concat(
     QUICK_ACTIONS.filter(([, key]) => key !== 'e' || /\.zip$/i.test(view.selected || '')).map(([glyph, key, text]) =>
-      el('button', {class: 'quick', disabled: !view.picked.size, onclick: () => { view.pendingKey = key; view.menuAsked = true; act('enter'); }},
+      el('button', {class: 'quick' + (ACTION_TONES[glyph] ? ' tone-' + ACTION_TONES[glyph] : ''), disabled: !view.picked.size, onclick: () => { view.pendingKey = key; view.menuAsked = true; act('enter'); }},
         icon(glyph), text(screen), el('small', {class: 'keyname'}, key))));
 }
 

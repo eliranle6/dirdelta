@@ -26,7 +26,7 @@ def check_contents(relpaths, src, src_index, index, checked, selection, send, se
         send = lambda found=None, default=None: None
     missing = set(relpaths)
     matcher = None
-    dst_name = index.replica.displayname()
+    dst_name = index.replica.screen_name()
     pending = None
     while True:
         if pending is None or not index.is_built():

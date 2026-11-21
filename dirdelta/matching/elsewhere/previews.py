@@ -23,9 +23,9 @@ def find_previews(relpaths, src, index, send, checked=None, src_index=None, on_s
     gone. checked, src_index: as _Matcher's. on_status, if given, is told how far it's got, a text (None once
     it's done), rather than the previews saying it: the picker's status bar says it then, not the column
     that's about the selection."""
-    dst_name = index.replica.displayname()
+    dst_name = index.replica.screen_name()
     # (By the replica's one name: e.g. "Finding where Grey HD has them: 4,223 of its files listed...")
-    title = "Finding where %s has them" % (replicanames.name(dst_name),)
+    title = "Finding where %s has them" % (dst_name,)
 
     def status(how_far, files=None):
         text = "%s: %s..." % (title, how_far) if how_far else None
@@ -51,7 +51,7 @@ def find_previews(relpaths, src, index, send, checked=None, src_index=None, on_s
                 found = {}
     except (OSError, ValueError) as error:
         status(None)
-        send(default=["Couldn't find where %s has them:" % (replicanames.name(dst_name),), str(error)])
+        send(default=["Couldn't find where %s has them:" % (dst_name,), str(error)])
         return
     status(None)
     # Dirs show nothing

@@ -32,32 +32,28 @@ class ReplicasTest(InboxSortTest):
         self.sort([['b.jpg'], None], ['Remove it from', YES, SURE], is_dry_run=True)
         self.assertEqual(self.sorter.changes.paths(), [])
 
-    def test_a_sort_reads_the_logs_and_offers_entries_once_done(self):
+    def test_a_sort_reads_the_logs_and_notes_the_change_without_an_entry(self):
         with open(os.path.join(self.root, 'last_update.txt'), 'w') as log:
             log.write("17.05.2026 - removed old money.ods\n")
         known = replicas.Replicas()
         picks = [['a.txt'], None]
         with helpers.scripted_files_picker(lambda relpaths: picks.pop(0)), \
-                helpers.answering_option_picker(['Move it to a dir you pick', YES, 'Add it to its', log_entries.NO_ENTRY]) as pick, \
+                helpers.answering_option_picker(['Move it to a dir you pick', YES]) as pick, \
                 mock.patch('dirdelta.ui.picker.pick_under_dir', return_value=('', os.path.join(self.root, 'docs'))), \
                 mock.patch('dirdelta.ui.picker.view_files', return_value=True), \
                 mock.patch('dirdelta.known.replicas.save'), mock.patch('dirdelta.util.dryrun.DRYRUN', False), \
                 mock.patch('dirdelta.known.replicalog.identity', side_effect=lambda path: 'id:' + path), \
                 mock.patch.object(Sort, 'prepare_hashing'), self.synchronously():
             inbox.run(self.inbox, self.root, known)
-        # Seen at the start, and its log's last entry is the one added since
+        # Seen at the start; changed (noted), its log left as it was: no entry is offered any more
         self.assertIsNotNone(known.known['id:' + self.root]['seen'])
-        self.assertEqual(known.known['id:' + self.root]['last_entry']['text'], "added 1 file from %s" % (self.inbox,))
+        self.assertIsNotNone(known.known['id:' + self.root]['changed'])
+        self.assertEqual(known.known['id:' + self.root]['last_entry']['text'], "removed old money.ods")
         # An inbox has no log: it isn't a replica kept track of
         self.assertNotIn('id:' + self.inbox, known.known)
         self.assertFalse(self.exists('inbox', 'last_update.txt'))
-        # Then offered for the changed one: the sorted tree (it's added the file), not the inbox the
-        # file left
-        headers = [call.kwargs['header'] for call in pick.call_args_list[2:]]
-        self.assertIn("added 1 file from %s" % (self.inbox,), headers[0])
-        self.assertFalse(any(self.inbox + '?' in header or 'moved 1 file' in header for header in headers))
         with open(os.path.join(self.root, 'last_update.txt')) as log:
-            self.assertTrue(log.read().endswith(" - added 1 file from %s\n" % (self.inbox,)))
+            self.assertEqual(log.read(), "17.05.2026 - removed old money.ods\n")
 
     def test_from_a_read_only_inbox_only_copying_is_left_and_its_said(self):
         self.read_only_inbox()

@@ -126,8 +126,13 @@ class DirTree(Listeners, Copying, Changes, DirMoves, FilesInfo):
         return self._rootpath
 
     def displayname(self):
-        """The replica's name for the screens: its path, as given (a cloud tree's says it's one)"""
+        """The replica's path, as given (a cloud tree's says it's one): what logs and records keep"""
         return self._rootpath
+
+    def screen_name(self):
+        """What the screens call the replica: its one name (its label, else its disk: replicanames.name())"""
+        from dirdelta.known import replicanames
+        return replicanames.name(self.displayname())
 
     def _set_default_subdir(self, parent, name):
         relpath, fullpath = parent.data._child_paths(name)

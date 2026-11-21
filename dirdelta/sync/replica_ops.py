@@ -75,7 +75,7 @@ def refresh_replica(replica, relpath=''):
     """Read the cloud replica's folder at relpath (default: all of it) anew from Drive
     (CloudDirTree.refresh_from_drive()). Returns whether it was; if not, it's said why (on a screen),
     and the replica and the cache are as they were."""
-    title = "Refresh %s from Google Drive" % (os.path.join(replica.displayname(), relpath).rstrip('/'),)
+    title = "Refresh %s from Google Drive" % (os.path.join(replica.screen_name(), relpath).rstrip('/'),)
     try:
         replica.refresh_from_drive(relpath)
     except KeyboardInterrupt:

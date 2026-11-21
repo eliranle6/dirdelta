@@ -44,7 +44,7 @@ def compare(relpaths, src, dst, src_index, dst_index, compared):
     Drive file with no hash) aren't noted. Returns how many differ of those compared."""
     nr_differ = nr_done = 0
     with messages.progress_screen("Comparing %s of the same size in %s and %s" % (
-            replica_ops.files_text(len(relpaths)), src.displayname(), dst.displayname()), dryrun.label()):
+            replica_ops.files_text(len(relpaths)), src.screen_name(), dst.screen_name()), dryrun.label()):
         try:
             for number, relpath in enumerate(relpaths, 1):
                 messages.print_progress("Comparing %d of %d: %s" % (number, len(relpaths), relpath))

@@ -26,7 +26,7 @@ class Lists(object):
         if change is None:
             return
         self._diff_at = (relpath, send)
-        shown = differing.preview_lines(change, self._dst.displayname(), replica_ops.can_copy(self._src, self._dst))
+        shown = differing.preview_lines(change, self._dst.screen_name(), replica_ops.can_copy(self._src, self._dst))
         if not (replica_ops.is_local(self._src) and replica_ops.is_local(self._dst)):
             send({relpath: shown + ["", picker.styled([("Getting its versions for their diff...", 'grey')])]})
         names = replicanames.short_names([self._path_of(self._src), self._path_of(self._dst)])
@@ -65,9 +65,9 @@ class Lists(object):
 
     def _say_nothing(self):
         if self._only_differing:
-            lines = ["No file at the same path in %s and %s differs." % (self._src.displayname(), self._dst.displayname())]
+            lines = ["No file at the same path in %s and %s differs." % (self._src.screen_name(), self._dst.screen_name())]
         else:
-            lines = ["%s has all of %s's files." % (self._dst.displayname(), self._src.displayname())]
+            lines = ["%s has all of %s's files." % (self._dst.screen_name(), self._src.screen_name())]
         unverified = comparing.unverified_line(self.differs)
         if unverified:
             lines += ["", picker.unstyled(unverified)]
@@ -99,7 +99,7 @@ class Lists(object):
         where dst may have the missing ones (elsewhere.find_previews())"""
         if differs:
             can_replace = replica_ops.can_copy(self._src, self._dst)
-            send({relpath: differing.preview_lines(change, self._dst.displayname(), can_replace)
+            send({relpath: differing.preview_lines(change, self._dst.screen_name(), can_replace)
                   for relpath, change in differs.items()})
         if not missing:
             send(default=[])

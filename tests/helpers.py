@@ -41,6 +41,10 @@ atexit.register(shutil.rmtree, _downloads_dir, ignore_errors=True)
 # Nor find the real Drive login (secrets/token.json): what looks at Drive only when there's a login (a replica's own
 # record, see web/records.py) doesn't, and what does is given a fake service
 driveapi.TOKEN_PATH = os.path.join(_downloads_dir, 'no-token.json')
+# The sync's texts with each replica by its path, as the tests say them (a test's temp dirs are all one disk's, unnamed:
+# their one name, LocalDisk, wouldn't tell them apart); what a replica is called is test_replicanames'
+from dirdelta.trees.dirtree import DirTree  # noqa: E402
+DirTree.screen_name = lambda self: self.displayname()
 
 
 def remove_drive_cache(path):
