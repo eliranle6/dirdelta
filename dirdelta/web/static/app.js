@@ -321,11 +321,20 @@ function renderPickerParts() {
   renderSide();
   const footer = document.getElementById('footer');
   if (footer) footer.replaceChildren(view.screen.footer ? segmentsSpan(view.screen.footer) : '');
-  document.getElementById('status').replaceChildren(segmentsSpan(view.status));
+  document.getElementById('status').replaceChildren(segmentsSpan(NARROW.matches ? shortStatus(view.status) : view.status));
+  markHashingNow(document.getElementById('status'));
   renderPickerActions();
   renderHelp();
   colorNames(document.getElementById('main'));
   colorNames(document.getElementById('bottom'));
+}
+
+// The status line on a phone: each replica's hashing without its files' counts ("63% hashed (1,204/1,911)" -> "63%
+// hashed", with dots while it goes on; "(…, paused)" -> "(paused)")
+const HASH_COUNTS = /% hashed( \u2713)? \((?:[\d,]+\/[\d,]+)(?:, ([^)]*))?\)/g;
+const HASHING_NOW = '\u2063';
+function shortStatus(status) {
+  return (status || '').replace(HASH_COUNTS, (all, done, how) => '% hashed' + (done || '') + (how ? ' (' + how + ')' : done ? '' : HASHING_NOW));
 }
 
 // A sync's two replicas named in its texts (menus, headers, messages, previews, buttons): each name with its icon
@@ -1361,6 +1370,17 @@ function renderHome() {
 }
 
 function waitingDots() { return el('span', {class: 'dots', style: 'animation-delay:-' + (Date.now() % 1600) + 'ms'}); }
+
+// (The status line's marks where a replica's hashing goes on, made dots once it's drawn: see shortStatus())
+function markHashingNow(root) {
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  const found = [];
+  while (walker.nextNode()) if (walker.currentNode.data.includes(HASHING_NOW)) found.push(walker.currentNode);
+  for (const node of found) {
+    const [before, after] = node.data.split(HASHING_NOW);
+    node.replaceWith(before, waitingDots(), after);
+  }
+}
 
 // The breadcrumbs (under the tabs: a run is a page of its tab's): the tab first (a sync's Replicas, a sort's
 // Inboxes), then where the run is, without dirdelta's own name (the top bar has it)
