@@ -12,8 +12,8 @@
 .bar input { flex: 1 1 220px; }
 .chips { display: flex; gap: 6px; flex-wrap: wrap; }
 .chips button.on { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
-.day h2 { font-size: 15px; margin: 14px 0 6px; display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
-.day h2 small { color: var(--muted); font-weight: 400; }
+.day h3, .day h2 { font-size: 15px; margin: 14px 0 6px; display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.day h3 small, .day h2 small { color: var(--muted); font-weight: 400; }
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 6px; }
 .photo { position: relative; background: var(--card); border: 1px solid var(--line); border-radius: 8px; overflow: hidden;
   cursor: pointer; outline: 3px solid transparent; }
@@ -34,7 +34,7 @@
 select { font: inherit; padding: 7px 8px; border-radius: 8px; border: 1px solid var(--line); background: var(--card); color: var(--fg); max-width: 100%; }
 .note { color: var(--muted); font-size: 13px; overflow-wrap: anywhere; }
 .lines div { font-size: 12px; }
-.day h2 button { font-weight: 400; font-size: 14px; }
+.day h3 button, .group button { font-weight: 400; font-size: 14px; }
 a.button { font: inherit; border: 1px solid var(--line); background: var(--card); color: var(--fg); border-radius: 8px;
   padding: 7px 12px; text-decoration: none; display: inline-block; }
 a.button.primary, .chips a.button.on { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); }
@@ -77,3 +77,14 @@ h2.head { display: flex; align-items: center; gap: 8px; }
 .card.inbox .phonename { display: flex; align-items: center; gap: 8px; }
 .card.inbox .phonename input, .card.inbox .forget input { max-width: 240px; }
 .card.quiet.adder { border-style: dashed; }
+/* An import's one screen: its head (from, into, what's new), its groups' titles, and its end, quiet at the bottom */
+.importhead .head { font-size: 17px; gap: 8px; flex-wrap: wrap; }
+.importhead .head select { font-size: 15px; font-weight: 600; }
+.importhead .counts { display: flex; flex-wrap: wrap; gap: 4px 14px; align-items: baseline; margin: 6px 0; }
+.importhead .counts b { font-size: 18px; }
+.importhead .showall { color: var(--muted); font-size: 14px; display: inline-flex; align-items: center; gap: 4px; }
+.group { display: flex; gap: 6px 8px; flex-wrap: wrap; align-items: center; margin: 22px 0 4px; padding-top: 10px; border-top: 2px solid var(--line); }
+.group h2 { font-size: 18px; margin: 0; display: flex; gap: 8px; align-items: baseline; }
+.group h2 small { color: var(--muted); font-weight: 400; font-size: 14px; }
+.day h3 { font-size: 15px; margin: 12px 0 6px; display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.endimport { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 24px; }

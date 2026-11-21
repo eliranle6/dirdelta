@@ -54,7 +54,7 @@ class Check(object):
 
     @property
     def replica_paths(self):
-        return self.known.replica_paths if self.known is not None else [self.dest] + synced_with(self.dest)
+        return self.known.replica_paths if self.known is not None else [self.dest]
 
 
 class Checks(object):
@@ -93,7 +93,8 @@ class Checks(object):
 
     def _check(self, check):
         try:
-            found = known.Known([check.dest] + synced_with(check.dest))
+            # (The replica sorted into alone: what the others have isn't what this import's about)
+            found = known.Known([check.dest])
             found.index()
             suggester = suggest.Suggester(found.media_relpaths(check.dest))
         except Exception:
@@ -165,10 +166,12 @@ def synced_with(path):
 
 def destinations(source=None):
     """[{'path', 'name', 'disk', 'kind'}] of the user's replicas an import of source may go into (any:
-    they're copies of one tree), the likeliest first: the one it was last sorted into, then local ones
+    they're copies of one tree), the likeliest first: the main one, the one it was last sorted into, then local ones
     that are there (a disk's); for a Drive folder, Drive ones too, after them"""
     known_replicas = replicas.load()
-    candidates = [root for inbox, root in known_replicas.sorts if inbox == source] + \
+    # (The main replica first: the one the user's tree is sorted into, the others synced from it)
+    main = [known_replicas.main_replica] if known_replicas.main_replica else []
+    candidates = main + [root for inbox, root in known_replicas.sorts if inbox == source] + \
         [path for path in known_replicas.replica_paths() if not paths.is_cloud_path(path)] + known_replicas.replica_paths()
     is_drive = source is not None and paths.is_cloud_path(source)
     found = [path for path in dict.fromkeys(candidates) if path != source and

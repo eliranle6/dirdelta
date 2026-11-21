@@ -6,6 +6,7 @@ Drive one again (see phoneimport/, and checks.py)"""
 import os
 
 from dirdelta.phoneimport import applying, copying, sources, store, thumbs
+from dirdelta.known import replicanames
 from dirdelta.known import replicas
 from dirdelta.trees import paths
 from dirdelta.web import naming
@@ -42,7 +43,8 @@ def inboxes():
         found.setdefault(path, ('newphone', name, True))
     added = known_replicas.inbox_paths()
     for path in added:
-        found.setdefault(path, ('drive' if paths.is_cloud_path(path) else 'folder', naming.name(path),
+        # (An inbox by its label, else its folder's own name: "unsorted", not its disk's)
+        found.setdefault(path, ('drive' if paths.is_cloud_path(path) else 'folder', replicanames.label(path) or os.path.basename(path.rstrip('/')),
                                 paths.is_cloud_path(path) or os.path.isdir(path)))
     for one in imports:
         # (Which of its files the replicas have: checked again when due, in the background, and kept)

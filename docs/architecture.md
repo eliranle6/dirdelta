@@ -1303,6 +1303,19 @@ every link carries, then a cookie), and a watcher.
   yellow ("New phone: SAMSUNG Android", Not one of yours yet), its name to give it and Add this phone, and it isn't
   imported from until it's added (`/api/phones/add`, `/api/phones/remove`; `importing.inboxes()`'s kind `newphone`);
   a file from before has the phones its imports were from, once.
+- The Inboxes page and an import, redone 2026-11-21: an unsorted folder (on a disk or in Drive) is sorted with the
+  file sort (Sort files: any kind of file, the sort's own screens with Claude's suggestions; an earlier photo import of
+  it still opened from its card), a phone imported from (Import photos); each into the main replica by default
+  (`checks.destinations()`: the main one first), another chosen in Into. An import is compared with the replica it goes
+  into alone (`checks.Check`: `known.Known([dest])`), and is one screen (`import.js`'s `renderImport()`): its head (from,
+  Into, which opens another import, how many are new, ready to move, already in the replica (hidden; Show them all),
+  moved, skipped; what's being done: listing, copying the new ones, checking again; files given a folder that the replica
+  has already, said, with Skip them), the sticky meter of the new ones decided and the selection's bar, then the files
+  in their groups (`sources.group_of()`: a phone's camera's, DCIM; WhatsApp's images; its videos; a folder's all one),
+  each with how many are new and the folders suggested for all of it (`Suggester.suggest_group()`: where the replica
+  keeps WhatsApp's images, or videos, by their names), then by day (the day's suggestions, as before); End this import
+  at the bottom. The new files (not in the replica by name and size) are copied, and so hashed, on their own as the
+  import is shown (`state._copy_new()`, each once), so one the replica has under another name is found by its contents.
 - The import (`/import`, `phoneimport/`): photos and videos (not audio: `sources.is_photo()`) from a phone (gvfs's MTP mount: the source is its storage, `sources.phones()`, and what's imported its camera's, DCIM, and WhatsApp's images and videos, under Android/media or where older phones kept them, what was sent too (a photo taken in WhatsApp is only in its Sent/): `sources.PHONE_DIRS`; an import from before 2026-11-21 has its DCIM alone; the
   phone called by its model: "Pixel 8"), a Drive inbox (a sort's inbox in Drive: listed from the Drive
   cache, hashed by Drive, its thumbnails Drive's, downloaded into a local replica and then moved to

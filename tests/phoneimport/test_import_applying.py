@@ -150,18 +150,22 @@ class ImportPageTest(ImportTest):
         import_id = self.call('POST', '/api/imports/new', body={'source': self.source, 'dest': self.dest})['id']
         self.wait_until(lambda: self.done(import_id))
         state = self.call('GET', '/api/import', {'id': import_id})
-        self.assertEqual(['2026-02-24', '2026-02-25'], [day['day'] for day in state['days']])
-        first, second = state['days'][0]['files'][0], state['days'][1]['files'][0]
+        # (A folder's files are one group; a phone's by where they are on it: test_import_copying)
+        self.assertEqual(['all'], [group['key'] for group in state['groups']])
+        days = state['groups'][0]['days']
+        self.assertEqual(['2026-02-24', '2026-02-25'], [day['day'] for day in days])
+        first, second = days[0]['files'][0], days[1]['files'][0]
         self.assertEqual([{'replica': self.dest, 'relpath': 'media/Trip/PXL_20260224_1.jpg', 'how': 'namePhoneUnhashed'}],
                          first['have'])
         self.assertEqual([], second['have'])
-        self.assertEqual(['media/Trip'], state['days'][1]['suggested'])
+        self.assertEqual(['media/Trip'], days[1]['suggested'])
         self.assertEqual({'files': 1, 'size': 7}, state['overview']['nameOnly'])
         self.call('POST', '/api/import/read', body={'id': import_id, 'which': 'nameOnly'})
         self.wait_until(lambda: self.done(import_id))
         brief = self.call('GET', '/api/import', {'id': import_id, 'files': '0'})
-        self.assertNotIn('days', brief)
-        self.assertEqual((2, 1, 1, 1), (brief['overview']['total'], brief['overview']['hashed'],
+        self.assertNotIn('groups', brief)
+        # (The one the replica lacks was copied, and hashed, on its own as the import was shown)
+        self.assertEqual((2, 2, 1, 1), (brief['overview']['total'], brief['overview']['hashed'],
                                         brief['overview']['replicas'][0]['nameReplicaUnhashed'], brief['overview']['inNone']))
         self.assertEqual(1, brief['replicas'][0]['unhashed'])
         self.call('POST', '/api/import/assign', body={'id': import_id, 'rels': [first['rel']], 'skip': True})
@@ -215,7 +219,7 @@ class ImportPageTest(ImportTest):
         os.utime(self.write(self.source, 'x.jpg', 'b'), (0, 0))
         import_id = self.call('POST', '/api/imports/new', body={'source': self.source, 'dest': self.dest})['id']
         self.wait_until(lambda: self.done(import_id))
-        days = self.call('GET', '/api/import', {'id': import_id})['days']
+        days = self.call('GET', '/api/import', {'id': import_id})['groups'][0]['days']
         self.assertEqual('2025-01-01', days[0]['day'])
         self.assertEqual(2, len(days))
 

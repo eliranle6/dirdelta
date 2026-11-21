@@ -70,6 +70,8 @@ def import_state(found, check, with_files=True):
     reading, moving = copying.reading_of(found.source), applying.applying_of(found.id)
     replica_paths = check.replica_paths
     state = dict(summary(found), label=list(dryrun.label()), checked=replica_paths, indexed=known is not None,
+                 # (The replicas it could go into instead: each another import, chosen on its page)
+                 dests=[{'path': dest['path'], 'name': dest['name']} for dest in checking.destinations(found.source)],
                  errors=(known.errors if known is not None else []) + check.errors,
                  checking={'busy': check.is_checking,
                            'ago': int(time.time() - check.checked_at) if check.checked_at else None},
@@ -79,16 +81,36 @@ def import_state(found, check, with_files=True):
                  reading={'phase': reading.phase, 'message': reading.message, 'asked': reading.nr_asked,
                           'copied': reading.nr_copied} if reading else None,
                  applying={'done': moving.is_done, 'lines': moving.lines} if moving else None)
+    if haves is not None:
+        _copy_new(found, files, haves)
     if with_files:
         state['folders'] = known.dirs.get(found.dest, []) if known is not None else []
-        state['days'] = _days(files, haves, check.suggester)
+        state['groups'] = _groups(found.source, files, haves, check.suggester)
     return state
 
 
-def _days(files, haves, suggester):
-    """The files by day (each with where the replicas have it, and how sure that is), and the dirs
-    suggested for each day"""
-    days = {}
+# The files each import asked to have copied (and hashed) on its own, so each is asked once
+_copied_new = {}
+
+
+def _copy_new(found, files, haves):
+    """Copy (and so hash) the import's files the replica doesn't have by name and size, in the background: they're the
+    ones to sort, which moving them needs copied anyway, and hashing them may find the replica has some by contents
+    (renamed). Each once."""
+    asked = _copied_new.setdefault(found.id, set())
+    new = [relpath for relpath, info in files.items() if not haves.get(relpath) and info['state'] == store.PENDING
+           and not info.get('copied') and relpath not in asked]
+    if new:
+        asked.update(new)
+        copying.read(found.source, is_listing=False, relpaths=new)
+
+
+def _groups(source, files, haves, suggester):
+    """The files in their groups (sources.group_of(): a phone's camera's, WhatsApp's images, its videos), each with the
+    dirs suggested for it all (where the replica keeps its kind), and in it by day (each file with where the replica
+    has it, and how sure that is, and the dirs suggested for the day)"""
+    groups = {}
+
     def by_day(item):
         # (The files without a date last)
         day = suggest.date_of(item[0], item[1]['mtime'])
@@ -96,9 +118,13 @@ def _days(files, haves, suggester):
     for relpath, info in sorted(files.items(), key=by_day):
         have = [{'replica': replica, 'relpath': where, 'how': overview.match(info, how)}
                 for replica, where, how in haves[relpath]] if haves is not None else None
+        days = groups.setdefault(sources.group_of(source, relpath), {})
         days.setdefault(str(suggest.date_of(relpath, info['mtime'])), []).append(dict(info, rel=relpath, have=have))
-    return [{'day': day, 'files': day_files, 'suggested': suggester.suggest(_date(day)) if suggester else []}
-            for day, day_files in days.items()]
+    order = list(sources.GROUP_TITLES)
+    return [{'key': key, 'title': sources.GROUP_TITLES[key], 'suggested': suggester.suggest_group(key) if suggester else [],
+             'days': [{'day': day, 'files': day_files, 'suggested': suggester.suggest(_date(day)) if suggester else []}
+                      for day, day_files in days.items()]}
+            for key, days in sorted(groups.items(), key=lambda item: order.index(item[0]))]
 
 
 def _date(text):

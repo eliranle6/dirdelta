@@ -24,15 +24,28 @@ def date_of(name, mtime=None):
     return datetime.date.fromtimestamp(mtime) if mtime else None
 
 
+# WhatsApp's names: IMG-20260224-WA0001.jpg, VID-20260224-WA0003.mp4
+_WHATSAPP = {'whatsapp-images': re.compile(r'^IMG-[0-9]{8}-WA[0-9]+'), 'whatsapp-video': re.compile(r'^VID-[0-9]{8}-WA[0-9]+')}
+
+
 class Suggester(object):
-    """Suggestions from the dirs of relpaths (a replica's files) by their names' dates"""
+    """Suggestions from the dirs of relpaths (a replica's files) by their names' dates, and for a group of files
+    (WhatsApp's images, its videos: sources.group_of()) where the replica keeps the files of that kind"""
 
     def __init__(self, relpaths):
         self._by_day = collections.defaultdict(collections.Counter)
+        self._by_group = collections.defaultdict(collections.Counter)
         for relpath in relpaths:
             day = date_of(relpath)
             if day is not None:
                 self._by_day[day][posixpath.dirname(relpath)] += 1
+            for group, pattern in _WHATSAPP.items():
+                if pattern.match(posixpath.basename(relpath)):
+                    self._by_group[group][posixpath.dirname(relpath)] += 1
+
+    def suggest_group(self, group):
+        """[dir], the likeliest first, where the replica keeps the files of group (WhatsApp's), or []"""
+        return [dirpath for dirpath, _ in self._by_group.get(group, collections.Counter()).most_common(MAX_SUGGESTED)]
 
     def suggest(self, day):
         """[dir], the likeliest first, for a photo of day (a date), or [] for none"""

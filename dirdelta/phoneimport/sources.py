@@ -87,6 +87,32 @@ def drive_inboxes():
     return [(os.path.basename(path.rstrip('/')), path) for path in found]
 
 
+# The groups an import's files are shown in, by where they are in the source: (key, title)
+CAMERA, WHATSAPP_IMAGES, WHATSAPP_VIDEO, OTHER, ALL = 'camera', 'whatsapp-images', 'whatsapp-video', 'other', 'all'
+GROUP_TITLES = {CAMERA: 'Camera (DCIM)', WHATSAPP_IMAGES: 'WhatsApp images', WHATSAPP_VIDEO: 'WhatsApp videos',
+                OTHER: 'Other', ALL: 'Files'}
+
+
+def group_of(source, relpath):
+    """The group (a key of GROUP_TITLES) of the file at relpath of source: a phone's by the dir it's in (its camera's,
+    WhatsApp's images or videos), any other source's all one"""
+    parts = relpath.split('/')
+    if is_phone_storage(source):
+        if parts[0] == 'DCIM':
+            return CAMERA
+        if 'WhatsApp Images' in parts:
+            return WHATSAPP_IMAGES
+        if 'WhatsApp Video' in parts:
+            return WHATSAPP_VIDEO
+        return OTHER
+    # (An import from before of a phone's DCIM alone: its camera's)
+    return CAMERA if sources_dcim(source) else ALL
+
+
+def sources_dcim(source):
+    return source.startswith(GVFS_DIR) and os.path.basename(source.rstrip('/')) == 'DCIM'
+
+
 def describe(source):
     """{'device': the phone's name (or None, for a dir), 'drive': whether it's a Drive folder, 'inner':
     the path in it (in a phone's storage: 'DCIM'; a dir's whole path), 'full': source}"""

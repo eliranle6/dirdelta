@@ -1,35 +1,12 @@
-// The import page (web/importing.py): the imports and the phones plugged in; an import's overview (how
-// many files, how many hashed, what each replica has already and how sure that is), each count opening
-// its photos (#photos/KIND/REPLICA); the photos by day, each tagged with where the replicas have it,
-// chosen a dir (a day at once, or the ones selected), then moved in. The server keeps every choice at once.
+// The import page (web/importing.py): the inboxes, the user's phones (and any plugged in that isn't one of theirs) and
+// unsorted folders; and an import, one screen: the photos and videos the replica it goes into doesn't have (those it has
+// hidden, but on asking), in their groups (a phone's camera's, WhatsApp's images, its videos) and by day, each group and
+// day with the folders suggested for it, chosen a folder (all at once, or the ones selected), then moved in. The server
+// keeps every choice at once.
 'use strict';
 
 const params = new URLSearchParams(location.search);
-const page = {id: params.get('id'), data: null, selected: new Set(), filter: {kind: 'all', replica: ''}, timer: null, target: ''};
-
-// What the hash says is shown: the overview (none), or the photos a filter lets through
-function view() {
-  const [name, kind, replica] = location.hash.slice(1).split('/');
-  if (name !== 'photos') return 'overview';
-  page.filter = {kind: kind || 'all', replica: replica ? decodeURIComponent(replica) : ''};
-  return 'photos';
-}
-
-// (A replica in the address by its place among the import's replicas, 1 the first: never by its path)
-function photosLink(kind, replica) {
-  const at = replica && page.data ? (page.data.replicas || []).findIndex(found => found.path === replica) : -1;
-  return '#photos/' + kind + (at >= 0 ? '/' + (at + 1) : '');
-}
-
-// The replica's path the photos shown are filtered by ('' none), from the address's number (or, from before, its path)
-function filterReplica() {
-  const token = page.filter.replica;
-  if (!token) return '';
-  const found = /^\d+$/.test(token) && page.data ? (page.data.replicas || [])[+token - 1] : null;
-  return found ? found.path : token;
-}
-
-window.addEventListener('hashchange', () => { page.selected.clear(); window.scrollTo(0, 0); load(); });
+const page = {id: params.get('id'), data: null, selected: new Set(), timer: null, target: '', showAll: false};
 
 async function api(method, path, body) {
   const response = await fetch(path, method === 'GET' ? {} : {
@@ -109,28 +86,35 @@ function phoneActions(inbox) {
 
 function inboxCard(inbox) {
   if (inbox.kind === 'newphone') return newPhoneCard(inbox);
-  const [iconName, where] = INBOX_KINDS[inbox.kind];
+  return inbox.kind === 'phone' ? phoneCard(inbox) : folderCard(inbox);
+}
+
+// Where an inbox's files go: the main replica (the dests' first), else the one chosen; a choice only if there's another
+function intoChoice(dests, dest, onchange) {
+  return dests.length === 1 ? el('span', {class: 'note'}, 'Into ', el('b', {}, dests[0].name)) :
+    el('label', {class: 'note into'}, 'Into ', el('select', {onchange: event => onchange(event.target.value)},
+      dests.map(found => el('option', {value: found.path, selected: found.path === dest}, found.name))));
+}
+
+// One of the user's phones: its photos and videos (its camera's, WhatsApp's) imported into a replica, how far that is,
+// and its name to edit, or it to remove
+function phoneCard(inbox) {
   const progress = inboxProgress(inbox);
-  const head = el('div', {class: 'head'}, icon(iconName), el('b', {}, inbox.kind === 'phone' ? 'Photos on ' + inbox.name : inbox.name),
-    inbox.kind === 'phone' ? chip(inbox.there ? 'ok' : 'none', inbox.there ? 'Plugged in' : 'Not plugged in') :
-      !inbox.there ? chip('bad', 'Not there') : '');
-  const isPhone = inbox.kind === 'phone';
-  const parts = [head, inbox.kind === 'phone' ? pathLine(inbox.source.full, where + ' · ' + (inbox.source.folders ? 'its ' + inbox.source.folders.join(', ') :
-      'its ' + inbox.source.inner + ' folder')) : pathLine(inbox.path, where),
-    el('div', {class: 'note'}, progress.text),
-    bar(progress.share, 'sure'),
-    progress.checked ? el('div', {class: 'note'}, progress.checked) : ''];
+  const folders = inbox.source.folders || [inbox.source.inner];
+  const parts = [el('div', {class: 'head'}, icon('phone'), el('b', {}, inbox.name),
+      chip(inbox.there ? 'ok' : 'none', inbox.there ? 'Plugged in' : 'Not plugged in')),
+    el('div', {class: 'note'}, 'Its photos and videos: ' + folders.join(', ')),
+    inbox.imports.length ? el('div', {class: 'note'}, progress.text) : '',
+    inbox.imports.length ? bar(progress.share, 'sure') : ''];
   const dests = inbox.dests;
   if (!dests.length) {
-    parts.push(el('p', {class: 'note'}, inbox.kind === 'drive' ? 'Add a replica to sort it into (Replicas).' :
-      'Add a replica on this computer or a disk to sort it into (Replicas).'), isPhone ? phoneActions(inbox) : '');
+    parts.push(el('p', {class: 'note'}, 'Add a replica on this computer or a disk to import into (Replicas).'), phoneActions(inbox));
     return el('div', {class: 'card inbox'}, parts);
   }
-  // Into which replica: the one an import has, else the likeliest; a choice only if there's another
-  const ongoing = inbox.imports.find(found => !found.otherDisk);
-  let dest = ongoing ? ongoing.dest : dests[0].path;
+  // (Into the main replica, else the one chosen; the import of it, if there is one, continued)
+  let dest = dests[0].path;
   const opened = () => inbox.imports.find(found => found.dest === dest && !found.otherDisk);
-  const sortPhotos = el('button', {class: 'primary', disabled: !inbox.there && !opened(), onclick: async () => {
+  const go = el('button', {class: 'primary', onclick: async () => {
     const found = opened();
     if (found) return void (location.href = importLink(found.id));
     const answer = await api('POST', '/api/imports/new', {source: inbox.path, dest});
@@ -139,15 +123,33 @@ function inboxCard(inbox) {
   }});
   const named = () => {
     const found = opened();
-    sortPhotos.textContent = !found ? 'Sort photos' : importTally(found).left ? 'Continue sorting photos' : 'See its photos';
+    go.disabled = !inbox.there && !found;
+    go.textContent = !found ? 'Import photos' : importTally(found).left ? 'Continue importing' : 'See what was imported';
   };
   named();
-  const into = dests.length === 1 ? el('span', {class: 'note'}, 'Into ', el('b', {}, dests[0].name)) :
-    el('label', {class: 'note into'}, 'Into ', el('select', {onchange: event => { dest = event.target.value; named(); }},
-      dests.map(found => el('option', {value: found.path, selected: found.path === dest}, found.name))));
-  parts.push(into, el('div', {class: 'row2'}, sortPhotos,
-    inbox.kind !== 'phone' ? el('button', {disabled: !inbox.there, onclick: () => startFlow({kind: 'sort', inbox: inbox.path, root: dest})}, 'Sort all files') : '',
-    inbox.added ? forgetButton(inbox.path, 'inbox') : '', isPhone && inbox.phone ? phoneActions(inbox) : ''));
+  parts.push(intoChoice(dests, dest, value => { dest = value; named(); }), el('div', {class: 'row2'}, go, phoneActions(inbox)));
+  return el('div', {class: 'card inbox'}, parts);
+}
+
+// An unsorted folder (on a disk, or in Drive): its files, of any kind, sorted into a replica (the sort's own screens, with
+// Claude's suggestions); an earlier photo import of it, if there is one, still opened from here
+function folderCard(inbox) {
+  const [iconName, where] = INBOX_KINDS[inbox.kind];
+  const parts = [el('div', {class: 'head'}, icon(iconName), el('b', {}, inbox.name), !inbox.there ? chip('bad', 'Not there') : ''),
+    pathLine(inbox.path, where)];
+  const dests = inbox.dests;
+  if (!dests.length) {
+    parts.push(el('p', {class: 'note'}, inbox.kind === 'drive' ? 'Add a replica to sort it into (Replicas).' :
+      'Add a replica on this computer or a disk to sort it into (Replicas).'));
+    return el('div', {class: 'card inbox'}, parts);
+  }
+  let dest = dests[0].path;
+  parts.push(intoChoice(dests, dest, value => { dest = value; }),
+    el('div', {class: 'row2'}, el('button', {class: 'primary', disabled: !inbox.there, onclick: () => startFlow({kind: 'sort', inbox: inbox.path, root: dest})}, 'Sort files'),
+      inbox.added ? forgetButton(inbox.path, 'inbox') : ''));
+  const earlier = inbox.imports.find(found => !found.otherDisk);
+  if (earlier) parts.push(el('div', {class: 'note'}, 'An earlier photo import of it into ' + earlier.destName + ': ',
+    el('a', {href: importLink(earlier.id)}, 'open it')));
   return el('div', {class: 'card inbox'}, parts);
 }
 
@@ -204,47 +206,27 @@ function countsText(counts, source) {
 // An import
 
 async function loadImport() {
-  const shown = view();
-  const data = await api('GET', '/api/import?id=' + encodeURIComponent(page.id) + (shown === 'overview' ? '&files=0' : ''));
+  const data = await api('GET', '/api/import?id=' + encodeURIComponent(page.id));
   if (data.error) throw new Error(data.error);
-  if (view() !== shown) return;
   page.data = data;
-  const title = sourceName(data.source) + ' → ' + data.destName;
-  document.getElementById('where').replaceChildren(' > ', shown === 'overview' ? title :
-    el('a', {href: '#'}, title), shown === 'overview' ? '' : ' > ' + filterText());
+  document.getElementById('where').replaceChildren(' > ', sourceName(data.source) + ' → ' + data.destName);
   document.getElementById('labels').replaceChildren(labelChip(data.label));
-  if (shown === 'overview') renderOverview(); else renderImport();
+  renderImport();
   const reading = data.reading && (data.reading.phase === 'listing' || data.reading.phase === 'copying');
-  const hashing = data.replicas.some(replica => replica.reading || (replica.hashing && replica.hashing.started && replica.hashing.state !== 'done'));
-  const busy = reading || hashing || (data.applying && !data.applying.done) || data.checking.busy;
+  const busy = reading || (data.applying && !data.applying.done) || data.checking.busy;
   later(busy ? 2 : 10);
-}
-
-// The name of a replica of the import shown, with where it is ('eliran (Drive)'), else its dir's
-function nameOf(path) {
-  const found = page.data && (page.data.replicas || []).find(replica => replica.path === path);
-  return found ? found.name : replicaName(path);
 }
 
 function plural(count, one, many) { return count === 1 ? one : many; }
 
-// A replica's short name: its dir's (Drive's said so)
-function replicaName(path) {
-  const parts = path.split('/').filter(Boolean);
-  return parts[0] === 'cloud' ? 'Drive: ' + (parts.slice(1).pop() || 'all') : parts.pop() || path;
+function ago(seconds) {
+  if (seconds === null || seconds === undefined) return '';
+  return seconds < 60 ? 'just now' : seconds < 3600 ? Math.floor(seconds / 60) + ' min ago' : Math.floor(seconds / 3600) + ' h ago';
 }
 
 // A text that's waiting for something, with dots that go on (in step across the page's redraws)
 function waiting(text) {
   return el('span', {}, text, el('span', {class: 'dots', style: 'animation-delay:-' + (Date.now() % 1600) + 'ms'}));
-}
-
-function percent(part, whole) { return whole ? Math.floor(100 * part / whole) + '%' : ''; }
-
-
-function ago(seconds) {
-  if (seconds === null) return '';
-  return seconds < 60 ? 'just now' : seconds < 3600 ? Math.floor(seconds / 60) + ' min ago' : Math.floor(seconds / 3600) + ' h ago';
 }
 
 async function act(path, body) {
@@ -253,188 +235,40 @@ async function act(path, body) {
   await load();
 }
 
-// The overview: the source's files (by name and size, and hashed once copied), what each replica has
-// and how sure that is (with what makes it surer), and the choices made
-function renderOverview() {
-  const data = page.data, over = data.overview, reading = data.reading;
-  // A count, linking to its photos; none: no link, and where none is good news, a green check and goodText
-  const link = (count, text, kind, replica, cls, goodText) => count ?
-    el('a', {class: 'stat' + (cls ? ' ' + cls : ''), href: photosLink(kind, replica)},
-      el('b', {}, count), el('span', {}, text), el('span', {class: 'go'}, '›')) :
-    el('div', {class: 'stat zero' + (goodText ? ' good' : '')}, el('b', {}, goodText ? '✓' : '0'), el('span', {}, goodText || text));
-  const button = (text, onclick, cls) => el('button', {class: cls || '', onclick}, text);
-  const cards = [];
+// A file's place: the replica has it (by contents, or by name and size: ≈), it's to be moved (a folder chosen), moved,
+// skipped, or new (none of those)
+function isThere(file) { return !!(file.have && file.have.length); }
+function isDone(file) { return file.state === 'moved' || file.state === 'skipped'; }
+function isNew(file) { return !isThere(file) && !isDone(file); }
+function isReady(file) { return !!file.target && !isDone(file); }
+function isUndecided(file) { return isNew(file) && !file.target; }
+// What's shown: the new ones, and those to be moved (one the replica has too said so), else, on asking, all of them
+function isShown(file) { return page.showAll || isNew(file) || isReady(file); }
 
-  const drive = data.source.drive;
-  const thing = data.source.device ? 'phone' : drive ? 'Drive folder' : 'folder';
-  const listing = reading && reading.phase === 'listing';
-  const [tone, toneText] = !over.total ? ['red', listing ? waiting('Reading the ' + thing) : 'Not read yet'] :
-    over.unhashed.files ? ['yellow', reading && reading.phase === 'copying' ? waiting('Hashing') : 'Matched by name & size'] : ['green', 'Hashed'];
-  const source = el('div', {class: 'card tone-' + tone},
-    el('h2', {}, data.source.device ? 'Photos on ' + data.source.device : drive ? 'Photos in the inbox “' + bareName(data.source) + '”' :
-      'Photos in ' + bareName(data.source),
-      el('span', {class: 'pill'}, toneText)),
-    pathLine(data.source.full, data.source.device ? 'Phone · ' + data.source.inner : drive ? 'Google Drive inbox' : 'Folder'));
-  if (listing && !over.total) source.append(el('p', {}, waiting('Listing its files')));
-  else {
-    source.append(link(over.total, plural(over.total, 'photo or video', 'photos and videos') + (listing ? ' (listing again)' : ''), 'all'));
-    source.append(el('div', {class: 'stat'}, el('b', {}, over.hashed), el('span', {}, drive ? 'hashed (by Drive)' : 'hashed (copied to this computer)')),
-      el('div', {class: 'meter'}, el('div', {style: 'width:' + percent(over.hashed, over.total)})));
-    if (reading && reading.phase === 'copying') {
-      source.append(el('p', {}, waiting((drive ? 'Downloading' : 'Copying') + ' and hashing: ' + reading.copied + ' of ' + reading.asked)));
-    } else if (over.unhashed.files) {
-      source.append(el('p', {class: 'note'}, (over.hashed ? 'The rest are matched by name and size only: ' : 'Matched by name and size only: ') +
-        'usually right, not certain. Hashing ' + (drive ? 'downloads' : 'copies') + ' them to this computer (sorting needs that anyway) and compares their contents.'));
-      const buttons = el('div', {class: 'row2'});
-      if (over.nameOnly.files && over.nameOnly.files < over.unhashed.files) {
-        buttons.append(button((drive ? 'Download' : 'Copy') + ' & hash the ' + over.nameOnly.files + ' matched by name (' + size(over.nameOnly.size) + ')',
-          () => act('/api/import/read', {which: 'nameOnly'})));
-      }
-      buttons.append(button((drive ? 'Download' : 'Copy') + ' & hash all ' + over.unhashed.files + ' (' + size(over.unhashed.size) + ')',
-        () => act('/api/import/read', {which: 'all'})));
-      source.append(buttons);
-    }
-  }
-  if (reading && reading.message) source.append(el('p', {class: 'c-orange'}, reading.message));
-  if (!reading || reading.phase === 'done' || reading.phase === 'waiting') {
-    source.append(el('div', {class: 'row2'}, el('span', {class: 'note'}, data.listedAgo !== null ? 'Listed ' + ago(data.listedAgo) : ''),
-      button(data.source.device ? "List the phone's files again" : drive ? 'Read it from Drive again' : "List the folder's files again",
-        () => act('/api/import/read', {which: 'list'}))));
-  }
-  if (data.otherDisk) {
-    cards.push(el('div', {class: 'card tone-red'}, el('h2', {}, 'A different disk is mounted there now'),
-      el('p', {}, 'The disk mounted where ' + (data.destName || nameOf(data.dest)) + ' was (' + data.destDisk + ') isn\'t the one this import was started with. ' +
-        'Nothing is moved until that disk is back; start a new import to sort into this one.')));
-  }
-  cards.push(source);
+function allFiles() { return page.data.groups.flatMap(group => group.days.flatMap(day => day.files)); }
 
-  // (A new one for each card: an element is in one place only)
-  const checked = () => data.checking.busy ? waiting(over.checked ? 'Checking again' : 'Checking what they have') :
-    'Checked ' + ago(data.checking.ago) + '.';
-  for (const replica of data.replicas) {
-    const counted = over.replicas.find(found => found.path === replica.path);
-    const card = el('div', {class: 'card'}, el('h2', {class: 'head'}, icon(replica.kind === 'drive' ? 'drive' : 'disk'), 'Already in ' + replica.name),
-      // (Called by its name alone: never by the dirs it's in)
-      el('p', {class: 'kind'}, replica.kind === 'drive' ? 'Google Drive replica' : 'Local disk replica'));
-    if (!over.checked) card.append(el('p', {}, checked()));
-    else {
-      card.append(el('div', {class: 'stat'}, el('b', {}, counted.have + ' of ' + over.total), el('span', {}, 'are there already')),
-        el('div', {class: 'meter'}, el('div', {class: 'sure', style: 'width:' + percent(counted.contents, over.total)}),
-          el('div', {class: 'unsure', style: 'width:' + percent(counted.have - counted.contents, over.total)})));
-      if (counted.contents) card.append(link(counted.contents, 'the same contents (hashes match)', 'contents', replica.path, 'sure'));
-      if (counted.namePhoneUnhashed) card.append(link(counted.namePhoneUnhashed, 'same name and size (not hashed here yet)', 'name', replica.path, 'unsure'));
-      if (counted.nameReplicaUnhashed) card.append(link(counted.nameReplicaUnhashed, 'same name and size (its copy isn\'t hashed)', 'name', replica.path, 'unsure'));
-      card.append(link(counted.missing, 'not there', 'missing', replica.path, 'missing', 'Nothing missing'));
-      card.append(el('p', {class: 'note'}, checked()));
-    }
-    const buttons = el('div', {class: 'row2'});
-    if (replica.kind === 'drive') {
-      buttons.append(replica.reading ? el('span', {class: 'note'}, waiting('Reading it from Drive')) :
-        button('Read it from Drive again', () => act('/api/import/recheck', {replica: replica.path, how: 'drive'})));
-    } else {
-      if (!data.checking.busy) buttons.append(button('Check names and sizes again', () => act('/api/import/recheck', {})));
-      const job = replica.hashing;
-      if (job && job.started && job.state !== 'done') {
-        buttons.append(el('span', {class: 'note'}, waiting('Hashing its files: ' + job.done + ' of ' + job.files)));
-      } else if (replica.unhashed) {
-        buttons.append(button('Hash its ' + replica.unhashed + ' remaining files',
-          () => act('/api/import/recheck', {replica: replica.path, how: 'hash'})));
-      }
-    }
-    card.append(buttons);
-    cards.push(card);
-  }
-  if (over.checked && over.replicas.length > 1) {
-    cards.push(el('div', {class: 'card'}, el('h2', {}, 'Across all the replicas'),
-      link(over.inNone, 'in no replica', 'none', '', 'missing', 'Each is in at least one replica'),
-      link(over.inAll, 'in every replica', 'all-in')));
-  }
-  if (over.checked && over.inAll && over.inAll > over.counts.skipped + over.counts.moved) {
-    cards.push(el('div', {class: 'card tone-green'}, el('h2', {}, over.inAll === over.total ? 'Nothing new to sort' : 'Some are there already'),
-      el('p', {class: 'note'}, over.inAll === over.total ? 'Every file is in every replica already.' :
-        over.inAll + ' of the ' + over.total + ' are in every replica already.'),
-      el('div', {class: 'row2'}, button('Skip the ' + over.inAll + ' in every replica', skipInAll))));
-  }
-  for (const error of data.errors) cards.push(el('p', {class: 'c-red'}, error));
-
-  const counts = over.counts;
-  const open = over.total - counts.moved - counts.skipped - over.chosen;
-  const end = el('button', {class: 'danger', onclick: async () => {
-    if (!end.classList.contains('sure')) {
-      end.classList.add('sure');
-      end.textContent = 'Yes, end it';
-      return;
-    }
-    const answer = await api('POST', '/api/import/end', {id: page.id});
-    if (answer.ok) location.href = '/import'; else document.getElementById('status').textContent = answer.error || "Couldn't end it.";
-  }}, 'End this import');
-  cards.push(el('div', {class: 'card'}, el('h2', {}, 'Sorting the photos into ' + data.destName),
-    link(open, 'with no folder yet', 'open', '', '', 'All decided'), link(over.chosen, 'with a folder chosen, to move', 'chosen'),
-    counts.moved ? link(counts.moved, 'moved', 'moved') : '', counts.skipped ? link(counts.skipped, 'skipped', 'skipped') : '',
-    el('div', {class: 'row2'}, el('a', {class: 'button primary', href: photosLink(over.checked && over.inNone ? 'none' : 'open')},
-      over.checked && over.inNone ? 'Sort the ' + over.inNone + ' not in any replica' : 'Sort them'),
-      el('a', {class: 'button', href: photosLink('all')}, 'See all'))));
-  if (data.applying) cards.push(el('div', {class: 'lines'}, data.applying.lines.map(([text, color]) => el('div', {class: color ? 'c-' + color : ''}, text))));
-  cards.push(el('div', {class: 'card quiet'}, el('h2', {}, 'Done with this import?'),
-    el('p', {class: 'note'}, 'Ending it forgets the folders chosen here, and deletes its copies on this computer (unless another import ' +
-      'uses them). Nothing on the ' + (data.source.device ? 'phone' : drive ? 'Drive inbox' : 'folder') +
-      ' or in your replicas is touched; files already moved stay where they are.'), el('div', {class: 'row2'}, end)));
-  if (!document.querySelector('#main button.sure')) document.getElementById('main').replaceChildren(...cards);
-  renderFooter();
-}
-
-// Where the replicas have the file, in short: each folder (or path, if the name there is another) once,
-// after the replicas it's in, and '≈' where it's by name and size only (not hashes)
+// Where the replica has the file, in short: its folder (or path, if its name there is another), '≈' by name and size only
 function have(file) {
   const name = file.rel.split('/').pop();
-  const where = new Map();
-  for (const found of file.have || []) {
+  return (file.have || []).map(found => {
     const there = found.relpath.split('/').pop() === name ? (found.relpath.split('/').slice(0, -1).join('/') || '(top)') : found.relpath;
-    if (!where.has(there)) where.set(there, []);
-    where.get(there).push(nameOf(found.replica) + (found.how === 'contents' ? '' : ' ≈'));
-  }
-  return [...where].map(([there, replicas]) => replicas.join(', ') + ' · ' + there);
+    return there + (found.how === 'contents' ? '' : ' ≈');
+  });
 }
 
-// The filters: [kind, its text (of a replica's name), whether a file passes it]
-const FILTERS = {
-  'all': ['All', () => true],
-  'open': ['No folder yet', file => file.state !== 'moved' && file.state !== 'skipped' && !file.target],
-  'chosen': ['Folder chosen', file => !!file.target && file.state !== 'moved' && file.state !== 'skipped'],
-  'moved': ['Moved', file => file.state === 'moved'],
-  'skipped': ['Skipped', file => file.state === 'skipped'],
-  'unhashed': ['Not hashed', file => !file.sha1],
-  'have': ['Already in a replica', file => (file.have || []).length > 0],
-  'none': ['In no replica', file => file.have !== null && !file.have.length],
-  'all-in': ['In every replica', file => new Set((file.have || []).map(found => found.replica)).size === page.data.checked.length],
-  'in': [name => 'In ' + name, (file, replica) => haveIn(file, replica).length > 0],
-  'contents': [name => 'In ' + name + ' (hashes match)', (file, replica) => haveIn(file, replica).some(found => found.how === 'contents')],
-  'name': [name => 'In ' + name + ' (name & size)', (file, replica) => haveIn(file, replica).length > 0 && !haveIn(file, replica).some(found => found.how === 'contents')],
-  'missing': [name => 'Not in ' + name, (file, replica) => file.have !== null && !haveIn(file, replica).length],
-};
-
-function haveIn(file, replica) { return (file.have || []).filter(found => found.replica === replica); }
-
-function filterText() {
-  const [text] = FILTERS[page.filter.kind] || FILTERS.all;
-  return typeof text === 'function' ? text(nameOf(filterReplica())) : text;
-}
-
-function passes(file) {
-  const [, test] = FILTERS[page.filter.kind] || FILTERS.all;
-  return test(file, filterReplica());
-}
-
+// The import, one screen: where from and into (another replica chosen there), what's new and what's there already (hidden
+// but on asking), what's being done; then the groups, each by day; and its end
 function renderImport() {
   const data = page.data;
   const main = document.getElementById('main');
   const focused = document.activeElement && document.activeElement.id === 'target';
+  const files = allFiles();
+  const counts = {new: files.filter(isNew).length, there: files.filter(file => isThere(file) && !isDone(file)).length,
+    ready: files.filter(isReady).length, moved: files.filter(file => file.state === 'moved').length,
+    skipped: files.filter(file => file.state === 'skipped').length};
   const parts = [];
-  if (!data.indexed || data.errors.length) {
-    parts.push(el('div', {class: 'note'}, data.indexed ? '' : waiting('Checking what the replicas have'), data.errors.join('; ')));
-  }
-  const meter = sortMeter();
   if (!focused) {
+    parts.push(importHead(data, counts));
     // What's done with the photos selected (a folder for them, or skipping them), once there are any
     const chosen = page.selected.size ? el('div', {class: 'bar'}, el('b', {}, page.selected.size + ' selected'),
       el('input', {type: 'text', id: 'target', list: 'folders', placeholder: 'Folder in ' + data.destName + '…',
@@ -443,50 +277,115 @@ function renderImport() {
       el('button', {class: 'primary', onclick: () => assign([...page.selected], page.target)}, 'Put them in this folder'),
       el('button', {onclick: () => assign([...page.selected], null, true)}, 'Skip them'),
       el('button', {onclick: () => { page.selected.clear(); renderImport(); }}, 'Clear')) :
-      el('div', {class: 'note'}, 'Tap photos to select them, or use a day\'s buttons.');
-    parts.push(el('div', {class: 'sticky'}, meter, chosen));
-    const filters = ['all', 'open', 'none', 'have', 'chosen'];
-    if (!filters.includes(page.filter.kind)) filters.unshift(page.filter.kind);
-    parts.push(el('div', {class: 'chips scroll'}, el('a', {class: 'button', href: '#'}, '‹ Overview'),
-      filters.map(key => el('a', {class: 'button' + (page.filter.kind === key ? ' on' : ''),
-        href: key === page.filter.kind ? location.hash : photosLink(key)}, key === page.filter.kind ? filterText() : FILTERS[key][0]))));
+      el('div', {class: 'note'}, 'Tap photos to select them, or use a group\'s or a day\'s buttons.');
+    parts.push(el('div', {class: 'sticky'}, sortMeter(files), chosen));
   } else {
     const sticky = document.querySelector('.sticky');
-    sticky.firstChild.replaceWith(meter);
-    parts.push(sticky, document.querySelector('.chips'));
+    sticky.firstChild.replaceWith(sortMeter(files));
+    parts.push(document.querySelector('.importhead'), sticky);
   }
-  for (const day of data.days) {
-    const files = day.files.filter(passes);
-    if (!files.length) continue;
-    const undecided = files.filter(isUndecided).length;
-    const open = day.files.filter(file => file.state !== 'moved').map(file => file.rel);
-    const header = el('h2', {}, day.day === 'None' ? 'No date' : day.day, el('small', {}, day.files.length + ' ' + plural(day.files.length, 'file', 'files')),
-      el('button', {onclick: () => { open.forEach(rel => page.selected.add(rel)); renderImport(); }}, 'Select the day'),
-      day.suggested.map(dir => el('button', {onclick: () => assign(open, dir)}, 'All to ' + dir)),
-      open.length && day.files.every(file => file.state === 'moved' || (file.have || []).length) ?
-        el('button', {onclick: () => assign(open, null, true)}, 'Skip the day: all there already') : '');
-    parts.push(el('div', {class: 'day', 'data-day': day.day === 'None' ? 'No date' : day.day, 'data-undecided': undecided},
-      header, el('div', {class: 'grid'}, files.map(photo))));
-  }
-  if (data.days.length && !data.days.some(day => day.files.some(passes))) parts.push(el('p', {class: 'note'}, 'None.'));
-  if (!data.days.length) parts.push(el('p', {class: 'note'}, data.reading && data.reading.phase === 'listing' ? waiting('Listing the files') : 'No media files.'));
+  for (const group of data.groups) parts.push(...groupParts(group, data.groups.length > 1));
+  if (!files.length) parts.push(el('p', {class: 'note'}, data.reading && data.reading.phase === 'listing' ? waiting('Listing the files') : 'No photos or videos.'));
+  else if (!files.some(isShown)) parts.push(el('p', {class: 'note'}, counts.there ? 'Nothing new: ' + data.destName + ' has them all.' : 'All sorted.'));
   if (data.applying) parts.push(el('div', {class: 'lines'}, data.applying.lines.map(([text, color]) => el('div', {class: color ? 'c-' + color : ''}, text))));
-  main.replaceChildren(...parts);
-  renderFooter();
+  parts.push(endCard(data));
+  if (!document.querySelector('#main button.sure')) main.replaceChildren(...parts);
+  renderFooter(counts);
   fitHeader();
   showPosition();
 }
 
-function isUndecided(file) { return file.state !== 'moved' && file.state !== 'skipped' && !file.target; }
+// The import's head: from where into which replica (another chosen there: its own import), how many are new and how
+// many the replica has already (shown on asking), and what's being done (listing, copying the new ones, checking)
+function importHead(data, counts) {
+  const drive = data.source.drive;
+  const thing = data.source.device ? 'phone' : drive ? 'Drive folder' : 'folder';
+  const into = (data.dests || []).length > 1 ? el('select', {'aria-label': 'Into', onchange: async event => {
+    const answer = await api('POST', '/api/imports/new', {source: data.source.full, dest: event.target.value});
+    if (answer.error) document.getElementById('status').textContent = answer.error; else location.href = importLink(answer.id);
+  }}, data.dests.map(found => el('option', {value: found.path, selected: found.path === data.dest}, found.name))) : el('b', {}, data.destName);
+  const notes = [];
+  const reading = data.reading;
+  if (reading && reading.phase === 'listing') notes.push(waiting('Listing the ' + thing + '\'s files'));
+  else if (reading && reading.phase === 'copying') notes.push(waiting((drive ? 'Downloading' : 'Copying') + ' the new ones, to compare their contents: ' + reading.copied + ' of ' + reading.asked));
+  if (reading && reading.message) notes.push(el('span', {class: 'c-orange'}, reading.message));
+  if (data.checking.busy && data.indexed) notes.push(waiting('Checking what ' + data.destName + ' has again'));
+  for (const error of data.errors) notes.push(el('span', {class: 'c-red'}, error));
+  // (Given a folder, then found in the replica already: moved, they'd be a second copy; said, and skipped on asking)
+  const twice = allFiles().filter(file => isReady(file) && isThere(file)).map(file => file.rel);
+  const head = el('div', {class: 'card importhead'},
+    el('div', {class: 'head'}, icon(data.source.device ? 'phone' : drive ? 'inbox' : 'folder'), el('b', {}, sourceName(data.source)), ' → ', into),
+    // (Until what the replica has is known, how many there are, not how many are new)
+    !data.indexed ? el('div', {class: 'counts'}, el('b', {}, allFiles().length.toLocaleString() + ' photos and videos'),
+      el('span', {}, waiting('finding which ' + data.destName + ' lacks'))) :
+    el('div', {class: 'counts'}, el('b', {}, counts.new.toLocaleString() + ' new'),
+      counts.ready ? el('span', {}, counts.ready + ' ready to move') : '',
+      el('span', {}, counts.there.toLocaleString() + ' already in ' + data.destName + (page.showAll ? '' : ' (hidden)')),
+      counts.moved ? el('span', {}, counts.moved + ' moved') : '', counts.skipped ? el('span', {}, counts.skipped + ' skipped') : '',
+      el('label', {class: 'showall'}, el('input', {type: 'checkbox', checked: page.showAll, onchange: event => { page.showAll = event.target.checked; renderImport(); }}),
+        ' Show them all')),
+    notes.length ? el('div', {class: 'note'}, ...notes.flatMap((note, i) => i ? [' · ', note] : [note])) : '',
+    el('div', {class: 'row2'}, el('span', {class: 'note'}, data.listedAgo !== null ? 'Listed ' + ago(data.listedAgo) : ''),
+      !reading || reading.phase === 'done' || reading.phase === 'waiting' ? el('button', {class: 'small quiet', onclick: () => act('/api/import/read', {which: 'list'})},
+        data.source.device ? 'List the phone again' : drive ? 'Read it from Drive again' : 'List it again') : ''));
+  if (twice.length) head.append(el('div', {class: 'row2 c-orange'}, twice.length + ' ' + plural(twice.length, 'file', 'files') +
+    ' with a folder chosen ' + plural(twice.length, 'is', 'are') + ' in ' + data.destName + ' already: moved, ' + plural(twice.length, 'it', 'they') + '\'d be a second copy.',
+    el('button', {class: 'small', onclick: () => assign(twice, null, true)}, 'Skip ' + plural(twice.length, 'it', 'them'))));
+  if (data.otherDisk) head.append(el('p', {class: 'c-red'}, 'Another disk is mounted where ' + data.destName + ' was (' + data.destDisk +
+    '): nothing is moved until that disk is back.'));
+  return head;
+}
 
-// How far the sorting is: the files decided (a folder chosen, skipped or moved) of all, a bar, where the
+// A group (a phone's camera's, WhatsApp's images or videos; a folder's files are one): its new files' count, the folders
+// suggested for it (where the replica keeps its kind), and its days
+function groupParts(group, isTitled) {
+  const files = group.days.flatMap(day => day.files);
+  const shown = files.filter(isShown);
+  const undecided = files.filter(isUndecided).map(file => file.rel);
+  const newCount = files.filter(isNew).length;
+  const parts = [];
+  if (isTitled) {
+    parts.push(el('div', {class: 'group'}, el('h2', {}, group.title, el('small', {}, newCount ? newCount.toLocaleString() + ' new' : 'nothing new')),
+      undecided.length ? el('button', {onclick: () => { undecided.forEach(rel => page.selected.add(rel)); renderImport(); }}, 'Select the ' + undecided.length) : '',
+      undecided.length ? group.suggested.map(dir => el('button', {onclick: () => assign(undecided, dir)}, 'All ' + undecided.length + ' to ' + dir)) : ''));
+  }
+  if (!shown.length) return parts;
+  for (const day of group.days) {
+    const dayFiles = day.files.filter(isShown);
+    if (!dayFiles.length) continue;
+    const open = dayFiles.filter(isUndecided).map(file => file.rel);
+    const header = el('h3', {}, day.day === 'None' ? 'No date' : day.day, el('small', {}, dayFiles.length + ' ' + plural(dayFiles.length, 'file', 'files')),
+      open.length ? el('button', {onclick: () => { open.forEach(rel => page.selected.add(rel)); renderImport(); }}, 'Select the day') : '',
+      open.length ? day.suggested.map(dir => el('button', {onclick: () => assign(open, dir)}, 'All to ' + dir)) : '');
+    parts.push(el('div', {class: 'day', 'data-day': (isTitled ? group.title + ' · ' : '') + (day.day === 'None' ? 'No date' : day.day),
+      'data-undecided': open.length}, header, el('div', {class: 'grid'}, dayFiles.map(photo))));
+  }
+  return parts;
+}
+
+// Ending the import: what it forgets, and what it doesn't touch; asked twice
+function endCard(data) {
+  const end = el('button', {class: 'small danger', onclick: async () => {
+    if (!end.classList.contains('sure')) {
+      end.classList.add('sure');
+      end.textContent = 'Yes, end it';
+      return;
+    }
+    const answer = await api('POST', '/api/import/end', {id: page.id});
+    if (answer.ok) location.href = '/inboxes'; else document.getElementById('status').textContent = answer.error || "Couldn't end it.";
+  }}, 'End this import');
+  return el('div', {class: 'card quiet endimport'}, el('span', {class: 'note'}, 'Done with this import? Ending it forgets its choices and its copies here; nothing on the ' +
+    (data.source.device ? 'phone' : data.source.drive ? 'Drive inbox' : 'folder') + ' or in ' + data.destName + ' is touched.'), end);
+}
+
+// How far the sorting is: the new files decided (a folder chosen, skipped or moved) of all of them, a bar, where the
 // page is (which day of the ones shown), and a jump to the next day with files left to decide
-function sortMeter() {
-  const files = page.data.days.flatMap(day => day.files);
-  const decided = files.filter(file => !isUndecided(file)).length;
-  const share = files.length ? Math.floor(100 * decided / files.length) : 0;
+function sortMeter(files) {
+  const toSort = files.filter(file => !isThere(file) || isDone(file));
+  const decided = toSort.filter(file => !isUndecided(file)).length;
+  const share = toSort.length ? Math.floor(100 * decided / toSort.length) : 100;
   return el('div', {class: 'sortmeter'},
-    el('div', {class: 'big'}, el('b', {}, share + '%'), el('span', {}, decided + ' of ' + files.length + ' decided'),
+    el('div', {class: 'big'}, el('b', {}, share + '%'), el('span', {}, decided + ' of ' + toSort.length + ' new decided'),
       el('button', {onclick: () => window.scrollTo({top: 0, behavior: 'smooth'})}, 'Top'),
       el('button', {onclick: nextUndecided}, 'Next undecided ›')),
     el('div', {class: 'meter thick'}, el('div', {class: 'sure', style: 'width:' + share + '%'})),
@@ -552,7 +451,7 @@ function photo(file) {
   if (file.state === 'moved') caption.push(el('div', {class: 'to'}, '✓ moved'));
   else if (file.state === 'skipped') caption.push(el('div', {class: 'skipped'}, 'skipped'));
   else if (file.target) caption.push(el('div', {class: 'to'}, '→ ' + file.target));
-  for (const text of have(file)) caption.push(el('div', {class: 'have'}, '✓ in ' + text));
+  for (const text of have(file)) caption.push(el('div', {class: 'have'}, '✓ in ' + page.data.destName + ' · ' + text));
   caption.push(el('div', {}, file.rel.split('/').pop()));
   if (VIDEO.test(file.rel) && file.state !== 'moved') {
     caption.push(el('a', {class: 'play', target: '_blank', onclick: event => event.stopPropagation(),
@@ -564,15 +463,7 @@ function photo(file) {
       if (file.state === 'moved') return;
       if (page.selected.has(file.rel)) page.selected.delete(file.rel); else page.selected.add(file.rel);
       renderImport();
-    }}, image, (file.have || []).length ? el('span', {class: 'badge'}, 'have') : '', el('div', {class: 'cap'}, caption));
-}
-
-// Skip the files every replica has (not the ones chosen a folder or moved)
-async function skipInAll() {
-  const data = await api('GET', '/api/import?id=' + encodeURIComponent(page.id));
-  const rels = data.days.flatMap(day => day.files).filter(file => file.state !== 'moved' && !file.target &&
-    new Set((file.have || []).map(found => found.replica)).size === data.checked.length).map(file => file.rel);
-  await assign(rels, null, true);
+    }}, image, isThere(file) ? el('span', {class: 'badge'}, 'have') : '', el('div', {class: 'cap'}, caption));
 }
 
 async function assign(rels, target, skip) {
@@ -582,20 +473,20 @@ async function assign(rels, target, skip) {
   await load();
 }
 
-// The footer: how far the sorting is, in plain words, and Move once any file has a folder chosen
-function renderFooter() {
-  const data = page.data, over = data.overview;
-  const status = [over.counts.moved + over.counts.skipped + ' of ' + over.total + ' sorted'];
-  if (over.chosen) status.push(over.chosen + ' with a folder, to move');
-  if (over.checked && over.inNone !== null) status.push((over.total - over.inNone) + ' already in a replica');
+// The footer: how far it is, in plain words, and Move once any file is ready to move
+function renderFooter(counts) {
+  const data = page.data;
+  const status = [counts.new.toLocaleString() + ' new'];
+  if (counts.ready) status.push(counts.ready + ' ready to move');
+  if (counts.moved) status.push(counts.moved + ' moved');
   if (page.selected.size) status.push(page.selected.size + ' selected');
   document.getElementById('status').textContent = status.join(' · ');
   const busy = data.applying && !data.applying.done;
-  document.getElementById('actions').replaceChildren(over.chosen ? el('button', {class: 'primary', disabled: busy,
+  document.getElementById('actions').replaceChildren(counts.ready ? el('button', {class: 'primary', disabled: busy,
     onclick: () => api('POST', '/api/import/apply', {id: page.id}).then(answer => {
       if (answer.error) document.getElementById('status').textContent = answer.error;
       return loadImport();
-    })}, busy ? waiting('Moving') : 'Move ' + over.chosen + ' into ' + data.destName) : '');
+    })}, busy ? waiting('Moving') : 'Move ' + counts.ready + ' into ' + data.destName) : '');
 }
 
 tabBar('inboxes');
