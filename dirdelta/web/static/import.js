@@ -58,12 +58,53 @@ function sourceName(source) {
 
 const INBOX_KINDS = {phone: ['phone', 'Phone'], drive: ['inbox', 'In Google Drive'], folder: ['folder', 'On this computer']};
 
+// A phone plugged in that isn't one of the user's: said so, in a look of its own, with its name to give it and Add
+function newPhoneCard(inbox) {
+  const name = el('input', {type: 'text', value: inbox.name, 'aria-label': 'Its name'});
+  const status = el('span', {class: 'note'});
+  const add = el('button', {class: 'primary', onclick: async () => {
+    const answer = await api('POST', '/api/phones/add', {phone: inbox.phone, name: name.value});
+    if (answer.ok) loadList(); else status.textContent = answer.error;
+  }}, 'Add this phone');
+  return el('div', {class: 'card inbox newphone'},
+    el('div', {class: 'head'}, icon('phone'), el('b', {}, 'New phone: ' + inbox.name), chip('warn', 'Not one of yours yet')),
+    el('div', {class: 'note'}, 'A phone is plugged in that dirdelta doesn\'t know. Add it to import its photos and videos: ',
+      (inbox.source.folders || ['DCIM']).join(', '), '.'),
+    el('label', {class: 'note phonename'}, 'Call it ', name), el('div', {class: 'row2'}, add, status));
+}
+
+// One of the user's phones: its name, edited in place, and Remove (not while an import of it is kept)
+function phoneActions(inbox) {
+  const box = el('span', {class: 'forget'});
+  const status = el('span', {class: 'note'});
+  const idle = () => box.replaceChildren(
+    el('button', {class: 'small quiet', onclick: editName}, 'Edit name…'),
+    el('button', {class: 'small quiet', onclick: ask}, 'Remove…'), status);
+  const editName = () => {
+    const name = el('input', {type: 'text', value: inbox.name, 'aria-label': 'Its name'});
+    box.replaceChildren(name, el('button', {class: 'small', onclick: async () => {
+      const answer = await api('POST', '/api/phones/add', {phone: inbox.phone, name: name.value});
+      if (answer.ok) loadList(); else status.textContent = answer.error;
+    }}, 'Save'), el('button', {class: 'small', onclick: idle}, 'Cancel'), status);
+    name.focus();
+  };
+  const ask = () => box.replaceChildren(el('span', {class: 'note'}, 'Remove ' + inbox.name + ' from your phones? Nothing on it is changed.'),
+    el('button', {class: 'small danger sure', onclick: async () => {
+      const answer = await api('POST', '/api/phones/remove', {phone: inbox.phone});
+      if (answer.ok) loadList(); else { idle(); status.textContent = answer.error; }
+    }}, 'Remove'), el('button', {class: 'small', onclick: idle}, 'Keep'));
+  idle();
+  return box;
+}
+
 function inboxCard(inbox) {
+  if (inbox.kind === 'newphone') return newPhoneCard(inbox);
   const [iconName, where] = INBOX_KINDS[inbox.kind];
   const progress = inboxProgress(inbox);
   const head = el('div', {class: 'head'}, icon(iconName), el('b', {}, inbox.kind === 'phone' ? 'Photos on ' + inbox.name : inbox.name),
     inbox.kind === 'phone' ? chip(inbox.there ? 'ok' : 'none', inbox.there ? 'Plugged in' : 'Not plugged in') :
       !inbox.there ? chip('bad', 'Not there') : '');
+  const isPhone = inbox.kind === 'phone';
   const parts = [head, inbox.kind === 'phone' ? pathLine(inbox.source.full, where + ' · ' + (inbox.source.folders ? 'its ' + inbox.source.folders.join(', ') :
       'its ' + inbox.source.inner + ' folder')) : pathLine(inbox.path, where),
     el('div', {class: 'note'}, progress.text),
@@ -72,7 +113,7 @@ function inboxCard(inbox) {
   const dests = inbox.dests;
   if (!dests.length) {
     parts.push(el('p', {class: 'note'}, inbox.kind === 'drive' ? 'Add a replica to sort it into (Replicas).' :
-      'Add a replica on this computer or a disk to sort it into (Replicas).'));
+      'Add a replica on this computer or a disk to sort it into (Replicas).'), isPhone ? phoneActions(inbox) : '');
     return el('div', {class: 'card inbox'}, parts);
   }
   // Into which replica: the one an import has, else the likeliest; a choice only if there's another
@@ -96,26 +137,36 @@ function inboxCard(inbox) {
       dests.map(found => el('option', {value: found.path, selected: found.path === dest}, found.name))));
   parts.push(into, el('div', {class: 'row2'}, sortPhotos,
     inbox.kind !== 'phone' ? el('button', {disabled: !inbox.there, onclick: () => startFlow({kind: 'sort', inbox: inbox.path, root: dest})}, 'Sort all files') : '',
-    inbox.added ? forgetButton(inbox.path, 'inbox') : ''));
+    inbox.added ? forgetButton(inbox.path, 'inbox') : '', isPhone && inbox.phone ? phoneActions(inbox) : ''));
   return el('div', {class: 'card inbox'}, parts);
+}
+
+// Adding a phone: it's the one plugged in (shown above as new, to add there); else how to plug one in
+function phoneAdder(newPhones) {
+  return el('div', {class: 'card quiet adder'}, el('div', {class: 'head'}, icon('phone'), el('b', {}, '+ Add a phone')),
+    el('div', {class: 'note'}, newPhones.length ? 'The phone plugged in is above: name it and press Add this phone.' :
+      'Plug it in by USB and choose "File transfer" on it: it shows above within a few seconds, to add.'));
 }
 
 async function loadList() {
   const data = await api('GET', '/api/imports');
   document.getElementById('labels').replaceChildren(labelChip(data.label));
   // Two kinds, each in a block of its own (so neither is missed): unsorted folders, and phones' photos
-  const folders = data.inboxes.filter(inbox => inbox.kind !== 'phone'), phones = data.inboxes.filter(inbox => inbox.kind === 'phone');
+  const folders = data.inboxes.filter(inbox => !['phone', 'newphone'].includes(inbox.kind));
+  // (The user's phones, counted; and any plugged in that isn't one of theirs, first, to add)
+  const phones = data.inboxes.filter(inbox => inbox.kind === 'phone'), newPhones = data.inboxes.filter(inbox => inbox.kind === 'newphone');
   const jump = kindJump, block = (id, iconName, title, text, cards, extra) => kindBlock(id, iconName, title, text, cards, extra || '');
   const parts = [...kindParts([
       {jump: jump('unsorted', 'inbox', 'Unsorted folders', thereOutOf(folders) + ' there', inboxesTone(folders)),
        block: block('unsorted', 'inbox', 'Unsorted folders',
          '',
          folders.length ? folders.map(inboxCard) : el('p', {class: 'note'}, 'None yet: add one below.'), folderAdder('inbox'))},
-      {jump: jump('phones', 'phone', 'Phones\' photos', thereOutOf(phones) + ' plugged in', inboxesTone(phones)),
+      {jump: jump('phones', 'phone', 'Phones\' photos', newPhones.length ? 'A new phone is plugged in' : thereOutOf(phones) + ' plugged in',
+         newPhones.length ? 'warn' : inboxesTone(phones)),
        block: block('phones', 'phone', 'Phones\' photos',
          '',
-         phones.length ? phones.map(inboxCard) : el('div', {class: 'card quiet'}, el('div', {class: 'head'}, icon('phone'), el('b', {}, 'No phone plugged in')),
-           el('div', {class: 'note'}, 'Plug one in by USB and choose "File transfer" on it: it shows here within a few seconds.')))}],
+         newPhones.concat(phones).length ? newPhones.concat(phones).map(inboxCard) : el('p', {class: 'note'}, 'No phones yet.'),
+         phoneAdder(newPhones))}],
       {add: 'unsorted'})];
   const main = document.getElementById('main');
   if (!main.contains(document.activeElement) || document.activeElement === document.body) main.replaceChildren(...parts);

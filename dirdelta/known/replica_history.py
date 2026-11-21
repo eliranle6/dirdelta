@@ -24,7 +24,7 @@ normalized = paths.normalized
 class Replicas(ReplicaLists):
     def __init__(self, history=None, favorites=None, sorts=None, recent_dirs=None, known=None, compared=None,
                  labels=None, followers=None, added_replicas=None, added_inboxes=None, looks=None, main_replica=None,
-                 extra_pairs=None, records=None):
+                 extra_pairs=None, records=None, phones=None):
         # Pairs (tuples of 2 normalized paths), the latest first
         self.history = list(history or [])
         # Pairs, in the order they were added
@@ -61,6 +61,9 @@ class Replicas(ReplicaLists):
         # {what a label is of (label_key()): what's known of the record the replica keeps of itself (selfrecords.py):
         # {'id': its id, 'agreed': {'name', 'look'}: what it and this file last both had}}
         self.records = {key: dict(record) for key, record in (records or {}).items()}
+        # The user's phones, imported from: {its id (its USB link's: phoneimport.sources.phone_id()): {'name': what the
+        # user calls it}}, in the order they were added; None if the file had none yet (before 2026-11-21)
+        self.phones = None if phones is None else {key: dict(info) for key, info in phones.items()}
 
     def set_label(self, key, label):
         """Label what key is of (None: it has no label now)"""

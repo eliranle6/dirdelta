@@ -20,16 +20,30 @@ CHECKS = checking.Checks()
 
 
 def inboxes():
-    """[{'path', 'name', 'kind' (phone, drive, folder), 'there', 'added' (one of the user's, not a phone
-    plugged in: it can be forgotten), 'source' (sources.describe()), 'dests' (the replicas its files
-    may go into, the likeliest first), 'imports' (its imports' summaries)}]: the user's inboxes, the
-    phones plugged in first, and any other source an import of theirs has (e.g. a phone unplugged)"""
-    added = replicas.load().inbox_paths()
-    found = {path: ('phone', name, True) for name, path in sources.phones()}
+    """[{'path', 'name', 'kind' (phone, newphone: plugged in but not one of the user's, drive, folder), 'there',
+    'added' (an inbox of the user's: it can be forgotten), 'phone' (a phone's id, sources.phone_id()), 'source'
+    (sources.describe()), 'dests' (the replicas its files may go into, the likeliest first), 'imports' (its imports'
+    summaries)}]: the user's phones (each storage plugged in, else where an import of it was, else the phone itself),
+    the phones plugged in that aren't theirs, then their inboxes, and any other source an import of theirs has"""
+    known_replicas = replicas.load()
+    imports = store.all_imports()
+    phones = _phones(known_replicas, imports)
+    found = {}
+    plugged = sources.phones()
+    for phone, info in phones.items():
+        storages = [path for _, path in plugged if sources.phone_id(path) == phone]
+        for path in storages:
+            found[path] = ('phone', info['name'], True)
+        if not storages:
+            # (Unplugged: where its imports were from, else the phone itself)
+            for path in [one.source for one in imports if sources.phone_id(one.source) == phone] or [_phone_path(phone)]:
+                found.setdefault(path, ('phone', info['name'], False))
+    for name, path in plugged:
+        found.setdefault(path, ('newphone', name, True))
+    added = known_replicas.inbox_paths()
     for path in added:
         found.setdefault(path, ('drive' if paths.is_cloud_path(path) else 'folder', naming.name(path),
                                 paths.is_cloud_path(path) or os.path.isdir(path)))
-    imports = store.all_imports()
     for one in imports:
         # (Which of its files the replicas have: checked again when due, in the background, and kept)
         note_where(one, CHECKS.get(one.dest))
@@ -38,9 +52,27 @@ def inboxes():
                                       described['device'] or naming.name(one.source),
                                       paths.is_cloud_path(one.source) or os.path.isdir(one.source)))
     return [{'path': path, 'kind': kind, 'name': name, 'there': there, 'added': path in added,
-             'source': sources.describe(path), 'dests': checking.destinations(path),
+             'phone': sources.phone_id(path), 'source': sources.describe(path),
+             'dests': checking.destinations(path) if kind != 'newphone' else [],
              'imports': [summary(one) for one in imports if one.source == path]}
             for path, (kind, name, there) in found.items()]
+
+
+def _phones(known_replicas, imports):
+    """The user's phones ({id: {'name'}}): the file's; once, a file from before has those its imports were from"""
+    if known_replicas.phones is None:
+        for one in imports:
+            phone = sources.phone_id(one.source)
+            if phone and phone not in (known_replicas.phones or {}):
+                known_replicas.add_phone(phone, sources.describe(one.source)['device'])
+        known_replicas.phones = known_replicas.phones or {}
+        replicas.save(known_replicas)
+    return known_replicas.phones
+
+
+def _phone_path(phone):
+    """Where a phone of the user's that isn't plugged in, nor imported from yet, is said to be: its USB link's mount"""
+    return os.path.join(sources.GVFS_DIR, sources.MTP_PREFIX + phone)
 
 
 def routes():
@@ -53,8 +85,32 @@ def routes():
         freshening.refresh_stale(known_replicas.replica_paths() + known_replicas.inbox_paths())
         return {'inboxes': inboxes(), 'label': list(dryrun.label())}
 
+    def add_phone(query, body):
+        """One of the user's phones from now on, or its name changed: body['phone'] (its id), body['name']"""
+        phone, name = (body.get('phone') or '').strip(), (body.get('name') or '').strip()
+        if not phone or not name:
+            return {'ok': False, 'error': "Give it a name."}
+        known_replicas = replicas.load()
+        known_replicas.add_phone(phone, name)
+        replicas.save(known_replicas)
+        return {'ok': True}
+
+    def remove_phone(query, body):
+        """Not one of the user's phones any more (body['phone']): not while an import of it is kept"""
+        phone = body.get('phone') or ''
+        if any(sources.phone_id(one.source) == phone for one in store.all_imports()):
+            return {'ok': False, 'error': "End its imports first (each on its page)."}
+        known_replicas = replicas.load()
+        known_replicas.remove_phone(phone)
+        replicas.save(known_replicas)
+        return {'ok': True}
+
     def new(query, body):
         source, dest = body.get('source', ''), body.get('dest', '')
+        # (A phone's: only one of the user's, added first)
+        phone = sources.phone_id(source)
+        if phone and phone not in (replicas.load().phones or {}):
+            return {'error': "Add this phone first."}
         if not paths.is_cloud_path(source):
             source = os.path.abspath(source) if source else ''
             if not os.path.isdir(source):
@@ -147,7 +203,8 @@ def routes():
             ('GET', '/api/import/thumb'): thumb, ('GET', '/api/import/file'): file,
             ('POST', '/api/import/assign'): assign, ('POST', '/api/import/read'): read,
             ('POST', '/api/import/apply'): apply, ('POST', '/api/import/end'): end,
-            ('POST', '/api/import/recheck'): recheck}
+            ('POST', '/api/import/recheck'): recheck, ('POST', '/api/phones/add'): add_phone,
+            ('POST', '/api/phones/remove'): remove_phone}
 
 
 def _is_inside(relpath):

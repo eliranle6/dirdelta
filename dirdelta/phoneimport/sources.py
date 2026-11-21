@@ -43,6 +43,17 @@ def phones():
     return found
 
 
+def phone_id(source):
+    """The phone a source of it (its storage, or a dir in it) is on, by its USB link's name, which has its serial
+    (gvfs's mtp:host=VENDOR_MODEL_SERIAL: 'SAMSUNG_SAMSUNG_Android_RZCY502XMHE'); None if source isn't a phone's"""
+    if not source.startswith(GVFS_DIR):
+        return None
+    for part in source.split(os.sep):
+        if part.startswith(MTP_PREFIX):
+            return part[len(MTP_PREFIX):]
+    return None
+
+
 def phone_dirs(storage):
     """The ones of PHONE_DIRS the phone's storage (its path) has"""
     return [name for name in PHONE_DIRS if os.path.isdir(os.path.join(storage, name))]

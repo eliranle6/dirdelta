@@ -338,23 +338,30 @@ function countOf(count, one, many) { return count.toLocaleString() + ' ' + (coun
 
 function withCount(count, hint) { return [el('b', {class: 'tilecount'}, count), hint ? ' · ' : '', hint]; }
 
+// Whether what's known of a pair is out of date: a replica of it changed since they were compared (its card says
+// "Not known any more")
+function isStale(pair) { return !!pair.synced && pair.changedSince.length > 0; }
+
 function inStepTile(data, tile) {
   const tileOf = tile, replicaCount = countOf(data.replicas.length, 'replica', 'replicas');
   tile = (tone, glyph, title, value, hint, href) => tileOf(tone, glyph, title, value, withCount(replicaCount, hint), href);
-  let both = 0, either = 0, counted = 0, changed = false, apart = null;
+  // (Of the pairs known as they are: one never compared, or changed since, isn't, and keeps it from green)
+  let both = 0, either = 0, counted = 0, apart = null;
+  const notKnown = data.pairs.filter(pair => !pair.synced || isStale(pair)).length;
   for (const pair of data.pairs) {
     const synced = pair.synced;
-    if (synced) apart = (apart || 0) + synced.onlyA + synced.onlyB;
-    if (!synced || synced.share === null) continue;
+    if (!synced || isStale(pair)) continue;
+    apart = (apart || 0) + synced.onlyA + synced.onlyB;
+    if (synced.share === null) continue;
     both += synced.totalA - synced.onlyA;
     either += synced.totalA + synced.onlyB;
     counted += 1;
-    changed = changed || pair.changedSince.length > 0;
   }
+  const notKnownText = notKnown ? '; ' + notKnown + ' not known (compare ' + (notKnown === 1 ? 'it' : 'them') + ' again)' : '';
   if (!counted && apart !== null) {
     // (Compared before the totals were noted: only how many files were apart is known)
-    return tile(apart ? 'warn' : 'ok', 'equal', 'Replicas in step', apart ? apart.toLocaleString() + ' file' + (apart === 1 ? '' : 's') + ' apart' : 'In step',
-      'As of the last comparison; a % from the next one', '/replicas');
+    return tile(apart || notKnown ? 'warn' : 'ok', 'equal', 'Replicas in step', apart ? apart.toLocaleString() + ' file' + (apart === 1 ? '' : 's') + ' apart' : 'In step',
+      'As of the last comparison; a % from the next one' + notKnownText, '/replicas');
   }
   if (!counted) {
     return tile('none', 'equal', 'Replicas in step', 'Not known yet', data.pairs.length ? 'A sync compares them' : 'Add two replicas', '/replicas');
@@ -362,9 +369,9 @@ function inStepTile(data, tile) {
   const share = either ? both / either : 1;
   const percent = share === 1 ? '100%' : Math.min(99.9, Math.floor(share * 1000) / 10) + '%';
   // (Green only all in step: short of it, even at 99%, yellow)
-  return tile(inStepTone(share), 'equal', 'Replicas in step', percent,
+  return tile(notKnown && share === 1 ? 'warn' : inStepTone(share), 'equal', 'Replicas in step', percent,
     'Files in both as of the last comparison (' + counted + ' of ' + data.pairs.length + ' pair' + (data.pairs.length === 1 ? '' : 's') + ')' +
-      (changed ? '; changed since' : ''), '/replicas');
+      notKnownText, '/replicas');
 }
 
 // When the replica synced longest ago was last synced (each replica's last sync: its pairs' latest), and
@@ -491,8 +498,9 @@ function replicasPage(data) {
   const local = data.replicas.filter(replica => replica.kind === 'local');
   const drive = data.replicas.filter(replica => replica.kind === 'drive');
   const there = data.replicas.filter(replica => replica.there).length;
-  const apart = data.pairs.filter(pair => ['a ahead', 'b ahead', 'branched'].includes(pair.state.kind)).length;
-  const unknown = data.pairs.filter(pair => pair.state.kind === 'unknown').length;
+  // (A pair a replica of which changed since they were compared isn't known any more, whatever it was then)
+  const apart = data.pairs.filter(pair => !isStale(pair) && ['a ahead', 'b ahead', 'branched'].includes(pair.state.kind)).length;
+  const unknown = data.pairs.filter(pair => isStale(pair) || pair.state.kind === 'unknown').length;
   const pairs = data.pairs.length ? el('div', {class: 'list'}, data.pairs.map(pair => pairRow(pair, data.running, data.user, data.comparing))) :
     el('p', {class: 'note'}, data.replicas.length ? 'Add another replica: any two are a pair to sync.' : 'Add two replicas: any two are a pair to sync.');
   const other = el('div', {class: 'list'}, el('a', {class: 'item', href: '#', onclick: event => { event.preventDefault(); start({}); }},
@@ -504,7 +512,7 @@ function replicasPage(data) {
   // Two parts, each in a block of its own: every two replicas' sync status (what's done here, first), and
   // the replicas themselves
   return [...kindParts([
-      {jump: kindJump('pairs', 'sync', 'Sync status', !data.pairs.length ? 'No pair yet' : apart ? apart + ' of ' + data.pairs.length + ' pairs out of step' : unknown ? unknown + ' of ' + data.pairs.length + ' pairs not compared yet' : 'All in step',
+      {jump: kindJump('pairs', 'sync', 'Sync status', !data.pairs.length ? 'No pair yet' : apart ? apart + ' of ' + data.pairs.length + ' pairs out of step' : unknown ? unknown + ' of ' + data.pairs.length + ' pairs not known' : 'All in step',
         !data.pairs.length || data.pairs.some(pair => pair.state.kind === 'branched') ? 'bad' : apart || unknown ? 'warn' : 'ok'),
        block: kindBlock('pairs', 'sync', 'Sync status', '', mainNote(data),
          data.pairs.length > 1 ? el('div', {class: 'compareall'}, el('button', {class: 'small quiet', onclick: () => compareAgain(null),

@@ -65,7 +65,8 @@ def _from(content):
                     _paths(content.get('inboxes', [])),
                     {str(key): dict(look) for key, look in content.get('looks', {}).items() if isinstance(look, dict)},
                     content.get('main') or None, _pairs(content.get('pairs', [])),
-                    {str(key): dict(record) for key, record in content.get('records', {}).items() if isinstance(record, dict)})
+                    {str(key): dict(record) for key, record in content.get('records', {}).items() if isinstance(record, dict)},
+                    _phones(content.get('phones')))
 
 
 def save(replicas):
@@ -109,7 +110,8 @@ def _content(replicas):
                'looks': replicas.looks,
                'main': replicas.main_replica,
                'pairs': [list(pair) for pair in replicas.extra_pairs],
-               'records': replicas.records}
+               'records': replicas.records,
+               'phones': replicas.phones}
 
 
 def _write(path, content):
@@ -139,6 +141,16 @@ def _pairs(items):
             raise ValueError("not a pair of paths: %r" % (item,))
         pairs.append(pair_of(*item))
     return pairs
+
+
+def _phones(content):
+    """The user's phones read from the file: {id: {'name'}}, or None if it has none yet"""
+    if content is None:
+        return None
+    if not isinstance(content, dict) or not all(isinstance(info, dict) and isinstance(info.get('name'), str)
+                                                for info in content.values()):
+        raise ValueError("not phones: %r" % (content,))
+    return content
 
 
 def _recent_dirs(content):

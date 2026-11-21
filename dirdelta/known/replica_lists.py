@@ -51,6 +51,14 @@ class ReplicaLists(object):
         """Whether the pair is one the user added (not one of the main replica's)"""
         return frozenset((paths.normalized(path_a), paths.normalized(path_b))) in {frozenset(one) for one in self.extra_pairs}
 
+    def add_phone(self, phone_id, name):
+        """One of the user's phones from now on (or its name changed): phone_id, phoneimport.sources.phone_id()'s"""
+        self.phones = dict(self.phones or {})
+        self.phones[phone_id] = dict(self.phones.get(phone_id, {}), name=name)
+
+    def remove_phone(self, phone_id):
+        self.phones = {key: info for key, info in (self.phones or {}).items() if key != phone_id}
+
     def add_replica(self, path):
         path = paths.normalized(path)
         self.added_inboxes = [old for old in self.added_inboxes if old != path]

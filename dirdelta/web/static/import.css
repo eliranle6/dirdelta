@@ -72,3 +72,8 @@ a.item .go { color: var(--muted); font-size: 20px; }
 .card.quiet { background: transparent; }
 h2.head { display: flex; align-items: center; gap: 8px; }
 
+/* A phone plugged in that isn't one of the user's: dashed in the warning's color, so it's seen as new */
+.card.inbox.newphone { border: 2px dashed var(--yellow); background: color-mix(in srgb, var(--yellow) 7%, var(--card)); }
+.card.inbox .phonename { display: flex; align-items: center; gap: 8px; }
+.card.inbox .phonename input, .card.inbox .forget input { max-width: 240px; }
+.card.quiet.adder { border-style: dashed; }

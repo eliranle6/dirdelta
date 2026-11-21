@@ -117,6 +117,7 @@ class ReplicasFileTest(unittest.TestCase):
         known.add_inbox('cloud/phone')
         known.set_look('disk-key', 'teal', 'usb')
         known.set_look('other-key', 'no such color', 'no such icon')
+        known.add_phone('Google_Pixel_8_3A170DLJH002DN', 'my pixel')
         # Its dir is made
         replicas.save(known)
         loaded = replicas.load()
@@ -128,6 +129,7 @@ class ReplicasFileTest(unittest.TestCase):
         self.assertEqual((['/disk/me'], ['cloud/phone']), (loaded.added_replicas, loaded.added_inboxes))
         # (A look of neither a known color nor icon isn't kept)
         self.assertEqual(loaded.looks, {'disk-key': {'color': 'teal', 'icon': 'usb'}})
+        self.assertEqual({'Google_Pixel_8_3A170DLJH002DN': {'name': 'my pixel'}}, loaded.phones)
         with open(self.path) as f:
             self.assertEqual(json.load(f), {'favorites': [['/mnt/win', 'cloud/me']],
                                             'history': [['/a', 'cloud/b']],
@@ -137,7 +139,8 @@ class ReplicasFileTest(unittest.TestCase):
                                             'followers': {'cloud/me': ['/mnt/win']},
                                             'replicas': ['/disk/me'], 'inboxes': ['cloud/phone'],
                                             'looks': {'disk-key': {'color': 'teal', 'icon': 'usb'}},
-                                            'main': None, 'pairs': [], 'records': {}})
+                                            'main': None, 'pairs': [], 'records': {},
+                                            'phones': {'Google_Pixel_8_3A170DLJH002DN': {'name': 'my pixel'}}})
 
     def test_with_a_main_replica_each_other_is_paired_with_it_and_the_pairs_added_too(self):
         known = replicas.Replicas()
