@@ -127,3 +127,8 @@ button.link { background: none; border: 0; padding: 4px 2px; color: var(--fg); c
 .readydir > summary .readyacts { margin-left: auto; display: flex; gap: 6px; }
 .readydir > .grid { padding: 0 12px 12px; }
 .grouptabs .theretab { margin-left: 0; }
+/* What's going on in an import: a bar each, and what it said in at most 10 lines, scrolled */
+.progress { margin-top: 8px; display: flex; flex-direction: column; gap: 4px; }
+.progresshead { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+.progress .lines { max-height: calc(var(--lines, 10) * 1.45em); overflow-y: auto; font-family: ui-monospace, monospace; font-size: 12px;
+  line-height: 1.45em; border: 1px solid var(--line); border-radius: 6px; padding: 4px 8px; background: var(--bg); }

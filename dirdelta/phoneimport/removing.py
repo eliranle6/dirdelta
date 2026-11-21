@@ -21,17 +21,19 @@ class Removing(object):
         self.lines = []
         self.is_done = False
         self.nr_removed = 0
+        self.nr_total, self.nr_done = len(self.relpaths), 0
         self.thread = threading.Thread(target=self._run, daemon=True)
 
     def _run(self):
         found = self.import_
         try:
             if dryrun.DRYRUN:
-                self.nr_removed = len(self.relpaths)
+                self.nr_removed = self.nr_done = len(self.relpaths)
             elif found.pool.is_drive:
                 self._from_drive()
             else:
                 for relpath in self.relpaths:
+                    self.nr_done += 1
                     if self._remove_local(os.path.join(found.source, relpath)):
                         self._forget(relpath)
         finally:

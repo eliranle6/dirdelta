@@ -28,12 +28,15 @@ class Applying(object):
         self.lines = []
         self.is_done = False
         self.nr_moved = self.nr_there = 0
+        # How many files there are to do, and how many were done (each, whatever came of it): for the page's bar
+        self.nr_total = self.nr_done = 0
         self.thread = threading.Thread(target=self._run, daemon=True)
 
     def _run(self):
         found = self.import_
         chosen = [(relpath, info) for relpath, info in found.files().items()
                   if info['state'] in (store.PENDING, store.COPIED) and info.get('target') is not None]
+        self.nr_total = len(chosen)
         try:
             if found.pool.is_drive and paths.is_cloud_path(found.dest):
                 self._within_drive(chosen)
@@ -42,8 +45,12 @@ class Applying(object):
         finally:
             found.save()
             found.pool.save()
-            self.lines.append(("%s %d file(s)%s." % ("Would move" if dryrun.DRYRUN else "Moved", self.nr_moved,
-                                                    ", %d there already" % (self.nr_there,) if self.nr_there else ""), 'green'))
+            moved = found.pool.is_drive
+            self.lines.append(("%s %d file(s) into the replica%s.%s" % (
+                ("Would move" if moved else "Would copy") if dryrun.DRYRUN else ("Moved" if moved else "Copied"), self.nr_moved,
+                ", %d there already" % (self.nr_there,) if self.nr_there else "",
+                "" if moved or dryrun.DRYRUN or not self.nr_moved else " The %s keeps its own: remove them from it in Already in the replica." % (
+                    "phone" if found.source.startswith('/run/') else "folder")), 'green'))
             if dryrun.DRYRUN:
                 self.lines.append((dryrun.note(), 'green'))
             self.is_done = True
@@ -51,6 +58,7 @@ class Applying(object):
     def _into_local(self, chosen):
         found, source_pool = self.import_, self.import_.pool
         for relpath, info in chosen:
+            self.nr_done += 1
             if info['state'] == store.PENDING and not dryrun.DRYRUN:
                 try:
                     info['sha1'] = copying.copy_one(source_pool, relpath)
@@ -68,8 +76,7 @@ class Applying(object):
                 continue
             new_path = _free(new_path)
             self.nr_moved += 1
-            self.lines.append(("%s %s → %s" % ("Would move" if dryrun.DRYRUN else "Moving", relpath,
-                                               os.path.relpath(new_path, found.dest)), None))
+            self.lines.append(("%s %s → %s" % (self._verb(), relpath, os.path.relpath(new_path, found.dest)), None))
             if dryrun.DRYRUN:
                 continue
             try:
@@ -87,6 +94,7 @@ class Applying(object):
         found, source_pool = self.import_, self.import_.pool
         source_tree, dest_tree = source_pool.tree(), clouddirtree.factory(found.dest)
         for relpath, info in chosen:
+            self.nr_done += 1
             new_relpath = '/'.join(part for part in (info['target'], os.path.basename(relpath)) if part)
             if dest_tree.has_file(new_relpath) and dest_tree.known_hash(new_relpath, 'sha1') == info['sha1']:
                 self.nr_there += 1
@@ -95,10 +103,15 @@ class Applying(object):
                 continue
             new_relpath = _free(new_relpath, dest_tree.has_file)
             self.nr_moved += 1
-            self.lines.append(("%s %s → %s" % ("Would move" if dryrun.DRYRUN else "Moving", relpath, new_relpath), None))
+            self.lines.append(("%s %s → %s" % (self._verb(), relpath, new_relpath), None))
             if not dryrun.DRYRUN and source_tree.move_files([(relpath, new_relpath)], to=dest_tree):
                 found.set_moved(relpath)
                 source_pool.gone(relpath)
+
+    def _verb(self):
+        """What's done to a file: a Drive inbox's moved (to Drive's trash, after), a phone's or a folder's copied"""
+        moved = self.import_.pool.is_drive
+        return ("Would move" if moved else "Would copy") if dryrun.DRYRUN else ("Moving" if moved else "Copying")
 
     def _done(self, relpath, drive_tree=None):
         """The file at relpath is in the replica now: its copy's gone, and a Drive one's moved to the trash"""

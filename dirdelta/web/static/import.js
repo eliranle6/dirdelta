@@ -248,8 +248,6 @@ function filesSignature(data) {
   for (const group of data.groups) for (const day of group.days) for (const file of day.files) {
     text += file.rel + '|' + file.state + '|' + (file.target || '') + '|' + (file.have ? file.have.length : '-') + '\n';
   }
-  // (And what moving or removing said: drawn under the photos)
-  for (const doing of [data.applying, data.removing]) if (doing) text += doing.lines.length + (doing.done ? 'd' : '') + '\n';
   return text.length + ':' + hashText(text);
 }
 
@@ -346,10 +344,7 @@ function renderImport() {
   if (group) parts.push(...groupParts(group));
   if (!files.length) parts.push(el('p', {class: 'note'}, data.reading && data.reading.phase === 'listing' ? waiting('Listing the files') : 'No photos or videos.'));
   else if (group && group.key !== READY && !group.days.some(day => day.files.some(isShown))) parts.push(el('p', {class: 'note'},
-    group.key === THERE ? 'None.' : group.days.some(day => day.files.some(isReady)) ? 'All decided: see Ready to move.' : 'Nothing new here.'));
-  for (const doing of [data.applying, data.removing]) {
-    if (doing) parts.push(el('div', {class: 'lines'}, doing.lines.map(([text, color]) => el('div', {class: color ? 'c-' + color : ''}, text))));
-  }
+    group.key === THERE ? 'None.' : group.days.some(day => day.files.some(isReady)) ? 'All decided: see ' + readyTitle() + '.' : 'Nothing new here.'));
   parts.push(endCard(data));
   if (!document.querySelector('#main button.sure')) main.replaceChildren(...parts);
   renderFooter(counts);
@@ -483,6 +478,27 @@ function showSelection() {
   document.getElementById('status').textContent = status + (page.selected.size ? ' · ' + page.selected.size + ' selected' : '');
 }
 
+// Something going on (or done): its bar with its percentage, dots while it goes on, and what it said (if anything), at
+// most LINES_SHOWN lines high, scrolled to its end (where it was, if it was scrolled up)
+const LINES_SHOWN = 10;
+function progress(title, count, total, isDone, lines) {
+  count = count || 0;
+  total = total || 0;
+  const share = total ? Math.min(100, Math.floor(100 * count / total)) : (isDone ? 100 : 0);
+  const box = el('div', {class: 'progress' + (isDone ? ' done' : '')},
+    el('div', {class: 'progresshead'}, isDone ? el('b', {}, title) : waiting(title), el('span', {class: 'note'}, count.toLocaleString() + ' of ' + total.toLocaleString())),
+    bar(share, isDone ? 'sure' : ''));
+  if (lines && lines.length) {
+    const log = el('div', {class: 'lines', style: '--lines:' + LINES_SHOWN}, lines.map(([text, color]) => el('div', {class: color ? 'c-' + color : ''}, text)));
+    const old = document.querySelector('#main .progress .lines');
+    const wasAtEnd = !old || old.scrollTop + old.clientHeight >= old.scrollHeight - 4;
+    const oldTop = old ? old.scrollTop : 0;
+    requestAnimationFrame(() => { log.scrollTop = wasAtEnd ? log.scrollHeight : oldTop; });
+    box.append(log);
+  }
+  return box;
+}
+
 // The import's head: from where into which replica (another chosen there: its own import), how many are new and how
 // many the replica has already (shown on asking), and what's being done (listing, copying the new ones, checking)
 function importHead(data, counts) {
@@ -495,7 +511,7 @@ function importHead(data, counts) {
   const notes = [];
   const reading = data.reading;
   if (reading && reading.phase === 'listing') notes.push(waiting('Listing the ' + thing + '\'s files'));
-  else if (reading && reading.phase === 'copying') notes.push(waiting((drive ? 'Downloading' : 'Copying') + ' the new ones, to compare their contents: ' + reading.copied + ' of ' + reading.asked));
+
   if (reading && reading.message) notes.push(el('span', {class: 'c-orange'}, reading.message));
   if (data.checking.busy && data.indexed) notes.push(waiting('Checking what ' + data.destName + ' has again'));
   for (const error of data.errors) notes.push(el('span', {class: 'c-red'}, error));
@@ -509,7 +525,7 @@ function importHead(data, counts) {
     el('div', {class: 'counts'}, el('b', {}, counts.undecided.toLocaleString() + ' to decide'),
       counts.ready ? el('span', {}, counts.ready + ' ready to move') : '',
       el('span', {}, counts.there.toLocaleString() + ' already in ' + data.destName + (page.showAll ? '' : ' (hidden)')),
-      counts.moved ? el('span', {}, counts.moved + ' moved') : '', counts.skipped ? el('span', {}, counts.skipped + ' skipped') : '',
+      counts.moved ? el('span', {}, counts.moved + (verb() === 'move' ? ' moved' : ' copied in')) : '', counts.skipped ? el('span', {}, counts.skipped + ' skipped') : '',
       el('label', {class: 'showall'}, el('input', {type: 'checkbox', checked: page.showAll, onchange: event => { page.showAll = event.target.checked; renderImport(); }}),
         ' Show them all')),
     notes.length ? el('div', {class: 'note'}, ...notes.flatMap((note, i) => i ? [' · ', note] : [note])) : '',
@@ -519,6 +535,18 @@ function importHead(data, counts) {
   if (twice.length) head.append(el('div', {class: 'row2 c-orange'}, twice.length + ' ' + plural(twice.length, 'file', 'files') +
     ' with a folder chosen ' + plural(twice.length, 'is', 'are') + ' in ' + data.destName + ' already: moved, ' + plural(twice.length, 'it', 'they') + '\'d be a second copy.',
     el('button', {class: 'small', onclick: () => assign(twice, null, true)}, 'Skip ' + plural(twice.length, 'it', 'them'))));
+  // What's going on, each with its bar (and, copying into the replica or removing, what it said, the last lines shown)
+  if (reading && reading.phase === 'copying') {
+    head.append(progress((drive ? 'Downloading' : 'Copying') + ' the new ones here, to compare their contents', reading.copied, reading.asked, false));
+  }
+  if (data.applying) head.append(progress(data.applying.done ? 'Done' : (data.applying.moves ? 'Moving' : 'Copying') + ' into ' + data.destName,
+    data.applying.count, data.applying.total, data.applying.done, data.applying.lines));
+  if (data.removing) head.append(progress(data.removing.done ? 'Done' : 'Removing from ' + (data.source.device || 'the source'),
+    data.removing.count, data.removing.total, data.removing.done, data.removing.lines));
+  // (Removing from the source: what the replica has already, in its tab)
+  const nrThere = allFiles().filter(isInReplica).length;
+  if (nrThere && page.group !== THERE) head.append(el('div', {class: 'row2'}, el('a', {class: 'button', href: '#group=' + THERE},
+    'Remove from ' + (data.source.device || (data.source.drive ? 'the Drive inbox' : 'the folder')) + ' what ' + data.destName + ' has (' + nrThere.toLocaleString() + ')…')));
   if (data.otherDisk) head.append(el('p', {class: 'c-red'}, 'Another disk is mounted where ' + data.destName + ' was (' + data.destDisk +
     '): nothing is moved until that disk is back.'));
   return head;
@@ -530,7 +558,7 @@ function importHead(data, counts) {
 function shownGroup() {
   const groups = page.data.groups;
   if (page.group === THERE) return thereGroup();
-  if (page.group === READY) return {key: READY, title: 'Ready to move', days: [], suggested: []};
+  if (page.group === READY) return {key: READY, title: readyTitle(), days: [], suggested: []};
   return groups.find(group => group.key === page.group) ||
     groups.find(group => group.days.some(day => day.files.some(isNew))) || groups[0] || null;
 }
@@ -560,7 +588,7 @@ function groupTabs() {
     const nrLeft = group.days.reduce((sum, day) => sum + day.files.filter(isUndecided).length, 0);
     return tab(group.key, group.title, nrLeft ? nrLeft.toLocaleString() + ' to decide' : 'all decided', group === shown);
   }) : groups.length ? tab(groups[0].key, 'To decide', allFiles().filter(isUndecided).length.toLocaleString(), shown === groups[0]) : '',
-    nrReady ? tab(READY, 'Ready to move', nrReady.toLocaleString(), page.group === READY) : '',
+    nrReady ? tab(READY, readyTitle(), nrReady.toLocaleString(), page.group === READY) : '',
     nrThere ? tab(THERE, 'Already in ' + page.data.destName, nrThere.toLocaleString(), page.group === THERE) : '');
 }
 
@@ -615,9 +643,10 @@ function readyParts() {
   const dirs = [...byDir.keys()].sort((a, b) => a.localeCompare(b));
   if (!dirs.length) return [el('p', {class: 'note'}, 'Nothing yet: give files a folder in the other tabs.')];
   const total = dirs.reduce((sum, dir) => sum + byDir.get(dir).length, 0);
-  return [el('div', {class: 'group'}, el('h2', {}, 'Ready to move into ' + page.data.destName,
+  return [el('div', {class: 'group'}, el('h2', {}, readyTitle() + ' into ' + page.data.destName,
       el('small', {}, total.toLocaleString() + ' in ' + dirs.length + ' ' + plural(dirs.length, 'folder', 'folders')))),
-    el('p', {class: 'note'}, 'Open a folder to look at its files; Move, below, moves them all.'),
+    el('p', {class: 'note'}, 'Open a folder to look at its files; ' + capitalized(verb()) + ', below, ' + verb() + 's them all' +
+      (page.data.source.drive ? '.' : ' (the ' + (page.data.source.device ? 'phone' : 'folder') + ' keeps its own).')),
     ...dirs.map(dir => {
       const files = byDir.get(dir), rels = files.map(file => file.rel);
       // (Its files drawn once it's opened; opened, it stays so as the page is drawn again: a change, a move)
@@ -640,6 +669,11 @@ async function undecide(rels) {
   page.selected.clear();
   await load();
 }
+
+// What putting files into the replica does to them: a Drive inbox's are moved (out of it), a phone's or a folder's copied
+function verb() { return page.data.source.drive ? 'move' : 'copy'; }
+function capitalized(text) { return text ? text[0].toUpperCase() + text.slice(1) : text; }
+function readyTitle() { return 'Ready to ' + verb(); }
 
 // The next days, drawn as the end of the ones there is scrolled to
 function moreDays(days) {
@@ -804,7 +838,7 @@ function renderFooter(counts) {
   const data = page.data;
   const status = [counts.undecided.toLocaleString() + ' to decide'];
   if (counts.ready) status.push(counts.ready + ' ready to move');
-  if (counts.moved) status.push(counts.moved + ' moved');
+  if (counts.moved) status.push(counts.moved + (verb() === 'move' ? ' moved' : ' copied in'));
   if (page.selected.size) status.push(page.selected.size + ' selected');
   document.getElementById('status').textContent = status.join(' · ');
   const busy = data.applying && !data.applying.done;
@@ -812,7 +846,7 @@ function renderFooter(counts) {
     onclick: () => api('POST', '/api/import/apply', {id: page.id}).then(answer => {
       if (answer.error) document.getElementById('status').textContent = answer.error;
       return loadImport();
-    })}, busy ? waiting('Moving') : 'Move ' + counts.ready + ' into ' + data.destName) : '');
+    })}, busy ? waiting(capitalized(verb()) + 'ing') : capitalized(verb()) + ' ' + counts.ready + ' into ' + data.destName) : '');
 }
 
 tabBar('inboxes');

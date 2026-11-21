@@ -35,7 +35,8 @@ class ApplyingTest(ImportTest):
         self.apply(found, is_dry_run=True)
         self.assertFalse(os.path.exists(os.path.join(self.dest, 'media/Trip/a.jpg')))
         self.assertEqual({'Camera/a.jpg': store.COPIED}, self.states(found))
-        self.assertIn("Would move Camera/a.jpg → media/Trip/a.jpg", [line for line, _ in applying.applying_of(found.id).lines])
+        # (A phone's or a folder's files are copied: it keeps its own)
+        self.assertIn("Would copy Camera/a.jpg → media/Trip/a.jpg", [line for line, _ in applying.applying_of(found.id).lines])
 
     def test_files_go_into_their_dirs_never_over_another_file(self):
         found = self.listed({'Camera/a.jpg': 'a', 'Camera/b.jpg': 'new b', 'Camera/c.jpg': 'not chosen'})

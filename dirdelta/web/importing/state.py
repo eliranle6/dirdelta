@@ -90,8 +90,10 @@ def import_state(found, check, with_files=True):
                  listedAgo=int(time.time() - found.pool.listed_at) if found.pool.listed_at else None,
                  reading={'phase': reading.phase, 'message': reading.message, 'asked': reading.nr_asked,
                           'copied': reading.nr_copied} if reading else None,
-                 applying={'done': moving.is_done, 'lines': moving.lines} if moving else None,
-                 removing={'done': removed.is_done, 'lines': removed.lines} if removed else None)
+                 applying={'done': moving.is_done, 'lines': moving.lines, 'total': moving.nr_total, 'count': moving.nr_done,
+                           'moves': found.pool.is_drive} if moving else None,
+                 removing={'done': removed.is_done, 'lines': removed.lines, 'total': removed.nr_total, 'count': removed.nr_done}
+                 if removed else None)
     if haves is not None:
         _copy_new(found, files, haves)
     if with_files:

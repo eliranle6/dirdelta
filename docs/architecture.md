@@ -1321,7 +1321,11 @@ every link carries, then a cookie), and a watcher.
   marked strong (✓ the same contents) or weak (≈ the same name and size only; Compare their contents copies and hashes
   them), selected all of either at once, and removed from the source (`removing.py`, `/api/import/remove`: the phone's
   through gvfs, a folder's, a Drive inbox's to its trash; only the files the replica has, asked twice, a dry run saying
-  what it would do; each removed one dropped from the source's pool); a poll redraws the photos only if anything about them
+  what it would do; each removed one dropped from the source's pool);
+  a phone's or a folder's files are copied into the replica (Copy N into REPLICA; the source keeps its own, removed from it
+  in Already in REPLICA, which the head links to), a Drive inbox's moved; what's going on (copying the new ones here,
+  copying or moving into the replica, removing) a bar each in the head, with its percentage and what it said at most 10
+  lines high, scrolled to its end (`progress()`); a poll redraws the photos only if anything about them
   changed (`filesSignature()`), else the head and the footer alone,
   each with how many are new and the folders suggested for all of it (`Suggester.suggest_group()`: where the replica
   keeps WhatsApp's images, or videos, by their names), then by day (the day's suggestions, as before); End this import
