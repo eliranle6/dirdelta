@@ -6,6 +6,10 @@ import os
 MOUNTS_FILE = os.path.expanduser('~/.config/dirdelta/mounts.json')
 # Where a connected disk's partitions are, by their filesystems' UUIDs
 BY_UUID_DIR = '/dev/disk/by-uuid'
+# A disk's own entry in MOUNTS_FILE: 'uuid:' and its UUID
+UUID_KEY = 'uuid:'
+# What's mounted now, by device and mount point (see volumes.py)
+MOUNTS_TABLE = '/proc/self/mounts'
 # What ntfs-3g says when Windows hibernated, or shut down with Fast Startup on: it won't mount it
 # read-write
 UNCLEAN_NTFS_ERRORS = ('unclean file system', 'hibernated', 'windows cache')

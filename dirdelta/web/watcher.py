@@ -8,6 +8,7 @@ import os
 import threading
 import time
 
+from dirdelta.known import replicanames
 from dirdelta.known import replicas
 from dirdelta.known import users
 from dirdelta.phoneimport import sources
@@ -73,13 +74,14 @@ class Watcher(object):
         found = self._look()
         if self._seen is not None:
             for path, (kind, name, whose) in found.items():
-                if kind == REPLICA and path not in self._known_before:
+                if kind == REPLICA and replicanames.label_key(path) not in self._known_before:
                     continue
                 if path not in self._seen and now - self._said.get(path, -QUIET_SECONDS) >= QUIET_SECONDS:
                     self._said[path] = now
                     self._on_appear(kind, name, path, whose)
         self._seen = set(found)
-        self._known_before = set(known)
+        # (By their identities: a replica whose disk wasn't mounted was known at its placeholder, see volumes.py)
+        self._known_before = {replicanames.label_key(path) for path in known}
 
     def start(self):
         thread = threading.Thread(target=self._run, daemon=True)

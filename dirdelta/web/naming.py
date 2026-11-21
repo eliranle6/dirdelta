@@ -35,7 +35,7 @@ def place(path):
     if mount is None or mount.target in ('/', '/home'):
         found = 'this computer'
     else:
-        found = 'disk ' + (mount.label or os.path.basename(mount.target.rstrip('/')) or mount.target)
+        found = 'disk ' + (mount.label or os.path.basename(mount.target.rstrip('/')) or mount.target) if mount.target else 'disk'
     with _lock:
         _places[path] = (now, found)
     return found

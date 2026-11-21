@@ -3,20 +3,21 @@
   --accent: #2563eb; --accent-fg: #fff; --sel: #dbe7ff; --picked: #fde2e2; --disabled: #a3a7ae;
   --red: #c62828; --green: #2e7d32; --yellow: #a07800; --blue: #1e5bd8; --magenta: #a21caf;
   --cyan: #0e7490; --indigo: #4f46e5; --orange: #c2410c; --grey: #6b7078; --white: #888;
+  --look-black: #111827;  /* (A replica's black: light in the dark themes, so it's seen) */
 }
 /* Like the device unless this browser chose otherwise (theme(), markup.js): light, or dark */
 :root[data-theme="dark"] {
     --bg: #16181c; --fg: #e6e7ea; --muted: #9aa0a8; --card: #202329; --line: #33373e;
     --accent: #5b8cff; --sel: #263a63; --picked: #4a2326; --disabled: #5d626a;
     --red: #ff6b6b; --green: #5fd27a; --yellow: #e0c04a; --blue: #7aa7ff; --magenta: #e07af0;
-    --cyan: #4cc9e0; --indigo: #a5a8ff; --orange: #ff9a52; --grey: #9aa0a8; --white: #ddd;
+    --cyan: #4cc9e0; --indigo: #a5a8ff; --orange: #ff9a52; --grey: #9aa0a8; --white: #ddd; --look-black: #e5e7eb;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]):not([data-theme="dark"]) {
     --bg: #16181c; --fg: #e6e7ea; --muted: #9aa0a8; --card: #202329; --line: #33373e;
     --accent: #5b8cff; --sel: #263a63; --picked: #4a2326; --disabled: #5d626a;
     --red: #ff6b6b; --green: #5fd27a; --yellow: #e0c04a; --blue: #7aa7ff; --magenta: #e07af0;
-    --cyan: #4cc9e0; --indigo: #a5a8ff; --orange: #ff9a52; --grey: #9aa0a8; --white: #ddd;
+    --cyan: #4cc9e0; --indigo: #a5a8ff; --orange: #ff9a52; --grey: #9aa0a8; --white: #ddd; --look-black: #e5e7eb;
   }
 }
 * { box-sizing: border-box; }
@@ -726,3 +727,4 @@ button[class*="tone-"]:disabled { color: var(--disabled); }
 .tabs.tabselect label { min-width: 0; flex: 1 1 auto; display: flex; align-items: center; gap: 4px; }
 .tabs.tabselect select { min-width: 0; flex: 1 1 auto; max-width: 100%; text-overflow: ellipsis; }
 .statehead .searchtoggle { flex: none; }
+.gicon svg { display: block; }

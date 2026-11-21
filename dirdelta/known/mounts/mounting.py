@@ -23,13 +23,14 @@ def ensure_mounted(path):
         if mount is None:
             return True
         if not is_connected(mount):
+            where = mount.target or "Its disk's volume"
             header = "Connect its disk? (for %s)\n\n%s isn't mounted, and its disk (%s) isn't connected." % (
-                mount.target, mount.target, described(mount))
+                path, where, described(mount))
             if picker.pick_option([TRY_AGAIN, BACK], header=header, title='Mount') != TRY_AGAIN:
                 return False
             continue
         command = mount_command(mount)
-        header = "Mount it? (%s)\n\nIt isn't mounted (last time: %s)." % (mount.target, described(mount))
+        header = "Mount it? (%s)\n\nIt isn't mounted (last time: %s)." % (mount.target or path, described(mount))
         mount_option = picker.Option(MOUNT, "%s (runs: %s)" % (MOUNT, shlex.join(command)))
         if picker.pick_option([mount_option, BACK], header=header, title='Mount') != MOUNT:
             return False
@@ -45,7 +46,10 @@ def is_connected(mount):
 def mount_command(mount):
     """The command that mounts mount (a Mount) where it was: by its fstab line if it has one (with
     no sudo if the line lets users mount it), else by its UUID with its type and options,
-    read-write"""
+    read-write; or, if where it was isn't known or another disk is mounted there now (two disks of one model), where
+    the desktop mounts it (udisksctl, by its UUID: no sudo)"""
+    if mount.target is None or os.path.ismount(mount.target):
+        return ['udisksctl', 'mount', '-b', os.path.join(names.BY_UUID_DIR, mount.uuid)]
     fstab_options = _fstab_options(mount.target)
     if fstab_options is not None:
         users_may = {'user', 'users'} & set(fstab_options.split(','))
@@ -83,8 +87,8 @@ def _mount(mount, command):
     messages.print_line("Running: %s" % (shlex.join(command),))
     error = run_command(command)
     if error is None:
-        messages.print_line("Mounted %s." % (mount.target,))
-        if _came_up_read_only(mount):
+        messages.print_line("Mounted %s." % (mount.target or mount.uuid,))
+        if mount.target and _came_up_read_only(mount):
             messages.show("Mounted read-only: %s" % (mount.target,), read_only_lines(mount), dryrun.label(), 'yellow')
         return True
     lines = ["%s failed:" % (shlex.join(command),)] + error.splitlines()

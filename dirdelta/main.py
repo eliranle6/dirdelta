@@ -12,6 +12,7 @@ from dirdelta import dirpick_main
 from dirdelta.drive import drivecache
 from dirdelta import inbox
 from dirdelta.known import mounts
+from dirdelta.known.mounts import volumes
 from dirdelta.util import programs
 from dirdelta.known import replicanames
 from dirdelta.known import replicas
@@ -105,29 +106,36 @@ def run_pair(path_a, path_b, args=None):
     """Sync the replicas at path_a and path_b, once their volumes are mounted and they're there (args:
     as parse_args()'s, whose paths are ignored; the defaults if None)"""
     # The paths in a copy of args (args itself is left as it was parsed)
+    ready = _ready(path_a, path_b)
+    if ready is None:
+        return
+    path_a, path_b = ready
     chosen_args = argparse.Namespace(**dict(vars(args or _default_args()), dir_a_path=path_a, dir_b_path=path_b))
-    if _ready(path_a, path_b) and choose_replicas.are_there((path_a, path_b)):
+    if choose_replicas.are_there((path_a, path_b)):
         dirsync_main.run(chosen_args)
 
 
 def run_sort(inbox_path, root_path):
     """Sort the inbox at inbox_path into the sorted tree at root_path, once they're there"""
-    if _ready(inbox_path, root_path) and choose_replicas.are_there((inbox_path, root_path)):
-        inbox.run(inbox_path, root_path, replicas.load())
+    ready = _ready(inbox_path, root_path)
+    if ready is not None and choose_replicas.are_there(ready):
+        inbox.run(*ready, replicas.load())
 
 
 def _ready(*replica_paths):
-    """Whether the replicas' volumes are mounted (see mounts.py: the user is asked to mount one that
-    isn't, and may not), remembering how they are, for next time"""
+    """The replicas' paths once their volumes are mounted (see mounts.py: the user is asked to mount one that
+    isn't, and may not: then None), remembering how they are, for next time; one whose disk wasn't mounted as it was
+    chosen (its placeholder, see volumes.py) is where it's mounted now"""
     for path in replica_paths:
         if not mounts.ensure_mounted(path):
-            return False
+            return None
     # What they're on may be another disk now
     replicanames.forget()
+    replica_paths = [volumes.present(path) for path in replica_paths]
     for path in replica_paths:
         if os.path.isdir(path):
             mounts.remember(path)
-    return True
+    return replica_paths
 
 
 if __name__ == "__main__":

@@ -17,5 +17,5 @@ def run_command(command):
 
 def described(mount):
     """What the user may know the volume by: its device then, type and label"""
-    return ', '.join([mount.source or 'UUID ' + mount.uuid, mount.fstype] +
-                     (["'%s'" % (mount.label,)] if mount.label else []))
+    return ', '.join(part for part in [mount.source or 'UUID ' + mount.uuid, mount.fstype] +
+                     (["'%s'" % (mount.label,)] if mount.label else []) if part)

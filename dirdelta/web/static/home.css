@@ -56,8 +56,6 @@ button.item { border: 0; border-radius: 0; background: none; }
 /* The pair being synced now: marked, its button back to the run (any other's offers to open what runs) */
 .item.pair.syncing { box-shadow: inset 4px 0 0 var(--accent); }
 .item.pair .insync { color: var(--accent); font-weight: 600; font-size: 14px; }
-.item.pair:has(> a.button) { flex-wrap: wrap; }
-.item.pair > a.button { flex: 1 0 100%; text-align: center; margin-top: 4px; }
 .banner.running span.button { display: block; padding: 8px 12px; border-radius: 8px; background: var(--accent); color: var(--accent-fg); font-weight: 600; }
 /* A replica's name, given in its card */
 .namer { display: flex; flex-direction: column; gap: 6px; border-top: 1px solid var(--line); padding-top: 8px; }
@@ -76,3 +74,24 @@ button.item { border: 0; border-radius: 0; background: none; }
 .pairadd { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 14px; }
 .pairadd select { max-width: 100%; font: inherit; padding: 5px 7px; border-radius: 8px; border: 1px solid var(--line); background: var(--card); color: var(--fg); }
 .lookrow.fixed { align-items: center; color: var(--muted); font-size: 14px; }
+/* A pair's card: its Sync button in its bottom row, on the right, so what's above spans the card's width */
+.item.pair .pairfoot { align-items: center; }
+.item.pair .pairfoot > :is(button, a.button):last-child { margin: 0 0 0 auto; }
+.item.pair .statehead-line { display: flex; align-items: baseline; gap: 4px 12px; flex-wrap: wrap; }
+.item.pair .statehead-line > * { font-size: 15px; font-weight: 700; }
+.item.pair .comparedat { white-space: nowrap; }
+.item.pair .comparedat .tone-ok { color: var(--green); } .item.pair .comparedat .tone-warn { color: var(--yellow); }
+.item.pair .comparedat .tone-bad { color: var(--red); }
+/* On a phone, a pair's card a little closer to its left edge, so its lines fit without breaking */
+@media (max-width: 600px) { .list .item.pair { padding-left: 8px; gap: 6px; } }
+/* A tile's icon: on a desktop as tall as the tile, left of all its texts (in its tone); on a phone the small one in its title */
+.tilebig { display: none; }
+@media (min-width: 601px) {
+  .tile { position: relative; padding-left: 62px; }
+  .tile > .tilebig { display: flex; position: absolute; left: 12px; top: 8px; bottom: 8px; width: 38px; align-items: center; justify-content: center; color: var(--grey); }
+  .tile > .tilebig .icon, .tile > .tilebig svg { width: 100%; height: 100%; max-height: 52px; }
+  .tile > .tilebig svg { stroke-width: 1.4; }
+  .tile > .tilebig .icon { color: var(--grey); }
+  .tile.ok > .tilebig .icon { color: var(--green); } .tile.warn > .tilebig .icon { color: var(--yellow); } .tile.orange > .tilebig .icon { color: var(--orange); } .tile.bad > .tilebig .icon { color: var(--red); }
+  .tile .tile-title .icon { display: none; }
+}

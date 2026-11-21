@@ -7,6 +7,7 @@ import os
 
 from dirdelta.drive import drivecache
 from dirdelta.known import mounts
+from dirdelta.known.mounts import volumes
 from dirdelta.trees import paths
 from dirdelta.known import replicas
 
@@ -22,6 +23,8 @@ _identities = {}
 _labels = {}
 _labels_of = None
 _known = []
+# What was mounted when the disks were read (volumes.signature())
+_mounts_seen = None
 
 
 def forget():
@@ -30,12 +33,26 @@ def forget():
     _identities.clear()
 
 
+def _fresh():
+    """The disks read anew if what's mounted changed since they were read (another disk may be at the same mount
+    point now: two of one model)"""
+    global _mounts_seen
+    now = volumes.signature()
+    if now != _mounts_seen:
+        forget()
+        _mounts_seen = now
+
+
 def identity(path):
     """The identity of the replica at path, a string, whatever path it's at now: a Drive one's by the
     account and its path, a local one's by the filesystem's UUID and its path in it, or if it has
     none, by its path"""
     if paths.is_cloud_path(path):
         return 'drive:%s:/%s' % (drivecache.root_id() or '?', '/'.join(paths.components(path)[1:]))
+    # (A replica whose disk isn't mounted: its identity is in its path, see volumes.py)
+    on_disk = volumes.of_placeholder(path)
+    if on_disk is not None:
+        return 'uuid:%s:/%s' % on_disk
     path = os.path.realpath(path)
     mount = _mount_of(path)
     if mount is not None and mount.uuid:
@@ -52,6 +69,7 @@ def _mount_of(path):
 
 def _uuid(path):
     """The UUID of the filesystem the local path is on, or None"""
+    _fresh()
     if path not in _uuids:
         mount = _mount_of(os.path.realpath(path))
         _uuids[path] = mount.uuid if mount is not None else None
@@ -62,6 +80,7 @@ def label_key(path):
     """What the label of the replica at path is kept by: its identity"""
     if paths.is_cloud_path(path):
         return identity(path)
+    _fresh()
     if path not in _identities:
         _identities[path] = identity(path)
     return _identities[path]

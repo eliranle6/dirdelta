@@ -10,6 +10,7 @@ from dirdelta.drive import freshening
 from dirdelta.hashes import hashcache
 from dirdelta.hashes import hashing
 from dirdelta.known import mounts
+from dirdelta.known.mounts import volumes
 from dirdelta.known import replicainfo
 from dirdelta.known import replicanames
 from dirdelta.known import replicas
@@ -58,6 +59,9 @@ def replica_info(path, known_replicas):
         found['hashesKept'] = hashcache.count_under(path) if found['there'] else 0
     info = known_replicas.info_at(path) or {}
     found.update(lastEntry=info.get('last_entry'), seen=info.get('seen'), changed=info.get('changed'))
+    # (A replica whose disk isn't mounted is at a placeholder: the path it was last seen at is shown, see volumes.py)
+    if volumes.of_placeholder(path) and info.get('paths'):
+        found['shownPath'] = info['paths'][0]
     found['files'] = _files_of(path, is_cloud)
     return found
 

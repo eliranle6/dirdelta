@@ -109,7 +109,7 @@ change dirdelta made to Drive was cut off before it was added to the cache, and 
 `files.times`, when each folder's list was last updated and uploaded to the replica's
 `meta/files.jsonl`, see `drivemeta.py`),
 `~/.config/dirdelta/replicas.json` (the history, favorites and sorts, each sorted tree's recent dirs and the other replicas a sort copied into, what's known of each replica: its `last_update.txt`'s last entry, and the labels),
-`~/.config/dirdelta/mounts.json` (how the replicas' volumes were mounted),
+`~/.config/dirdelta/mounts.json` (how the replicas' volumes were mounted, by mount point and by disk; replicas.json keeps local replicas by their disks' UUIDs, see `known/located.py`),
 `~/.config/dirdelta/settings.json` (whether the file pickers show pictures, and the address links are emailed to),
 `~/.config/dirdelta/web.json` (the web version's port and key),
 `~/.config/dirdelta/users/NAME/` and `~/.local/share/dirdelta/users/NAME/` (another user's own replicas.json, settings.json and imports: `known/users.py`; the computer's login's are the ones above; `--user NAME` or the web page's top bar chooses),
@@ -188,7 +188,7 @@ them by name. A big class's tests are split by topic into modules of their own, 
 prefix), which a test module imports by name: the runner puts its folder and the ones above it, up to
 `tests/` (helpers.py), on the path.
 
-Modules are tested where it's worth it, not for the sake of a test file each (987 tests, all passing as of 2026-11-21; 150 were removed on 2026-11-06 as redundant, white-box or pinning styling) except
+Modules are tested where it's worth it, not for the sake of a test file each (990 tests, all passing as of 2026-11-21; 150 were removed on 2026-11-06 as redundant, white-box or pinning styling) except
 the thin wiring in `main.py`/`dirsync_main.py`, covered only by running the
 app. A test is worth keeping if it says what the code does for whoever uses it: not one that sets
 or reads private state, counts calls to an inner function, restates a constant or a style (colors,

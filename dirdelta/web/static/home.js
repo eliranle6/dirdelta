@@ -186,7 +186,8 @@ function replicaCard(replica) {
     // (How many files, and their size: a local one's once its hashing listed them, a Drive one's as its list has them)
     replica.files ? el('div', {class: 'filecount'}, el('b', {}, replica.files.count.toLocaleString() + ' file' + (replica.files.count === 1 ? '' : 's')),
       ' · ' + size(replica.files.size)) : '',
-    pathLine(replica.path),
+    // (One whose disk isn't mounted: where it was last, not its placeholder: volumes.py)
+    pathLine(replica.shownPath || replica.path),
     statusChips(replica),
     recordBox(replica),
     workBar(replica),
@@ -231,23 +232,26 @@ function pairRow(pair, running, user) {
       el('div', {class: 'syncline'}, el('span', {}, pair.changedSince.join(' and ') + ' changed since they were compared.'),
         el('span', {class: 'note'}, 'Sync them to compare them again.')));
   } else {
-    parts.push(el('span', {class: 'statename c-' + pair.state.color}, STATE_WORDS[pair.state.kind] || ''));
     const {onlyA, onlyB, totalA, share} = synced;
     const either = totalA === null ? null : totalA + onlyB;
     const percent = share === null ? null : (share === 1 ? '100' : Math.min(99.9, Math.floor(share * 1000) / 10).toString());
+    // (Its state and how much is in step, one line)
+    parts.push(el('div', {class: 'statehead-line'}, el('span', {class: 'statename c-' + pair.state.color}, (STATE_WORDS[pair.state.kind] || '') + (percent !== null ? ':' : '')),
+      percent !== null ? el('b', {style: 'color:' + inStepColor(share)}, percent + '% in step') : ''));
     if (either) {
       const inBoth = (either - onlyA - onlyB) / either;
       parts.push(el('div', {class: 'syncbar'}, el('div', {class: 'both', style: 'width:' + (100 * inBoth) + '%;background:' + inStepColor(inBoth)}),
         el('div', {class: 'only', style: 'width:' + (100 * onlyA / either) + '%'}), el('div', {class: 'only', style: 'width:' + (100 * onlyB / either) + '%'})));
     }
-    parts.push(el('div', {class: 'syncline'}, percent !== null ? el('b', {style: 'color:' + inStepColor(share)}, percent + '% in step') : '',
+    parts.push(el('div', {class: 'syncline'},
       el('span', {}, !onlyA && !onlyB ? 'Each has all the other\'s files' :
         [onlyA ? [onlyA.toLocaleString() + ' only in ', replicaLabel(pair.a, pair.nameA)] : '',
           onlyB ? [onlyB.toLocaleString() + ' only in ', replicaLabel(pair.b, pair.nameB)] : ''].filter(Boolean).flatMap((part, i) => i ? [' · ', ...part] : part)),
-      el('span', {class: 'note'}, 'As of the last comparison.' + (percent === null ? ' A % shows from the next one.' : ''))));
+      percent === null ? el('span', {class: 'note'}, 'A % shows from the next comparison.') : ''));
   }
   const fresh = [];
-  if (pair.state.when) fresh.push(chip(compared.tone, 'Compared ' + compared.text));
+  // (When they were compared, in one short line with the Sync button: its time in its tone, fresh or old)
+  if (pair.state.when) fresh.push(el('span', {class: 'note comparedat'}, 'As of last compare: ', el('span', {class: 'tone-' + compared.tone}, compared.text)));
 
   // (A pair the user added besides the main replica's: it can be taken away)
   if (pair.extra) fresh.push(el('button', {class: 'tiny', onclick: async () => { await api('POST', '/api/pairs/remove', {a: pair.a, b: pair.b}); load(); }}, '✕ Remove this pair'));
@@ -259,8 +263,7 @@ function pairRow(pair, running, user) {
   return el('div', {class: 'item pair' + (syncing ? ' syncing' : '')}, el('span', {class: 'syncmark c-' + (stale ? 'grey' : pair.state.color)}, stale ? '?' : pair.state.mark),
     el('span', {class: 'what'}, el('b', {class: 'pairline'}, pair.favorite ? '★' : '', replicaLabel(pair.a, pair.nameA), '⇄',
       replicaLabel(pair.b, pair.nameB)), syncing ? el('div', {class: 'insync'}, waiting('Sync in progress')) : '',
-      parts, fresh.length ? el('div', {class: 'chips-row'}, fresh) : ''),
-    button);
+      parts, el('div', {class: 'chips-row pairfoot'}, fresh, button)));
 }
 
 // The whole picture, in three sections of tiles, two to a row, the replicas' left and the inboxes' right
@@ -274,10 +277,17 @@ function summary(data) {
   const hashing = jobs.find(replica => replica.hashing.started && replica.hashing.state !== 'done');
   const drive = data.replicas.filter(replica => replica.kind === 'drive' && replica.listedAt).map(replica => replica.listedAt).sort()[0];
   const listed = age(drive);
+  // (On a desktop its icon is big, the tile's height, left of its texts: tilebig; on a phone a small one in its title)
   const tile = (tone, glyph, title, value, hint, href) => el(href ? 'a' : 'div', {class: 'tile ' + tone, href},
-    el('span', {class: 'tile-title'}, icon(glyph), title), el('b', {}, value), hint ? el('span', {class: 'tile-hint'}, hint) : '');
-  const hashes = tile(hashing ? 'warn' : jobs.length && jobs.every(replica => replica.hashing.state === 'done') ? 'ok' : 'none', 'hash', 'File hashes',
-    hashing ? waiting(hashing.name) : jobs.length ? 'Up to date' : 'Not computed yet', 'They find moved and renamed files', '/replicas');
+    el('span', {class: 'tilebig', 'aria-hidden': 'true'}, icon(glyph)), el('span', {class: 'tile-title'}, icon(glyph), title), el('b', {}, value), hint ? el('span', {class: 'tile-hint'}, hint) : '');
+  // (Every local replica's: one not hashed, or not connected so its files aren't known here, is named, never left out)
+  const hashed = disks.filter(replica => replica.hashing && replica.hashing.state === 'done');
+  const notHashed = disks.filter(replica => !hashed.includes(replica) && replica !== hashing);
+  const notHashedText = notHashed.map(replica => replica.name + (replica.there ? ' not hashed' : ' not connected')).join(' · ');
+  const hashes = tile(hashing ? 'warn' : disks.length && !notHashed.length ? 'ok' : hashed.length ? 'warn' : 'none', 'hash', 'File hashes',
+    hashing ? waiting(hashing.name) : !disks.length ? 'No local replicas' : !notHashed.length ? 'Up to date' :
+      hashed.length ? hashed.length + ' of ' + disks.length + ' hashed' : 'Not computed yet',
+    notHashed.length ? notHashedText : 'They find moved and renamed files', '/replicas');
   if (hashing && hashing.hashing.files) hashes.append(bar(100 * hashing.hashing.done / hashing.hashing.files));
   if (!drive) hashes.classList.add('wide');
   const section = (title, ...tiles) => [el('div', {class: 'section-title'}, title), el('div', {class: 'tiles'}, tiles)];

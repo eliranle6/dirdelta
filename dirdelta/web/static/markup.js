@@ -515,6 +515,19 @@ const ICONS = {
   person: '<circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/>',
 };
 
+// Google's G, in its four colors (a Drive replica's mark, replicaLabel())
+function googleIcon() {
+  const span = document.createElement('span');
+  span.className = 'icon gicon';
+  span.title = 'Google Drive';
+  span.innerHTML = '<svg viewBox="0 0 48 48" width="16" height="16" aria-hidden="true">' +
+    '<path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>' +
+    '<path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>' +
+    '<path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>' +
+    '<path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>';
+  return span;
+}
+
 function icon(name) {
   const span = document.createElement('span');
   span.className = 'icon';
@@ -542,8 +555,9 @@ function chip(tone, text, title) {
 // A replica's name after its icon: Drive's (its 'cloud/' then left out) or a disk's
 // How the user has each replica shown (its color and icon, see LOOK_COLORS), by its path: set as the page loads
 // (setReplicaLooks()), so its name is shown so wherever it's said
-const LOOK_COLORS = {blue: '#2563eb', green: '#16a34a', orange: '#ea580c', purple: '#7c3aed', red: '#dc2626',
-  teal: '#0d9488', pink: '#db2777', grey: '#6b7280'};
+const LOOK_COLORS = {blue: '#2563eb', indigo: '#4f46e5', cyan: '#0891b2', teal: '#0d9488', green: '#16a34a',
+  lime: '#65a30d', yellow: '#ca8a04', orange: '#ea580c', red: '#dc2626', pink: '#db2777', purple: '#7c3aed',
+  brown: '#92400e', grey: '#6b7280', black: 'var(--look-black)'};
 const LOOK_ICONS = {laptop: 'Laptop', desktop: 'Desktop', disk: 'External disk', usb: 'USB stick', nas: 'NAS',
   phone: 'Phone', drive: 'Cloud'};
 let replicaLooks = {};
@@ -559,6 +573,7 @@ function replicaLabel(path, name, isInbox) {
   const look = replicaLooks[path] || {};
   const color = lookColor(look);
   // (Its color as a box around its name, not its text's: a colored text reads as a link)
+  // (A Drive one's: Google's G before it, then its own icon if the user chose one, else none: the G says it's Drive)
   return el('span', {class: 'rname' + (color ? ' rtag' : ''), style: color ? '--rc:' + color : ''},
-    icon(isInbox ? 'inbox' : look.icon || (isDrive ? 'drive' : 'disk')), name);
+    isDrive && !isInbox ? googleIcon() : '', isInbox ? icon('inbox') : isDrive && !look.icon ? '' : icon(look.icon || 'disk'), name);
 }

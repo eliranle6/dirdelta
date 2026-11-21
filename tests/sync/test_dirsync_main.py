@@ -77,8 +77,8 @@ class OptionsTest(MainMenuTest):
             dirsync_main._sync(a, b, '/a', '/b')
         dashboard.assert_called_once_with([a, b], None)
         self.assertEqual(shown[0]['Replicas dashboard'],
-                         "Replicas dashboard: files, last updates, hashes (LocalDisk:a: listing its files...)")
-        self.assertIn("a: listing its files...", shown[0][''])
+                         "Replicas dashboard: files, last updates, hashes (LocalDisk: listing its files...)")
+        self.assertIn("LocalDisk: listing its files...", shown[0][''])
 
     def test_a_cloud_replica_can_be_refreshed_from_drive(self):
         a = localdiskdirtree.LocalDiskDirTree('/a', silent=True)

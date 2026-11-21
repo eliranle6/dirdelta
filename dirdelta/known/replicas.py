@@ -17,6 +17,7 @@ import json
 import os
 import threading
 
+from dirdelta.known import located
 from dirdelta.known import users
 from dirdelta.known.replica_history import Replicas, pair_of, normalized
 from dirdelta.known.replica_history import MAX_HISTORY, MAX_PATHS_KEPT, MAX_RECENT_DIRS, MAX_SORTS  # noqa: F401
@@ -43,7 +44,7 @@ def load():
     path = replicas_file()
     try:
         with open(path) as opened:
-            content = json.load(opened)
+            content = located.decoded(json.load(opened))
         found = _from(content)
     except FileNotFoundError:
         found = Replicas()
@@ -78,7 +79,7 @@ def save(replicas):
         if as_read is not None:
             try:
                 with open(path) as opened:
-                    now = _content(_from(json.load(opened)))
+                    now = _content(_from(located.decoded(json.load(opened))))
             except FileNotFoundError:
                 now = None
             except (OSError, ValueError, AttributeError, TypeError) as error:
@@ -87,7 +88,8 @@ def save(replicas):
                 content = {key: now[key] if value == as_read.get(key) else value for key, value in content.items()}
                 # (And it has them too, from now on)
                 replicas.__dict__.update(_from(content).__dict__)
-        _write(path, content)
+        # (Local replicas by their identities, where each is being the file's reader's: see located.py)
+        _write(path, located.encoded(content))
         # (A copy: what it has changes as it's changed)
         replicas.as_read = copy.deepcopy(content)
 

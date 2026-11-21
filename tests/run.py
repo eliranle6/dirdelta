@@ -41,6 +41,9 @@ def run_one(module, args):
         folders.append(folder)
         folder = os.path.dirname(folder)
     sys.path[:0] = folders + [TESTS]
+    # Every module's caches, settings, replicas' file and Drive login the tests' own, never the real ones, whether
+    # it imports helpers.py itself or not (one that didn't read the user's replicas.json and Drive account)
+    import helpers  # noqa: F401
     program = unittest.main(module=None, argv=['run.py'] + args + [module], exit=False)
     result = program.result
     print(MARK + json.dumps([result.testsRun, len(result.failures), len(result.errors), len(result.skipped),

@@ -66,8 +66,9 @@ class MountsTest(unittest.TestCase):
         self.answers['findmnt'] = (0, findmnt_json('/mnt/win'))
         self.answers['lsblk'] = (0, 'ntfs\n')
         mounts.remember('/mnt/win/Users')
-        self.assertEqual(mounts.load(), {'/mnt/win': mounts.Mount('/mnt/win', '/dev/sda3', 'ntfs', 'rw,relatime',
-                                                                  'rw,allow_other', '9618289F1828807B', 'OS')})
+        mount = mounts.Mount('/mnt/win', '/dev/sda3', 'ntfs', 'rw,relatime', 'rw,allow_other', '9618289F1828807B', 'OS')
+        # (By its mount point, and by its disk: another disk may be mounted there later)
+        self.assertEqual(mounts.load(), {'/mnt/win': mount, 'uuid:9618289F1828807B': mount})
 
     def test_doesnt_remember_the_root_filesystem_one_without_a_uuid_or_a_cloud_path(self):
         self.answers['findmnt'] = (0, findmnt_json('/', fstype='ext4'))

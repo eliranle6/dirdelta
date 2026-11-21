@@ -26,6 +26,12 @@ drivecache.names.LINES_FILE = os.path.join(_hash_cache_dir, 'dirdelta', 'files.t
 # replicas' mounts (choose_replicas') import this module
 _mounts_dir = tempfile.mkdtemp(prefix='dirdelta-test-mounts-')
 mounts.names.MOUNTS_FILE = os.path.join(_mounts_dir, 'mounts.json')
+# Nor see this computer's disks as the ones the replicas' file's paths are on (no disk is mounted, nor connected: see
+# volumes.py, and test_volumes, which says what is)
+mounts.names.MOUNTS_TABLE = os.path.join(_mounts_dir, 'no-mounts')
+mounts.names.BY_UUID_DIR = os.path.join(_mounts_dir, 'no-disks')
+from dirdelta.known.mounts import volumes  # noqa: E402
+volumes.PLACEHOLDERS_DIR = os.path.join(_mounts_dir, 'not-mounted')
 atexit.register(shutil.rmtree, _mounts_dir, ignore_errors=True)
 # Nor go by the real labels (~/.config/dirdelta/replicas.json), which say what screens call a replica
 replicas.REPLICAS_FILE = os.path.join(_mounts_dir, 'replicas.json')

@@ -335,6 +335,20 @@ menu chose is then checked to be there (`choose_replicas.are_there()`). No curse
 missing or failing), `DriveCacheError`, `replicas.ReplicasError` or
 `mounts.MountsError` exits with its message.
 
+### Two disks of one model: `known/mounts/volumes.py`, `known/located.py`
+
+Two disks of one model have one label ("My Passport"), so the desktop mounts each at the same mount point: a path
+can't tell them apart (2026-11-21: a second one's `eliran` was taken for the first's replica). So the user's
+`replicas.json` keeps each local replica by its identity (`uuid:UUID:/its path on the disk`, `replicanames.identity()`),
+not its path: `located.encoded()` writes them so, `decoded()` reads each back as where its disk is mounted now (read
+from `/proc/self/mounts` and `/dev/disk/by-uuid`, each time), or, if it isn't, a placeholder that's never made
+(`~/.local/share/dirdelta/not-mounted/UUID/path`): the replica isn't there, and asking to use it mounts its disk by
+its UUID (`udisksctl` where another disk has its mount point), after which `volumes.present()` is its real path
+(`main._ready()`). A file from before (paths) is read by what its `known` section says each path was. `mounts.json`
+keeps each disk's last mount by its UUID too (`uuid:UUID`), not only by mount point (which keeps the last disk's);
+`replicanames`' cache of identities is read anew when what's mounted changes; what's known of a replica
+(`info_at()`) and the web watcher go by identity.
+
 ### `mounts.py`
 The volumes local replicas are on, in `~/.config/dirdelta/mounts.json`
 (`MOUNTS_FILE`, by mount point; JSON, written whole with `os.replace`), so one

@@ -4,7 +4,8 @@ import os
 import subprocess
 
 from dirdelta.known.mounts.file import load, save
-from dirdelta.known.mounts.names import Mount
+from dirdelta.known.mounts import volumes
+from dirdelta.known.mounts.names import Mount, UUID_KEY
 from dirdelta.trees import paths
 
 
@@ -18,13 +19,16 @@ def remember(path):
     if mount is None or mount.target == '/' or not mount.uuid:
         return
     mounts = load()
-    if mounts.get(mount.target) != mount:
-        mounts[mount.target] = mount
+    if mounts.get(mount.target) != mount or mounts.get(UUID_KEY + mount.uuid) != mount:
+        mounts[mount.target] = mounts[UUID_KEY + mount.uuid] = mount
         save(mounts)
 
 
 def current_mount(path):
-    """The Mount that the local path is on now (findmnt's), or None if findmnt can't tell"""
+    """The Mount that the local path is on now (findmnt's), or None if findmnt can't tell; a placeholder's (its disk
+    not mounted, see volumes.py): its disk's last mount, as unmounted() says it"""
+    if volumes.of_placeholder(path) is not None:
+        return unmounted(path)
     try:
         result = subprocess.run(['findmnt', '-J', '-o', 'TARGET,SOURCE,FSTYPE,VFS-OPTIONS,FS-OPTIONS,UUID,LABEL',
                                  '--target', os.path.realpath(path)],
@@ -56,9 +60,17 @@ def unmounted(path):
     None (it is, or none is kept)"""
     if paths.is_cloud_path(path):
         return None
+    on_disk = volumes.of_placeholder(path)
+    if on_disk is not None:
+        # (A replica whose disk wasn't mounted as the file was read: its disk's last mount, if it's kept, else one by
+        # its UUID alone; None once it's mounted)
+        uuid = on_disk[0]
+        if uuid in volumes.mounted():
+            return None
+        return load().get(UUID_KEY + uuid) or Mount(None, None, '', '', '', uuid, None)
     path = os.path.realpath(path)
-    under = [mount for target, mount in load().items()
-             if target != '/' and paths.is_at_or_under(path, target)]
+    under = [mount for key, mount in load().items()
+             if not key.startswith(UUID_KEY) and key != '/' and paths.is_at_or_under(path, key)]
     if not under:
         return None
     mount = max(under, key=lambda mount: len(mount.target))

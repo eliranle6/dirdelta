@@ -13,7 +13,8 @@ MAX_PATHS_KEPT = 5
 
 
 # The colors and icons a replica can be shown in (the web version's names of them)
-LOOK_COLORS = ('blue', 'green', 'orange', 'purple', 'red', 'teal', 'pink', 'grey')
+LOOK_COLORS = ('blue', 'indigo', 'cyan', 'teal', 'green', 'lime', 'yellow', 'orange', 'red', 'pink', 'purple', 'brown',
+               'grey', 'black')
 LOOK_ICONS = ('laptop', 'desktop', 'disk', 'usb', 'nas', 'phone', 'drive')
 
 # One way for all (see paths.normalized())
@@ -129,8 +130,12 @@ class Replicas(ReplicaLists):
         info['last_entry'] = {'date': entry.date.isoformat() if entry.date else None, 'text': entry.text}
 
     def info_at(self, path):
-        """What's known of the replica last seen at path (the latest seen, if several were), or
-        None"""
+        """What's known of the replica at path: by its identity, else (not known by it) of the one last seen at path
+        (the latest seen, if several were: two disks of one model are seen at one path), or None"""
+        from dirdelta.known import replicanames
+        mine = self.known.get(replicanames.label_key(path))
+        if mine is not None:
+            return mine
         path = normalized(path)
         found = [info for info in self.known.values() if path in info.get('paths', [])]
         return max(found, key=lambda info: info.get('seen') or '') if found else None
