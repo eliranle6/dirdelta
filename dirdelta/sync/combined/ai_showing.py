@@ -7,6 +7,7 @@ from dirdelta.inbox.formatting import grey_line, preview_title, wrapped
 from dirdelta.screens import hashes_screen
 from dirdelta.sync.combined import ask_ai
 from dirdelta.sync.combined import plan as plans
+from dirdelta.ui import frontend
 from dirdelta.ui import picker
 from dirdelta.util import text
 
@@ -58,16 +59,16 @@ class AIShowing(object):
                     [grey_line("  %s sets its arrow so" % (ask_ai.APPLY_KEY_NAME,))])
         if suggestions.failure(relpath) is not None:
             return ["", preview_title(TITLE + " failed", 'red')] + wrapped(suggestions.failure(relpath), "  ")
-        return ["", picker.styled([("Recommendation:", 'bold')]), grey_line("  %s asks AI" % (ask_ai.SUGGEST_KEY_NAME,))]
+        return ["", picker.styled([("Recommendation:", 'bold')]), grey_line("  " + _ask_how())]
 
     def _dir_lines(self, dirpath, relpaths):
         """A dir's preview (its files: relpaths): how many, and what the AI suggests for them, in all"""
-        lines = [picker.styled([("Dir: ", 'bold'), (text.files(len(relpaths)), None)])]
+        lines = [picker.styled([("Folder: ", 'bold'), (text.files(len(relpaths)), None)])]
         asking = [relpath for relpath in relpaths if self.suggestions.is_asking(relpath)]
         suggested = self.suggestions.suggested_under(relpaths)
         if not asking and not suggested:
             return lines + ["", picker.styled([("Recommendation:", 'bold')]),
-                            grey_line("  %s asks AI about its files" % (ask_ai.SUGGEST_KEY_NAME,))]
+                            grey_line("  " + _ask_how() + " about its files")]
         lines += ["", preview_title(TITLE, AI_STYLE)]
         counts = collections.Counter(suggestion.state for suggestion in suggested.values())
         for state in (plans.TO_B, plans.TO_A, plans.SKIP):
@@ -78,3 +79,9 @@ class AIShowing(object):
         if suggested:
             lines.append(grey_line("  %s sets their arrows so" % (ask_ai.APPLY_KEY_NAME,)))
         return lines
+
+
+def _ask_how():
+    """How to ask the AI what to do with the selection: its key, or (the web version) its button"""
+    return ("%s asks AI" % (ask_ai.SUGGEST_KEY_NAME,) if frontend.current is None else
+            "Not asked yet: \"AI suggests\", under \u25be, asks AI")

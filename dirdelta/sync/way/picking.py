@@ -33,8 +33,10 @@ class Picking(object):
         clouds = [replica for replica in (self._src, self._dst)
                   if isinstance(replica, clouddirtree.CloudDirTree)]
         jobs = hashes_screen.jobs_of([self._src, self._dst])
-        src_name, dst_name = (replicanames.full(replica.displayname() if not replica_ops.is_local(replica) else replica.fullpath())
-                              for replica in (self._src, self._dst))
+        replica_paths = [replica.displayname() if not replica_ops.is_local(replica) else replica.fullpath()
+                         for replica in (self._src, self._dst)]
+        names = replicanames.short_names(replica_paths)
+        src_name, dst_name = (names[path] for path in replica_paths)
         header = ("%s has other versions of these. Check some, then choose what to do with them." % (dst_name,)
                   if self._only_differing else
                   "%s lacks these. Check some, then choose what to do with them." % (dst_name,))

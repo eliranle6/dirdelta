@@ -43,7 +43,7 @@ class Transfer(object):
         lines = ["Move %s to %s/?" % (files_text(len(plan)), where)]
         lines += text.listed(["  " + relpath for relpath, _ in plan], filescreen.MAX_FILES_LISTED)
         if dryrun.DRYRUN:
-            lines.append(dryrun.NOTE)
+            lines.append(dryrun.note())
         if not self._said_yes(lines, LABEL):
             return None
         # Stopped (Ctrl-C) before move_files() says (it says how far it got, if it's stopped in it)
@@ -121,7 +121,7 @@ class Transfer(object):
         listed = listed or ["  %s" % (relpath,) for relpath in relpaths]
         lines += text.listed(listed, filescreen.MAX_FILES_LISTED)
         if dryrun.DRYRUN:
-            lines.append(dryrun.NOTE)
+            lines.append(dryrun.note())
         if not self._said_yes(lines, LABEL):
             return None
         if not self._is_sure(len(relpaths), self.inbox_path, self.inbox_is_cloud, to_trash, LABEL):

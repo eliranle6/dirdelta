@@ -6,6 +6,7 @@ import os
 from dirdelta.matching import differing
 from dirdelta.sync import comparing
 from dirdelta.sync import replica_ops
+from dirdelta.sync.combined import moved as moved_pairs
 from dirdelta.sync.combined import plan as plans
 from dirdelta.ui import picker
 
@@ -125,9 +126,14 @@ class Showing(object):
                         arrow, "%s is read-only" % (names[dst],) if not replica_ops.is_writable(dst)
                         else "dirdelta doesn't copy within Drive"))
         elif group == plans.MOVED:
+            # Its path in each, and how A's differs from B's, word by word
+            width = max(len(self.name_a), len(self.name_b)) + 2
             lines = [picker.styled([("↔ Moved", 'bold,' + plans.MOVE_COLOR)]),
-                     "The same contents are in %s at" % (self.name_b,), "  " + self.moved[relpath], "",
-                     "⇒ moves %s's there to here" % (self.name_b,), "⇐ moves this one there"]
+                     (self.name_a + ":").ljust(width) + relpath, (self.name_b + ":").ljust(width) + self.moved[relpath],
+                     picker.styled([("From %s's path to %s's: " % (self.name_b, self.name_a), 'grey')] +
+                                   moved_pairs.path_diff(self.moved[relpath], relpath)), "",
+                     "⇒ moves %s's to %s's path" % (self.name_b, self.name_a),
+                     "⇐ moves %s's to %s's path" % (self.name_a, self.name_b)]
         else:
             lines = [picker.styled([(os.path.basename(relpath), 'bold')]),
                      "Only in %s" % (self.name_a if group == plans.ONLY_A else self.name_b,)]

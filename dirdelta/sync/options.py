@@ -19,9 +19,8 @@ STATE_POINTS = ("Sync state: only in A", "Sync state: only in B", "Sync state: d
 
 def state_lines(ways, path_a, path_b):
     """{STATE or one of STATE_POINTS: its line (a picker.Skipped)}, by what each way found, the replicas
-    by their short names and what each is on (replicanames.told_apart()); while they're found, the
-    points are blank"""
-    names = replicanames.told_apart([path_a, path_b])
+    by their short names (replicanames.short_names()); while they're found, the points are blank"""
+    names = replicanames.short_names([path_a, path_b])
     name_a, name_b = names[path_a], names[path_b]
     found = {point: picker.BLANK for point in STATE_POINTS}
     futures = [way.missing for way in ways]
@@ -105,7 +104,7 @@ class Action(object):
         if self.only_differing:
             label = "%s at the same paths in both" % (DIFFER,)
         else:
-            label = "Files only in %s" % (replicanames.full(self.src_path),)
+            label = "Files only in %s" % (self._names()[self.src_path],)
         missing, differs = self.way.missing, self.way.differs
         if differs is None:
             # Not looked for
@@ -127,8 +126,12 @@ class Action(object):
         # The ones that differ are in its picker too
         and_differ = ", and %d that %s" % (nr_differ, differ_word(nr_differ)) if nr_differ else ""
         if count == 0 and not nr_differ:
-            return picker.Disabled("%s: none, %s has them all" % (label, replicanames.full(self.dst_path)))
+            return picker.Disabled("%s: none, %s has them all" % (label, self._names()[self.dst_path]))
         return "%s (%s%s)" % (label, files_text(count), and_differ)
+
+    def _names(self):
+        """{path: its short name} of the two replicas"""
+        return replicanames.short_names([self.src_path, self.dst_path])
 
     def run(self):
         """Returns whether the replicas' files changed meanwhile (see InteractiveDirSync)"""
@@ -137,8 +140,8 @@ class Action(object):
                                                        way.indexes[way.src], way.indexes[way.dst],
                                                        way.checked, self.changes, way.differs,
                                                        self.only_differing, way.compared)
-        # (Named for what it shows: e.g. 'Only in eliran on LocalDisk(07B)', the files the other lacks)
-        only_in = replicanames.told_apart([self.src_path, self.dst_path])[self.src_path]
+        # (Named for what it shows: e.g. 'Only in laptop', the files the other lacks)
+        only_in = self._names()[self.src_path]
         with picker.place(DIFFER if self.only_differing else "Only in %s" % (only_in,)):
             sync.browse()
         self.was_read_anew = sync.was_read_anew

@@ -19,12 +19,12 @@ HELP_LINES = ["Tags after a file's name (/ searches them too):",
 
 
 NOTHING = "Nothing: go back"
-NOT_NOW = "Not now (%s starts it later)" % (KEY,)
+NOT_NOW = "Not now"
 HASH_AND_WAIT = "Hash now, and wait"
 HASH_IN_BACKGROUND = "Hash in the background, and go on"
 # The same, leaving out the media files (images, audio, video): offered when there are both kinds left
-HASH_BUT_MEDIA_AND_WAIT = "Hash all but the media files now, and wait"
-HASH_BUT_MEDIA_IN_BACKGROUND = "Hash all but the media files in the background, and go on"
+HASH_BUT_MEDIA_AND_WAIT = "Hash now, all but photos and videos, and wait"
+HASH_BUT_MEDIA_IN_BACKGROUND = "Hash in the background, all but photos and videos, and go on"
 KEEP_HASHING = "Don't quit: keep hashing"
 QUIT_ANYWAY = "Quit"
 # How often the wait's progress line changes, in seconds

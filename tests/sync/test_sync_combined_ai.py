@@ -56,9 +56,9 @@ class AITest(ReplicasTest):
         self.assertIn("AI: asking about 5 files", picker.unstyled(self.sync._shown_as()['']))
         self.released.set()
         self.sync.suggestions.wait()
-        self.assertEqual(self.shown('new/a.txt'), "a.txt  only in A  [ai: ⇒ B]")
+        self.assertEqual(self.shown('new/a.txt'), "a.txt  only in LocalDisk:A  [ai: ⇒ LocalDisk:B]")
         # What it left out is to be left, as its summary says
-        self.assertEqual(self.shown('b.txt'), "b.txt  only in B  [ai: leave it]")
+        self.assertEqual(self.shown('b.txt'), "b.txt  only in LocalDisk:B  [ai: leave it]")
         self.assertEqual(self.sync.suggestions.suggestion('b.txt').reason, "The rest are unclear")
         # Done: said no more
         self.assertEqual(picker.unstyled(self.sync._shown_as()['']), '')
@@ -85,10 +85,11 @@ class AITest(ReplicasTest):
         self.sync.suggestions.wait()
         lines = [picker.unstyled(line) for line in self.sync._file_preview('new/a.txt')]
         self.assertEqual(lines[lines.index("Recommendation (ai):"):],
-                         ["Recommendation (ai):", "  ⇒ make B like A", "", "  it's new", "  Ctrl-A sets its arrow so"])
+                         ["Recommendation (ai):", "  ⇒ make LocalDisk:B like LocalDisk:A", "", "  it's new", "  Ctrl-A sets its arrow so"])
         # A dir's: what it suggests for its files, in all
         dir_lines = [picker.unstyled(line) for line in self.sync._dir_previews()['']]
-        self.assertIn("  ⇒ make B like A: 1 file", dir_lines)
+        # (Wrapped, as the names are long)
+        self.assertIn("⇒ make LocalDisk:B like LocalDisk:A: 1 file", " ".join(line.strip() for line in dir_lines))
 
     def test_ctrl_a_puts_the_selections_files_in_the_states_it_suggests_once(self):
         self.sync._on_key(ask_ai.SUGGEST_KEY, '')

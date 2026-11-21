@@ -38,6 +38,8 @@ class Command(object):
             self.args += ['--key', 'q', 'back' if places_entered else 'quit']
         self.args += args
         self.is_done = threading.Event()
+        # The pictures' function, if it has one (see add_previews())
+        self.images = None
         self.child_fds, self.our_fds = [], []
         self.jobs = []
         # The ones on the selection's moves, each its own (see Selection), all moved by one reader
@@ -85,6 +87,8 @@ class Command(object):
             self.selections.append(selection)
             self.jobs.append(functools.partial(preview_sender.run, lambda send: on_selection(selection, send)))
         if images is not None:
+            # (The web version's grid of a folder's photos makes them with it too)
+            self.images = images
             self.selections.append(Selection())
             pictures = Images(self.selections[-1], images, preview_sender)
             self.jobs.append(pictures.run)
@@ -157,7 +161,7 @@ class Command(object):
                 thread.start()
             input_data = null_terminated(input_items) if input_items is not None else None
             try:
-                returncode, stdout = session.run_picker(self.args[1:], input_data)
+                returncode, stdout = session.run_picker(self.args[1:], input_data, self.images)
             except Exception:
                 # It didn't get to them: closed here, so the threads reading ours end
                 for child_fd in self.child_fds:

@@ -18,7 +18,7 @@ class ActionsTest(MainMenuTest):
     def test_a_refresh_finds_each_ways_files_again_and_lists_its_files_anew(self):
         a = localdiskdirtree.LocalDiskDirTree('/a', silent=True)
         b = clouddirtree.CloudDirTree('cloud/b')
-        answers = ['Refresh /b file list from Google Drive', dirsync_main.BACK]
+        answers = ["Refresh LocalDisk:b's file list from Google Drive", dirsync_main.BACK]
         with mock.patch('dirdelta.ui.picker.pick_option', side_effect=lambda *_, **__: answers.pop(0)), \
                 mock.patch.object(b, 'refresh_from_drive') as refresh, \
                 mock.patch.object(elsewhere.Index, 'invalidate', autospec=True) as invalidate:
@@ -30,7 +30,7 @@ class ActionsTest(MainMenuTest):
     def test_a_failed_refresh_says_why_and_finds_nothing_again(self):
         a = localdiskdirtree.LocalDiskDirTree('/a', silent=True)
         b = clouddirtree.CloudDirTree('cloud/b')
-        answers = ['Refresh /b file list from Google Drive', dirsync_main.BACK]
+        answers = ["Refresh LocalDisk:b's file list from Google Drive", dirsync_main.BACK]
         with mock.patch('dirdelta.ui.picker.pick_option', side_effect=lambda *_, **__: answers.pop(0)), \
                 mock.patch.object(b, 'refresh_from_drive', side_effect=OSError('no network')):
             dirsync_main._sync(a, b, '/a', '/b')
@@ -71,7 +71,7 @@ class ActionsTest(MainMenuTest):
     def test_rescanning_finds_each_ways_files_again(self):
         a = localdiskdirtree.LocalDiskDirTree('/a', silent=True)
         b = localdiskdirtree.LocalDiskDirTree('/b', silent=True)
-        answers = ['Rescan /b', dirsync_main.BACK]
+        answers = ['Rescan LocalDisk:b', dirsync_main.BACK]
         with mock.patch('dirdelta.ui.picker.pick_option', side_effect=lambda *_, **__: answers.pop(0)), \
                 mock.patch.object(localdiskdirtree.LocalDiskDirTree, 'rescan') as rescan, \
                 mock.patch('dirdelta.matching.elsewhere.Index.invalidate', autospec=True) as invalidate:
@@ -117,7 +117,7 @@ class ActionsTest(MainMenuTest):
     def test_a_rescan_that_fails_says_so_and_finds_nothing_again(self):
         a = localdiskdirtree.LocalDiskDirTree('/a', silent=True)
         b = localdiskdirtree.LocalDiskDirTree('/b', silent=True)
-        answers = ['Rescan /b', dirsync_main.BACK]
+        answers = ['Rescan LocalDisk:b', dirsync_main.BACK]
         with mock.patch('dirdelta.ui.picker.pick_option', side_effect=lambda *_, **__: answers.pop(0)), \
                 mock.patch.object(localdiskdirtree.LocalDiskDirTree, 'rescan', side_effect=OSError('/b is gone')), \
                 mock.patch('dirdelta.matching.elsewhere.Index.invalidate', autospec=True) as invalidate:

@@ -50,7 +50,8 @@ a.stat { border-top: 1px solid var(--line); }
 .where .fullpath { flex-basis: 100%; overflow-wrap: anywhere; }
 button.tiny { font-size: 11px; padding: 1px 7px; border-radius: 10px; color: var(--muted); }
 .card .kind { margin-top: -6px; }
-button.danger { color: var(--red); } button.danger.sure { background: var(--red); border-color: var(--red); color: #fff; }
+/* A destructive action's first step: outlined in red; asked again (.sure), solid red as everywhere (app.css) */
+button.danger:not(.sure) { background: var(--card); border-color: var(--red); color: var(--red); }
 /* The phone's card: red (nothing listed yet), yellow (by name and size only), green (hashed) */
 .card.tone-red { border-left: 5px solid var(--red); } .card.tone-yellow { border-left: 5px solid var(--yellow); }
 .card.tone-green { border-left: 5px solid var(--green); }

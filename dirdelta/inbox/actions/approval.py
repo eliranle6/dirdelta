@@ -62,7 +62,7 @@ class Approval(object):
                 " (to Drive's trash)" if self.inbox_is_cloud and action == self.MOVE_TO else ""))
         lines += self._followers.confirmation_lines()
         if dryrun.DRYRUN:
-            lines.append(dryrun.NOTE)
+            lines.append(dryrun.note())
         if not self._said_yes(lines, LABEL):
             return None
         moves = list(plan)

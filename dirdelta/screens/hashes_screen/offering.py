@@ -8,6 +8,9 @@ from dirdelta.screens.hashes_screen.names import (HASH_AND_WAIT, HASH_BUT_MEDIA_
                                                   media_files_text)
 from dirdelta.screens.hashes_screen.waiting import wait
 from dirdelta.ui import messages
+
+# Why leaving the media files out can't be chosen
+NO_MEDIA_LEFT = "no photos or videos left to hash"
 from dirdelta.ui import picker
 from dirdelta.util import text
 
@@ -59,26 +62,27 @@ def offer(jobs):
     if not left:
         return True
     names = replicanames.short_names([job.root for job, _ in left])
-    lines = ["Hash unhashed files?", ""]
-    has_both = False
+    lines = ["Hash the files first? It reads their contents, to find a file however it was moved or renamed.", ""]
+    has_media = False
     for job, progress in left:
         others, media_files = job.left()
-        if others.nr_files and media_files.nr_files:
-            has_both = True
+        if media_files.nr_files:
+            # (Leaving them out is a choice even with no other file left: it hashes the ones that come later)
+            has_media = True
             lines.append("%s unhashed in %s (%s), and %s (%s)." % (
-                files_text(others.nr_files), names[job.root], text.format_size(others.size),
-                media_files_text(media_files.nr_files),
-                text.format_size(media_files.size)))
+                files_text(others.nr_files) if others.nr_files else "No other file", names[job.root],
+                text.format_size(others.size), media_files_text(media_files.nr_files), text.format_size(media_files.size)))
         else:
             lines.append("%s unhashed in %s." % (files_text(progress.nr_files - progress.nr_done), names[job.root]))
-    lines.append("It helps compare files, but may slow down the machine.")
-    if has_both:
-        lines.append("Media files (images, audio, video) are hashed last; left out, they're matched by "
-                     "their names and sizes only (%s hashes them later)." % (KEY,))
-    options = [NOTHING, NOT_NOW, HASH_AND_WAIT, HASH_IN_BACKGROUND]
-    if has_both:
-        options += [HASH_BUT_MEDIA_AND_WAIT, HASH_BUT_MEDIA_IN_BACKGROUND]
-    answer = picker.pick_option(options, header='\n'.join(lines), title="Hash files?")
+    if has_media:
+        lines.append("Photos, audio and videos are the slowest: left out, they're matched by name and size.")
+    # (The one that keeps going first, and chosen; going back is Back, q. Without media files left, leaving them
+    # out is shown, off, saying why)
+    def but_media(option):
+        return option if has_media else picker.Option(option, option, picker.Disabled("%s (%s)" % (option, NO_MEDIA_LEFT)))
+    options = [HASH_IN_BACKGROUND, but_media(HASH_BUT_MEDIA_IN_BACKGROUND), HASH_AND_WAIT,
+               but_media(HASH_BUT_MEDIA_AND_WAIT), NOT_NOW]
+    answer = picker.pick_option(options, header='\n'.join(lines), title="Hash files?", selected=HASH_IN_BACKGROUND)
     if answer in (None, NOTHING):
         return False
     if answer != NOT_NOW:

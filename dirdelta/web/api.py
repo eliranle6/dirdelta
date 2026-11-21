@@ -5,8 +5,11 @@ from dirdelta.known import replicanames
 from dirdelta.known import replicas as known_replicas
 from dirdelta.trees import paths
 from dirdelta.util import dryrun
+from dirdelta.web import server
 from dirdelta.web.picker import PickerScreen
 
+# The biggest picture a grid asks for (a side, in pixels): one shown whole
+MAX_PICTURE_SIZE = 1600
 # The mode's labels (dryrun.label()'s): a screen's is shown as the mode is now, which may have been switched since
 MODE_LABELS = ('DRY RUN', 'LIVE')
 
@@ -33,7 +36,7 @@ def routes(session, start_flow):
             is_new = str(screen.id) != query.get('screen')
             found['screen'] = dict(screen.meta(), **screen.state(0 if is_new else since))
             found['screen']['labels'] = with_mode_now(found['screen'].get('labels') or [])
-            if isinstance(screen, PickerScreen) and screen.spec.states and session.replicas:
+            if session.replicas:
                 found['screen']['replicas'] = replicas_shown(session.replicas)
             if is_new and isinstance(screen, PickerScreen):
                 found['screen']['items'] = screen.items.listed()
@@ -42,6 +45,13 @@ def routes(session, start_flow):
     def preview(query, body):
         screen = session.screen(int(query.get('screen', 0)))
         return screen.preview(query.get('path', '')) if isinstance(screen, PickerScreen) else {}
+
+    def picture(query, body):
+        """A file's picture, a JPEG (a folder's photos' grid), at most size pixels a side"""
+        screen = session.screen(int(query.get('screen', 0)))
+        size = max(32, min(MAX_PICTURE_SIZE, int(query.get('size', 240))))
+        data = screen.picture(query.get('path', ''), size) if isinstance(screen, PickerScreen) else None
+        return server.Reply(data, 'image/jpeg', is_kept=True) if data else server.Reply(b'', 'text/plain', 404)
 
     def children(query, body):
         screen = session.screen(int(query.get('screen', 0)))
@@ -68,6 +78,7 @@ def routes(session, start_flow):
                                    dict(body))}
 
     return {('GET', '/api/state'): state, ('GET', '/api/preview'): preview, ('GET', '/api/children'): children,
+            ('GET', '/api/picture'): picture,
             ('POST', '/api/act'): act, ('POST', '/api/start'): start}
 
 

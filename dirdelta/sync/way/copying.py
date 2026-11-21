@@ -42,7 +42,7 @@ class Copying(object):
                          (replica_ops.files_text(len(newer_here)) + (" is" if len(newer_here) == 1 else " are"), dst_name,
                           "it" if len(newer_here) == 1 else "them"))
         if dryrun.DRYRUN:
-            lines.append(dryrun.NOTE)
+            lines.append(dryrun.note())
         if not self._said_yes(lines, self.LABELS[self.COPY_BACK]):
             return None
         self._last_action = self.COPY_BACK
@@ -141,7 +141,7 @@ class Copying(object):
         elif changed and replica is self._src:
             lines.append("%s has other versions of %s of them, which stay." % (self._dst.displayname(), len(changed)))
         if dryrun.DRYRUN:
-            lines.append(dryrun.NOTE)
+            lines.append(dryrun.note())
         if not self._said_yes(lines, self.LABELS[action]):
             return False
         return action != self.REMOVE or self._is_sure(len(relpaths), replica.displayname(), not replica_ops.is_local(replica),

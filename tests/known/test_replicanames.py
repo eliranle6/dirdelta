@@ -28,17 +28,25 @@ class NamesTest(unittest.TestCase):
         known.set_label(replicanames.label_key(path), label)
         replicas.save(known)
 
-    def test_a_local_one_says_its_disk(self):
-        self.assertEqual(replicanames.full('/mnt/disk/eliran'), 'LocalDisk(234):/mnt/disk/eliran')
+    def test_a_local_one_without_a_label_is_called_by_its_disk_not_its_path(self):
+        self.assertEqual(replicanames.full('/mnt/disk/eliran'), 'LocalDisk(234)')
 
     def test_a_local_one_on_no_known_disk(self):
         self.mount.return_value = None
-        self.assertEqual(replicanames.full('/x'), 'LocalDisk:/x')
+        self.assertEqual(replicanames.full('/x'), 'LocalDisk')
 
     def test_a_drive_one_says_its_user(self):
-        self.assertEqual(replicanames.full('cloud/eliran'), 'Cloud(me):/eliran')
+        self.assertEqual(replicanames.full('cloud/eliran'), 'Cloud(me)')
         self.user.return_value = None
-        self.assertEqual(replicanames.full('cloud/eliran'), 'Cloud:/eliran')
+        self.assertEqual(replicanames.full('cloud/eliran'), 'Cloud')
+
+    def test_two_on_one_disk_have_their_folders_name_after_it_never_the_dirs_above(self):
+        names = replicanames.short_names(['/mnt/disk/photos/eliran', '/mnt/disk/backup/old'])
+        self.assertEqual(names, {'/mnt/disk/photos/eliran': 'LocalDisk(234):eliran', '/mnt/disk/backup/old': 'LocalDisk(234):old'})
+        # (Told apart from the known ones too, wherever it's named alone)
+        known = replicas.Replicas(history=[('/mnt/disk/photos/eliran', '/mnt/disk/backup/old')])
+        replicas.save(known)
+        self.assertEqual(replicanames.name('/mnt/disk/backup/old'), 'LocalDisk(234):old')
 
     def test_a_replicas_label_is_its_own_not_its_disks(self):
         self.label('/mnt/disk/a', 'blue WD')
@@ -56,13 +64,12 @@ class NamesTest(unittest.TestCase):
         self.label('cloud/a', 'photos')
         self.assertEqual(replicanames.full('cloud/a'), 'photos')
         self.assertEqual(replicanames.short_names(['cloud/a'])['cloud/a'], 'photos')
-        self.assertEqual(replicanames.full('cloud/b'), 'Cloud(me):/b')
+        self.assertEqual(replicanames.full('cloud/b'), 'Cloud(me)')
 
-    def test_two_of_one_name_are_told_apart_by_where_they_are(self):
-        self.assertEqual(replicanames.told_apart(['/mnt/disk/eliran', 'cloud/eliran']),
-                         {'/mnt/disk/eliran': 'eliran on LocalDisk(234)', 'cloud/eliran': 'eliran on Cloud(me)'})
+    def test_a_labeled_one_is_called_by_its_label_alone(self):
         self.label('cloud/eliran', 'photos')
-        self.assertEqual(replicanames.told_apart(['cloud/eliran'])['cloud/eliran'], 'photos')
+        self.assertEqual(replicanames.told_apart(['/mnt/disk/eliran', 'cloud/eliran']),
+                         {'/mnt/disk/eliran': 'LocalDisk(234)', 'cloud/eliran': 'photos'})
 
     def test_a_label_changed_in_the_file_is_seen(self):
         self.label('/mnt/disk/a', 'one')

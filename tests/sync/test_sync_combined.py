@@ -185,7 +185,7 @@ class ScreenTest(ReplicasTest):
 
     def test_tabs_are_for_the_groups_that_have_files(self):
         self.run_screen([None], [], changes=differing.Changes())
-        self.assertEqual([tab.title for tab in self.pick_states.call_args.kwargs['tabs']], ['All', 'Only in A', 'Only in B'])
+        self.assertEqual([tab.title for tab in self.pick_states.call_args.kwargs['tabs']], ['All', 'Only in LocalDisk:A', 'Only in LocalDisk:B'])
 
     def test_a_moved_pair_has_its_tab_and_says_where_b_has_it(self):
         sync = screen.CombinedSync(self.replica_a, self.replica_b, self.path_a, self.path_b, ['gone.txt'], ['old/b2.txt'],
@@ -196,7 +196,15 @@ class ScreenTest(ReplicasTest):
         self.assertEqual([tab.title for tab in pick_states.call_args.kwargs['tabs']], ['All', 'Moved'])
         self.assertEqual([entry.relpath for entry in pick_states.call_args.args[1]], ['gone.txt'])
         self.assertEqual(picker.unstyled(pick_states.call_args.kwargs['shown_as']()['gone.txt']),
-                         "gone.txt  moved: in B at old/b2.txt")
+                         "gone.txt  moved: in LocalDisk:B at old/b2.txt")
+
+    def test_a_moved_files_preview_says_how_its_path_changed_word_by_word(self):
+        sync = screen.CombinedSync(self.replica_a, self.replica_b, self.path_a, self.path_b, ['photos/2024/a.jpg'],
+                                   ['photos/a.jpg'], differing.Changes(), moved={'photos/2024/a.jpg': 'photos/a.jpg'})
+        lines = [picker.unstyled(line) for line in sync._file_preview('photos/2024/a.jpg')]
+        self.assertIn("From LocalDisk:B's path to LocalDisk:A's: photos/{+2024/+}a.jpg", lines)
+        self.assertEqual(moved.path_diff('old/moved.txt', 'docs/moved.txt'),
+                         [('[-old/-]', 'red'), ('{+docs/+}', 'green'), ('moved.txt', None)])
 
     def test_the_ais_steps_set_the_arrows_to_review_in_the_tree(self):
         steps = [aiplan.Step(plans.TO_B, 'new/a.txt', None, "it's new"), aiplan.Step(plans.TO_A, 'both.txt', None, "B's is newer")]
@@ -205,7 +213,7 @@ class ScreenTest(ReplicasTest):
         task = ask.call_args.args[0]
         self.assertFalse(ask.call_args.kwargs['review'])
         notes = {file.relpath: file.note for file in task.files}
-        self.assertEqual(notes['b.txt'], 'only in B')
+        self.assertEqual(notes['b.txt'], 'only in LocalDisk:B')
         self.assertTrue(notes['both.txt'].startswith('in both, different: '))
         self.assertEqual(task.focus, ['new/a.txt'])
         again = self.pick_states.call_args_list[1]

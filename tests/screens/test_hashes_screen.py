@@ -10,6 +10,7 @@ from dirdelta.hashes import hashing
 from dirdelta.screens import hashes_screen
 from dirdelta.trees import dirtree
 from dirdelta.trees import localdiskdirtree
+from dirdelta.ui import picker
 from hashes_screen_support import FakeJob, progress_of
 
 
@@ -21,22 +22,23 @@ class OfferTest(unittest.TestCase):
         pick.assert_not_called()
         self.assertEqual(job.started, 1)
 
-    def test_nothing_is_first_and_goes_back(self):
+    def test_hashing_in_the_background_is_first_and_chosen_and_back_goes_back(self):
         job = FakeJob('/photos', progress_of())
-        with helpers.answering_option_picker([hashes_screen.NOTHING]) as pick:
+        with helpers.answering_option_picker([None]) as pick:
             self.assertFalse(hashes_screen.offer([job]))
-        self.assertEqual(pick.call_args.args[0][:2], [hashes_screen.NOTHING, hashes_screen.NOT_NOW])
+        options = [picker.option_id(option) for option in pick.call_args.args[0]]
+        self.assertEqual(options, [hashes_screen.HASH_IN_BACKGROUND, hashes_screen.HASH_BUT_MEDIA_IN_BACKGROUND,
+                                   hashes_screen.HASH_AND_WAIT, hashes_screen.HASH_BUT_MEDIA_AND_WAIT, hashes_screen.NOT_NOW])
+        self.assertEqual(pick.call_args.kwargs['selected'], hashes_screen.HASH_IN_BACKGROUND)
         self.assertEqual(job.started, 0)
-        with helpers.answering_option_picker([None]):
-            self.assertFalse(hashes_screen.offer([job]))
 
     def test_its_asked_with_whats_left(self):
         job = FakeJob('/photos', progress_of())
         with helpers.answering_option_picker([hashes_screen.NOT_NOW]) as pick:
             self.assertTrue(hashes_screen.offer([job]))
         header = pick.call_args.kwargs['header']
-        self.assertEqual(header, "Hash unhashed files?\n\n6 files unhashed in photos.\n"
-                                 "It helps compare files, but may slow down the machine.")
+        self.assertEqual(header, "Hash the files first? It reads their contents, to find a file however it was moved "
+                                 "or renamed.\n\n6 files unhashed in LocalDisk.")
         # Not now: not started
         self.assertEqual(job.started, 0)
 
@@ -62,9 +64,9 @@ class OfferTest(unittest.TestCase):
         with helpers.answering_option_picker([hashes_screen.HASH_BUT_MEDIA_IN_BACKGROUND]) as pick, \
                 mock.patch('dirdelta.screens.hashes_screen.offering.wait') as wait:
             self.assertTrue(hashes_screen.offer([job]))
-        self.assertEqual(pick.call_args.args[0][-2:], [hashes_screen.HASH_BUT_MEDIA_AND_WAIT,
-                                                       hashes_screen.HASH_BUT_MEDIA_IN_BACKGROUND])
-        self.assertIn("2 files unhashed in photos (2.0 KB), and 3,000 media files (3.0 GB).",
+        self.assertEqual(pick.call_args.args[0][:2], [hashes_screen.HASH_IN_BACKGROUND,
+                                                      hashes_screen.HASH_BUT_MEDIA_IN_BACKGROUND])
+        self.assertIn("2 files unhashed in LocalDisk (2.0 KB), and 3,000 media files (3.0 GB).",
                       pick.call_args.kwargs['header'])
         self.assertEqual(job.started, 1)
         self.assertFalse(job.with_media)
@@ -77,12 +79,25 @@ class OfferTest(unittest.TestCase):
             hashes_screen.offer([job])
         self.assertTrue(job.with_media)
 
-    def test_without_both_kinds_left_theres_no_choice_of_media(self):
+    def test_with_only_media_files_left_leaving_them_out_is_still_offered(self):
+        # (Hashing then goes on for the files that come later, but the media)
         job = FakeJob('/photos', progress_of())
         job.left = lambda: (hashing.Left(0, 0), hashing.Left(6, 100))
+        with helpers.answering_option_picker([hashes_screen.HASH_BUT_MEDIA_IN_BACKGROUND]) as pick:
+            hashes_screen.offer([job])
+        self.assertIn(hashes_screen.HASH_BUT_MEDIA_AND_WAIT, pick.call_args.args[0])
+        self.assertIn("No other file unhashed in LocalDisk (0 B), and 6 media files (100 B).", pick.call_args.kwargs['header'])
+        self.assertEqual((job.started, job.with_media), (1, False))
+
+    def test_without_media_files_left_leaving_them_out_is_off_saying_why(self):
+        job = FakeJob('/photos', progress_of())
+        job.left = lambda: (hashing.Left(6, 100), hashing.Left(0, 0))
         with helpers.answering_option_picker([hashes_screen.NOT_NOW]) as pick:
             hashes_screen.offer([job])
-        self.assertNotIn(hashes_screen.HASH_BUT_MEDIA_AND_WAIT, pick.call_args.args[0])
+        off = {option.id: option.shown for option in pick.call_args.args[0] if isinstance(option, picker.Option)}
+        self.assertEqual(off[hashes_screen.HASH_BUT_MEDIA_IN_BACKGROUND],
+                         picker.Disabled(hashes_screen.HASH_BUT_MEDIA_IN_BACKGROUND + " (no photos or videos left to hash)"))
+        self.assertIn(hashes_screen.HASH_BUT_MEDIA_AND_WAIT, off)
 
     def test_ones_being_hashed_arent_asked_of(self):
         job = FakeJob('/photos', progress_of(state=hashing.HASHING, is_started=True))

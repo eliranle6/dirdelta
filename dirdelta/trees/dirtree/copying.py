@@ -2,6 +2,7 @@
 import contextlib
 
 from dirdelta.trees.dirtree.common import batch_verb
+from dirdelta.ui import frontend
 from dirdelta.ui import messages
 from dirdelta.util import dryrun
 
@@ -85,7 +86,9 @@ class Copying(object):
             after()
         ended = "stopped" if is_stopped else "complete"
         if dryrun.DRYRUN:
-            messages.print_line("Dry run %s: nothing was %s %s (DRYRUN=0 %s)" % (ended, past, dry_where or where, third))
+            # (How to make it live: the terminal's env var; the web version's switch is in its top bar)
+            how = " (DRYRUN=0 %s)" % (third,) if frontend.current is None else ""
+            messages.print_line("Dry run %s: nothing was %s %s%s" % (ended, past, dry_where or where, how))
         else:
             messages.print_line("%s %s: %s %d of %d files %s" % (noun, ended, past, nr_done(), total, where))
 

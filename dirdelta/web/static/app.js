@@ -55,6 +55,8 @@ function apply(data) {
   }
   const isNew = !view.screen || view.screen.id !== screen.id;
   if (isNew) newScreen(screen);
+  // (A sync's two replicas, on every screen of it: their names shown in their colors, colorNames())
+  view.sides = pairSides(screen);
   if (screen.kind === 'picker') updatePicker(screen, isNew);
   else if (screen.kind === 'merge') renderMerge(screen, isNew);
   else renderMessages(screen, isNew);
@@ -70,6 +72,7 @@ function apply(data) {
 function newScreen(screen) {
   // (What was shown of the screen before, kept: coming back to it, as the flow does, finds it as it was)
   keepView();
+  closeGrid();
   // (Whether this page showed one before: between two screens the flow may show none for a moment)
   const previous = view.shownOne;
   view.shownOne = true;
@@ -96,7 +99,15 @@ function newScreen(screen) {
 function goBack() {
   // (A step the browser has: its Back, the same, so the two agree; else the screen's own)
   if (history.state && history.state.step) history.back();
-  else act('quit');
+  else quitScreen();
+}
+
+// The screen's own Back: q, or a tree's key that goes back keeping what was marked (the combined tree's Ctrl-Q:
+// q would drop its marks)
+const KEEPING_BACK = /keeping/;
+function quitScreen() {
+  const keep = view.screen && view.screen.keys.find(key => key.ends && KEEPING_BACK.test(key.text || ''));
+  return keep ? act('press', {key: keep.key}) : act('quit');
 }
 
 addEventListener('popstate', () => {
@@ -105,7 +116,7 @@ addEventListener('popstate', () => {
   if (screen.kind !== 'picker') { history.pushState(null, '', '#screen=' + screen.id); return; }
   if (location.hash === '#screen=' + screen.id) return;
   view.wentBack = true;
-  act('quit');
+  quitScreen();
 });
 
 // What this tab showed of a screen (its open folders, tab, search and scroll), kept in its session's storage
@@ -215,18 +226,23 @@ function renderPickerFrame() {
   const main = document.getElementById('main');
   const parts = [];
   const sides = pairSides(screen);
-  if (sides && screen.states.length) parts.push(pairLegend(sides), el('div', {class: 'pairplan', id: 'pairplan'}));
-  else if (screen.header) parts.push(el('div', {class: 'header'}, segmentsSpan(screen.header)));
-  if (screen.tabs.length) parts.push(el('div', {class: 'tabs', id: 'pickertabs'}));
-  if (screen.mode !== 'list') {
-    parts.push(el('input', {type: 'search', id: 'search', placeholder: 'Search', autocomplete: 'off',
-      value: view.search, oninput: event => { view.search = event.target.value; renderTree(); }}));
+  const search = screen.mode !== 'list' ? el('input', {type: 'search', id: 'search', placeholder: 'Search', autocomplete: 'off',
+    value: view.search, oninput: event => { view.search = event.target.value; renderTree(); }}) : '';
+  if (sides && screen.states.length) {
+    // A sync's tree of states: its head kept in sight as the tree scrolls, in two rows: the pair and what the
+    // arrows do, with the plan so far; the tabs (each with its count) and the search
+    parts.push(el('div', {class: 'statehead'}, el('div', {class: 'headrow'}, pairLegend(sides), el('div', {class: 'pairplan', id: 'pairplan'})),
+      el('div', {class: 'headrow'}, screen.tabs.length ? el('div', {class: 'tabs', id: 'pickertabs'}) : '', search)));
+  } else {
+    if (screen.header) parts.push(el('div', {class: 'header'}, segmentsSpan(screen.header)));
+    if (screen.tabs.length) parts.push(el('div', {class: 'tabs', id: 'pickertabs'}));
+    if (search) parts.push(search);
   }
   // On a wide screen the trees side by side, and what's shown of the selection (its details, a diff, the AI's
   // suggestion) in the bottom bar, right of the buttons (placePreview()); on a phone, under the tree
   const inBar = isWide() && screen.mode !== 'list';
-  // (No side tree: the tree takes the whole width, its details in the bottom bar)
-  const body = el('div', {class: 'split' + (inBar && !screen.side ? ' single' : '')}, el('div', {id: 'tree'}),
+  // (No side tree: the tree (or the menu) takes the whole width, a tree's details in the bottom bar)
+  const body = el('div', {class: 'split' + (!screen.side && (inBar || screen.mode === 'list') ? ' single' : '')}, el('div', {id: 'tree'}),
     el('div', {}, inBar ? '' : el('div', {id: 'preview'}), el('div', {id: 'side'})));
   parts.push(body, el('div', {class: 'footer', id: 'footer'}), el('div', {class: 'help', id: 'help'}));
   placePreview(inBar);
@@ -299,6 +315,7 @@ addEventListener('resize', placePanel);
 
 function renderPickerParts() {
   renderPlan();
+  renderGrid();
   renderTabs();
   renderTree();
   renderSide();
@@ -307,13 +324,46 @@ function renderPickerParts() {
   document.getElementById('status').replaceChildren(segmentsSpan(view.status));
   renderPickerActions();
   renderHelp();
+  colorNames(document.getElementById('main'));
+  colorNames(document.getElementById('bottom'));
+}
+
+// A sync's two replicas named in its texts (menus, headers, messages, previews, buttons): each name with its icon
+// in its color, as the combined tree shows them, rather than plain text
+function colorNames(root) {
+  if (!root || !view.sides) return;
+  const names = view.sides.filter(side => side.name).sort((one, other) => other.name.length - one.name.length);
+  if (!names.length) return;
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {acceptNode: node =>
+    node.parentElement && !node.parentElement.closest('.pairname, input, textarea, select, option, .pairside, b') &&
+    names.some(side => node.data.includes(side.name)) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT});
+  const found = [];
+  while (walker.nextNode()) found.push(walker.currentNode);
+  for (const node of found) {
+    const parts = [];
+    let rest = node.data;
+    while (rest) {
+      let at = -1, side = null;
+      for (const one of names) {
+        const where = rest.indexOf(one.name);
+        if (where >= 0 && (at < 0 || where < at)) { at = where; side = one; }
+      }
+      if (at < 0) { parts.push(rest); break; }
+      if (at) parts.push(rest.slice(0, at));
+      parts.push(sideName(side));
+      rest = rest.slice(at + side.name.length);
+    }
+    node.replaceWith(...parts);
+  }
 }
 
 function renderTabs() {
   const tabs = document.getElementById('pickertabs');
   if (!tabs) return;
+  // (Each with how many files it shows)
+  const count = tab => view.items.filter(path => { const info = view.info.get(path); return info.t === 'f' && (!tab.groups.length || tab.groups.includes(info.g)); }).length;
   tabs.replaceChildren(...view.screen.tabs.map((tab, i) => el('button', {class: i === view.tab ? 'on' : '',
-    onclick: () => { view.tab = i; renderPickerParts(); }}, tab.title)));
+    onclick: () => { view.tab = i; renderPickerParts(); }}, tab.title, el('span', {class: 'tabcount'}, ' ' + count(tab)))));
 }
 
 function shown(path) {
@@ -496,12 +546,10 @@ function pairTitle(text, sides) {
 // Above the tree: A on the left, B on the right, and between them what each arrow does
 function pairLegend(sides) {
   const [a, b] = sides;
-  const box = side => el('div', {class: 'pairside', style: '--side:' + side.color}, icon(side.icon), el('span', {}, side.name));
-  return el('div', {class: 'pairlegend'}, box(a),
-    el('div', {class: 'pairways'},
-      el('div', {class: 'way'}, el('b', {}, '⇒'), ' changes ', sideName(b), ' to match ', sideName(a), el('span', {class: 'tip'}, ' ⟶')),
-      el('div', {class: 'way'}, el('span', {class: 'tip'}, '⟵ '), el('b', {}, '⇐'), ' changes ', sideName(a), ' to match ', sideName(b))),
-    box(b));
+  const box = side => el('span', {class: 'pairside', style: '--side:' + side.color}, icon(side.icon), el('span', {}, side.name));
+  return el('div', {class: 'pairlegend', title: '⇒ changes ' + b.name + ' to match ' + a.name + '; ⇐ changes ' + a.name + ' to match ' + b.name},
+    box(a), el('span', {class: 'pairways'}, el('b', {}, '⇒'), ' changes ', el('b', {style: 'color:' + b.color}, b.name),
+      el('span', {class: 'tip'}, ' · '), el('b', {}, '⇐'), ' changes ', el('b', {style: 'color:' + a.color}, a.name)), box(b));
 }
 
 // The tag after a file's name that says it's only in one replica: its badge says so instead
@@ -575,7 +623,108 @@ function renderPlan() {
   const counts = plannedCounts('.');
   box.replaceChildren(counts.size ? el('b', {}, 'Planned: ') : '',
     ...(counts.size ? plannedParts(counts, view.sides, true).flatMap((part, i) => i ? [' · ', part] : [part]) :
-      [el('span', {class: 'note'}, 'Nothing planned yet: tap a file\'s mark (·) for ⇒ or ⇐, or choose it below. Nothing changes until Done, and you confirm.')]));
+      [el('span', {class: 'note'}, 'Nothing planned yet: tap a file\'s · to mark it ⇒ or ⇐.')]));
+}
+
+// A folder's photos side by side (a picker whose files have pictures, see PickerScreen.picture()): a folder holding
+// GRID_MIN_PHOTOS of them, most of its files, has a button for it on its row. Each tile is its photo, marked as the tree
+// marks it (a tree of states: its mark and badge, a tap the next mark; else its checkbox, a tap checks it); ⤢ shows it
+// whole. What's done there is the tree's own: closing it shows it there
+const PHOTO_EXTENSIONS = /\.(jpe?g|jfif|png|gif|webp|bmp|tiff?|heic|heif|mp4|mov|m4v|3gp|mkv|webm|avi)$/i;
+const GRID_MIN_PHOTOS = 4, GRID_SIZE = 320, WHOLE_SIZE = 1600;
+
+function gridPhotos(dir) {
+  const files = (view.children.get(dir) || []).filter(path => (view.info.get(path) || {}).t === 'f' && inTab(path));
+  const photos = files.filter(path => PHOTO_EXTENSIONS.test(path));
+  return photos.length >= GRID_MIN_PHOTOS && photos.length * 2 >= files.length ? photos : null;
+}
+
+function pictureUrl(path, size) {
+  return '/api/picture?screen=' + view.screen.id + '&size=' + size + '&path=' + encodeURIComponent(path);
+}
+
+function openGrid(dir) {
+  view.gridDir = dir;
+  view.gridTiles = null;
+  placePanel();
+  renderGrid();
+}
+
+function closeGrid() {
+  view.gridDir = null;
+  view.gridTiles = null;
+  const box = document.getElementById('grid');
+  if (box) box.remove();
+}
+
+document.addEventListener('keydown', event => {
+  if (event.key !== 'Escape' || !view.gridDir) return;
+  event.preventDefault();
+  const whole = document.getElementById('gridwhole');
+  if (whole) whole.remove(); else closeGrid();
+});
+
+function toggleTile(path) {
+  const screen = view.screen;
+  if (screen.states.length) {
+    const next = nextState(path);
+    act('select', {path}).then(() => act('state', {paths: [path], name: next}));
+  } else if (screen.multi) {
+    const on = !view.picked.has(path);
+    act('select', {path}).then(() => act('pick', {paths: [path], on}));
+  } else act('select', {path});
+}
+
+function showWhole(path) {
+  act('select', {path});
+  const old = document.getElementById('gridwhole');
+  if (old) old.remove();
+  const box = el('div', {id: 'gridwhole', onclick: () => box.remove()},
+    el('img', {src: pictureUrl(path, WHOLE_SIZE), alt: baseName(path)}), el('div', {class: 'caption'}, path + ' · tap to close'));
+  document.body.append(box);
+}
+
+function renderGrid() {
+  if (!view.gridDir) return;
+  const screen = view.screen, dir = view.gridDir;
+  const photos = gridPhotos(dir);
+  if (!photos) { closeGrid(); return; }
+  let box = document.getElementById('grid');
+  if (!box || !view.gridTiles) {
+    // Built once; then only each tile's mark changes (its picture isn't asked for again)
+    if (box) box.remove();
+    view.gridTiles = new Map();
+    const tiles = photos.map(path => {
+      const mark = el('span', {class: 'tilemark'});
+      const tile = el('div', {class: 'tile', title: baseName(path), onclick: () => toggleTile(path)},
+        el('img', {src: pictureUrl(path, GRID_SIZE), loading: 'lazy', alt: baseName(path)}),
+        el('button', {class: 'tilewhole', title: 'Show it whole', onclick: event => { event.stopPropagation(); showWhole(path); }}, '⤢'),
+        mark, el('div', {class: 'tilename'}, view.sides && screen.states.length ? groupBadge((view.info.get(path) || {}).g, view.sides) : '',
+          el('span', {}, baseName(path))));
+      view.gridTiles.set(path, {tile, mark});
+      return tile;
+    });
+    const hint = screen.states.length ? 'Tap a photo for its next mark: ⇒, ⇐, or none' : screen.multi ? 'Tap a photo to check it' : '';
+    box = el('div', {id: 'grid'}, el('div', {class: 'gridhead'},
+      el('b', {}, (dir === '.' ? screen.root : dir) + ' · ' + photos.length + ' photos'), el('span', {class: 'note'}, hint),
+      el('button', {class: 'primary', onclick: closeGrid}, 'Back to the tree')), el('div', {class: 'gridtiles'}, tiles));
+    document.getElementById('main').append(box);
+  }
+  for (const [path, {tile, mark}] of view.gridTiles) {
+    tile.classList.toggle('sel', path === view.selected);
+    if (screen.states.length) {
+      const {mark: shown, color} = stateMark(path), info = view.info.get(path) || {};
+      const planned = view.sides ? plannedChip(info.g, info.st, view.sides) : '';
+      mark.className = 'tilemark c-' + color + (shown.trim() ? ' on' : '');
+      mark.replaceChildren(shown.trim() || '', planned);
+      tile.classList.toggle('marked', !!shown.trim());
+    } else if (screen.multi) {
+      const on = view.picked.has(path);
+      mark.className = 'tilemark check' + (on ? ' on' : '');
+      mark.textContent = on ? '✓' : '';
+      tile.classList.toggle('marked', on);
+    }
+  }
 }
 
 function pickedUnder(path) {
@@ -625,9 +774,11 @@ function row({path, depth, flat, guides}) {
   }}, isDir && path !== '.' ? (view.expanded.has(path) ? '▾' : '▸') : ''));
   if (screen.states.length) {
     const {mark, color} = stateMark(path);
-    parts.push(el('button', {class: 'mark c-' + color, onclick: event => {
+    // (Tapping it selects its row too, so the buttons below act on what was just touched)
+    parts.push(el('button', {class: 'mark c-' + color, title: 'Tap for the next: ⇒, ⇐, or leave it', onclick: event => {
       event.stopPropagation();
-      act('state', {paths: [path], name: nextState(path)});
+      const next = nextState(path);
+      act('select', {path: path === '.' ? '' : path}).then(() => act('state', {paths: [path], name: next}));
     }}, mark.trim() || '·'));
     if (view.sides && info.t === 'f') parts.push(groupBadge(info.g, view.sides));
   } else if (screen.multi) {
@@ -649,6 +800,10 @@ function row({path, depth, flat, guides}) {
   // (Where a file is, said by its badge: not again in grey after its name)
   if (view.sides && screen.states.length && info.t === 'f') text = text.replace(ONLY_IN_TAG, '');
   const name = el('span', {class: 'name' + (isDir ? ' dir' : '') + (info.c ? ' c-' + info.c : '')}, typeof text === 'string' ? segmentsSpan(text) : text);
+  // A folder of photos: its grid
+  const photos = isDir && !flat && screen.hasPictures ? gridPhotos(path) : null;
+  if (photos) name.append(el('button', {class: 'gridbutton', title: 'See its photos side by side, and mark them there',
+    onclick: event => { event.stopPropagation(); openGrid(path); }}, '▦ ' + photos.length + ' photos'));
   // What's planned for it, on its right, or under its name where there's no room (a phone); the root's is the plan
   // line above the tree
   const planned = view.sides && screen.states.length && path !== '.' ?
@@ -684,6 +839,7 @@ async function loadPreview() {
   if (found.image) { const canvas = pictureCanvas(found.image); if (canvas) content.push(canvas); }
   box.replaceChildren(content.length ? el('div', {class: 'preview'}, content) : '');
   box.classList.toggle('max', !!view.previewMax && content.length > 0);
+  colorNames(box);
 }
 
 // The selection's details filling the screen (under the top bar), to read a long diff, or back in their place; it
@@ -800,7 +956,7 @@ function renderSide() {
 const GENERAL_KEYS = new Set(['i', '?']);
 // Keys the page has no button for: the menu (:) lists what's selected can have done, each with its key, as the
 // buttons here do (with files picked, it's Enter's); the replicas dashboard (#) is the Replicas tab's
-const NO_BUTTON_KEYS = new Set([':', '#', 'Ctrl-T', 'g']);  // (g: the diff's Merge..., diffToggle())  // (Ctrl-T: the diff's views, in its title, diffToggle())
+const NO_BUTTON_KEYS = new Set([':', '#', 'Ctrl-T', 'g', 'Ctrl-Q']);  // (Ctrl-Q: the combined tree's Back, keeping its marks, quitScreen())  // (g: the diff's Merge..., diffToggle())  // (Ctrl-T: the diff's views, in its title, diffToggle())
 // Keys whose buttons are shown only where they do something: exploring a zip on one, a diff's views on a diff
 const KEY_APPLIES = {
   'e': () => /\.zip$/i.test(view.selected || ''),
@@ -884,14 +1040,16 @@ function renderPickerActions() {
     const what = enter ? capitalized(enter[1]) : 'Choose';
     // (Named for what it acts on, in that one's color: the checked files, green, or else the selected one, blue)
     let label = [what + ' ', screen.multi ? '' : targetChip(screen, selected)];
-    if (screen.states.length) label = 'Done';
+    // (A tree of states: what Enter does next is showing the plan of what's marked, to confirm)
+    const marked = screen.states.length ? markedCount() : 0;
+    if (screen.states.length) label = marked ? 'Review plan (' + marked + ')' : 'Nothing marked yet';
     // (With nothing checked it's off: what it acts on is the checked files, an empty set then, never the selection,
     // which the terminal's Enter takes then, but which surprised: the whole tree, with the top selected)
     else if (screen.multi) label = view.picked.size ? [what + ' with ', targetChip(screen, selected)] : 'Check files first';
-    const enterButton = el('button', {class: 'primary', disabled: screen.multi && !screen.states.length && !view.picked.size,
+    const enterButton = el('button', {class: 'primary', disabled: screen.multi && (screen.states.length ? !marked : !view.picked.size),
       onclick: () => { if (opensMenu(screen)) openingPanel(); act('enter'); }}, label);
     // (A sync's file tree: ▾ beside it shows its menu's actions as buttons, see quickActions())
-    main.push(isSyncFilesTree(screen) ? el('span', {class: 'splitbutton'}, enterButton,
+    main.push(isSyncFilesTree(screen) || screen.states.length ? el('span', {class: 'splitbutton'}, enterButton,
       el('button', {class: 'primary more' + (actionsOpen() ? ' on' : ''), title: actionsOpen() ? 'Hide the actions' : 'Show all the actions',
         'aria-expanded': String(actionsOpen()), onclick: () => { setActionsOpen(!actionsOpen()); renderPickerActions(); }}, actionsOpen() ? '▴' : '▾')) :
       enterButton);
@@ -901,16 +1059,22 @@ function renderPickerActions() {
   }
   const keyButton = (key, onclick) => el('button', {title: key.text, onclick},
     key.text ? short(capitalized(key.text)) : key.name, el('small', {class: 'keyname'}, key.name));
-  const onSelection = [], general = [];
+  const onSelection = [], general = [], marks = [];
   if (screen.states.length && view.selected !== null) {
     for (const state of screen.states) {
-      const changed = view.sides && {'to-b': view.sides[1], 'to-a': view.sides[0]}[state.name];
-      onSelection.push(el('button', {class: 'c-' + state.color, onclick: () => act('state', {paths: [view.selected || '.'], name: state.name})},
-        (state.mark.trim() || '·') + ' ', view.sides ? (changed ? ['Change ', sideName(changed)] : el('small', {}, 'Leave as is')) : el('small', {}, state.name)));
+      marks.push(el('button', {class: 'c-' + state.color, onclick: () => act('state', {paths: [view.selected || '.'], name: state.name})},
+        stateButtonLabel(state, view.selected || '.')));
     }
   }
   for (const key of screen.keys.filter(applies)) {
     (GENERAL_KEYS.has(key.name) ? general : onSelection).push(keyButton(key, () => act('press', {key: key.key})));
+  }
+  // (A tree of states: its marks for the selection always shown; its other actions (the AI's, the diff, the
+  // pictures) under ▾, as a files tree's, see actionsOpen())
+  if (screen.states.length) {
+    if (actionsOpen()) onSelection.push(...general.splice(0));
+    else { onSelection.length = 0; general.length = 0; }
+    onSelection.unshift(...marks);
   }
   const side = [];
   if (screen.side && screen.side.enterPicks) {
@@ -926,14 +1090,49 @@ function renderPickerActions() {
     section(screen.side ? 'In ' + screen.side.root : '', side), section('Misc', general));
 }
 
+// How many files are marked (in a state but the first, "leave as is")
+function markedCount() {
+  const first = view.screen.states[0].name;
+  return view.items.filter(path => { const info = view.info.get(path); return info.t === 'f' && info.st && info.st !== first; }).length;
+}
+
+// A mark's button, named for what it does to the selection: on a file, what its arrow will do ("⇒ Copy to D");
+// on a folder (or the whole tree), which replica it changes and how many files each way ("⇐ Make C like D: copy 3 ·
+// remove 4"); the first, "Leave as is"
+function stateButtonLabel(state, path) {
+  const mark = (state.mark.trim() || '·') + ' ';
+  if (!view.sides) return [mark, el('small', {}, state.name)];
+  if (state.name === view.screen.states[0].name) return [mark, 'Leave as is'];
+  const changed = state.name === 'to-b' ? view.sides[1] : view.sides[0], other = state.name === 'to-b' ? view.sides[0] : view.sides[1];
+  const info = view.info.get(path) || {};
+  if (info.t === 'f') {
+    const kind = plannedKind(info.g, state.name);
+    return kind ? [mark, el('span', {class: 'c-' + PLANNED[kind][1]}, PLANNED[kind][0]), sideName(changed)] : [mark, 'Change ', sideName(changed)];
+  }
+  const prefix = path === '.' ? '' : path + '/', counts = new Map();
+  for (const p of view.items) {
+    const file = view.info.get(p);
+    if (file.t !== 'f' || !p.startsWith(prefix)) continue;
+    const kind = plannedKind(file.g, state.name);
+    if (kind) counts.set(kind, (counts.get(kind) || 0) + 1);
+  }
+  const parts = [...counts].map(([kind, count]) => el('span', {class: 'c-' + PLANNED[kind][1]},
+    PLANNED[kind][0].trim().split(' ')[0].toLowerCase() + ' ' + count));
+  return [mark, path === '.' ? 'All: make ' : 'Make ', sideName(changed), ' like ', sideName(other),
+    parts.length ? ': ' : '', ...parts.flatMap((part, i) => i ? [' · ', part] : [part])];
+}
+
 function renderHelp() {
   const box = document.getElementById('help');
   if (!box) return;
   const screen = view.screen;
-  box.replaceChildren(view.showHelp ? el('div', {class: 'preview'},
-    screen.hints.map(([key, text]) => el('div', {}, key.padEnd(10) + text)),
-    screen.help.map(line => el('div', {}, styledSpan(line)))) : '');
+  // (A tree of states: what its marks mean first, the keys after; the keys hidden on a touch screen, which has none)
+  const keys = isTouch() ? [] : screen.hints.map(([key, text]) => el('div', {}, key.padEnd(10) + text));
+  const lines = screen.help.map(line => el('div', {}, styledSpan(line)));
+  box.replaceChildren(view.showHelp ? el('div', {class: 'preview'}, screen.states.length ? [lines, keys] : [keys, lines]) : '');
 }
+
+function isTouch() { return window.matchMedia('(hover: none)').matches; }
 
 function capitalized(text) { return text ? text[0].toUpperCase() + text.slice(1) : text; }
 
@@ -1094,6 +1293,7 @@ function renderMessages(screen, isNew) {
   } else if (screen.waiting) buttons.push(el('button', {class: 'primary', onclick: () => act('continue')}, 'Continue'));
   else if (screen.stoppable) buttons.push(el('button', {onclick: () => act('stop')}, 'Stop'));
   document.getElementById('actions').replaceChildren(...buttons);
+  colorNames(main);
   if (!screen.asking) window.scrollTo(0, document.body.scrollHeight);
 }
 

@@ -29,7 +29,7 @@ class Lists(object):
         shown = differing.preview_lines(change, self._dst.displayname(), replica_ops.can_copy(self._src, self._dst))
         if not (replica_ops.is_local(self._src) and replica_ops.is_local(self._dst)):
             send({relpath: shown + ["", picker.styled([("Getting its versions for their diff...", 'grey')])]})
-        names = replicanames.told_apart([self._path_of(self._src), self._path_of(self._dst)])
+        names = replicanames.short_names([self._path_of(self._src), self._path_of(self._dst)])
         send({relpath: shown + versions.lines((self._src, self._dst), relpath,
                                               (names[self._path_of(self._src)], names[self._path_of(self._dst)]), self._diff_view)})
 

@@ -21,7 +21,7 @@ class MarksTest(unittest.TestCase):
                          {'a/x': 'x  ' + hash_status.NOT_HASHED_TAG, 'z': 'z  ' + hash_status.NOT_HASHED_TAG})
         # Its tag in its style
         self.assertEqual(first['z'], picker.styled([('z', None), ('  ', None), (hash_status.NOT_HASHED_TAG, 'grey')]))
-        self.assertEqual(first[''], picker.segments([("photos: 0% hashed (0/3, not hashing)", 'red')]))
+        self.assertEqual(first[''], picker.segments([("LocalDisk: 0% hashed (0/3, not hashing)", 'red')]))
         # z is hashed: only it changes
         self.job._hashes['z'] = 'H'
         marks._on_hashed('z', {'sha1': 'H'})
@@ -40,7 +40,7 @@ class MarksTest(unittest.TestCase):
 
     def test_more_status_after_the_jobs(self):
         marks = hashes_screen.Marks(None, ['a'], [self.job], lambda: [("Claude: describing 1 file", 'yellow')])
-        self.assertEqual(marks(), {'': picker.segments([("photos: 0% hashed (0/3, not hashing)", 'red'),
+        self.assertEqual(marks(), {'': picker.segments([("LocalDisk: 0% hashed (0/3, not hashing)", 'red'),
                                                       ("Claude: describing 1 file", 'yellow')])})
 
 

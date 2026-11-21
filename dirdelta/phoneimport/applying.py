@@ -45,7 +45,7 @@ class Applying(object):
             self.lines.append(("%s %d file(s)%s." % ("Would move" if dryrun.DRYRUN else "Moved", self.nr_moved,
                                                     ", %d there already" % (self.nr_there,) if self.nr_there else ""), 'green'))
             if dryrun.DRYRUN:
-                self.lines.append((dryrun.NOTE, 'green'))
+                self.lines.append((dryrun.note(), 'green'))
             self.is_done = True
 
     def _into_local(self, chosen):

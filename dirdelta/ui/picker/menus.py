@@ -29,7 +29,7 @@ def pick_option(options, header='', shown_as=None, label=None, selected=None, ti
     was_dry_run = dryrun.DRYRUN
     picked = _pick_option(options, header, shown_as, label, selected, title, key_hints, help_lines, previews_below)
     if picked is not None and was_dry_run and not dryrun.DRYRUN:
-        header = '\n'.join([SWITCHED_TO_LIVE] + [line for line in header.split('\n') if line != dryrun.NOTE])
+        header = '\n'.join([SWITCHED_TO_LIVE] + [line for line in header.split('\n') if line not in (dryrun.NOTE, dryrun.WEB_NOTE)])
         return pick_option(options, header, shown_as, label, picked, title, key_hints, help_lines, previews_below)
     return picked
 

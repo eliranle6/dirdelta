@@ -38,8 +38,9 @@ function hashChip(replica) {
 
 // Each replica's status chips: there, synced, hashed (a local one), its list read (a Drive one)
 function statusChips(replica) {
+  // (When it was last opened in a sync, compared: not that anything was copied, which a dry run never does)
   const synced = age(replica.seen);
-  const verb = 'Synced';
+  const verb = 'Compared';
   return el('div', {class: 'chips-row'},
     replica.there ? chip('ok', replica.kind === 'drive' ? 'In Drive' : 'Mounted') : chip('bad', replica.why),
     chip(replica.seen ? synced.tone : 'none', replica.seen ? verb + ' ' + synced.text : 'Never ' + verb.toLowerCase()),
@@ -196,10 +197,9 @@ function pairRow(pair, running, user) {
     }
     parts.push(el('div', {class: 'syncline'}, percent !== null ? el('b', {style: 'color:' + inStepColor(share)}, percent + '% in step') : '',
       el('span', {}, !onlyA && !onlyB ? 'Each has all the other\'s files' :
-        [onlyA ? onlyA.toLocaleString() + ' only in ' + pair.nameA : '', onlyB ? onlyB.toLocaleString() + ' only in ' + pair.nameB : '']
-          .filter(Boolean).join(' · ')),
-      el('span', {class: 'note'}, 'As of the last sync: files added since aren\'t counted, only its age tells.' +
-        (percent === null ? ' A % shows from the next sync.' : ''))));
+        [onlyA ? [onlyA.toLocaleString() + ' only in ', replicaLabel(pair.a, pair.nameA)] : '',
+          onlyB ? [onlyB.toLocaleString() + ' only in ', replicaLabel(pair.b, pair.nameB)] : ''].filter(Boolean).flatMap((part, i) => i ? [' · ', ...part] : part)),
+      el('span', {class: 'note'}, 'As of the last comparison.' + (percent === null ? ' A % shows from the next one.' : ''))));
   }
   const fresh = [];
   if (pair.state.when) fresh.push(chip(compared.tone, 'Compared ' + compared.text));
@@ -281,7 +281,7 @@ function inStepTile(data, tile) {
   if (!counted && apart !== null) {
     // (Compared before the totals were noted: only how many files were apart is known)
     return tile(apart ? 'warn' : 'ok', 'equal', 'Replicas in step', apart ? apart.toLocaleString() + ' file' + (apart === 1 ? '' : 's') + ' apart' : 'In step',
-      'As of the last sync; a % from the next one', '/replicas');
+      'As of the last comparison; a % from the next one', '/replicas');
   }
   if (!counted) {
     return tile('none', 'equal', 'Replicas in step', 'Not known yet', data.pairs.length ? 'A sync compares them' : 'Add two replicas', '/replicas');
@@ -290,7 +290,7 @@ function inStepTile(data, tile) {
   const percent = share === 1 ? '100%' : Math.min(99.9, Math.floor(share * 1000) / 10) + '%';
   // (Green only all in step: short of it, even at 99%, yellow)
   return tile(share === 1 ? 'ok' : share >= 0.9 ? 'warn' : 'bad', 'equal', 'Replicas in step', percent,
-    'Files in both as of the last sync, newer ones not counted (' + counted + ' of ' + data.pairs.length + ' pair' + (data.pairs.length === 1 ? '' : 's') + ')' +
+    'Files in both as of the last comparison (' + counted + ' of ' + data.pairs.length + ' pair' + (data.pairs.length === 1 ? '' : 's') + ')' +
       (changed ? '; changed since' : ''), '/replicas');
 }
 
@@ -305,15 +305,15 @@ function lastSyncTile(data, tile) {
     }
   }
   const replicas = data.replicas.filter(replica => replica.path in latest);
-  if (!replicas.length) return tile('none', 'sync', 'Last sync', 'never', 'Of any two replicas', '/replicas');
+  if (!replicas.length) return tile('none', 'sync', 'Last compared', 'never', 'Of any two replicas', '/replicas');
   const stalest = replicas.reduce((one, other) => !latest[other.path] || (latest[one.path] && latest[other.path] < latest[one.path]) ? other : one);
   const newest = Object.values(latest).filter(Boolean).sort().pop();
   const when = latest[stalest.path], found = age(when);
   const everyone = replicas.every(replica => latest[replica.path] === when);
   const hint = everyone ? (replicas.length === 2 ? 'Both replicas' : 'All ' + replicas.length + ' replicas') :
-    'The one longest ago: ' + stalest.fullName + (when ? '' : ' was never synced') + (newest && newest !== when ? '; the latest ' + age(newest).text : '');
+    'The one longest ago: ' + stalest.fullName + (when ? '' : ' was never compared') + (newest && newest !== when ? '; the latest ' + age(newest).text : '');
   const syncing = data.pairs.some(pair => isSyncing(pair, data.running, data.user));
-  return tile(when ? found.tone : 'bad', 'sync', 'Last sync', when ? found.text : 'never',
+  return tile(when ? found.tone : 'bad', 'sync', 'Last compared', when ? found.text : 'never',
     syncing ? [el('b', {class: 'c-accent'}, 'Syncing now. '), hint] : hint, '/replicas');
 }
 
@@ -423,7 +423,7 @@ function replicasPage(data) {
   const pairs = data.pairs.length ? el('div', {class: 'list'}, data.pairs.map(pair => pairRow(pair, data.running, data.user))) :
     el('p', {class: 'note'}, data.replicas.length ? 'Add another replica: any two are a pair to sync.' : 'Add two replicas: any two are a pair to sync.');
   const other = el('div', {class: 'list'}, el('a', {class: 'item', href: '#', onclick: event => { event.preventDefault(); start({}); }},
-    el('span', {class: 'what'}, el('b', {}, 'Sync two other folders once…'), el('span', {class: 'note'}, 'Any two, chosen on the terminal\'s screens')),
+    el('span', {class: 'what'}, el('b', {}, 'Sync two other folders once…'), el('span', {class: 'note'}, 'Any two folders, chosen here')),
     el('span', {class: 'go'}, '›')));
   const cards = [];
   if (local.length) cards.push(el('div', {class: 'kindlabel'}, 'On disks'), el('div', {class: 'grid'}, local.map(replicaCard)));
@@ -431,7 +431,7 @@ function replicasPage(data) {
   // Two parts, each in a block of its own: every two replicas' sync status (what's done here, first), and
   // the replicas themselves
   return [...kindParts([
-      {jump: kindJump('pairs', 'sync', 'Sync status', !data.pairs.length ? 'No pair yet' : apart ? apart + ' out of ' + data.pairs.length + ' out of step' : unknown ? unknown + ' out of ' + data.pairs.length + ' not synced yet' : 'All in step',
+      {jump: kindJump('pairs', 'sync', 'Sync status', !data.pairs.length ? 'No pair yet' : apart ? apart + ' of ' + data.pairs.length + ' pairs out of step' : unknown ? unknown + ' of ' + data.pairs.length + ' pairs not compared yet' : 'All in step',
         !data.pairs.length || data.pairs.some(pair => pair.state.kind === 'branched') ? 'bad' : apart || unknown ? 'warn' : 'ok'),
        block: kindBlock('pairs', 'sync', 'Sync status', '', mainNote(data), pairs, pairAdder(data), other)},
       {jump: kindJump('replicas', 'replicas', 'Replicas', there + ' out of ' + data.replicas.length + ' available',

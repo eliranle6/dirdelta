@@ -1,5 +1,6 @@
 """The web version's dashboard and Sync page (web/home.py), and the flows they start (daemon.flow())"""
 import datetime
+import io
 import os
 import shutil
 import tempfile
@@ -69,6 +70,13 @@ class HomeTest(WebTest):
         self.assertEqual('2026-11-01 09:00', pair['state']['when'])
         self.assertEqual(1, len(pair['changedSince']))
 
+    def test_totals_that_cant_be_arent_taken_for_a_share(self):
+        # (A local replica's were noted as none, beside files apart, before 2026-11-21: -100% in step)
+        known = replicas.load()
+        known.note_compared(self.local, 'cloud/photos', 3, 3, datetime.datetime(2026, 11, 1, 9, 0), totals=[0, 0])
+        pair = next(pair for pair in self.call('GET', '/api/home')['pairs'] if pair['b'] == 'cloud/photos')
+        self.assertEqual((3, 3, None), (pair['synced']['onlyA'], pair['synced']['onlyB'], pair['synced']['share']))
+
     def test_while_a_pairs_sync_runs_the_dashboard_says_which_pair_it_is(self):
         self.assertIsNone(self.call('GET', '/api/home')['running'])
         release = threading.Event()
@@ -130,6 +138,22 @@ class HomeTest(WebTest):
         self.assertEqual([('photos', False), ('Drive', True)], [(replica['name'], replica['drive']) for replica in shown])
         self.assertEqual({'color': 'teal'}, shown[1]['look'])
         self.session.screen().cancel()
+
+    def test_a_folders_photos_grid_gets_each_ones_picture_as_a_jpeg(self):
+        from PIL import Image
+        from dirdelta.ui import images
+        made = lambda relpath, width, height: images.encoded(Image.new('RGB', (400, 300), (255, 0, 0)), width, height)
+        self.session.start(lambda: picker.pick_files('photos', ['trip/a.jpg'], previews=lambda send: None, images=made),
+                           'replicas', {'kind': 'pair'})
+        self.wait_for(lambda: self.session.screen() is not None)
+        routes = api.routes(self.session, None)
+        screen = self.session.screen()
+        self.assertTrue(routes[('GET', '/api/state')]({}, {})['screen']['hasPictures'])
+        reply = routes[('GET', '/api/picture')]({'screen': str(screen.id), 'path': 'trip/a.jpg', 'size': '100'}, {})
+        self.assertEqual('image/jpeg', reply.content_type)
+        with Image.open(io.BytesIO(reply.data)) as picture:
+            self.assertEqual((100, 75), picture.size)
+        screen.cancel()
 
     def test_a_replica_is_named_and_unnamed_from_its_card(self):
         with mock.patch('dirdelta.known.replicas.save') as save:

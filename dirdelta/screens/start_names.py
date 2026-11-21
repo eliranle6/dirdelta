@@ -2,7 +2,7 @@
 import collections
 
 
-NOT_CHOSEN = '<none: press Enter to choose one>'
+NOT_CHOSEN = '<none: choose one>'
 LOCAL = 'Local disk'
 CLOUD = 'Google Drive'
 QUIT = 'Quit'

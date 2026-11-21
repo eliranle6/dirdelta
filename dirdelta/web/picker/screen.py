@@ -1,9 +1,11 @@
 """A picker shown in the browser (PickerScreen): treepicker's command, done by the web page. The
 browser selects, picks, sets states, presses the picker's keys and ends it; this says so on the pipes
 as treepicker would, and works out what treepicker would print (see docs/treepicker-integration.md)."""
+import collections
 import os
 import threading
 
+from dirdelta.ui import images
 from dirdelta.ui.picker import places
 from dirdelta.web.picker import keynames
 from dirdelta.web.picker import pipes
@@ -13,13 +15,21 @@ from dirdelta.web.picker.items import Items
 PICKED, QUIT = 0, 1
 # What a Picked's key is when Enter in the side tree ended it (picker.SIDE_KEY)
 SIDE_KEY = '\x1d'
+# A grid's pictures: how many a screen keeps (see picture()), and how many are made at once (each a file
+# read and decoded: a grid asks for many at once)
+MAX_JPEGS_KEPT = 300
+_MAKING = threading.BoundedSemaphore(3)
 
 
 class PickerScreen(object):
     kind = 'picker'
 
-    def __init__(self, screen_id, spec, records, bump):
+    def __init__(self, screen_id, spec, records, bump, pictures=None):
         self.id = screen_id
+        # Its files' pictures' function (pick_files()'s images), for the grid of a folder's photos (picture())
+        self.pictures = pictures
+        self._jpegs = collections.OrderedDict()
+        self._jpegs_lock = threading.Lock()
         self.spec = spec
         self._bump = bump
         self.items = Items(spec, records, bump)
@@ -180,7 +190,7 @@ class PickerScreen(object):
                 'stateMarks': [[name, group, mark, color] for (name, group), (mark, color) in spec.state_marks.items()],
                 'tabs': [{'title': title, 'groups': groups} for title, groups in spec.tabs],
                 'side': self._side_meta(), 'previewBelow': '--preview-below' in spec.flags,
-                'hasPreviews': '--preview' in spec.fds}
+                'hasPreviews': '--preview' in spec.fds, 'hasPictures': self.pictures is not None}
 
     def _side_meta(self):
         if self.spec.side_file is None:
@@ -195,6 +205,24 @@ class PickerScreen(object):
                 'picked': self._picked_in_order() if self.spec.is_multi else [],
                 'previewVersion': self.preview_versions.get(self.selected or '.', 0),
                 'done': self._done.is_set()}
+
+    def picture(self, path, size):
+        """The JPEG of the file at path, at most size pixels a side, or None if it has none; the last ones
+        made kept (MAX_JPEGS_KEPT), as a grid asks for them again as it's scrolled"""
+        key = (path, size)
+        with self._jpegs_lock:
+            if key in self._jpegs:
+                self._jpegs.move_to_end(key)
+                return self._jpegs[key]
+        if self.pictures is None:
+            return None
+        with _MAKING:
+            data = images.to_jpeg(self.pictures(path, size, size))
+        with self._jpegs_lock:
+            self._jpegs[key] = data
+            while len(self._jpegs) > MAX_JPEGS_KEPT:
+                self._jpegs.popitem(last=False)
+        return data
 
     def preview(self, path):
         path = path or '.'

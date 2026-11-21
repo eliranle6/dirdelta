@@ -175,6 +175,16 @@ def _of_video(path, max_width, max_height):
     return None
 
 
+def to_jpeg(image, quality=80):
+    """A JPEG's bytes of image (as encoded() makes it), or None if it's None"""
+    if image is None or Image is None:
+        return None
+    width, height, pixels = image.split(' ', 2)
+    data = io.BytesIO()
+    Image.frombytes('RGB', (int(width), int(height)), bytes.fromhex(pixels)).save(data, 'JPEG', quality=quality)
+    return data.getvalue()
+
+
 def of_data(data, max_width, max_height):
     """treepicker's image of an image file's contents (bytes, e.g. a thumbnail), or None"""
     if not is_available() or not data:

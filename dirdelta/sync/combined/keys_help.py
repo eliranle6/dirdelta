@@ -6,6 +6,10 @@ from dirdelta.sync.combined import diffing
 from dirdelta.sync.combined import diffview
 from dirdelta.sync.combined import plan as plans
 
+# Back to the sync menu, keeping the marks (q drops them: treepicker quits without saying them); the web
+# version's Back is this
+BACK_KEY, BACK_KEY_NAME = '\x11', 'Ctrl-Q'
+
 
 class KeysHelp(object):
     """The keys row and the help (CombinedSync's)"""
@@ -13,7 +17,8 @@ class KeysHelp(object):
     def _key_hints(self):
         return [(ask_ai.SUGGEST_KEY_NAME, "AI suggests"), (ask_ai.APPLY_KEY_NAME, "set AI's arrows"),
                 (plans.TO_B_KEY, "⇒ %s" % (self.name_b,)), (plans.TO_A_KEY, "⇐ %s" % (self.name_a,)),
-                (plans.SKIP_KEY, "skip: leave as is"), (diffing.KEY_NAME, "diff"), (ask_ai.KEY, "ask AI")]
+                (plans.SKIP_KEY, "skip: leave as is"), (diffing.KEY_NAME, "diff"), (ask_ai.KEY, "ask AI"),
+                (BACK_KEY_NAME, "back, keeping the marks")]
 
     def _help_lines(self):
         return ["What each mark does:",

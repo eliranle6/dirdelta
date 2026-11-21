@@ -1,6 +1,5 @@
-"""What the web version calls a replica (name()): its own name (its label, or its dir's) and where it
-is, so two of one name (a disk's eliran and Drive's) are told apart wherever they're named: 'eliran
-(Drive)', 'eliran (disk win)', 'eliran (this computer)'"""
+"""What the web version calls a replica (name()): its one name, as every screen calls it (its label, else
+its disk: replicanames.name()); and where it is (place()), said apart: 'Drive', 'disk win', 'this computer'"""
 import os
 import threading
 import time
@@ -18,8 +17,8 @@ _lock = threading.Lock()
 
 
 def own_name(path):
-    """The replica's label, or its dir's name"""
-    return replicanames.label(path) or os.path.basename(path.rstrip('/')) or path
+    """The replica's one name, as every screen calls it (replicanames.name(): its label, else its disk)"""
+    return replicanames.name(path)
 
 
 def place(path):
@@ -43,5 +42,5 @@ def place(path):
 
 
 def name(path):
-    """The replica's name, with where it is: 'eliran (Drive)'"""
-    return '%s (%s)' % (own_name(path), place(path))
+    """The replica's name (own_name(): where it is is shown apart, see place())"""
+    return own_name(path)

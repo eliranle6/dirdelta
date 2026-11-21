@@ -26,7 +26,7 @@ from dirdelta.util import text
 # The most files of each thing the confirmation lists
 MAX_FILES_LISTED = 5
 
-CONFIRM_NO, CONFIRM_YES, CONFIRM_SURE = "No, back to the tree", "Yes, do it", "Yes, I'm sure"
+CONFIRM_NO, CONFIRM_YES, CONFIRM_SURE = "Back to the tree", "Apply", "Yes, remove them"
 
 
 class CombinedSync(showing.Showing, keys_help.KeysHelp, ai_showing.AIShowing, ask_ai.AskAI, diffpane.DiffPane):
@@ -34,9 +34,10 @@ class CombinedSync(showing.Showing, keys_help.KeysHelp, ai_showing.AIShowing, as
     only one has (only_a, only_b: relpaths) and the ones both have that differ (changes: a
     differing.Changes, A's way), and the moved pairs among them (moved: see moved.find()), each put by
     the user in a state (what to do with it, all skipped at first), then done once the user confirms
-    the plan. changes_log: as InteractiveDirSync's changes."""
+    the plan. changes_log: as InteractiveDirSync's changes. chosen: the states it starts in ({relpath: state})."""
 
-    def __init__(self, replica_a, replica_b, path_a, path_b, only_a, only_b, changes, changes_log=None, moved=None):
+    def __init__(self, replica_a, replica_b, path_a, path_b, only_a, only_b, changes, changes_log=None, moved=None,
+                 chosen=None):
         self.replica_a, self.replica_b = replica_a, replica_b
         self.path_a, self.path_b = path_a, path_b
         names = replicanames.short_names([path_a, path_b])
@@ -45,8 +46,9 @@ class CombinedSync(showing.Showing, keys_help.KeysHelp, ai_showing.AIShowing, as
         self.changes_log = changes_log
         self.moved = moved or {}
         self.grouped = plans.groups(only_a, only_b, changes, self.moved)
-        # What the user chose so far, kept when they go back to the tree from the confirmation
-        self.chosen = {}
+        # What the user chose so far, kept when they go back to the tree from the confirmation (and, given,
+        # from before: the sync menu keeps it while they go back to it), of the files still here
+        self.chosen = {relpath: state for relpath, state in (chosen or {}).items() if relpath in self.grouped}
         self.selected = None
         self._shown = None
         self.allowed = plans.allowed(self.replica_a, self.replica_b)
@@ -77,12 +79,14 @@ class CombinedSync(showing.Showing, keys_help.KeysHelp, ai_showing.AIShowing, as
                 plans.STATES, tabs=self._tabs(), header=self._header(), selected=self.selected,
                 shown_as=self._shown_as, previews=self._send_previews,
                 key_hints=self._key_hints(),
-                help_lines=self._help_lines(), footer=self._footer(), keys=ask_ai.KEY + diffing.KEY,
+                help_lines=self._help_lines(), footer=self._footer(), keys=ask_ai.KEY + diffing.KEY + keys_help.BACK_KEY,
                 on_selection=self._follow, notify_keys=ask_ai.SUGGEST_KEY + ask_ai.APPLY_KEY + diffview.KEY,
                 on_notify=self._on_key, images=self._pictures())
             if picked is None:
                 return False
             self.chosen, self.selected = picked.states, picked.selected
+            if picked.key == keys_help.BACK_KEY:
+                return False
             if picked.key == diffing.KEY:
                 diffing.show(self, self.selected)
                 continue
@@ -92,7 +96,8 @@ class CombinedSync(showing.Showing, keys_help.KeysHelp, ai_showing.AIShowing, as
             plan = plans.plan_of(self.chosen, self.grouped, self.moved)
             if plans.is_empty(plan) or not self._is_confirmed(plan):
                 continue
-            doing.do(plan, self.replica_a, self.replica_b, self.changes_log)
+            doing.do(plan, self.replica_a, self.replica_b, self.changes_log,
+                     {self.replica_a: self.name_a, self.replica_b: self.name_b})
             return True
 
     def _pictures(self):
@@ -120,7 +125,8 @@ class CombinedSync(showing.Showing, keys_help.KeysHelp, ai_showing.AIShowing, as
 
     def _is_confirmed(self, plan):
         """Whether the user says yes to the plan (removing files: and is sure)"""
-        lines = ["Do this?"]
+        nr_changes = sum(len(items) for items in plan)
+        lines = ["Apply %s?" % ("these %d changes" % (nr_changes,) if nr_changes > 1 else "this change",)]
         for line, items in plans.summary(plan, self.name_a, self.name_b):
             lines.append("  " + line + ":")
             lines += text.listed(["      %s" % (item,) for item in items], MAX_FILES_LISTED)
@@ -130,9 +136,11 @@ class CombinedSync(showing.Showing, keys_help.KeysHelp, ai_showing.AIShowing, as
                 lines.append("%s's versions replaced go %s." % (name, replica_ops.discarded_to(replica)
                                                                 if replica_ops.is_local(replica) else "to Drive's older versions"))
         if dryrun.DRYRUN:
-            lines.append(dryrun.NOTE)
+            lines.append(dryrun.note())
         label = ('SYNC', 'blue')
-        if picker.pick_option([CONFIRM_NO, CONFIRM_YES], header='\n'.join(lines), title="Sure?", label=label) != CONFIRM_YES:
+        # (Live, Apply is red: it changes files)
+        apply = picker.Option(CONFIRM_YES, CONFIRM_YES, None if dryrun.DRYRUN else picker.Colored(CONFIRM_YES, 'red'))
+        if picker.pick_option([CONFIRM_NO, apply], header='\n'.join(lines), title="Apply?", label=label) != CONFIRM_YES:
             return False
         nr_removed = plans.removals(plan)
         if not nr_removed:
@@ -141,4 +149,5 @@ class CombinedSync(showing.Showing, keys_help.KeysHelp, ai_showing.AIShowing, as
             (self.replica_a, self.name_a, plan.remove_from_a), (self.replica_b, self.name_b, plan.remove_from_b)) if relpaths]
         sure = "Are you sure? %s will be removed (%s)." % (text.files(nr_removed), "; ".join(
             "%s's %s" % (name, replica_ops.discarded_to(replica)) for replica, name in removed_from))
-        return picker.pick_option([CONFIRM_NO, CONFIRM_SURE], header=sure, title="Sure?", label=label) == CONFIRM_SURE
+        sure_option = picker.Option(CONFIRM_SURE, CONFIRM_SURE, None if dryrun.DRYRUN else picker.Colored(CONFIRM_SURE, 'red'))
+        return picker.pick_option([CONFIRM_NO, sure_option], header=sure, title="Sure?", label=label) == CONFIRM_SURE

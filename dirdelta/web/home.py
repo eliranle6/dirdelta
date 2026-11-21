@@ -118,9 +118,10 @@ def _synced(comparison):
         return None
     (only_a, only_b), total = comparison['only'], comparison.get('total')
     found = {'onlyA': only_a, 'onlyB': only_b, 'totalA': None, 'totalB': None, 'share': None}
-    if total:
+    # (Totals that can't be, e.g. none noted beside files apart, as a local replica's were before 2026-11-21: not known)
+    if total and total[0] >= only_a and total[1] >= only_b:
         both, either = total[0] - only_a, total[0] + only_b
-        found.update(totalA=total[0], totalB=total[1], share=both / either if either else 1.0)
+        found.update(totalA=total[0], totalB=total[1], share=min(1.0, max(0.0, both / either)) if either else 1.0)
     return found
 
 

@@ -44,8 +44,8 @@ class Merging(object):
         """Merge the file's two versions and write the merge to both. Returns [relpath] once it's written (in a
         dry run, would have been), or None"""
         title = "Merge %s" % (os.path.basename(relpath),)
-        # (Named as the diff names them: 'eliran on LocalDisk(07B)')
-        names = replicanames.told_apart([self._path_of(self._src), self._path_of(self._dst)])
+        # (Named as the diff names them)
+        names = replicanames.short_names([self._path_of(self._src), self._path_of(self._dst)])
         src_name, dst_name = names[self._path_of(self._src)], names[self._path_of(self._dst)]
         versions = []
         for replica, name in ((self._src, src_name), (self._dst, dst_name)):
@@ -75,7 +75,7 @@ class Merging(object):
         if merging.has_marks(merged):
             lines.append("Careful: it still has conflict marks (<<<<<<<, =======, >>>>>>>) in it.")
         if dryrun.DRYRUN:
-            lines.append(dryrun.NOTE)
+            lines.append(dryrun.note())
         if not self._said_yes(lines, self.LABELS[self.MERGE]):
             return None
         self._write_merge(relpath, merged, ends_a)

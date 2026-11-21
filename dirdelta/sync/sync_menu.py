@@ -4,8 +4,10 @@ import concurrent.futures
 import datetime
 
 from dirdelta.drive import clouddirtree
+from dirdelta.hashes import hashing
 from dirdelta.screens.hashes_screen import status as hash_status
 from dirdelta.known import replicainfo
+from dirdelta.known import replicanames
 from dirdelta.known import replicas
 from dirdelta.matching import elsewhere
 from dirdelta.matching import syncstate
@@ -23,7 +25,7 @@ from dirdelta.known import mounts
 from dirdelta.util import dryrun
 
 # The sync menu's last option: it doesn't quit dirdelta, the start menu shows again (as with q)
-BACK = "Back to the start menu (end the sync)"
+BACK = "End the sync"
 # The menu's sections' headings (in grey, skipped when moving), as the start menu's: the sync of all
 # the differences, a kind of them at a time, what makes the comparison up to date, and the pair's
 # own things
@@ -63,12 +65,16 @@ class SyncMenu(object):
         # The files both have that differ (differing.py), alone, a's way (Copy replaces b's, Copy back a's)
         self.actions[DIFFER] = Action(self.replica_a_path, self.replica_b_path, self.ways[0], self.changes, only_differing=True)
         # A cloud replica's folder can be read anew from Drive, if Drive changed since the cache was made
-        self.refreshes = {"Refresh %s file list from Google Drive" % (path,): replica
+        # (each by its short name, as the combined tree says it)
+        names = replicanames.short_names([self.replica_a_path, self.replica_b_path])
+        # (The web version's pages show them by these names, each in its color, on every screen of the sync)
+        frontend.show_replicas([(self.replica_a_path, names[self.replica_a_path]), (self.replica_b_path, names[self.replica_b_path])])
+        self.refreshes = {"Refresh %s's file list from Google Drive" % (names[path],): replica
                           for replica, path in ((self.replica_a, self.replica_a_path), (self.replica_b, self.replica_b_path))
                           if isinstance(replica, clouddirtree.CloudDirTree)}
         # A local one can be scanned anew, if its files changed meanwhile, outside dirdelta
-        self.rescans = {"Rescan %s" % (path,): replica
-                             for replica, path in ((self.replica_a, self.replica_a_path), (self.replica_b, self.replica_b_path))
+        self.rescans = {"Rescan %s" % (names[path],): replica
+                        for replica, path in ((self.replica_a, self.replica_a_path), (self.replica_b, self.replica_b_path))
                         if localdiskdirtree.is_local(replica)}
         # The files of the same size compared on request (see comparing.py), a's way
         self.compared = {}
@@ -80,6 +86,9 @@ class SyncMenu(object):
         self._find_all()
         # What each way found last, noted in known_replicas (once each time they're found)
         self.noted = []
+        # The combined tree's marks, kept while the user goes back to the menu and comes back to it (until
+        # they're done: the files are other ones then)
+        self.combined_chosen = {}
 
     def run(self):
         """Show the menu until the user goes back (returns None)"""
@@ -152,10 +161,14 @@ class SyncMenu(object):
                 self._find_all()
             return
         if option == SYNC_ALL:
-            if self._sync_all():
+            # Done (something changed): the tree again, of what still differs, until nothing does or the user
+            # goes back to the menu
+            while self._sync_all():
                 self._find_all()
                 for job in self.jobs:
                     job.scan_in_background()
+                if not self._still_differ():
+                    return
             return
         # Copying, removing and renaming change the files (unless it's a dry run), and so what each
         # lacks, and so does reading a replica anew from Drive (in the file picker)
@@ -188,9 +201,20 @@ class SyncMenu(object):
         moved = combined.find_moved(missing[0].relpaths, missing[1].relpaths, self.replica_a,
                                     self.indexes[self.replica_a], self.indexes[self.replica_b], self.ways[0].checked)
         sync = combined.CombinedSync(self.replica_a, self.replica_b, self.replica_a_path, self.replica_b_path,
-                                     missing[0].relpaths, missing[1].relpaths, changes, self.changes, moved)
+                                     missing[0].relpaths, missing[1].relpaths, changes, self.changes, moved,
+                                     chosen=self.combined_chosen)
         with picker.place("Sync"):
-            return sync.run()
+            changed = sync.run()
+        self.combined_chosen = {} if changed else sync.chosen
+        return changed
+
+    def _still_differ(self):
+        """Whether the replicas still differ, once each way's found again (False if that failed)"""
+        try:
+            missing = [way.missing.result() for way in self.ways]
+            return any(found.relpaths for found in missing) or bool(self.ways[0].differs.result())
+        except Exception:
+            return False
 
     def _find_all(self):
         """Start finding (again) what each way lacks, and the files that differ"""
@@ -211,10 +235,23 @@ class SyncMenu(object):
         self.noted[:] = futures
         self.known_replicas.note_compared(self.replica_a_path, self.replica_b_path,
                                           *[len(future.result().relpaths) for future in futures],
-                                          when=datetime.datetime.now(),
-                                          totals=[sum(1 for _ in replica.iter_files())
-                                                  for replica in (self.replica_a, self.replica_b)])
+                                          when=datetime.datetime.now(), totals=self._totals())
         replicas.save(self.known_replicas)
+
+    def _totals(self):
+        """[how many files each replica has], or None if one's isn't known: a local replica has no tree of
+        them (dirdiff lists them), so its hashing job's listing says"""
+        totals = []
+        for replica in (self.replica_a, self.replica_b):
+            if localdiskdirtree.is_local(replica):
+                job = hashing.job_for(replica.fullpath())
+                progress = job.progress() if job is not None else None
+                if progress is None or progress.state in (hashing.NOT_SCANNED, hashing.SCANNING):
+                    return None
+                totals.append(progress.nr_files + progress.nr_left_out)
+            else:
+                totals.append(sum(1 for _ in replica.iter_files()))
+        return totals
 
     def shown_as(self):
         """The menu's options as they're shown now: each way's count, the state line, the

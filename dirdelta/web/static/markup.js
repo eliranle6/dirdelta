@@ -315,7 +315,7 @@ function folderAdder(as) {
 function forgetButton(path, what) {
   const box = el('span', {class: 'forget'});
   const ask = () => box.replaceChildren(el('span', {class: 'note'}, 'Forget this ' + what + '? Nothing in it is changed.'),
-    el('button', {class: 'small danger', onclick: async () => {
+    el('button', {class: 'small danger sure', onclick: async () => {
       await fetch('/api/forget', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({path})});
       location.href = location.pathname;
     }}, 'Forget'), el('button', {class: 'small', onclick: idle}, 'Keep'));

@@ -73,7 +73,7 @@ class Renames(object):
                   ["  %s -> %s" % move for move in file_moves])
         lines += text.listed(listed, self.MAX_FILES_LISTED)
         if dryrun.DRYRUN:
-            lines.append(dryrun.NOTE)
+            lines.append(dryrun.note())
         answer = picker.pick_option([self.CONFIRM_NO, self.CONFIRM_YES], header='\n'.join(lines),
                                     label=self.LABELS[action], title="Sure?")
         if answer != self.CONFIRM_YES:

@@ -111,8 +111,8 @@ class DashboardTest(unittest.TestCase):
         self.assertIn("Hashing", state)
         self.assertIn("now a (and 1 more)", state)
         self.assertIn("2 files couldn't be hashed", state)
-        self.assertEqual(shown[(hashes_screen.names.TOGGLE, '/photos')], "  Pause hashing photos")
-        self.assertEqual(shown[''], picker.segments([("photos: 50% hashed (4/10)", 'orange')]))
+        self.assertEqual(shown[(hashes_screen.names.TOGGLE, '/photos')], "  Pause hashing LocalDisk")
+        self.assertEqual(shown[''], picker.segments([("LocalDisk: 50% hashed (4/10)", 'orange')]))
 
     def test_its_media_files_are_left_out_and_hashed_again_from_it(self):
         job = FakeJob('/photos', progress_of(state=hashing.HASHING, is_started=True))

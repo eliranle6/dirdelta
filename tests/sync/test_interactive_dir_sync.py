@@ -246,7 +246,7 @@ class InteractiveDirSyncTest(unittest.TestCase):
         src.add_file_by_relpath('song.mp3')
         with mock.patch('dirdelta.drive.drivecache.user', return_value='me'):
             self._browse([['song.mp3'], None], ['Remove', NO], src, dirtree.DirTree('/local'))
-        self.assertEqual(self.pick_files.call_args.args[0], 'Cloud(me):/mein')
+        self.assertEqual(self.pick_files.call_args.args[0], 'Cloud(me)')
         header = self.pick_option.call_args.kwargs['header'].splitlines()
         self.assertEqual(header[0], 'Remove 1 file from cloud/mein?')
 

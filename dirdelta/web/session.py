@@ -135,14 +135,15 @@ class Session(object):
 
     # What dirdelta's picker calls (ui/picker/command.py)
 
-    def run_picker(self, args, input_data):
+    def run_picker(self, args, input_data, pictures=None):
         """treepicker's command with args (after its name) and input_data on its stdin (or None), done
-        in the browser: (exit code, what it printed)"""
+        in the browser: (exit code, what it printed); pictures: its files' pictures' function, if it has
+        one (see pick_files()'s images), for the grid of a folder's photos"""
         spec = web_picker.parse(args)
         records = None
         if input_data is not None:
             records = [record.decode('utf-8', 'surrogateescape') for record in input_data.split(b'\0')[:-1]]
-        with self._shown(web_picker.PickerScreen(next(self._ids), spec, records, self.bump)) as screen:
+        with self._shown(web_picker.PickerScreen(next(self._ids), spec, records, self.bump, pictures)) as screen:
             return screen.run()
 
     # What dirdelta's messages call (ui/messages.py)

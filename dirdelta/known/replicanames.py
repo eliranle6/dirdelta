@@ -21,6 +21,7 @@ _uuids = {}
 _identities = {}
 _labels = {}
 _labels_of = None
+_known = []
 
 
 def forget():
@@ -36,17 +37,23 @@ def identity(path):
     if paths.is_cloud_path(path):
         return 'drive:%s:/%s' % (drivecache.root_id() or '?', '/'.join(paths.components(path)[1:]))
     path = os.path.realpath(path)
-    mount = mounts.current_mount(path)
+    mount = _mount_of(path)
     if mount is not None and mount.uuid:
         relpath = os.path.relpath(path, mount.target)
         return 'uuid:%s:/%s' % (mount.uuid, '' if relpath == '.' else relpath)
     return 'path:%s' % (path,)
 
 
+def _mount_of(path):
+    """The mount the local path is on: its disk's as it was kept, if it isn't mounted now (not the disk its
+    empty mount point is on), else the one it's on now"""
+    return mounts.unmounted(path) or mounts.current_mount(path)
+
+
 def _uuid(path):
     """The UUID of the filesystem the local path is on, or None"""
     if path not in _uuids:
-        mount = mounts.current_mount(os.path.realpath(path))
+        mount = _mount_of(os.path.realpath(path))
         _uuids[path] = mount.uuid if mount is not None else None
     return _uuids[path]
 
@@ -62,20 +69,33 @@ def label_key(path):
 
 def labels():
     """{label_key(): label}, as the file has them now"""
-    global _labels, _labels_of
+    _read()
+    return _labels
+
+
+def _known_paths():
+    """The user's replicas' and inboxes' paths, as the file has them now"""
+    _read()
+    return _known
+
+
+def _read():
+    """The labels and the known paths, read again if the file changed"""
+    global _labels, _labels_of, _known
     try:
         path = replicas.replicas_file()
         status = os.stat(path)
         state = (path, status.st_mtime_ns, status.st_size)
     except OSError:
-        return {}
+        _labels, _known = {}, []
+        return
     if state != _labels_of:
         try:
-            _labels = replicas.load().labels
+            found = replicas.load()
+            _labels, _known = found.labels, found.replica_paths() + found.inbox_paths()
         except replicas.ReplicasError:
-            _labels = {}
+            _labels, _known = {}, []
         _labels_of = state
-    return _labels
 
 
 def label(path):
@@ -96,12 +116,8 @@ def disk_name(path):
 
 
 def full(path):
-    """What to call the replica at path to tell it from all others: its label, or what it's on,
-    and a local one's path, e.g. LocalDisk(ABC):/mnt/eliran, blue WD:/mnt/eliran, Cloud(me):/eliran"""
-    named = label(path)
-    if paths.is_cloud_path(path):
-        return named or '%s:/%s' % (disk_name(path), '/'.join(paths.components(path)[1:]))
-    return '%s:%s' % (named or disk_name(path), path)
+    """What to call the replica at path (its one name, see short_names())"""
+    return name(path)
 
 
 def labeled(path):
@@ -114,27 +130,37 @@ def labeled(path):
 
 
 def short_names(replica_paths):
-    """{path: a short name for it on the screens}: paths.short_names()'s, after a local one's label,
-    if it has one (a Drive one: its label)"""
-    names = paths.short_names(replica_paths)
-    found = labels()
-    if not found:
-        return names
-    for path in names:
-        named = found.get(label_key(path))
-        if named:
-            names[path] = named if paths.is_cloud_path(path) else '%s:%s' % (named, names[path])
+    """{path: its name on every screen}: its label, if the user gave it one; else what it's on, its disk
+    (disk_name(): LocalDisk(07B), Cloud(me)); and when another known replica or inbox (or one of
+    replica_paths) would be called the same, its folder's name after it (LocalDisk(07B):eliran). Never
+    the dirs above it."""
+    names = {}
+    others = list(dict.fromkeys(list(replica_paths) + [path for path in _known_paths()]))
+    base = {path: label(path) or disk_name(path) for path in others}
+    for path in replica_paths:
+        same = [other for other in others if base[other] == base[path] and not _same_place(other, path)]
+        names[path] = base[path] if not same else '%s:%s' % (base[path], _folder_name(path))
     return names
+
+
+def _same_place(one, other):
+    """Whether two paths are one replica's (the same, normalized)"""
+    return paths.normalized(one) == paths.normalized(other)
+
+
+def _folder_name(path):
+    """The replica's own folder's name (a Drive one's, or its account's root: /)"""
+    if paths.is_cloud_path(path):
+        components = paths.components(path)
+        return components[-1] if len(components) > 1 else '/'
+    return os.path.basename(os.path.realpath(path).rstrip('/')) or '/'
+
+
+def name(path):
+    """The replica's name on every screen (see short_names())"""
+    return short_names([path])[path]
 
 
 def told_apart(replica_paths):
-    """{path: a name for it in a sentence that tells it from the others, wherever they are}: its short
-    name (short_names()'s) and what it's on, e.g. 'eliran on LocalDisk(07B)', 'eliran on
-    Cloud(me)'; a labeled one's as short_names() has it (its label says where)"""
-    names = short_names(replica_paths)
-    for path in names:
-        if label(path):
-            continue
-        name = '/'.join(paths.components(path)[1:]) or '/' if paths.is_cloud_path(path) else names[path]
-        names[path] = '%s on %s' % (name, disk_name(path))
-    return names
+    """{path: its one name} (see short_names(): it tells them apart already)"""
+    return short_names(replica_paths)
