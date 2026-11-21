@@ -6,6 +6,7 @@ from unittest import mock
 import helpers
 from dirdelta import inbox
 from dirdelta.inbox import followers
+from dirdelta.known import replicanames
 from dirdelta.known import replicas
 from dirdelta.ui import messages
 from dirdelta.ui import picker
@@ -83,16 +84,16 @@ class ChoosingTest(InboxSortTest):
         chosen, pick_option = self.choose(["Go on"])
         self.assertEqual(chosen, [])
         options = pick_option.call_args.args[0]
-        self.assertIn(followers.choice.NOT_PICKED_MARK + self.mirror, [picker.option_label(option) for option in options])
+        self.assertIn(followers.choice.NOT_PICKED_MARK + replicanames.short_names([self.mirror, self.root])[self.mirror], [picker.option_label(option) for option in options])
 
     def test_a_picked_one_is_returned_and_remembered(self):
-        chosen, _ = self.choose([followers.choice.NOT_PICKED_MARK + self.mirror, "Go on"])
+        chosen, _ = self.choose([followers.choice.NOT_PICKED_MARK + replicanames.short_names([self.mirror, self.root])[self.mirror], "Go on"])
         self.assertEqual(chosen, [self.mirror])
         self.assertEqual(self.known.followers_of(self.root)[0], self.mirror)
 
     def test_picking_it_again_unpicks_it(self):
-        chosen, _ = self.choose([followers.choice.NOT_PICKED_MARK + self.mirror,
-                                 followers.choice.PICKED_MARK + self.mirror, "Go on"])
+        chosen, _ = self.choose([followers.choice.NOT_PICKED_MARK + replicanames.short_names([self.mirror, self.root])[self.mirror],
+                                 followers.choice.PICKED_MARK + replicanames.short_names([self.mirror, self.root])[self.mirror], "Go on"])
         self.assertEqual(chosen, [])
 
     def test_with_none_known_nothing_is_asked(self):
@@ -101,7 +102,7 @@ class ChoosingTest(InboxSortTest):
         pick_option.assert_not_called()
 
     def test_one_not_there_cant_be_picked(self):
-        self.assertEqual(followers.cant_follow(self.root, os.path.join(self.tmpdir, 'gone')), "not there: not mounted?")
+        self.assertEqual(followers.cant_follow(self.root, os.path.join(self.tmpdir, 'gone')), "its disk isn't connected")
         self.assertIsNotNone(followers.cant_follow('cloud/me', 'cloud/other'))
         self.assertIsNone(followers.cant_follow(self.root, 'cloud/me'))
 

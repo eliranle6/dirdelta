@@ -13,9 +13,10 @@ GO_ON = 'go on'
 ADD = 'add'
 GO_ON_NONE = "Go on, copying into no other replica"
 GO_ON_PICKED = "Go on, copying into the %d checked too"
-ADD_LABEL = "Another replica of it (choose a dir)..."
-PICKED_MARK = "[x] "
-NOT_PICKED_MARK = "[ ] "
+ADD_LABEL = "Another folder to copy into (choose it)..."
+# (A checkbox, as the web page's and the terminal's both show it)
+PICKED_MARK = "\u2611 "
+NOT_PICKED_MARK = "\u2610 "
 
 
 def choose(known_replicas, inbox_path, root_path):
@@ -30,15 +31,16 @@ def choose(known_replicas, inbox_path, root_path):
     picked, selected = [], GO_ON
     while True:
         options = [picker.Option(GO_ON, GO_ON_PICKED % (len(picked),) if picked else GO_ON_NONE), picker.BLANK]
+        # (Each by its one name, never its path)
+        names = replicanames.short_names(found + [root_path])
         for path in found:
             why_not = cant_follow(root_path, path)
-            label = (PICKED_MARK if path in picked else NOT_PICKED_MARK) + path
+            label = (PICKED_MARK if path in picked else NOT_PICKED_MARK) + names[path]
             options.append(picker.Option(('toggle', path), label,
                                          picker.Disabled("%s (%s)" % (label, why_not)) if why_not else None))
         options += [picker.BLANK, picker.Option(ADD, ADD_LABEL)]
-        header = ("Also copy what this sort moves or copies into %s into other replicas of it? Enter checks one "
-                  "(or unchecks it); none are, unless checked. A file there already is left as it is." %
-                  (replicanames.short_names([root_path])[root_path],))
+        header = ("Also copy what this sort puts into %s into other replicas? Check the ones to copy into: none are, "
+                  "unless checked. A file one has already is left as it is." % (names[root_path],))
         chosen = picker.pick_option(options, header=header, selected=selected, label=LABEL,
                                     title="Other replicas of the sorted tree")
         if chosen is None:
@@ -71,7 +73,7 @@ def cant_follow(root_path, path):
     if paths.is_cloud_path(path):
         return "both in Google Drive: no copies within it" if paths.is_cloud_path(root_path) else None
     if not os.path.isdir(path):
-        return "not there: not mounted?"
+        return "its disk isn't connected"
     if not os.access(path, os.W_OK):
         return "read-only"
     return None
