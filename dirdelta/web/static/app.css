@@ -306,10 +306,12 @@ header#top > #crumbs:has(> #where:empty) { display: none; }
 .tree .row { padding-left: 6px; gap: 0; }
 .tree .row > * + * { margin-left: 6px; } .tree .row > .guide + *, .tree .row > .guide + .guide { margin-left: 0; }
 .row .guide { flex: none; width: 18px; align-self: stretch; margin: calc(-1 * var(--row-pad, 6px)) 0 calc(-1 * var(--row-pad, 6px) - 1px); position: relative; }
-.row .guide::before, .row .guide::after { content: ''; position: absolute; border-color: var(--muted); opacity: .55; }
-.row .guide.pipe::before, .row .guide.tee::before { left: calc(50% - .75px); top: 0; bottom: 0; border-left: 1.5px solid; }
-.row .guide.elbow::before { left: calc(50% - .75px); top: 0; height: 50%; border-left: 1.5px solid; }
-.row .guide.tee::after, .row .guide.elbow::after { left: calc(50% - .75px); right: 0; top: 50%; border-top: 1.5px solid; }
+/* (The tree's lines in one solid color, the same wherever they cross or meet: a see-through one darkens where two overlap) */
+:root { --treeline: color-mix(in srgb, var(--muted) 55%, var(--card)); }
+.row .guide::before, .row .guide::after { content: ''; position: absolute; border-color: var(--treeline); }
+.row .guide.pipe::before, .row .guide.tee::before { left: calc(50% - .75px); top: 0; bottom: 0; border-left: 1.5px solid var(--treeline); }
+.row .guide.elbow::before { left: calc(50% - .75px); top: 0; height: 50%; border-left: 1.5px solid var(--treeline); }
+.row .guide.tee::after, .row .guide.elbow::after { left: calc(50% - .75px); right: 0; top: 50%; border-top: 1.5px solid var(--treeline); }
 .tree .row .twisty.leaf { height: 0; border-top: 1.5px solid var(--muted); opacity: .55; }
 .tree .row > .guide + .name { margin-left: 4px; }
 /* The bottom bar in sections: the main row (back, the main action, ?); what acts on the selection; on the
@@ -691,4 +693,4 @@ footer#bottom { padding-top: 12px; }
    the two meet in one straight line rather than a pixel apart */
 .tree .row .twisty.leaf { height: auto; border-top: 0; opacity: 1; align-self: stretch; position: relative;
   margin-top: calc(-1 * var(--row-pad, 6px)); margin-bottom: calc(-1 * var(--row-pad, 6px) - 1px); }
-.tree .row .twisty.leaf::before { content: ''; position: absolute; left: 0; right: 0; top: 50%; border-top: 1.5px solid var(--muted); opacity: .55; }
+.tree .row .twisty.leaf::before { content: ''; position: absolute; left: 0; right: 0; top: 50%; border-top: 1.5px solid var(--treeline); }
