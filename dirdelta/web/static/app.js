@@ -731,15 +731,44 @@ document.addEventListener('keydown', event => {
   if (whole) whole.remove(); else closeGrid();
 });
 
+// A tap on a tile: its mark or check sent first, waiting for nothing; then it's selected (the details show it)
 function toggleTile(path) {
   const screen = view.screen;
-  if (screen.states.length) {
-    const next = nextState(path);
-    act('select', {path}).then(() => act('state', {paths: [path], name: next}));
-  } else if (screen.multi) {
-    const on = !view.picked.has(path);
-    act('select', {path}).then(() => act('pick', {paths: [path], on}));
-  } else act('select', {path});
+  if (screen.states.length) act('state', {paths: [path], name: nextState(path)});
+  else if (screen.multi) act('pick', {paths: [path], on: !view.picked.has(path)});
+  act('select', {path});
+}
+
+// The grid's pictures loaded a few at a time (GRID_LOADING), the ones on the screen or near it first: a browser has only
+// so many connections to the server, and a tap's mark mustn't wait behind a folder's pictures
+const GRID_LOADING = 3;
+let gridLoading = 0;
+const gridWaiting = [];
+const gridSeen = window.IntersectionObserver ? new IntersectionObserver(entries => {
+  for (const entry of entries) {
+    if (!entry.isIntersecting) continue;
+    gridSeen.unobserve(entry.target);
+    gridWaiting.push(entry.target);
+  }
+  loadGridPictures();
+}, {rootMargin: '200px'}) : null;
+
+function loadGridPictures() {
+  while (gridLoading < GRID_LOADING && gridWaiting.length) {
+    const img = gridWaiting.shift();
+    if (!img.isConnected) continue;
+    gridLoading += 1;
+    const done = () => { gridLoading -= 1; loadGridPictures(); };
+    img.addEventListener('load', done, {once: true});
+    img.addEventListener('error', done, {once: true});
+    img.src = img.dataset.src;
+  }
+}
+
+function gridPicture(path) {
+  const img = el('img', {alt: baseName(path), 'data-src': pictureUrl(path, GRID_SIZE)});
+  if (gridSeen) gridSeen.observe(img); else img.src = img.dataset.src;
+  return img;
 }
 
 function showWhole(path) {
@@ -764,7 +793,7 @@ function renderGrid() {
     const tiles = photos.map(path => {
       const mark = el('span', {class: 'tilemark'});
       const tile = el('div', {class: 'phototile', title: baseName(path), onclick: () => toggleTile(path)},
-        el('img', {src: pictureUrl(path, GRID_SIZE), loading: 'lazy', alt: baseName(path)}),
+        gridPicture(path),
         el('button', {class: 'tilewhole', title: 'Show it whole', onclick: event => { event.stopPropagation(); showWhole(path); }}, '⤢'),
         mark, el('div', {class: 'tilename'}, view.sides && screen.states.length ? groupBadge((view.info.get(path) || {}).g, view.sides) : '',
           el('span', {}, baseName(path))));
@@ -909,7 +938,10 @@ async function loadPreview() {
         'aria-pressed': String(!!view.previewMax), onclick: () => maximizePreview(!view.previewMax)}, view.previewMax ? '⤡' : '⤢')));
   }
   if (lines.length) content.push(el('pre', {}, lines.map(line => [plainOf(line).startsWith('Diff: ') ? diffToggle(line) : previewLine(line), '\n'])));
-  if (found.image) { const canvas = pictureCanvas(found.image); if (canvas) content.push(canvas); }
+  // (The grid open: the photo's thumbnail, which the grid has already, rather than its picture made anew)
+  if (view.gridDir && view.selected && PHOTO_EXTENSIONS.test(view.selected)) {
+    content.push(el('img', {class: 'previewthumb', src: pictureUrl(view.selected, GRID_SIZE), alt: baseName(view.selected)}));
+  } else if (found.image) { const canvas = pictureCanvas(found.image); if (canvas) content.push(canvas); }
   box.replaceChildren(content.length ? el('div', {class: 'preview'}, content) : '');
   box.classList.toggle('max', !!view.previewMax && content.length > 0);
   colorNames(box);
