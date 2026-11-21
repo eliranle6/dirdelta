@@ -113,3 +113,17 @@ button.link { background: none; border: 0; padding: 4px 2px; color: var(--fg); c
 .grouptabs .button.on { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
 .grouptabs .tabcount { font-size: 12px; opacity: .85; }
 .note.more { text-align: center; padding: 16px; }
+/* The Already-in tab, in its own tone; each photo there marked strong (the same contents) or weak (name and size) */
+.grouptabs .theretab { margin-left: auto; }
+.grouptabs .theretab.on { background: var(--green); border-color: var(--green); }
+.photo .badge.strong { background: var(--green); color: #fff; }
+.photo .badge.weak { background: var(--yellow); color: #fff; }
+.day h3 .daytoggle.on { background: var(--sel); border-color: var(--accent); }
+/* Ready to move: a row for each folder, opened to its files */
+.readydir { border: 1px solid var(--line); border-radius: 10px; background: var(--card); margin: 8px 0; }
+.readydir > summary { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 8px 12px; cursor: pointer; }
+.readydir > summary .readyname { display: inline-flex; gap: 6px; align-items: center; font-weight: 600; overflow-wrap: anywhere; }
+.readydir > summary small { color: var(--muted); }
+.readydir > summary .readyacts { margin-left: auto; display: flex; gap: 6px; }
+.readydir > .grid { padding: 0 12px 12px; }
+.grouptabs .theretab { margin-left: 0; }

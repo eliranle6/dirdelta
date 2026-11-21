@@ -7,7 +7,7 @@ from unittest import mock
 
 from dirdelta.hashes import hashcache
 from dirdelta.known import replicas
-from dirdelta.phoneimport import applying, copying, store
+from dirdelta.phoneimport import applying, copying, removing, store
 from dirdelta.web import importing
 from dirdelta.web.importing import checks as checking
 from dirdelta.web.importing.state import summary
@@ -162,6 +162,8 @@ class ImportPageTest(ImportTest):
         self.assertEqual({'files': 1, 'size': 7}, state['overview']['nameOnly'])
         self.call('POST', '/api/import/read', body={'id': import_id, 'which': 'nameOnly'})
         self.wait_until(lambda: self.done(import_id))
+        # (The new one copied, and hashed, in the background as the import was shown: waited for)
+        self.wait_until(lambda: self.call('GET', '/api/import', {'id': import_id, 'files': '0'})['overview']['hashed'] == 2)
         brief = self.call('GET', '/api/import', {'id': import_id, 'files': '0'})
         self.assertNotIn('groups', brief)
         # (The one the replica lacks was copied, and hashed, on its own as the import was shown)
@@ -215,6 +217,28 @@ class ImportPageTest(ImportTest):
             self.assertTrue(self.call('GET', '/api/import', {'id': import_id, 'files': '0'})['otherDisk'])
             self.assertFalse(self.call('POST', '/api/import/apply', body={'id': import_id})['ok'])
             self.assertNotEqual(import_id, self.call('POST', '/api/imports/new', body=body)['id'])
+
+    def test_a_file_the_replica_has_is_removed_from_the_source_one_it_lacks_never(self):
+        self.write(self.dest, 'media/Trip/PXL_20260224_1.jpg', 'old one')
+        self.write(self.source, 'PXL_20260224_1.jpg', 'old one')
+        self.write(self.source, 'PXL_20260225_2.jpg', 'new one')
+        import_id = self.call('POST', '/api/imports/new', body={'source': self.source, 'dest': self.dest})['id']
+        self.wait_until(lambda: self.done(import_id))
+        self.call('GET', '/api/import', {'id': import_id})
+        self.wait_until(lambda: self.done(import_id))
+        refused = self.call('POST', '/api/import/remove', body={'id': import_id, 'rels': ['PXL_20260224_1.jpg', 'PXL_20260225_2.jpg']})
+        self.assertFalse(refused['ok'])
+        self.assertEqual(2, len(os.listdir(self.source)))
+        # (A dry run removes nothing)
+        self.assertTrue(self.call('POST', '/api/import/remove', body={'id': import_id, 'rels': ['PXL_20260224_1.jpg']})['ok'])
+        self.wait_for(removing.removing_of(import_id).thread)
+        self.assertEqual(2, len(os.listdir(self.source)))
+        with mock.patch('dirdelta.util.dryrun.DRYRUN', False):
+            self.call('POST', '/api/import/remove', body={'id': import_id, 'rels': ['PXL_20260224_1.jpg']})
+            self.wait_for(removing.removing_of(import_id).thread)
+        self.assertEqual(['PXL_20260225_2.jpg'], os.listdir(self.source))
+        rels = [file['rel'] for group in self.call('GET', '/api/import', {'id': import_id})['groups'] for day in group['days'] for file in day['files']]
+        self.assertEqual(['PXL_20260225_2.jpg'], rels)
 
     def test_the_files_without_a_date_come_after_the_days(self):
         self.write(self.source, 'IMG_20250101_1.jpg', 'a')

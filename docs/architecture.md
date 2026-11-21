@@ -1314,7 +1314,14 @@ every link carries, then a cookie), and a watcher.
   has already, said, with Skip them), the sticky meter of the new ones decided and the selection's bar, then the files
   in their groups (`sources.group_of()`: a phone's camera's, DCIM; WhatsApp's images; its videos; a folder's all one),
   one shown at a time, chosen in tabs in the sticky bar (each with how many are new; in the address, #group=KEY), its
-  days drawn 15 at a time, more as the end of them is scrolled to; a poll redraws the photos only if anything about them
+  days drawn 15 at a time, more as the end of them is scrolled to; a group's tab shows what's left to decide alone (all of it
+  on asking), each day with a toggle selecting all of it (☐ Select all 12 / ☑ All 12 selected); Ready to move, a tab of
+  the files given a folder, by folder, each a row opened to its files (Undo all; for those selected Back to undecided,
+  Change folder…, Skip them); Already in REPLICA, a tab of the files the replica has (or that were moved into it), each
+  marked strong (✓ the same contents) or weak (≈ the same name and size only; Compare their contents copies and hashes
+  them), selected all of either at once, and removed from the source (`removing.py`, `/api/import/remove`: the phone's
+  through gvfs, a folder's, a Drive inbox's to its trash; only the files the replica has, asked twice, a dry run saying
+  what it would do; each removed one dropped from the source's pool); a poll redraws the photos only if anything about them
   changed (`filesSignature()`), else the head and the footer alone,
   each with how many are new and the folders suggested for all of it (`Suggester.suggest_group()`: where the replica
   keeps WhatsApp's images, or videos, by their names), then by day (the day's suggestions, as before); End this import

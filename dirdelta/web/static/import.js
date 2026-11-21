@@ -238,7 +238,7 @@ async function loadImport() {
   else renderImport();
   page.signature = signature;
   const reading = data.reading && (data.reading.phase === 'listing' || data.reading.phase === 'copying');
-  const busy = reading || (data.applying && !data.applying.done) || data.checking.busy;
+  const busy = reading || (data.applying && !data.applying.done) || (data.removing && !data.removing.done) || data.checking.busy;
   later(busy ? 2 : 10);
 }
 
@@ -248,6 +248,8 @@ function filesSignature(data) {
   for (const group of data.groups) for (const day of group.days) for (const file of day.files) {
     text += file.rel + '|' + file.state + '|' + (file.target || '') + '|' + (file.have ? file.have.length : '-') + '\n';
   }
+  // (And what moving or removing said: drawn under the photos)
+  for (const doing of [data.applying, data.removing]) if (doing) text += doing.lines.length + (doing.done ? 'd' : '') + '\n';
   return text.length + ':' + hashText(text);
 }
 
@@ -260,7 +262,7 @@ function hashText(text) {
 // The head, and the footer, drawn again alone (what's being done, the counts)
 function refreshHead() {
   const files = allFiles();
-  const counts = {new: files.filter(isNew).length, there: files.filter(file => isThere(file) && !isDone(file)).length,
+  const counts = {new: files.filter(isNew).length, undecided: files.filter(isUndecided).length, there: files.filter(file => isThere(file) && !isDone(file)).length,
     ready: files.filter(isReady).length, moved: files.filter(file => file.state === 'moved').length,
     skipped: files.filter(file => file.state === 'skipped').length};
   const head = document.querySelector('#main .importhead');
@@ -295,7 +297,19 @@ function isNew(file) { return !isThere(file) && !isDone(file); }
 function isReady(file) { return !!file.target && !isDone(file); }
 function isUndecided(file) { return isNew(file) && !file.target; }
 // What's shown: the new ones, and those to be moved (one the replica has too said so), else, on asking, all of them
-function isShown(file) { return page.showAll || isNew(file) || isReady(file); }
+function isShown(file) {
+  if (page.group === THERE) return isInReplica(file);
+  if (page.group === READY) return isReady(file);
+  // (A group's: what's left to decide; what's decided is in Ready to move, or skipped; all of it on asking)
+  return page.showAll || isUndecided(file);
+}
+// The Ready-to-move tab's: the files given a folder, by folder, to look over before Move
+const READY = 'ready';
+// The Already-in tab's: the files the replica has (found there, or moved into it), to remove from the source
+const THERE = 'there';
+function isInReplica(file) { return isThere(file) || file.state === 'moved'; }
+// How sure that is: moved in, or the same contents (hashes match), or the same name and size only
+function isStrong(file) { return file.state === 'moved' || (file.have || []).some(found => found.how === 'contents'); }
 
 function allFiles() { return page.data.groups.flatMap(group => group.days.flatMap(day => day.files)); }
 
@@ -317,22 +331,25 @@ function renderImport() {
   const files = allFiles();
   const group = shownGroup();
   const groupFiles = group ? group.days.flatMap(day => day.files) : [];
-  const counts = {new: files.filter(isNew).length, there: files.filter(file => isThere(file) && !isDone(file)).length,
+  const counts = {new: files.filter(isNew).length, undecided: files.filter(isUndecided).length, there: files.filter(file => isThere(file) && !isDone(file)).length,
     ready: files.filter(isReady).length, moved: files.filter(file => file.state === 'moved').length,
     skipped: files.filter(file => file.state === 'skipped').length};
   const parts = [];
   if (!focused) {
     parts.push(importHead(data, counts));
-    parts.push(el('div', {class: 'sticky'}, groupTabs(), sortMeter(groupFiles), selectionRow()));
+    parts.push(el('div', {class: 'sticky'}, groupTabs(), [THERE, READY].includes(page.group) ? el('div', {class: 'sortmeter'}) : sortMeter(groupFiles), selectionRow()));
   } else {
     const sticky = document.querySelector('.sticky');
-    sticky.querySelector('.sortmeter').replaceWith(sortMeter(groupFiles));
+    sticky.querySelector('.sortmeter').replaceWith([THERE, READY].includes(page.group) ? el('div', {class: 'sortmeter'}) : sortMeter(groupFiles));
     parts.push(document.querySelector('.importhead'), sticky);
   }
   if (group) parts.push(...groupParts(group));
   if (!files.length) parts.push(el('p', {class: 'note'}, data.reading && data.reading.phase === 'listing' ? waiting('Listing the files') : 'No photos or videos.'));
-  else if (!files.some(isShown)) parts.push(el('p', {class: 'note'}, counts.there ? 'Nothing new: ' + data.destName + ' has them all.' : 'All sorted.'));
-  if (data.applying) parts.push(el('div', {class: 'lines'}, data.applying.lines.map(([text, color]) => el('div', {class: color ? 'c-' + color : ''}, text))));
+  else if (group && group.key !== READY && !group.days.some(day => day.files.some(isShown))) parts.push(el('p', {class: 'note'},
+    group.key === THERE ? 'None.' : group.days.some(day => day.files.some(isReady)) ? 'All decided: see Ready to move.' : 'Nothing new here.'));
+  for (const doing of [data.applying, data.removing]) {
+    if (doing) parts.push(el('div', {class: 'lines'}, doing.lines.map(([text, color]) => el('div', {class: color ? 'c-' + color : ''}, text))));
+  }
   parts.push(endCard(data));
   if (!document.querySelector('#main button.sure')) main.replaceChildren(...parts);
   renderFooter(counts);
@@ -345,6 +362,15 @@ function renderImport() {
 // them. One height either way, so nothing under it moves as the first is selected
 function selectionRow(asBar) {
   const data = page.data;
+  if (page.group === THERE) return el('div', {class: 'selrow'}, removeBar(asBar));
+  if (page.group === READY) {
+    return el('div', {class: 'selrow'}, page.selected.size || asBar ? el('div', {class: 'bar'}, el('b', {}, page.selected.size + ' selected'),
+      el('button', {onclick: () => undecide([...page.selected])}, 'Back to undecided'),
+      el('button', {class: 'primary', onclick: () => chooseFolder(dir => assign([...page.selected], dir))}, 'Change folder…'),
+      el('button', {onclick: () => assign([...page.selected], null, true)}, 'Skip them'),
+      el('button', {onclick: () => { page.selected.clear(); showSelection(); }}, 'Clear')) :
+      el('div', {class: 'note'}, 'Open a folder and tap files to change them, or Undo all of a folder.'));
+  }
   // (The folders they were last put in, a tap each; any other chosen in the folder dialog)
   const recent = (data.recentDirs || []).slice(0, MAX_RECENT_SHOWN);
   const row = page.selected.size || asBar ? el('div', {class: 'bar'}, el('b', {}, page.selected.size + ' selected'),
@@ -370,6 +396,31 @@ function fitSelectionRow() {
 window.addEventListener('resize', fitSelectionRow);
 
 const MAX_RECENT_SHOWN = 5;
+
+// The Already-in tab's selection bar: Remove from the source, asked twice (the second time saying how many are matched by
+// name and size only), and Clear; else how to select them
+function removeBar(asBar) {
+  const data = page.data;
+  const source = data.source.device || (data.source.drive ? 'the Drive inbox' : 'the folder');
+  if (!page.selected.size && !asBar) return el('div', {class: 'note'}, 'Tap the ones to remove from ' + source + ', or select a day\'s or all of a kind.');
+  const rels = [...page.selected];
+  const byRel = new Map(allFiles().map(file => [file.rel, file]));
+  const weak = rels.filter(rel => byRel.has(rel) && !isStrong(byRel.get(rel))).length;
+  const box = el('div', {class: 'bar'});
+  const idle = () => box.replaceChildren(el('b', {}, page.selected.size + ' selected'),
+    el('button', {class: 'danger', onclick: ask}, 'Remove from ' + source + '…'),
+    el('button', {onclick: () => { page.selected.clear(); showSelection(); }}, 'Clear'));
+  const ask = () => box.replaceChildren(el('span', {class: weak ? 'c-orange' : ''}, 'Remove ' + rels.length + ' from ' + source + '? ' +
+      (weak ? weak + ' of them ' + plural(weak, 'is', 'are') + ' in ' + data.destName + ' by name and size only, not sure. ' : '') +
+      (data.label[0] === 'DRY RUN' ? '(A dry run: nothing is removed.)' : 'They can\'t be brought back from ' + (data.source.drive ? 'Drive\'s trash after 30 days.' : 'a phone.'))),
+    el('button', {class: 'danger sure', onclick: async () => {
+      const answer = await api('POST', '/api/import/remove', {id: page.id, rels});
+      if (answer.error) document.getElementById('status').textContent = answer.error; else page.selected.clear();
+      await load();
+    }}, 'Yes, remove ' + plural(rels.length, 'it', 'them')), el('button', {onclick: idle}, 'Keep ' + plural(rels.length, 'it', 'them')));
+  idle();
+  return box;
+}
 
 // A folder's last two parts (its whole path in its tooltip)
 function shortDir(dir) {
@@ -421,6 +472,9 @@ function chooseFolder(done) {
 // page of thousands of photos takes a second to draw)
 function showSelection() {
   for (const node of document.querySelectorAll('#main .photo')) node.classList.toggle('sel', page.selected.has(node.dataset.rel));
+  for (const [button, rels] of dayToggles) {
+    if (button.isConnected) labelDayToggle(button, rels); else dayToggles.delete(button);
+  }
   const row = document.querySelector('.sticky .selrow');
   const focused = document.activeElement && document.activeElement.id === 'target';
   if (row && !(focused && page.selected.size)) row.replaceWith(selectionRow());
@@ -452,7 +506,7 @@ function importHead(data, counts) {
     // (Until what the replica has is known, how many there are, not how many are new)
     !data.indexed ? el('div', {class: 'counts'}, el('b', {}, allFiles().length.toLocaleString() + ' photos and videos'),
       el('span', {}, waiting('finding which ' + data.destName + ' lacks'))) :
-    el('div', {class: 'counts'}, el('b', {}, counts.new.toLocaleString() + ' new'),
+    el('div', {class: 'counts'}, el('b', {}, counts.undecided.toLocaleString() + ' to decide'),
       counts.ready ? el('span', {}, counts.ready + ' ready to move') : '',
       el('span', {}, counts.there.toLocaleString() + ' already in ' + data.destName + (page.showAll ? '' : ' (hidden)')),
       counts.moved ? el('span', {}, counts.moved + ' moved') : '', counts.skipped ? el('span', {}, counts.skipped + ' skipped') : '',
@@ -475,25 +529,46 @@ function importHead(data, counts) {
 // The group shown: the one in the address, else the first with anything new (else the first)
 function shownGroup() {
   const groups = page.data.groups;
+  if (page.group === THERE) return thereGroup();
+  if (page.group === READY) return {key: READY, title: 'Ready to move', days: [], suggested: []};
   return groups.find(group => group.key === page.group) ||
     groups.find(group => group.days.some(day => day.files.some(isNew))) || groups[0] || null;
 }
 
-// The groups as tabs (a phone's camera's, WhatsApp's images, its videos), each with how many are new; none for one group
+// The files the replica has, of every group, by day: the Already-in tab's
+function thereGroup() {
+  const days = new Map();
+  for (const group of page.data.groups) for (const day of group.days) {
+    const files = day.files.filter(isInReplica);
+    if (!files.length) continue;
+    if (!days.has(day.day)) days.set(day.day, {day: day.day, files: [], suggested: []});
+    days.get(day.day).files.push(...files);
+  }
+  const sorted = [...days.values()].sort((a, b) => (a.day === 'None') - (b.day === 'None') || a.day.localeCompare(b.day));
+  return {key: THERE, title: 'Already in ' + page.data.destName, days: sorted, suggested: []};
+}
+
+// The groups as tabs (a phone's camera's, WhatsApp's images, its videos), each with how many are new, and the files the
+// replica has already (to remove from the source)
 function groupTabs() {
   const groups = page.data.groups;
-  if (groups.length < 2) return '';
   const shown = shownGroup();
-  return el('div', {class: 'grouptabs', role: 'tablist'}, groups.map(group => {
-    const nrNew = group.days.reduce((sum, day) => sum + day.files.filter(isNew).length, 0);
-    return el('a', {class: 'button' + (group === shown ? ' on' : ''), role: 'tab', 'aria-selected': String(group === shown),
-      href: '#group=' + group.key}, group.title, el('span', {class: 'tabcount'}, nrNew ? nrNew.toLocaleString() + ' new' : 'nothing new'));
-  }));
+  const tab = (key, title, count, isOn) => el('a', {class: 'button' + (isOn ? ' on' : '') + (key === THERE ? ' theretab' : ''), role: 'tab',
+    'aria-selected': String(isOn), href: '#group=' + key}, title, el('span', {class: 'tabcount'}, count));
+  const nrThere = allFiles().filter(isInReplica).length, nrReady = allFiles().filter(isReady).length;
+  return el('div', {class: 'grouptabs', role: 'tablist'}, groups.length > 1 ? groups.map(group => {
+    const nrLeft = group.days.reduce((sum, day) => sum + day.files.filter(isUndecided).length, 0);
+    return tab(group.key, group.title, nrLeft ? nrLeft.toLocaleString() + ' to decide' : 'all decided', group === shown);
+  }) : groups.length ? tab(groups[0].key, 'To decide', allFiles().filter(isUndecided).length.toLocaleString(), shown === groups[0]) : '',
+    nrReady ? tab(READY, 'Ready to move', nrReady.toLocaleString(), page.group === READY) : '',
+    nrThere ? tab(THERE, 'Already in ' + page.data.destName, nrThere.toLocaleString(), page.group === THERE) : '');
 }
 
 // The group's head (its suggestions for all of it) and its days, the first DAYS_AT_ONCE of them, more as the end of them
 // is scrolled to
 function groupParts(group) {
+  if (group.key === THERE) return thereParts(group);
+  if (group.key === READY) return readyParts();
   const files = group.days.flatMap(day => day.files);
   const undecided = files.filter(isUndecided).map(file => file.rel);
   const parts = [el('div', {class: 'group'}, el('h2', {}, group.title, el('small', {}, undecided.length ? undecided.length.toLocaleString() + ' to decide' : 'all decided')),
@@ -503,27 +578,106 @@ function groupParts(group) {
   const days = group.days.filter(day => day.files.some(isShown));
   if (!page.nrDays) page.nrDays = DAYS_AT_ONCE;
   parts.push(...days.slice(0, page.nrDays).map(dayPart));
-  if (days.length > page.nrDays) {
-    // (Scrolled to, the next days drawn after the ones there: the page isn't drawn again)
-    const more = el('div', {class: 'note more'}, 'Showing ' + page.nrDays + ' of ' + days.length + ' days…');
-    new IntersectionObserver((seen, observer) => {
-      if (!seen.some(entry => entry.isIntersecting)) return;
-      observer.disconnect();
-      const next = days.slice(page.nrDays, page.nrDays + DAYS_AT_ONCE);
-      page.nrDays += next.length;
-      more.before(...next.map(dayPart));
-      if (page.nrDays >= days.length) more.remove(); else { more.textContent = 'Showing ' + page.nrDays + ' of ' + days.length + ' days…'; observer.observe(more); }
-    }, {rootMargin: '600px'}).observe(more);
-    parts.push(more);
-  }
+  // (Scrolled to, the next days drawn after the ones there: the page isn't drawn again)
+  if (days.length > page.nrDays) parts.push(moreDays(days));
   return parts;
+}
+
+// The Already-in tab: what it's for, how sure each is (strong: the same contents; weak: the same name and size only, which
+// copying the phone's file, to hash it, makes sure of), selecting all of either, and the days
+function thereParts(group) {
+  const files = group.days.flatMap(day => day.files);
+  const strong = files.filter(isStrong).map(file => file.rel), weak = files.filter(file => !isStrong(file)).map(file => file.rel);
+  const select = rels => { rels.forEach(rel => page.selected.add(rel)); showSelection(); };
+  const source = page.data.source.device ? page.data.source.device : 'the inbox';
+  const parts = [el('div', {class: 'group'}, el('h2', {}, group.title, el('small', {}, files.length.toLocaleString() + ' on ' + source + ' too')),
+    strong.length ? el('button', {onclick: () => select(strong)}, '✓ Select the ' + strong.length.toLocaleString() + ' with the same contents') : '',
+    weak.length ? el('button', {onclick: () => select(weak)}, '≈ Select the ' + weak.length.toLocaleString() + ' with the same name and size') : '',
+    weak.length && !page.data.source.drive ? el('button', {class: 'quiet', title: 'Copies them here and hashes them: needs the phone plugged in',
+      onclick: () => act('/api/import/read', {which: 'nameOnly'})}, 'Compare their contents') : ''),
+    el('p', {class: 'note'}, 'Pick what to remove from ' + source + ': ✓ the same contents in ' + page.data.destName +
+      ' (sure), ≈ the same name and size only (likely, not sure).')];
+  const days = group.days;
+  if (!page.nrDays) page.nrDays = DAYS_AT_ONCE;
+  parts.push(...days.slice(0, page.nrDays).map(dayPart));
+  if (days.length > page.nrDays) parts.push(moreDays(days));
+  return parts;
+}
+
+// The Ready-to-move tab: the files given a folder, by folder, each folder a row that opens to its photos (drawn once it's
+// opened), with Undo (back to deciding); Move, in the footer, moves them all
+function readyParts() {
+  const byDir = new Map();
+  for (const file of allFiles().filter(isReady)) {
+    if (!byDir.has(file.target)) byDir.set(file.target, []);
+    byDir.get(file.target).push(file);
+  }
+  const dirs = [...byDir.keys()].sort((a, b) => a.localeCompare(b));
+  if (!dirs.length) return [el('p', {class: 'note'}, 'Nothing yet: give files a folder in the other tabs.')];
+  const total = dirs.reduce((sum, dir) => sum + byDir.get(dir).length, 0);
+  return [el('div', {class: 'group'}, el('h2', {}, 'Ready to move into ' + page.data.destName,
+      el('small', {}, total.toLocaleString() + ' in ' + dirs.length + ' ' + plural(dirs.length, 'folder', 'folders')))),
+    el('p', {class: 'note'}, 'Open a folder to look at its files; Move, below, moves them all.'),
+    ...dirs.map(dir => {
+      const files = byDir.get(dir), rels = files.map(file => file.rel);
+      const grid = el('div', {class: 'grid'});
+      const folder = el('details', {class: 'readydir', ontoggle: () => {
+        if (folder.open && !grid.childElementCount) grid.replaceChildren(...files.map(photo));
+      }}, el('summary', {}, el('span', {class: 'readyname'}, icon('folder'), '→ ' + dir), el('small', {}, files.length + ' ' + plural(files.length, 'file', 'files')),
+        el('span', {class: 'readyacts'}, dayToggle(rels),
+          el('button', {onclick: event => { event.preventDefault(); undecide(rels); }}, 'Undo all'))), grid);
+      return folder;
+    })];
+}
+
+// Back to deciding: no folder, not skipped
+async function undecide(rels) {
+  if (!rels.length) return;
+  await api('POST', '/api/import/assign', {id: page.id, rels, target: null, skip: false});
+  page.selected.clear();
+  await load();
+}
+
+// The next days, drawn as the end of the ones there is scrolled to
+function moreDays(days) {
+  const more = el('div', {class: 'note more'}, 'Showing ' + page.nrDays + ' of ' + days.length + ' days…');
+  new IntersectionObserver((seen, observer) => {
+    if (!seen.some(entry => entry.isIntersecting)) return;
+    observer.disconnect();
+    const next = days.slice(page.nrDays, page.nrDays + DAYS_AT_ONCE);
+    page.nrDays += next.length;
+    more.before(...next.map(dayPart));
+    if (page.nrDays >= days.length) more.remove(); else { more.textContent = 'Showing ' + page.nrDays + ' of ' + days.length + ' days…'; observer.observe(more); }
+  }, {rootMargin: '600px'}).observe(more);
+  return more;
+}
+
+// A day's toggle: all its files shown selected, or none of them (☐ Select all 12 / ☑ All 12 selected)
+const dayToggles = new Map();
+function dayToggle(rels) {
+  const button = el('button', {class: 'daytoggle', onclick: event => {
+    // (In a folder's row, not opening it too)
+    event.preventDefault();
+    const all = rels.every(rel => page.selected.has(rel));
+    rels.forEach(rel => all ? page.selected.delete(rel) : page.selected.add(rel));
+    showSelection();
+  }});
+  dayToggles.set(button, rels);
+  labelDayToggle(button, rels);
+  return button;
+}
+function labelDayToggle(button, rels) {
+  const all = rels.every(rel => page.selected.has(rel));
+  button.textContent = all ? '☑ All ' + rels.length + ' selected' : '☐ Select all ' + rels.length;
+  button.classList.toggle('on', all);
 }
 
 function dayPart(day) {
   const dayFiles = day.files.filter(isShown);
   const open = dayFiles.filter(isUndecided).map(file => file.rel);
+  const selectable = dayFiles.filter(file => file.state !== 'moved' || page.group === THERE).map(file => file.rel);
   const header = el('h3', {}, day.day === 'None' ? 'No date' : day.day, el('small', {}, dayFiles.length + ' ' + plural(dayFiles.length, 'file', 'files')),
-    open.length ? el('button', {onclick: () => { open.forEach(rel => page.selected.add(rel)); showSelection(); }}, 'Select the day') : '',
+    selectable.length ? dayToggle(selectable) : '',
     open.length ? day.suggested.map(dir => el('button', {onclick: () => assign(open, dir)}, 'All to ' + dir)) : '',
     open.length ? el('button', {onclick: () => chooseFolder(dir => assign(open, dir))}, 'All to…') : '');
   return el('div', {class: 'day', 'data-day': day.day === 'None' ? 'No date' : day.day, 'data-undecided': open.length},
@@ -627,10 +781,12 @@ function photo(file) {
   const image = picture(file);
   return el('div', {class: 'photo' + (page.selected.has(file.rel) ? ' sel' : '') + (file.state === 'moved' ? ' done' : ''),
     'data-rel': file.rel, onclick: () => {
-      if (file.state === 'moved') return;
+      if (file.state === 'moved' && page.group !== THERE) return;
       if (page.selected.has(file.rel)) page.selected.delete(file.rel); else page.selected.add(file.rel);
       showSelection();
-    }}, image, isThere(file) ? el('span', {class: 'badge'}, 'have') : '', el('div', {class: 'cap'}, caption));
+    }}, image, isInReplica(file) ? el('span', {class: 'badge ' + (isStrong(file) ? 'strong' : 'weak'),
+      title: isStrong(file) ? 'The same contents in ' + page.data.destName : 'The same name and size in ' + page.data.destName + ' (not sure)'},
+      isStrong(file) ? '✓ same' : '≈ likely') : '', el('div', {class: 'cap'}, caption));
 }
 
 async function assign(rels, target, skip) {
@@ -643,7 +799,7 @@ async function assign(rels, target, skip) {
 // The footer: how far it is, in plain words, and Move once any file is ready to move
 function renderFooter(counts) {
   const data = page.data;
-  const status = [counts.new.toLocaleString() + ' new'];
+  const status = [counts.undecided.toLocaleString() + ' to decide'];
   if (counts.ready) status.push(counts.ready + ' ready to move');
   if (counts.moved) status.push(counts.moved + ' moved');
   if (page.selected.size) status.push(page.selected.size + ' selected');

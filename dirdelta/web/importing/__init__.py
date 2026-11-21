@@ -5,7 +5,7 @@ moving them in, ending it; and comparing better: checking the replicas again, ha
 Drive one again (see phoneimport/, and checks.py)"""
 import os
 
-from dirdelta.phoneimport import applying, copying, sources, store, thumbs
+from dirdelta.phoneimport import applying, copying, removing, sources, store, thumbs
 from dirdelta.known import replicanames
 from dirdelta.known import replicas
 from dirdelta.trees import paths
@@ -204,6 +204,27 @@ def routes():
         applying.apply(found)
         return {'ok': True}
 
+    def remove(query, body):
+        """Remove body['rels'] from the import's source: only the ones its replica has (moved into it, or found there by
+        their contents, or by name and size), never one it lacks"""
+        found = store.load(body.get('id'))
+        if found is None:
+            return {'ok': False}
+        check = checks.get(found.dest)
+        if check.known is None:
+            return {'ok': False, 'error': "What the replica has isn't known yet: wait for its check."}
+        files = found.files()
+        rels = [rel for rel in body.get('rels', []) if rel in files]
+        kept = [rel for rel in rels if files[rel]['state'] != store.MOVED and
+                not check.known.found(rel, files[rel]['size'], files[rel]['sha1'])]
+        if kept:
+            return {'ok': False, 'error': "%d of them aren't in %s: nothing was removed." % (len(kept), naming.name(found.dest))}
+        reading, moving = copying.reading_of(found.source), applying.applying_of(found.id)
+        if (moving is not None and not moving.is_done) or (reading is not None and reading.phase == 'copying'):
+            return {'ok': False, 'error': "Files are being copied or moved: wait for that to end."}
+        removing.remove(found, rels)
+        return {'ok': True}
+
     def end(query, body):
         found = store.load(body.get('id'))
         if found is None:
@@ -232,7 +253,7 @@ def routes():
             ('GET', '/api/import/thumb'): thumb, ('GET', '/api/import/file'): file,
             ('POST', '/api/import/assign'): assign, ('POST', '/api/import/read'): read,
             ('POST', '/api/import/apply'): apply, ('POST', '/api/import/end'): end,
-            ('POST', '/api/import/recheck'): recheck, ('POST', '/api/phones/add'): add_phone,
+            ('POST', '/api/import/recheck'): recheck, ('POST', '/api/import/remove'): remove, ('POST', '/api/phones/add'): add_phone,
             ('POST', '/api/phones/remove'): remove_phone}
 
 

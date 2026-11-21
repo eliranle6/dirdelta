@@ -7,7 +7,7 @@ import time
 
 from dirdelta.known import replicanames
 from dirdelta.known import replicas
-from dirdelta.phoneimport import applying, copying, known, overview, sources, store, suggest
+from dirdelta.phoneimport import applying, copying, known, overview, removing, sources, store, suggest
 from dirdelta.util import dryrun
 from dirdelta.web import naming
 from dirdelta.web.importing import checks as checking
@@ -77,7 +77,7 @@ def import_state(found, check, with_files=True):
         if known is not None else None
     if haves is not None:
         note_where(found, check, files, haves)
-    reading, moving = copying.reading_of(found.source), applying.applying_of(found.id)
+    reading, moving, removed = copying.reading_of(found.source), applying.applying_of(found.id), removing.removing_of(found.id)
     replica_paths = check.replica_paths
     state = dict(summary(found), label=list(dryrun.label()), checked=replica_paths, indexed=known is not None,
                  # (The replicas it could go into instead: each another import, chosen on its page)
@@ -90,7 +90,8 @@ def import_state(found, check, with_files=True):
                  listedAgo=int(time.time() - found.pool.listed_at) if found.pool.listed_at else None,
                  reading={'phase': reading.phase, 'message': reading.message, 'asked': reading.nr_asked,
                           'copied': reading.nr_copied} if reading else None,
-                 applying={'done': moving.is_done, 'lines': moving.lines} if moving else None)
+                 applying={'done': moving.is_done, 'lines': moving.lines} if moving else None,
+                 removing={'done': removed.is_done, 'lines': removed.lines} if removed else None)
     if haves is not None:
         _copy_new(found, files, haves)
     if with_files:
@@ -109,7 +110,8 @@ def _copy_new(found, files, haves):
     """Copy (and so hash) the import's files the replica doesn't have by name and size, in the background: they're the
     ones to sort, which moving them needs copied anyway, and hashing them may find the replica has some by contents
     (renamed). Each once."""
-    asked = _copied_new.setdefault(found.id, set())
+    # (By when it was made too: an import ended and another made in the same second has its id)
+    asked = _copied_new.setdefault((found.id, found.created), set())
     new = [relpath for relpath, info in files.items() if not haves.get(relpath) and info['state'] == store.PENDING
            and not info.get('copied') and relpath not in asked]
     if new:
