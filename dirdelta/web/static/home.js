@@ -235,30 +235,31 @@ function pairRow(pair, running, user, comparing) {
   const syncing = isSyncing(pair, running, user);
   const compared = age(pair.state.when);
   const parts = [];
-  // (A replica changed since they were compared: what was found then isn't how they are now, so it isn't shown as it)
+  // (A replica changed since they were compared: what was found then is shown, but in grey, as what was, not what is:
+  // the other's files as they were aren't kept, so it can't be worked out again without reading both)
   const stale = !!synced && pair.changedSince.length > 0;
   if (!synced) parts.push(el('span', {class: 'note'}, 'Never compared: sync them to know.'));
-  else if (stale) {
-    parts.push(el('span', {class: 'statename c-grey'}, 'Not known any more'),
-      el('div', {class: 'syncline'}, el('span', {}, pair.changedSince.join(' and ') + ' changed since they were compared.'),
-        el('span', {class: 'note'}, 'Compare them again (↻ below), or sync them.')));
-  } else {
+  else {
     const {onlyA, onlyB, totalA, share} = synced;
     const either = totalA === null ? null : totalA + onlyB;
     const percent = share === null ? null : (share === 1 ? '100' : Math.min(99.9, Math.floor(share * 1000) / 10).toString());
     // (Its state and how much is in step, one line)
-    parts.push(el('div', {class: 'statehead-line'}, el('span', {class: 'statename c-' + pair.state.color}, (STATE_WORDS[pair.state.kind] || '') + (percent !== null ? ':' : '')),
-      percent !== null ? el('b', {style: 'color:' + inStepColor(share)}, percent + '% in step') : ''));
+    const color = fraction => stale ? 'var(--grey)' : inStepColor(fraction);
+    parts.push(el('div', {class: 'statehead-line'}, el('span', {class: 'statename c-' + (stale ? 'grey' : pair.state.color)},
+      (stale ? 'Last known' : STATE_WORDS[pair.state.kind] || '') + (percent !== null ? ':' : '')),
+      percent !== null ? el('b', {style: 'color:' + color(share)}, percent + '% in step') : ''));
     if (either) {
       const inBoth = (either - onlyA - onlyB) / either;
-      parts.push(el('div', {class: 'syncbar'}, el('div', {class: 'both', style: 'width:' + (100 * inBoth) + '%;background:' + inStepColor(inBoth)}),
+      parts.push(el('div', {class: 'syncbar' + (stale ? ' stale' : '')}, el('div', {class: 'both', style: 'width:' + (100 * inBoth) + '%;background:' + color(inBoth)}),
         el('div', {class: 'only', style: 'width:' + (100 * onlyA / either) + '%'}), el('div', {class: 'only', style: 'width:' + (100 * onlyB / either) + '%'})));
     }
     parts.push(el('div', {class: 'syncline'},
-      el('span', {}, !onlyA && !onlyB ? 'Each has all the other\'s files' :
+      el('span', {}, !onlyA && !onlyB ? (stale ? 'Each had all the other\'s files' : 'Each has all the other\'s files') :
         [onlyA ? [onlyA.toLocaleString() + ' only in ', replicaLabel(pair.a, pair.nameA)] : '',
           onlyB ? [onlyB.toLocaleString() + ' only in ', replicaLabel(pair.b, pair.nameB)] : ''].filter(Boolean).flatMap((part, i) => i ? [' · ', ...part] : part)),
       percent === null ? el('span', {class: 'note'}, 'A % shows from the next comparison.') : ''));
+    if (stale) parts.push(el('div', {class: 'syncline'}, el('span', {}, pair.changedSince.join(' and ') + ' changed since then.'),
+      el('span', {class: 'note'}, 'Compare them again (↻ below), or sync them.')));
   }
   const fresh = [];
   // (When they were compared, in one short line with the Sync button: its time in its tone, fresh or old)
