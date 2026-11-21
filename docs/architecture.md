@@ -1313,6 +1313,9 @@ every link carries, then a cookie), and a watcher.
   moved, skipped; what's being done: listing, copying the new ones, checking again; files given a folder that the replica
   has already, said, with Skip them), the sticky meter of the new ones decided and the selection's bar, then the files
   in their groups (`sources.group_of()`: a phone's camera's, DCIM; WhatsApp's images; its videos; a folder's all one),
+  one shown at a time, chosen in tabs in the sticky bar (each with how many are new; in the address, #group=KEY), its
+  days drawn 15 at a time, more as the end of them is scrolled to; a poll redraws the photos only if anything about them
+  changed (`filesSignature()`), else the head and the footer alone,
   each with how many are new and the folders suggested for all of it (`Suggester.suggest_group()`: where the replica
   keeps WhatsApp's images, or videos, by their names), then by day (the day's suggestions, as before); End this import
   at the bottom. A tap selects a photo at once (its mark and the selection's row alone drawn again, the row as tall as

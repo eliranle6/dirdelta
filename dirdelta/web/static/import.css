@@ -107,3 +107,9 @@ button.link { background: none; border: 0; padding: 4px 2px; color: var(--fg); c
 .dialogfoot input { flex: 1 1 180px; min-width: 0; }
 .bar .recentdir { max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 @media (hover: hover) { .folderrow:hover { background: var(--sel); } }
+/* The groups as tabs, in the sticky bar: one shown at a time */
+.grouptabs { display: flex; gap: 6px; overflow-x: auto; }
+.grouptabs .button { white-space: nowrap; display: inline-flex; gap: 6px; align-items: baseline; }
+.grouptabs .button.on { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
+.grouptabs .tabcount { font-size: 12px; opacity: .85; }
+.note.more { text-align: center; padding: 16px; }

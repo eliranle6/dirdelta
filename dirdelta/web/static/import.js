@@ -6,7 +6,19 @@
 'use strict';
 
 const params = new URLSearchParams(location.search);
-const page = {id: params.get('id'), data: null, selected: new Set(), timer: null, target: '', showAll: false};
+const page = {id: params.get('id'), data: null, selected: new Set(), timer: null, target: '', showAll: false,
+  group: null, nrDays: 0};
+page.group = groupInAddress();
+
+// The group shown (its key, in the address: #group=whatsapp-images), one at a time: each is big on its own
+function groupInAddress() { const found = /group=([\w-]+)/.exec(location.hash); return found ? found[1] : null; }
+window.addEventListener('hashchange', () => {
+  page.group = groupInAddress();
+  page.nrDays = DAYS_AT_ONCE;
+  if (page.data) { renderImport(); window.scrollTo(0, 0); }
+});
+// How many of a group's days are drawn at first, and more each time the end of them is scrolled to
+const DAYS_AT_ONCE = 15;
 
 async function api(method, path, body) {
   const response = await fetch(path, method === 'GET' ? {} : {
@@ -220,10 +232,41 @@ async function loadImport() {
   page.data = data;
   document.getElementById('where').replaceChildren(' > ', sourceName(data.source) + ' → ' + data.destName);
   document.getElementById('labels').replaceChildren(labelChip(data.label));
-  renderImport();
+  // (The photos drawn again only if anything about them changed: a poll while files are copied changes counts alone)
+  const signature = filesSignature(data);
+  if (signature === page.signature && document.querySelector('#main .importhead') && !document.querySelector('#main button.sure')) refreshHead();
+  else renderImport();
+  page.signature = signature;
   const reading = data.reading && (data.reading.phase === 'listing' || data.reading.phase === 'copying');
   const busy = reading || (data.applying && !data.applying.done) || data.checking.busy;
   later(busy ? 2 : 10);
+}
+
+// What the photos shown depend on: each file's state, folder and whether the replica has it
+function filesSignature(data) {
+  let text = '';
+  for (const group of data.groups) for (const day of group.days) for (const file of day.files) {
+    text += file.rel + '|' + file.state + '|' + (file.target || '') + '|' + (file.have ? file.have.length : '-') + '\n';
+  }
+  return text.length + ':' + hashText(text);
+}
+
+function hashText(text) {
+  let hash = 0;
+  for (let i = 0; i < text.length; i++) hash = (hash * 31 + text.charCodeAt(i)) | 0;
+  return hash;
+}
+
+// The head, and the footer, drawn again alone (what's being done, the counts)
+function refreshHead() {
+  const files = allFiles();
+  const counts = {new: files.filter(isNew).length, there: files.filter(file => isThere(file) && !isDone(file)).length,
+    ready: files.filter(isReady).length, moved: files.filter(file => file.state === 'moved').length,
+    skipped: files.filter(file => file.state === 'skipped').length};
+  const head = document.querySelector('#main .importhead');
+  if (!head.contains(document.activeElement)) head.replaceWith(importHead(page.data, counts));
+  renderFooter(counts);
+  showSelection();
 }
 
 function plural(count, one, many) { return count === 1 ? one : many; }
@@ -272,19 +315,21 @@ function renderImport() {
   const main = document.getElementById('main');
   const focused = document.activeElement && document.activeElement.id === 'target';
   const files = allFiles();
+  const group = shownGroup();
+  const groupFiles = group ? group.days.flatMap(day => day.files) : [];
   const counts = {new: files.filter(isNew).length, there: files.filter(file => isThere(file) && !isDone(file)).length,
     ready: files.filter(isReady).length, moved: files.filter(file => file.state === 'moved').length,
     skipped: files.filter(file => file.state === 'skipped').length};
   const parts = [];
   if (!focused) {
     parts.push(importHead(data, counts));
-    parts.push(el('div', {class: 'sticky'}, sortMeter(files), selectionRow()));
+    parts.push(el('div', {class: 'sticky'}, groupTabs(), sortMeter(groupFiles), selectionRow()));
   } else {
     const sticky = document.querySelector('.sticky');
-    sticky.firstChild.replaceWith(sortMeter(files));
+    sticky.querySelector('.sortmeter').replaceWith(sortMeter(groupFiles));
     parts.push(document.querySelector('.importhead'), sticky);
   }
-  for (const group of data.groups) parts.push(...groupParts(group, data.groups.length > 1));
+  if (group) parts.push(...groupParts(group));
   if (!files.length) parts.push(el('p', {class: 'note'}, data.reading && data.reading.phase === 'listing' ? waiting('Listing the files') : 'No photos or videos.'));
   else if (!files.some(isShown)) parts.push(el('p', {class: 'note'}, counts.there ? 'Nothing new: ' + data.destName + ' has them all.' : 'All sorted.'));
   if (data.applying) parts.push(el('div', {class: 'lines'}, data.applying.lines.map(([text, color]) => el('div', {class: color ? 'c-' + color : ''}, text))));
@@ -427,30 +472,62 @@ function importHead(data, counts) {
 
 // A group (a phone's camera's, WhatsApp's images or videos; a folder's files are one): its new files' count, the folders
 // suggested for it (where the replica keeps its kind), and its days
-function groupParts(group, isTitled) {
+// The group shown: the one in the address, else the first with anything new (else the first)
+function shownGroup() {
+  const groups = page.data.groups;
+  return groups.find(group => group.key === page.group) ||
+    groups.find(group => group.days.some(day => day.files.some(isNew))) || groups[0] || null;
+}
+
+// The groups as tabs (a phone's camera's, WhatsApp's images, its videos), each with how many are new; none for one group
+function groupTabs() {
+  const groups = page.data.groups;
+  if (groups.length < 2) return '';
+  const shown = shownGroup();
+  return el('div', {class: 'grouptabs', role: 'tablist'}, groups.map(group => {
+    const nrNew = group.days.reduce((sum, day) => sum + day.files.filter(isNew).length, 0);
+    return el('a', {class: 'button' + (group === shown ? ' on' : ''), role: 'tab', 'aria-selected': String(group === shown),
+      href: '#group=' + group.key}, group.title, el('span', {class: 'tabcount'}, nrNew ? nrNew.toLocaleString() + ' new' : 'nothing new'));
+  }));
+}
+
+// The group's head (its suggestions for all of it) and its days, the first DAYS_AT_ONCE of them, more as the end of them
+// is scrolled to
+function groupParts(group) {
   const files = group.days.flatMap(day => day.files);
-  const shown = files.filter(isShown);
   const undecided = files.filter(isUndecided).map(file => file.rel);
-  const newCount = files.filter(isNew).length;
-  const parts = [];
-  if (isTitled) {
-    parts.push(el('div', {class: 'group'}, el('h2', {}, group.title, el('small', {}, newCount ? newCount.toLocaleString() + ' new' : 'nothing new')),
-      undecided.length ? el('button', {onclick: () => { undecided.forEach(rel => page.selected.add(rel)); showSelection(); }}, 'Select the ' + undecided.length) : '',
-      undecided.length ? group.suggested.map(dir => el('button', {onclick: () => assign(undecided, dir)}, 'All ' + undecided.length + ' to ' + dir)) : ''));
-  }
-  if (!shown.length) return parts;
-  for (const day of group.days) {
-    const dayFiles = day.files.filter(isShown);
-    if (!dayFiles.length) continue;
-    const open = dayFiles.filter(isUndecided).map(file => file.rel);
-    const header = el('h3', {}, day.day === 'None' ? 'No date' : day.day, el('small', {}, dayFiles.length + ' ' + plural(dayFiles.length, 'file', 'files')),
-      open.length ? el('button', {onclick: () => { open.forEach(rel => page.selected.add(rel)); showSelection(); }}, 'Select the day') : '',
-      open.length ? day.suggested.map(dir => el('button', {onclick: () => assign(open, dir)}, 'All to ' + dir)) : '',
-      open.length ? el('button', {class: 'quiet', onclick: () => chooseFolder(dir => assign(open, dir))}, 'All to…') : '');
-    parts.push(el('div', {class: 'day', 'data-day': (isTitled ? group.title + ' · ' : '') + (day.day === 'None' ? 'No date' : day.day),
-      'data-undecided': open.length}, header, el('div', {class: 'grid'}, dayFiles.map(photo))));
+  const parts = [el('div', {class: 'group'}, el('h2', {}, group.title, el('small', {}, undecided.length ? undecided.length.toLocaleString() + ' to decide' : 'all decided')),
+    undecided.length ? el('button', {onclick: () => { undecided.forEach(rel => page.selected.add(rel)); showSelection(); }}, 'Select all ' + undecided.length) : '',
+    undecided.length ? group.suggested.map(dir => el('button', {onclick: () => assign(undecided, dir)}, 'All ' + undecided.length + ' to ' + dir)) : '',
+    undecided.length ? el('button', {onclick: () => chooseFolder(dir => assign(undecided, dir))}, 'All to…') : '')];
+  const days = group.days.filter(day => day.files.some(isShown));
+  if (!page.nrDays) page.nrDays = DAYS_AT_ONCE;
+  parts.push(...days.slice(0, page.nrDays).map(dayPart));
+  if (days.length > page.nrDays) {
+    // (Scrolled to, the next days drawn after the ones there: the page isn't drawn again)
+    const more = el('div', {class: 'note more'}, 'Showing ' + page.nrDays + ' of ' + days.length + ' days…');
+    new IntersectionObserver((seen, observer) => {
+      if (!seen.some(entry => entry.isIntersecting)) return;
+      observer.disconnect();
+      const next = days.slice(page.nrDays, page.nrDays + DAYS_AT_ONCE);
+      page.nrDays += next.length;
+      more.before(...next.map(dayPart));
+      if (page.nrDays >= days.length) more.remove(); else { more.textContent = 'Showing ' + page.nrDays + ' of ' + days.length + ' days…'; observer.observe(more); }
+    }, {rootMargin: '600px'}).observe(more);
+    parts.push(more);
   }
   return parts;
+}
+
+function dayPart(day) {
+  const dayFiles = day.files.filter(isShown);
+  const open = dayFiles.filter(isUndecided).map(file => file.rel);
+  const header = el('h3', {}, day.day === 'None' ? 'No date' : day.day, el('small', {}, dayFiles.length + ' ' + plural(dayFiles.length, 'file', 'files')),
+    open.length ? el('button', {onclick: () => { open.forEach(rel => page.selected.add(rel)); showSelection(); }}, 'Select the day') : '',
+    open.length ? day.suggested.map(dir => el('button', {onclick: () => assign(open, dir)}, 'All to ' + dir)) : '',
+    open.length ? el('button', {onclick: () => chooseFolder(dir => assign(open, dir))}, 'All to…') : '');
+  return el('div', {class: 'day', 'data-day': day.day === 'None' ? 'No date' : day.day, 'data-undecided': open.length},
+    header, el('div', {class: 'grid'}, dayFiles.map(photo)));
 }
 
 // Ending the import: what it forgets, and what it doesn't touch; asked twice
