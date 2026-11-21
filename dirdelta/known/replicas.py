@@ -63,7 +63,8 @@ def _from(content):
                     _followers(content.get('followers', {})), _paths(content.get('replicas', [])),
                     _paths(content.get('inboxes', [])),
                     {str(key): dict(look) for key, look in content.get('looks', {}).items() if isinstance(look, dict)},
-                    content.get('main') or None, _pairs(content.get('pairs', [])))
+                    content.get('main') or None, _pairs(content.get('pairs', [])),
+                    {str(key): dict(record) for key, record in content.get('records', {}).items() if isinstance(record, dict)})
 
 
 def save(replicas):
@@ -105,7 +106,8 @@ def _content(replicas):
                'inboxes': replicas.added_inboxes,
                'looks': replicas.looks,
                'main': replicas.main_replica,
-               'pairs': [list(pair) for pair in replicas.extra_pairs]}
+               'pairs': [list(pair) for pair in replicas.extra_pairs],
+               'records': replicas.records}
 
 
 def _write(path, content):

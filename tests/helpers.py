@@ -7,6 +7,7 @@ from unittest import mock
 
 from dirdelta.util import downloads
 from dirdelta.drive import drivecache
+from dirdelta.drive import driveapi
 from dirdelta.hashes import hashcache
 from dirdelta.known import mounts
 from dirdelta.ui import picker
@@ -37,6 +38,9 @@ picker.updates.ERRORS_LOG = os.path.join(_hash_cache_dir, 'errors.log')
 _downloads_dir = tempfile.mkdtemp(prefix='dirdelta-test-downloads-')
 downloads.DOWNLOADS_DIR = os.path.join(_downloads_dir, 'downloads')
 atexit.register(shutil.rmtree, _downloads_dir, ignore_errors=True)
+# Nor find the real Drive login (secrets/token.json): what looks at Drive only when there's a login (a replica's own
+# record, see web/records.py) doesn't, and what does is given a fake service
+driveapi.TOKEN_PATH = os.path.join(_downloads_dir, 'no-token.json')
 
 
 def remove_drive_cache(path):

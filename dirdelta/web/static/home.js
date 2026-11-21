@@ -46,7 +46,42 @@ function statusChips(replica) {
     chip(replica.seen ? synced.tone : 'none', replica.seen ? verb + ' ' + synced.text : 'Never ' + verb.toLowerCase()),
     replica.kind === 'local' ? hashChip(replica) : '',
     replica.kind === 'drive' ? (replica.reading ? chip('warn', waiting('Reading its file list')) :
-      (listed => chip(listed.tone, 'File list read ' + listed.text))(age(replica.listedAt))) : '');
+      (listed => chip(listed.tone, 'File list read ' + listed.text))(age(replica.listedAt))) : '',
+    recordChip(replica));
+}
+
+// Whether the replica keeps its own record (its name, look and id, in its meta folder, see selfrecords.py), so any
+// computer or user sees it as it is: a chip; a disparity is said apart (recordBox())
+function recordChip(replica) {
+  const record = replica.record;
+  if (!record || record.disparity) return '';
+  return record.kept ? chip('ok', 'Its record in it', 'It keeps its name and look itself, for any computer') :
+    chip('none', 'Its record not in it yet', 'Not written to it: ' + record.why);
+}
+
+// A disparity between the replica's own record and this computer's: what each says, and how to settle it
+function recordBox(replica) {
+  const disparity = replica.record && replica.record.disparity;
+  if (!disparity) return '';
+  const said = side => (side.name ? '"' + side.name + '"' : 'no name') + (side.look && (side.look.color || side.look.icon) ?
+    ' (' + [side.look.color, side.look.icon].filter(Boolean).join(', ') + ')' : '');
+  const settle = how => async () => {
+    const answer = await api('POST', '/api/replicas/record', {path: replica.path, how});
+    if (!answer.ok && answer.error) box.append(el('div', {class: 'note c-red'}, 'Not done: ' + answer.error));
+    else load();
+  };
+  const isOther = disparity.kind === 'other';
+  const box = el('div', {class: 'recordbox'},
+    el('b', {}, isOther ? 'This may be another replica' : 'Its name differs in the replica itself'),
+    el('div', {}, isOther ?
+      'The folder here keeps another id than the one recorded for it (' + disparity.recordedId.slice(0, 8) + ' here, ' +
+        (disparity.there.id || 'none').slice(0, 8) + ' in it): this computer\'s record may be of another replica, e.g. one this disk had before.' :
+      'Here: ' + said(disparity.here) + '. In the replica: ' + said(disparity.there) +
+        (disparity.there.updated ? ', changed ' + age(disparity.there.updated.slice(0, 16).replace('T', ' ')).text : '') + ', not by this computer.'),
+    el('div', {class: 'row2'},
+      el('button', {class: 'small primary', onclick: settle('theirs')}, isOther ? 'It\'s another replica: use its ' + said(disparity.there) : 'Use the replica\'s ' + said(disparity.there)),
+      el('button', {class: 'small', onclick: settle('mine')}, isOther ? 'It\'s the same one: write this record to it' : 'Write ' + said(disparity.here) + ' to it')));
+  return box;
 }
 
 // How far a replica's hashing (a local one's) or its file list's reading (a Drive one's) is, as a bar; or ''
@@ -153,6 +188,7 @@ function replicaCard(replica) {
       ' · ' + size(replica.files.size)) : '',
     pathLine(replica.path),
     statusChips(replica),
+    recordBox(replica),
     workBar(replica),
     entry ? el('div', {class: 'entry'}, el('span', {class: 'entry-label'}, 'Last log entry: '), entry) : '',
     actions.length ? el('div', {class: 'row2 end'}, actions) : '');

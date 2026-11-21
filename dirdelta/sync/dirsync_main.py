@@ -3,6 +3,7 @@ from dirdelta.drive import drivemeta
 from dirdelta.hashes import hashcache
 from dirdelta.known import replicanames
 from dirdelta.known import replicas
+from dirdelta.known import selfrecords
 from dirdelta.known import synchistory
 from dirdelta.screens import hashes_screen
 from dirdelta.sync import replica_ops
@@ -47,6 +48,8 @@ def _run(args):
     known_replicas.record(args.dir_a_path, args.dir_b_path)
     trees = [(dirtree_a, args.dir_a_path), (dirtree_b, args.dir_b_path)]
     log_entries.note_seen(trees, known_replicas)
+    # Each replica's own record of itself (its name, look and id): written to it, or its name given elsewhere taken
+    _check_records([args.dir_a_path, args.dir_b_path], known_replicas)
     replicas.save(known_replicas)
     # The local replicas' files' hashes, which find a file by its contents: hashed in the
     # background, if the user wants, and kept in each (see hashcache.use_replica())
@@ -62,6 +65,25 @@ def _run(args):
     log_entries.offer_entries(changes, trees, known_replicas)
     note_in_history(trees, changes, known_replicas)
     return result
+
+
+def _check_records(replica_paths, known_replicas):
+    """Check each replica's own record against known_replicas' (selfrecords.check()); a disparity is said, to settle
+    on the web page's Replicas tab (its card), or a dry run's "not written yet" left as it is"""
+    lines = []
+    for path in replica_paths:
+        try:
+            found = selfrecords.check(path, known_replicas)
+        except Exception as error:
+            lines.append("%s's own record couldn't be read: %s" % (replicanames.name(path), error))
+            continue
+        if found.disparity is not None:
+            lines.append("%s: %s" % (replicanames.name(path), "this record may be of another replica (its id differs)"
+                                     if found.disparity['kind'] == selfrecords.OTHER else
+                                     "its name or look were changed in the replica, not here"))
+    if lines:
+        messages.show("A replica's own record differs", lines + ["", "Settle it on its card, on the web page's Replicas tab."],
+                      dryrun.label(), 'yellow')
 
 
 def note_in_history(trees, changes, known_replicas):

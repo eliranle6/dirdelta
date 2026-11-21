@@ -21,6 +21,7 @@ from dirdelta.trees import paths
 from dirdelta.util import dryrun
 from dirdelta.web import importing
 from dirdelta.web import naming
+from dirdelta.web import records
 from dirdelta.web.importing import checks
 
 
@@ -72,6 +73,14 @@ def _files_of(path, is_cloud):
         totals = (progress.nr_files, progress.size) if progress is not None and progress.state not in (
             hashing.NOT_SCANNED, hashing.SCANNING) else None
     return {'count': totals[0], 'size': totals[1]} if totals is not None else None
+
+
+def _is_there(path):
+    """Whether the replica's own record can be looked at: a local one's dir is there (its disk mounted), a Drive one's
+    with a Drive login"""
+    if paths.is_cloud_path(path):
+        return os.path.exists(driveapi.TOKEN_PATH)
+    return mounts.unmounted(path) is None and os.path.isdir(path)
 
 
 def _title(screen):
@@ -127,6 +136,9 @@ def _synced(comparison):
 
 def routes(session):
     def home(query, body):
+        # (Each replica there checked against the record it keeps of itself first: a name it was given elsewhere is
+        # taken, so it's the one shown)
+        found_records = records.statuses(replicas.load().replica_paths(), _is_there)
         known_replicas = replicas.load()
         all_paths = known_replicas.replica_paths()
         # (Drive's lists of the user's replicas and inboxes over a day old read again, in the background)
@@ -141,7 +153,7 @@ def routes(session):
                 # (Signed in to Drive: its login is kept; whether it's still good is known when it's used)
                 'drive': {'connected': os.path.exists(driveapi.TOKEN_PATH), 'reading': freshening.reading()},
                 'phones': [dict(sources.describe(path), name=name, path=path) for name, path in sources.phones()],
-                'replicas': [replica_info(path, known_replicas) for path in all_paths],
+                'replicas': [dict(replica_info(path, known_replicas), record=found_records.get(path)) for path in all_paths],
                 'pairs': [pair_info(a, b, names, known_replicas) for a, b in known_replicas.pairs()],
                 'main': known_replicas.main_replica,
                 'inboxes': importing.inboxes()}
@@ -185,6 +197,9 @@ def routes(session):
             # (A Drive one's icon is the cloud's, always: not one chosen)
             known_replicas.set_look(key, body.get('color') or None, None if paths.is_cloud_path(path) else body.get('icon') or None)
         replicas.save(known_replicas)
+        # (And in the replica's own record, if it can be written now: live)
+        records.forget(path)
+        records.statuses([path], _is_there)
         return {'ok': True, 'name': naming.own_name(path)}
 
     def set_main(query, body):

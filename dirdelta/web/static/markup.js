@@ -487,6 +487,7 @@ const ICONS = {
   phone: '<rect x="7" y="2.5" width="10" height="19" rx="2"/><path d="M11 18.5h2"/>',
   inbox: '<path d="M3 13l3-8h12l3 8v6H3z"/><path d="M3 13h5l1 2h6l1-2h5"/>',
   folder: '<path d="M3 6.5h6l2 2h10v10.5H3z"/>',
+  grid: '<rect x="3" y="3" width="7.5" height="7.5" rx="1"/><rect x="13.5" y="3" width="7.5" height="7.5" rx="1"/><rect x="3" y="13.5" width="7.5" height="7.5" rx="1"/><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="1"/>',
   replicas: '<rect x="3" y="8" width="13" height="12" rx="1.5"/><path d="M8 5h11.5a1.5 1.5 0 0 1 1.5 1.5V16"/>',
   sync: '<path d="M4 10a8 8 0 0 1 14-4l2 2"/><path d="M20 4v4h-4"/><path d="M20 14a8 8 0 0 1-14 4l-2-2"/><path d="M4 20v-4h4"/>',
   hash: '<path d="M9 4L7 20M17 4l-2 16M4 9h16M3 15h16"/>',
@@ -534,8 +535,8 @@ function age(when, freshDays = 2, oldDays = 30) {
 }
 
 // A small status chip: a dot of its tone (ok, warn, bad, none) and its text
-function chip(tone, text) {
-  return el('span', {class: 'chip ' + tone}, el('span', {class: 'dot'}), text);
+function chip(tone, text, title) {
+  return el('span', {class: 'chip ' + tone, title: title || ''}, el('span', {class: 'dot'}), text);
 }
 
 // A replica's name after its icon: Drive's (its 'cloud/' then left out) or a disk's

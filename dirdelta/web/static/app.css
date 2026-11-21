@@ -348,9 +348,10 @@ footer#bottom.sized { height: var(--bar-h); }
 @media (min-width: 900px) {
   .split { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
   .split.single { grid-template-columns: minmax(0, 1fr); }
-  footer#bottom.withpreview { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr); grid-template-rows: 1fr auto;
+  footer#bottom.withpreview { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr); grid-template-rows: minmax(0, 1fr) auto;
     column-gap: 14px; row-gap: 6px; align-items: start; max-height: var(--bar-h); overflow: hidden; }
-  footer#bottom.withpreview > #actions { grid-column: 1; grid-row: 1; overflow-y: auto; max-height: calc(var(--bar-h) - 50px); }
+  /* (Its buttons scroll in their row, so the status line under them is never covered) */
+  footer#bottom.withpreview > #actions { grid-column: 1; grid-row: 1; overflow-y: auto; min-height: 0; align-self: stretch; }
   footer#bottom.withpreview > #status { grid-column: 1; grid-row: 2; }
   footer#bottom.withpreview > #preview { grid-column: 2; grid-row: 1 / span 2; overflow-y: auto; max-height: calc(var(--bar-h) - 18px); }
 }
@@ -460,7 +461,9 @@ button.tiny { font-size: 12px; padding: 2px 8px; border-radius: 10px; color: var
 .barhandle:hover::after, .barhandle.dragging::after { background: var(--accent); }
 footer#bottom { padding-top: 12px; }
 /* A folder's photos side by side (renderGrid()): over the page, between the top bar and the bottom bar */
-.gridbutton { margin-left: 8px; font-size: 12px; font-weight: 600; padding: 1px 8px; border-radius: 6px; vertical-align: middle; }
+.gridbutton { margin-left: 8px; font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 6px; vertical-align: middle;
+  color: var(--accent); border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); display: inline-flex; align-items: center; gap: 4px; }
+.gridbutton .icon svg { width: 14px; height: 14px; }
 #grid { position: fixed; z-index: 2; left: 0; right: 0; top: var(--panel-top, 0px); bottom: var(--panel-bottom, 0px); background: var(--bg);
   overflow-y: auto; overscroll-behavior: contain; padding: 8px max(16px, calc((100vw - var(--page-width, 1040px)) / 2 + 16px)) 16px; }
 #grid .gridhead { position: sticky; top: -8px; z-index: 1; background: var(--bg); display: flex; align-items: center; gap: 6px 12px;
@@ -468,21 +471,46 @@ footer#bottom { padding-top: 12px; }
 #grid .gridhead .primary { margin-left: auto; }
 #grid .gridtiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
 @media (max-width: 600px) { #grid .gridtiles { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; } }
-.tile { position: relative; border-radius: 8px; overflow: hidden; background: var(--card); border: 2px solid var(--line); cursor: pointer;
+.phototile { position: relative; border-radius: 8px; overflow: hidden; background: var(--card); border: 2px solid var(--line); cursor: pointer;
   aspect-ratio: 1; display: flex; flex-direction: column; }
-.tile img { width: 100%; flex: 1; min-height: 0; object-fit: cover; display: block; background: color-mix(in srgb, var(--line) 60%, transparent); }
-.tile.marked { border-color: var(--accent); }
-.tile.sel { box-shadow: 0 0 0 2px var(--sel), 0 0 0 4px var(--accent); }
-.tile .tilename { font-size: 11px; padding: 2px 4px; display: flex; gap: 4px; align-items: center; overflow: hidden; white-space: nowrap; }
-.tile .tilename > span:last-child { overflow: hidden; text-overflow: ellipsis; }
-.tile .tilename .gbadge { min-width: 0; font-size: 10px; padding: 0 4px; }
-.tile .tilemark { position: absolute; top: 4px; left: 4px; max-width: calc(100% - 46px); display: flex; gap: 4px; align-items: center;
+.phototile img { width: 100%; flex: 1; min-height: 0; object-fit: cover; display: block; background: color-mix(in srgb, var(--line) 60%, transparent); }
+.phototile.marked { border-color: var(--accent); }
+/* (Checked, as everywhere: green; selected, blue) */
+.phototile.checked { border-color: var(--green); background: color-mix(in srgb, var(--green) 11%, var(--card)); }
+.phototile.sel { box-shadow: 0 0 0 2px var(--sel), 0 0 0 4px var(--accent); }
+.phototile .tilename { font-size: 11px; padding: 2px 4px; display: flex; gap: 4px; align-items: center; overflow: hidden; white-space: nowrap; }
+.phototile .tilename > span:last-child { overflow: hidden; text-overflow: ellipsis; }
+.phototile .tilename .gbadge { min-width: 0; font-size: 10px; padding: 0 4px; }
+.phototile .tilemark { position: absolute; top: 4px; left: 4px; max-width: calc(100% - 46px); display: flex; gap: 4px; align-items: center;
   font-weight: 800; font-size: 16px; }
-.tile .tilemark.on { background: var(--card); border-radius: 6px; padding: 1px 6px; box-shadow: 0 1px 4px rgb(0 0 0 / .3); }
-.tile .tilemark .planned { margin: 0; font-size: 10px; padding: 1px 4px; }
-.tile .tilemark.check.on { color: #fff; background: var(--green); }
-.tile .tilewhole { position: absolute; top: 4px; right: 4px; padding: 2px 7px; font-size: 14px; line-height: 1; opacity: .85; }
+.phototile .tilemark.on { background: var(--card); border-radius: 6px; padding: 1px 6px; box-shadow: 0 1px 4px rgb(0 0 0 / .3); }
+.phototile .tilemark .planned { margin: 0; font-size: 10px; padding: 1px 4px; }
+.phototile .tilemark.check.on { color: #fff; background: var(--green); }
+.phototile .tilewhole { position: absolute; top: 4px; right: 4px; padding: 2px 7px; font-size: 14px; line-height: 1; opacity: .85; }
 #gridwhole { position: fixed; z-index: 10; inset: 0; background: rgb(0 0 0 / .88); display: flex; flex-direction: column; align-items: center;
   justify-content: center; gap: 8px; cursor: zoom-out; padding: 12px; }
 #gridwhole img { max-width: 100%; max-height: calc(100% - 40px); object-fit: contain; }
 #gridwhole .caption { color: #ddd; font-size: 13px; overflow-wrap: anywhere; text-align: center; }
+/* A disparity between a replica's own record and this computer's (home.js's recordBox()) */
+.recordbox { border: 1px solid var(--yellow); background: color-mix(in srgb, var(--yellow) 10%, var(--card)); border-radius: 8px;
+  padding: 8px 10px; display: flex; flex-direction: column; gap: 6px; font-size: 14px; }
+/* Where a pointer can hover: what can be clicked says so, as it's hovered (rows, their ▸ ▾, marks and checkboxes,
+   buttons, tabs, a folder's photos, Home's tiles, the mode's label) */
+@media (hover: hover) {
+  button:not(:disabled):hover { background: color-mix(in srgb, var(--fg) 7%, var(--card)); }
+  button.primary:not(:disabled):hover { background: color-mix(in srgb, #000 12%, var(--accent)); }
+  button.danger:not(:disabled):hover { background: color-mix(in srgb, #000 12%, var(--red)); }
+  .tabs button.on:hover { background: color-mix(in srgb, #000 12%, var(--accent)); }
+  .tree .row:hover:not(.sel), .side .row:hover:not(.sel) { background: color-mix(in srgb, var(--accent) 7%, var(--card)); }
+  .tree .row.picked:hover:not(.sel) { background: color-mix(in srgb, var(--green) 18%, var(--card)); }
+  .row .twisty:not(:empty):hover { color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); border-radius: 4px; }
+  .mark:hover { background: color-mix(in srgb, var(--accent) 16%, var(--card)); border-color: var(--accent); }
+  .row input[type=checkbox]:hover { outline: 2px solid color-mix(in srgb, var(--green) 55%, transparent); outline-offset: 1px; }
+  .phototile:hover { border-color: var(--accent); }
+  .phototile:hover img { filter: brightness(1.06); }
+  a.tile:hover { background: color-mix(in srgb, var(--accent) 5%, var(--card)); }
+  .label.tappable { cursor: pointer; }
+  .label.tappable:hover { filter: brightness(1.15); }
+  .pathbutton:hover { text-decoration: underline; }
+}
+.row .twisty:not(:empty), .mark, .row input[type=checkbox] { cursor: pointer; }

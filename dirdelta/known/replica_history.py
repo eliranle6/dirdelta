@@ -23,7 +23,7 @@ normalized = paths.normalized
 class Replicas(ReplicaLists):
     def __init__(self, history=None, favorites=None, sorts=None, recent_dirs=None, known=None, compared=None,
                  labels=None, followers=None, added_replicas=None, added_inboxes=None, looks=None, main_replica=None,
-                 extra_pairs=None):
+                 extra_pairs=None, records=None):
         # Pairs (tuples of 2 normalized paths), the latest first
         self.history = list(history or [])
         # Pairs, in the order they were added
@@ -57,6 +57,9 @@ class Replicas(ReplicaLists):
         self.main_replica = main_replica
         # The pairs the user added besides the main replica's, in the order they were
         self.extra_pairs = [tuple(pair) for pair in (extra_pairs or [])]
+        # {what a label is of (label_key()): what's known of the record the replica keeps of itself (selfrecords.py):
+        # {'id': its id, 'agreed': {'name', 'look'}: what it and this file last both had}}
+        self.records = {key: dict(record) for key, record in (records or {}).items()}
 
     def set_label(self, key, label):
         """Label what key is of (None: it has no label now)"""

@@ -696,7 +696,7 @@ function renderGrid() {
     view.gridTiles = new Map();
     const tiles = photos.map(path => {
       const mark = el('span', {class: 'tilemark'});
-      const tile = el('div', {class: 'tile', title: baseName(path), onclick: () => toggleTile(path)},
+      const tile = el('div', {class: 'phototile', title: baseName(path), onclick: () => toggleTile(path)},
         el('img', {src: pictureUrl(path, GRID_SIZE), loading: 'lazy', alt: baseName(path)}),
         el('button', {class: 'tilewhole', title: 'Show it whole', onclick: event => { event.stopPropagation(); showWhole(path); }}, '⤢'),
         mark, el('div', {class: 'tilename'}, view.sides && screen.states.length ? groupBadge((view.info.get(path) || {}).g, view.sides) : '',
@@ -705,8 +705,13 @@ function renderGrid() {
       return tile;
     });
     const hint = screen.states.length ? 'Tap a photo for its next mark: ⇒, ⇐, or none' : screen.multi ? 'Tap a photo to check it' : '';
+    // All of them at once: checked or not (a files tree), or each mark (a tree of states)
+    const all = screen.states.length ? screen.states.map(state => el('button', {class: 'small c-' + state.color,
+      onclick: () => act('state', {paths: photos, name: state.name})}, 'All ' + (state.mark.trim() || '·'))) :
+      screen.multi ? [el('button', {class: 'small', onclick: () => act('pick', {paths: photos, on: true})}, '✓ Check all'),
+        el('button', {class: 'small', onclick: () => act('pick', {paths: photos, on: false})}, 'Uncheck all')] : [];
     box = el('div', {id: 'grid'}, el('div', {class: 'gridhead'},
-      el('b', {}, (dir === '.' ? screen.root : dir) + ' · ' + photos.length + ' photos'), el('span', {class: 'note'}, hint),
+      el('b', {}, (dir === '.' ? screen.root : dir) + ' · ' + photos.length + ' photos'), el('span', {class: 'note'}, hint), ...all,
       el('button', {class: 'primary', onclick: closeGrid}, 'Back to the tree')), el('div', {class: 'gridtiles'}, tiles));
     document.getElementById('main').append(box);
   }
@@ -723,6 +728,7 @@ function renderGrid() {
       mark.className = 'tilemark check' + (on ? ' on' : '');
       mark.textContent = on ? '✓' : '';
       tile.classList.toggle('marked', on);
+      tile.classList.toggle('checked', on);
     }
   }
 }
@@ -802,8 +808,8 @@ function row({path, depth, flat, guides}) {
   const name = el('span', {class: 'name' + (isDir ? ' dir' : '') + (info.c ? ' c-' + info.c : '')}, typeof text === 'string' ? segmentsSpan(text) : text);
   // A folder of photos: its grid
   const photos = isDir && !flat && screen.hasPictures ? gridPhotos(path) : null;
-  if (photos) name.append(el('button', {class: 'gridbutton', title: 'See its photos side by side, and mark them there',
-    onclick: event => { event.stopPropagation(); openGrid(path); }}, '▦ ' + photos.length + ' photos'));
+  if (photos) name.append(el('button', {class: 'gridbutton', title: 'See its photos side by side, and ' + (screen.states.length ? 'mark' : 'check') + ' them there',
+    onclick: event => { event.stopPropagation(); openGrid(path); }}, icon('grid'), 'Grid · ' + photos.length + ' photos'));
   // What's planned for it, on its right, or under its name where there's no room (a phone); the root's is the plan
   // line above the tree
   const planned = view.sides && screen.states.length && path !== '.' ?
