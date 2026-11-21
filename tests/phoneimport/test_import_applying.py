@@ -163,12 +163,10 @@ class ImportPageTest(ImportTest):
         self.assertEqual({'files': 1, 'size': 7}, state['overview']['nameOnly'])
         self.call('POST', '/api/import/read', body={'id': import_id, 'which': 'nameOnly'})
         self.wait_until(lambda: self.done(import_id))
-        # (The new one copied, and hashed, in the background as the import was shown: waited for)
-        self.wait_until(lambda: self.call('GET', '/api/import', {'id': import_id, 'files': '0'})['overview']['hashed'] == 2)
         brief = self.call('GET', '/api/import', {'id': import_id, 'files': '0'})
         self.assertNotIn('groups', brief)
-        # (The one the replica lacks was copied, and hashed, on its own as the import was shown)
-        self.assertEqual((2, 2, 1, 1), (brief['overview']['total'], brief['overview']['hashed'],
+        # (Only the one asked for is copied, and hashed: nothing is copied on its own)
+        self.assertEqual((2, 1, 1, 1), (brief['overview']['total'], brief['overview']['hashed'],
                                         brief['overview']['replicas'][0]['nameReplicaUnhashed'], brief['overview']['inNone']))
         self.assertEqual(1, brief['replicas'][0]['unhashed'])
         self.call('POST', '/api/import/assign', body={'id': import_id, 'rels': [first['rel']], 'skip': True})

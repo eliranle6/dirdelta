@@ -1333,8 +1333,9 @@ every link carries, then a cookie), and a watcher.
   its bar at any width); the selection's bar has Choose folder… (a dialog of the replica's folders, browsed or searched,
   the recent ones on top, a new one made), the folders files were last put in (the replica's recent dirs, kept with the
   file sort's: `record_dir()` as one is chosen), Skip them; a day's All to… opens the dialog too. A phone is called by
-  the name the user gave it. The new files (not in the replica by name and size) are copied, and so hashed, on their own as the
-  import is shown (`state._copy_new()`, each once), so one the replica has under another name is found by its contents.
+  the name the user gave it. Nothing is copied from the source on its own (2026-11-21: copying the new ones to hash them, as the import was
+  shown, was taken out: thousands of a phone's files filled the disk): a file is copied as it's put into the replica, or
+  hashed on asking (Compare their contents).
 - The import (`/import`, `phoneimport/`): photos and videos (not audio: `sources.is_photo()`) from a phone (gvfs's MTP mount: the source is its storage, `sources.phones()`, and what's imported its camera's, DCIM, and WhatsApp's images and videos, under Android/media or where older phones kept them, what was sent too (a photo taken in WhatsApp is only in its Sent/): `sources.PHONE_DIRS`; an import from before 2026-11-21 has its DCIM alone; the
   phone called by its model: "Pixel 8"), a Drive inbox (a sort's inbox in Drive: listed from the Drive
   cache, hashed by Drive, its thumbnails Drive's, downloaded into a local replica and then moved to

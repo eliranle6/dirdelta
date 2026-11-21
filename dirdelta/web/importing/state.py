@@ -94,31 +94,12 @@ def import_state(found, check, with_files=True):
                            'moves': found.pool.is_drive} if moving else None,
                  removing={'done': removed.is_done, 'lines': removed.lines, 'total': removed.nr_total, 'count': removed.nr_done}
                  if removed else None)
-    if haves is not None:
-        _copy_new(found, files, haves)
     if with_files:
         state['folders'] = known.dirs.get(found.dest, []) if known is not None else []
         # (The folders files were last put in, the latest first: offered at once, kept across imports and the file sort)
         state['recentDirs'] = replicas.load().dirs_of(found.dest)
         state['groups'] = _groups(found.source, files, haves, check.suggester)
     return state
-
-
-# The files each import asked to have copied (and hashed) on its own, so each is asked once
-_copied_new = {}
-
-
-def _copy_new(found, files, haves):
-    """Copy (and so hash) the import's files the replica doesn't have by name and size, in the background: they're the
-    ones to sort, which moving them needs copied anyway, and hashing them may find the replica has some by contents
-    (renamed). Each once."""
-    # (By when it was made too: an import ended and another made in the same second has its id)
-    asked = _copied_new.setdefault((found.id, found.created), set())
-    new = [relpath for relpath, info in files.items() if not haves.get(relpath) and info['state'] == store.PENDING
-           and not info.get('copied') and relpath not in asked]
-    if new:
-        asked.update(new)
-        copying.read(found.source, is_listing=False, relpaths=new)
 
 
 def _groups(source, files, haves, suggester):
