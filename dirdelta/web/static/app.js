@@ -227,12 +227,22 @@ function renderPickerFrame() {
   const parts = [];
   const sides = pairSides(screen);
   const search = screen.mode !== 'list' ? el('input', {type: 'search', id: 'search', placeholder: 'Search', autocomplete: 'off',
-    value: view.search, oninput: event => { view.search = event.target.value; renderTree(); }}) : '';
+    value: view.search, oninput: event => { view.search = event.target.value; renderTree(); },
+    onblur: event => { const head = event.target.closest('.statehead'); if (head && !event.target.value) head.classList.remove('searching'); }}) : '';
   if (sides && screen.states.length) {
     // A sync's tree of states: its head kept in sight as the tree scrolls, in two rows: the pair and what the
     // arrows do, with the plan so far; the tabs (each with its count) and the search
     parts.push(el('div', {class: 'statehead'}, el('div', {class: 'headrow'}, pairLegend(sides)),
-      el('div', {class: 'headrow'}, screen.tabs.length ? el('div', {class: 'tabs', id: 'pickertabs'}) : '', search)));
+      el('div', {class: 'headrow'}, screen.tabs.length ? el('div', {class: 'tabs', id: 'pickertabs'}) : '',
+        // (On a phone the head is one row: the search a 🔍 in it, opening a row of its own while it's wanted)
+        el('button', {class: 'searchtoggle small', title: 'Search', 'aria-label': 'Search', onclick: event => {
+          const head = event.currentTarget.closest('.statehead');
+          const open = !head.classList.contains('searching');
+          head.classList.toggle('searching', open);
+          if (open) document.getElementById('search').focus();
+        }}, '\ud83d\udd0d'),
+        search),
+      rootRow(sides)));
   } else {
     if (screen.header) parts.push(el('div', {class: 'header'}, segmentsSpan(screen.header)));
     if (screen.tabs.length) parts.push(el('div', {class: 'tabs', id: 'pickertabs'}));
@@ -562,12 +572,26 @@ function pairTitle(text, sides) {
 }
 
 // Above the tree: A on the left, B on the right, and between them what each arrow does
+// On a phone, the tree's root as the tree's first row, kept in sight in the head: its mark (all the files), then the
+// pair with their icons, the ways files go between them (as the legend's, renderPlan()); a tap on it selects the root
+function rootRow(sides) {
+  const [a, b] = sides;
+  const box = side => el('span', {class: 'pairside', style: '--side:' + side.color}, icon(side.icon), el('span', {}, side.name));
+  return el('div', {class: 'rootrow', id: 'rootrow', onclick: () => act('select', {path: ''})},
+    el('button', {class: 'mark rootmark', id: 'rootmark', title: 'All the files: the next mark', onclick: event => {
+      event.stopPropagation();
+      const next = nextState('.');
+      act('select', {path: ''}).then(() => act('state', {paths: ['.'], name: next}));
+    }}),
+    box(a), el('span', {class: 'pairarrows'}), box(b));
+}
+
 function pairLegend(sides) {
   const [a, b] = sides;
   const box = side => el('span', {class: 'pairside', style: '--side:' + side.color}, icon(side.icon), el('span', {}, side.name));
   return el('div', {class: 'pairlegend', title: '⇒ changes ' + b.name + ' to match ' + a.name + '; ⇐ changes ' + a.name + ' to match ' + b.name},
     // (Between the two, the ways files go: ⇒ into B, ⇐ into A, each with how many are marked so, renderPlan())
-    box(a), el('span', {class: 'pairarrows', id: 'pairarrows'}), box(b),
+    box(a), el('span', {class: 'pairarrows'}), box(b),
     el('span', {class: 'pairways'}, el('b', {}, '⇒'), ' changes ', sideName(b),
       el('span', {class: 'tip'}, ' · '), el('b', {}, '⇐'), ' changes ', sideName(a)));
 }
@@ -644,8 +668,8 @@ function plannedUnder(path, sides) {
 // The plan so far, in the arrows between the pair: how many files are marked each way, and all of it in words as
 // their tooltip ("Copy 2 files to usb disk · Remove 1 file from work laptop"); a row of its own would take a line
 function renderPlan() {
-  const arrows = document.getElementById('pairarrows');
-  if (!arrows || !view.sides) return;
+  const all = document.querySelectorAll('.pairarrows');
+  if (!all.length || !view.sides) return;
   const marked = name => view.items.filter(path => { const info = view.info.get(path); return info.t === 'f' && info.st === name; }).length;
   const counts = plannedCounts('.');
   const plan = counts.size ? plannedParts(counts, view.sides, true).map(part => part.textContent.replace(/\s+/g, ' ').trim()).join(' · ') :
@@ -654,8 +678,17 @@ function renderPlan() {
     const count = marked(name);
     return el('span', {class: 'way' + (count ? ' on' : '')}, mark, count ? el('small', {}, String(count)) : '');
   };
-  arrows.title = 'Plan: ' + plan;
-  arrows.replaceChildren(way('⇒', 'to-b'), way('⇐', 'to-a'));
+  for (const arrows of all) {
+    arrows.title = 'Plan: ' + plan;
+    arrows.replaceChildren(way('⇒', 'to-b'), way('⇐', 'to-a'));
+  }
+  const rootMark = document.getElementById('rootmark');
+  if (rootMark) {
+    const {mark, color} = stateMark('.');
+    rootMark.className = 'mark rootmark c-' + color;
+    rootMark.textContent = mark.trim() || '·';
+    document.getElementById('rootrow').classList.toggle('sel', view.selected === '');
+  }
 }
 
 // A folder's photos side by side (a picker whose files have pictures, see PickerScreen.picture()): a folder holding
@@ -1130,8 +1163,10 @@ function renderPickerActions() {
 
 // The bottom bar's ︾ ︽ (a phone's): at the end of the main action's row, taking no row of their own; where there's
 // none (a messages screen), on the bar's top
+let stepsNode = null;
 function placeSteps() {
-  const steps = document.querySelector('.barsteps');
+  // (Kept by reference: a redraw of the actions drops the row they're in, and them with it)
+  const steps = stepsNode;
   if (!steps) return;
   const main = document.querySelector('#actions > .actsec.main');
   if (NARROW.matches && main) main.append(steps);
@@ -1447,7 +1482,7 @@ function setBarLevel(level) {
 // ︾ ︽ off where there's no step that changes anything their way
 function updateSteps() {
   const bottom = document.getElementById('bottom'), level = Number(bottom.dataset.level), levels = barLevels();
-  for (const button of document.querySelectorAll('.barsteps button')) {
+  for (const button of stepsNode ? stepsNode.querySelectorAll('button') : []) {
     button.disabled = button.dataset.step === 'up' ? !levels.some(one => one > level) : !levels.some(one => one < level);
   }
   document.body.classList.toggle('bargone', level === BAR_GONE);
@@ -1461,7 +1496,7 @@ function barStep(up) {
 
 function barSteps() {
   const bottom = document.getElementById('bottom');
-  bottom.prepend(el('div', {class: 'barsteps'},
+  bottom.prepend(stepsNode = el('div', {class: 'barsteps'},
     el('button', {class: 'small', 'data-step': 'down', title: 'Show less of this bar', 'aria-label': 'Show less of this bar', onclick: () => barStep(false)}, '\ufe3e'),
     el('button', {class: 'small', 'data-step': 'up', title: 'Show more of this bar', 'aria-label': 'Show more of this bar', onclick: () => barStep(true)}, '\ufe3d')));
   // (The bar gone: this alone, floating in the corner, brings it back)
