@@ -442,7 +442,8 @@ button.tiny { font-size: 12px; padding: 2px 8px; border-radius: 10px; color: var
 .planned { flex: 0 1 auto; margin-left: auto; font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 6px;
   background: color-mix(in srgb, currentColor 10%, transparent); overflow-wrap: anywhere; }
 .planned.dirplan { color: var(--muted); font-weight: 500; }
-@media (max-width: 600px) { .pairways { order: 3; flex-basis: 100%; } }
+/* (On a phone, no room for it: what the arrows do is in the legend's tooltip, the buttons' names and ?) */
+@media (max-width: 600px) { .pairways { display: none; } }
 /* The head of a sync's tree of states, kept in sight under the top bar as the tree scrolls */
 .statehead { position: sticky; top: var(--panel-top, 0px); z-index: 2; background: var(--bg); display: flex; flex-direction: column;
   gap: 6px; padding: 4px 0 6px; margin-top: -4px; }
