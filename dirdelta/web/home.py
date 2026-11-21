@@ -22,6 +22,7 @@ from dirdelta.trees import paths
 from dirdelta.util import dryrun
 from dirdelta.web import importing
 from dirdelta.web import naming
+from dirdelta.web import comparing
 from dirdelta.web import records
 from dirdelta.web.importing import checks
 
@@ -159,6 +160,8 @@ def routes(session):
                 'phones': [dict(sources.describe(path), name=name, path=path) for name, path in sources.phones()],
                 'replicas': [dict(replica_info(path, known_replicas), record=found_records.get(path)) for path in all_paths],
                 'pairs': [pair_info(a, b, names, known_replicas) for a, b in known_replicas.pairs()],
+                # (The pairs being compared again, or that failed to be: Compare again, comparing.py)
+                'comparing': comparing.state(users.current()),
                 'main': known_replicas.main_replica,
                 'inboxes': importing.inboxes()}
 
@@ -232,6 +235,17 @@ def routes(session):
             return {'ok': True}
         return change
 
+    def compare_pairs(query, body):
+        """Compare a pair again (body['a'], body['b']), or all the user's (body['all']), in the background: comparing.py"""
+        known_replicas = replicas.load()
+        pairs = known_replicas.pairs()
+        if not body.get('all'):
+            pairs = [pair for pair in pairs if set(pair) == {body.get('a'), body.get('b')}]
+            if not pairs:
+                return {'ok': False, 'error': "Not one of your pairs."}
+        comparing.start(users.current(), pairs)
+        return {'ok': True}
+
     def set_mode(query, body):
         """Live (body['live']) or a dry run, from the top bar's label: any time but while files are being
         changed (a progress screen): a run's screens then show the mode as it is now (api.with_mode_now()),
@@ -264,4 +278,4 @@ def routes(session):
             ('GET', '/api/running'): running, ('GET', '/api/users'): user_list, ('POST', '/api/users/add'): add_user,
             ('POST', '/api/users/email'): set_email, ('POST', '/api/mode'): set_mode, ('POST', '/api/replicas/name'): name_replica,
             ('POST', '/api/replicas/main'): set_main, ('POST', '/api/pairs/add'): change_pair(True),
-            ('POST', '/api/pairs/remove'): change_pair(False)}
+            ('POST', '/api/pairs/remove'): change_pair(False), ('POST', '/api/pairs/compare'): compare_pairs}

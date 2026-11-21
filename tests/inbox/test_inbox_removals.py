@@ -61,10 +61,10 @@ class RemovalsTest(InboxSortTest):
         self.show.assert_not_called()
         real_unlink = os.unlink
 
-        def unlink(path):
+        def unlink(path, **kwargs):
             if path.endswith('b.jpg'):
                 raise PermissionError('read-only')
-            real_unlink(path)
+            real_unlink(path, **kwargs)
         with mock.patch('dirdelta.trees.localdiskdirtree.fs.os.unlink', side_effect=unlink):
             self.sort([['b.jpg', 'trip/c.jpg'], None], ['Remove the 2 files from', YES, SURE])
         title, lines = self.show.call_args.args[:2]

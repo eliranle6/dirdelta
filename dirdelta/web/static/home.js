@@ -219,7 +219,18 @@ function isSyncing(pair, running, user) {
     ((what.a === pair.a && what.b === pair.b) || (what.a === pair.b && what.b === pair.a));
 }
 
-function pairRow(pair, running, user) {
+// A pair being compared again (comparing.py): what it's doing, or the error it stopped at; or undefined
+function comparingOf(pair, comparing) {
+  return (comparing || []).find(one => (one.a === pair.a && one.b === pair.b) || (one.a === pair.b && one.b === pair.a));
+}
+
+// Compare a pair again, or (pair null) all of them, in the background; the page then shows how it goes
+async function compareAgain(pair) {
+  await api('POST', '/api/pairs/compare', pair ? {a: pair.a, b: pair.b} : {all: true});
+  load();
+}
+
+function pairRow(pair, running, user, comparing) {
   const synced = pair.synced;
   const syncing = isSyncing(pair, running, user);
   const compared = age(pair.state.when);
@@ -230,7 +241,7 @@ function pairRow(pair, running, user) {
   else if (stale) {
     parts.push(el('span', {class: 'statename c-grey'}, 'Not known any more'),
       el('div', {class: 'syncline'}, el('span', {}, pair.changedSince.join(' and ') + ' changed since they were compared.'),
-        el('span', {class: 'note'}, 'Sync them to compare them again.')));
+        el('span', {class: 'note'}, 'Compare them again (↻ below), or sync them.')));
   } else {
     const {onlyA, onlyB, totalA, share} = synced;
     const either = totalA === null ? null : totalA + onlyB;
@@ -260,6 +271,13 @@ function pairRow(pair, running, user) {
     running ? el('a', {class: 'button small', href: '/run', title: 'One runs at a time: finish or leave it to sync these'},
       'Another sync is running: open it') :
     el('button', {class: 'small', onclick: () => start({kind: 'pair', a: pair.a, b: pair.b})}, 'Sync');
+  // (Compare again: both file lists read anew, the status then as they are now; while it goes on, what it's doing)
+  const again = comparingOf(pair, comparing);
+  if (again && again.doing) fresh.push(el('span', {class: 'note comparing'}, waiting(again.doing === 'waiting' ? 'Waiting to compare' :
+    again.doing === 'comparing' ? 'Comparing' : 'Reading ' + (again.doing.slice(8) === pair.a ? pair.nameA : pair.nameB))));
+  else fresh.push(el('button', {class: 'small quiet', title: 'Read both file lists again and compare them (nothing is changed)',
+    onclick: () => compareAgain(pair)}, '↻ Compare again'));
+  if (again && again.error) parts.push(el('div', {class: 'note c-red'}, "Couldn't compare again: " + again.error));
   return el('div', {class: 'item pair' + (syncing ? ' syncing' : '')}, el('span', {class: 'syncmark c-' + (stale ? 'grey' : pair.state.color)}, stale ? '?' : pair.state.mark),
     el('span', {class: 'what'}, el('b', {class: 'pairline'}, pair.favorite ? '★' : '', replicaLabel(pair.a, pair.nameA), '⇄',
       replicaLabel(pair.b, pair.nameB)), syncing ? el('div', {class: 'insync'}, waiting('Sync in progress')) : '',
@@ -475,7 +493,7 @@ function replicasPage(data) {
   const there = data.replicas.filter(replica => replica.there).length;
   const apart = data.pairs.filter(pair => ['a ahead', 'b ahead', 'branched'].includes(pair.state.kind)).length;
   const unknown = data.pairs.filter(pair => pair.state.kind === 'unknown').length;
-  const pairs = data.pairs.length ? el('div', {class: 'list'}, data.pairs.map(pair => pairRow(pair, data.running, data.user))) :
+  const pairs = data.pairs.length ? el('div', {class: 'list'}, data.pairs.map(pair => pairRow(pair, data.running, data.user, data.comparing))) :
     el('p', {class: 'note'}, data.replicas.length ? 'Add another replica: any two are a pair to sync.' : 'Add two replicas: any two are a pair to sync.');
   const other = el('div', {class: 'list'}, el('a', {class: 'item', href: '#', onclick: event => { event.preventDefault(); start({}); }},
     el('span', {class: 'what'}, el('b', {}, 'Sync two other folders once…'), el('span', {class: 'note'}, 'Any two folders, chosen here')),
@@ -488,7 +506,10 @@ function replicasPage(data) {
   return [...kindParts([
       {jump: kindJump('pairs', 'sync', 'Sync status', !data.pairs.length ? 'No pair yet' : apart ? apart + ' of ' + data.pairs.length + ' pairs out of step' : unknown ? unknown + ' of ' + data.pairs.length + ' pairs not compared yet' : 'All in step',
         !data.pairs.length || data.pairs.some(pair => pair.state.kind === 'branched') ? 'bad' : apart || unknown ? 'warn' : 'ok'),
-       block: kindBlock('pairs', 'sync', 'Sync status', '', mainNote(data), pairs, pairAdder(data), other)},
+       block: kindBlock('pairs', 'sync', 'Sync status', '', mainNote(data),
+         data.pairs.length > 1 ? el('div', {class: 'compareall'}, el('button', {class: 'small quiet', onclick: () => compareAgain(null),
+           title: 'Read every pair\'s file lists again and compare them (nothing is changed)'}, '↻ Compare all again')) : '',
+         pairs, pairAdder(data), other)},
       {jump: kindJump('replicas', 'replicas', 'Replicas', there + ' out of ' + data.replicas.length + ' available',
         !data.replicas.length || !there ? 'bad' : there < data.replicas.length ? 'warn' : 'ok'),
        block: kindBlock('replicas', 'replicas', 'Replicas', '', ...cards, folderAdder('replica'))}],
@@ -525,7 +546,8 @@ async function load() {
   // (A path shown whole stays so across the redraws)
   document.querySelectorAll('.pathbutton').forEach(path => { if (open.includes(path.title)) path.textContent = path.title; });
   if (PAGE === 'replicas' && layout() === 'blocks') scrollToPart();
-  const busy = data.replicas.some(replica => replica.hashing && replica.hashing.started && replica.hashing.state !== 'done');
+  const busy = data.replicas.some(replica => replica.hashing && replica.hashing.started && replica.hashing.state !== 'done') ||
+    (data.comparing || []).some(one => one.doing);
   timer = setTimeout(load, busy ? 2000 : 8000);
 }
 

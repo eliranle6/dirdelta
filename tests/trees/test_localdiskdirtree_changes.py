@@ -4,6 +4,7 @@ import unittest
 from unittest import mock
 
 from dirdelta.trees import localdiskdirtree
+from dirdelta.trees.localdiskdirtree import whole_dirs
 from localdiskdirtree_support import LocalDiskDirTreeTest
 
 
@@ -86,6 +87,19 @@ class ChangesTest(LocalDiskDirTreeTest):
         self.assertFalse(os.path.exists(os.path.join(self.src_root, 'a.txt')))
         self.assertIn('for good (its drive has no trash)', print_line.call_args_list[-1].args[0])
 
+    def test_a_dir_with_anything_else_in_it_isnt_removed_as_one(self):
+        # (A file the comparison didn't list, e.g. hidden or junk; a link; a dir kept, as meta/ is)
+        with mock.patch('dirdelta.util.dryrun.DRYRUN', False):
+            self._remove(['a/1.txt', 'b/2.txt', 'k/3.txt'], ['a/1.txt', 'a/.hidden', 'b/2.txt', 'k/3.txt'])
+        self.assertEqual(['a', 'a/.hidden'], self._left())
+        self.assertIn('Removing dir b/ and its 1 file (1 out of 3)', self.lines)
+        os.makedirs(os.path.join(self.src_root, 'c'))
+        os.symlink(self.src_root, os.path.join(self.src_root, 'c', 'link'))
+        with open(os.path.join(self.src_root, 'c', '4.txt'), 'w') as f:
+            f.write('4')
+        self.assertEqual([], whole_dirs.whole_dirs(self.src_root, ['c/4.txt']))
+        self.assertEqual([], whole_dirs.whole_dirs(self.src_root, ['a/.hidden'], kept=lambda dirpath: dirpath == 'a'))
+
     def test_removing_files_removes_the_dirs_left_empty(self):
         with mock.patch('dirdelta.util.dryrun.DRYRUN', False):
             tree = self._remove(['a/b/1.txt', 'a/b/c/2.txt', 'a/d/3.txt', 'e/4.txt'],
@@ -93,7 +107,9 @@ class ChangesTest(LocalDiskDirTreeTest):
         # f was empty already, and wasn't removed from
         self.assertEqual(self._left(), ['e', 'e/5.txt', 'f'])
         self.assertNotIn('a', tree)
-        self.assertIn('Removed 4 dirs left empty', self.lines)
+        # (a/, all of whose files are removed, as one; e/, which keeps a file, a file at a time)
+        self.assertIn('Removing dir a/ and its 3 files (3 out of 4)', self.lines)
+        self.assertIn('Removing e/4.txt (4 out of 4)', self.lines)
 
     def test_a_dir_with_anything_left_in_it_is_kept(self):
         with mock.patch('dirdelta.util.dryrun.DRYRUN', False):

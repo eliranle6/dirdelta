@@ -95,3 +95,7 @@ button.item { border: 0; border-radius: 0; background: none; }
   .tile.ok > .tilebig .icon { color: var(--green); } .tile.warn > .tilebig .icon { color: var(--yellow); } .tile.orange > .tilebig .icon { color: var(--orange); } .tile.bad > .tilebig .icon { color: var(--red); }
   .tile .tile-title .icon { display: none; }
 }
+/* Compare again: on a pair's last line, before its Sync button; Compare all again, above the pairs, on the right */
+.item.pair .pairfoot { flex-wrap: wrap; gap: 6px 8px; }
+.item.pair .comparing { color: var(--accent); }
+.compareall { display: flex; justify-content: flex-end; margin: 0 0 6px; }

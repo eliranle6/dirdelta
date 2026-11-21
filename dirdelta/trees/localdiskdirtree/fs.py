@@ -11,11 +11,14 @@ PART_PREFIX = '.dirdelta-part.'
 
 
 def trash(path):
-    """Move the file at path to the desktop's trash (gio trash), where it can be restored from, if its
-    drive has one (see has_trash()); else remove it for good. Returns whether it went to the trash.
+    """Move the file (or dir, with all in it) at path to the desktop's trash (gio trash), where it can be restored
+    from, if its drive has one (see has_trash()); else remove it for good. Returns whether it went to the trash.
     Raises OSError if it can't."""
     if not has_trash(path):
-        os.unlink(path)
+        if os.path.isdir(path) and not os.path.islink(path):
+            shutil.rmtree(path)
+        else:
+            os.unlink(path)
         return False
     result = subprocess.run(['gio', 'trash', path], stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                             universal_newlines=True)

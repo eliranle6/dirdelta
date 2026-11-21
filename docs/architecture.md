@@ -335,6 +335,22 @@ menu chose is then checked to be there (`choose_replicas.are_there()`). No curse
 missing or failing), `DriveCacheError`, `replicas.ReplicasError` or
 `mounts.MountsError` exits with its message.
 
+### Compare again: `web/comparing.py`
+
+The Replicas page's ↻ Compare again (a pair's) and Compare all again read both sides' file lists anew in the
+background (a local one's from its disk, a Drive one's from Drive, `refresh_cache()`), find what each lacks by path
+(`replica_ops.find_missing()`, as a sync's menu does) and note it as the pair's comparison (`note_compared()`, with
+each side's total), so its status is as they are now without opening a sync. One pair at a time; `/api/home`'s
+`comparing` says what each is doing (reading which side, comparing) or the error it stopped at (a disk not mounted,
+Drive not signed in).
+
+### Removing whole local dirs: `trees/localdiskdirtree/whole_dirs.py`
+
+Removing files from a local replica removes each topmost dir all that's in which is being removed as one (one move to
+the trash, restored as one), as a Drive replica's whole folders already were (`clouddirtree/whole_folders.py`). Which
+dirs are whole is read from the disk itself as they're removed, so a file the comparison left out (junk, a hidden
+file), a link, an unreadable dir or a kept dir (`meta/`) keeps its dir, whose picked files then go one by one.
+
 ### Two disks of one model: `known/mounts/volumes.py`, `known/located.py`
 
 Two disks of one model have one label ("My Passport"), so the desktop mounts each at the same mount point: a path

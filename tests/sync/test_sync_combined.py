@@ -127,8 +127,8 @@ class DoingTest(ReplicasTest):
         self.assertEqual(self.read(self.path_a, 'both.txt'), "B's longer version")
         self.assertFalse(os.path.exists(os.path.join(self.path_a, 'gone.txt')))
         self.assertFalse(os.path.exists(os.path.join(self.path_b, 'old/b2.txt')))
-        # Removed and replaced files go to the trash
-        self.assertEqual(sorted(os.listdir(self.trash)), ['b2.txt', 'both.txt', 'gone.txt'])
+        # Removed and replaced files go to the trash (a dir all of whose files are removed: as one)
+        self.assertEqual(sorted(os.listdir(self.trash)), ['both.txt', 'gone.txt', 'old'])
         self.assertEqual(changes.summary(self.path_b), "copied 1 file from %s; removed 1 file" % (self.path_a,))
 
     def test_a_dry_run_changes_nothing(self):

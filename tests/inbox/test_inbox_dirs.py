@@ -124,7 +124,9 @@ class DirsTest(InboxSortTest):
                       ["Remove the dir trip/ (1 file), as Claude says: all copies of photos/", YES, SURE])
         confirm = self.pick_option.call_args_list[1].kwargs['header']
         self.assertIn("  trip/: all copies of photos/", confirm)
-        self.assertEqual(os.listdir(self.trash), ['c.jpg'])
+        # (The dir, all of whose files are removed, as one)
+        self.assertEqual(os.listdir(self.trash), ['trip'])
+        self.assertEqual(os.listdir(os.path.join(self.trash, 'trip')), ['c.jpg'])
 
     def test_spread(self):
         self.assertEqual(formatting.spread([1, 2, 3], 5), [1, 2, 3])
