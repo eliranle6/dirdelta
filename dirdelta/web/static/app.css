@@ -20,7 +20,10 @@
   }
 }
 * { box-sizing: border-box; }
-html, body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.4 system-ui, sans-serif; }
+/* The fonts each device has built in, the nicest first: Android's Roboto, GNOME's Cantarell, else the device's own; and a
+   monospace both have, Noto Sans Mono (nothing downloaded) */
+:root { --sans: Roboto, Cantarell, system-ui, sans-serif; --mono: 'Noto Sans Mono', ui-monospace, monospace; }
+html, body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.4 var(--sans); }
 body { display: flex; flex-direction: column; min-height: 100vh; }
 header#top { position: sticky; top: 0; z-index: 3; background: var(--bg); border-bottom: 1px solid var(--line);
   padding: 8px 16px; display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; }
@@ -75,18 +78,18 @@ input[type=search], input[type=text] { font: inherit; width: 100%; padding: 8px 
   border: 1px solid var(--line); }
 .more { padding: 10px; color: var(--muted); text-align: center; }
 .preview { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
-.preview pre { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font: 13px/1.45 ui-monospace, monospace; }
+.preview pre { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font: 13px/1.45 var(--mono); }
 .preview canvas { max-width: 100%; height: auto; margin-top: 8px; border-radius: 6px; image-rendering: auto; }
 .preview .highlight { display: block; font-weight: 700; color: #fff; padding: 1px 6px; border-radius: 4px; }
 .side { background: var(--card); border: 1px dashed var(--line); border-radius: 10px; }
 .side h3 { margin: 0; padding: 8px 12px; font-size: 14px; border-bottom: 1px solid var(--line); }
 .lines { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
-.lines div { white-space: pre-wrap; overflow-wrap: anywhere; font: 13px/1.5 ui-monospace, monospace; }
+.lines div { white-space: pre-wrap; overflow-wrap: anywhere; font: 13px/1.5 var(--mono); }
 .home { display: flex; flex-direction: column; gap: 12px; max-width: 640px; }
 .home .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 14px; }
 .home h2 { margin: 0 0 6px; font-size: 17px; }
 .home p { margin: 0 0 10px; color: var(--muted); }
-.help { white-space: pre-wrap; font: 13px/1.5 ui-monospace, monospace; }
+.help { white-space: pre-wrap; font: 13px/1.5 var(--mono); }
 @media (min-width: 900px) {
   .split { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 12px; align-items: start; }
   .split .preview, .split .side { position: sticky; top: 64px; }
@@ -334,7 +337,7 @@ footer#bottom.sized { height: var(--bar-h); }
   display: flex; flex-direction: column; gap: 10px; }
 .panelwrap .sheet .split { display: block; }
 /* A diff's views, in its title: a row of buttons, the one shown on */
-.difftoggle { display: inline-flex; flex-wrap: wrap; gap: 4px; align-items: center; font-family: system-ui, sans-serif; white-space: normal; }
+.difftoggle { display: inline-flex; flex-wrap: wrap; gap: 4px; align-items: center; font-family: var(--sans); white-space: normal; }
 .difftoggle b { margin-right: 4px; }
 .difftoggle button { font-size: 12px; padding: 2px 9px; border-radius: 12px; }
 .difftoggle button.on { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); }
@@ -356,7 +359,7 @@ footer#bottom.sized { height: var(--bar-h); }
   footer#bottom.withpreview > #preview { grid-column: 2; grid-row: 1 / span 2; overflow-y: auto; max-height: calc(var(--bar-h) - 18px); }
 }
 /* A files' menu's option's key, on its right */
-.option kbd { margin-left: auto; flex: none; font: 600 12px ui-monospace, monospace; color: var(--muted); border: 1px solid var(--line);
+.option kbd { margin-left: auto; flex: none; font: 600 12px var(--mono); color: var(--muted); border: 1px solid var(--line);
   border-bottom-width: 2px; border-radius: 5px; padding: 1px 6px; background: var(--bg); align-self: center; }
 .option:not(.withicon):has(kbd) { display: flex; align-items: flex-start; gap: 10px; }
 /* The main action and its ▾, joined: ▾ shows the menu's actions as buttons under them */
@@ -397,7 +400,7 @@ button.tiny { font-size: 12px; padding: 2px 8px; border-radius: 10px; color: var
 .mergehead { display: flex; flex-direction: column; gap: 8px; }
 .side-a { color: var(--red); font-weight: 600; } .side-b { color: var(--green); font-weight: 600; }
 .mergeblocks { display: flex; flex-direction: column; gap: 6px; }
-.mergesame, .mergeside pre, #mergeresult { margin: 0; font: 13px/1.45 ui-monospace, monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
+.mergesame, .mergeside pre, #mergeresult { margin: 0; font: 13px/1.45 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; }
 .mergesame { color: var(--muted); padding: 4px 10px; border-left: 3px solid var(--line); }
 .mergesame.folded { cursor: pointer; }
 .mergediff { border: 1px solid var(--line); border-radius: 10px; background: var(--card); overflow: hidden; }
@@ -544,3 +547,39 @@ footer#bottom { padding-top: 12px; }
 .pairarrows .way { display: inline-flex; align-items: baseline; gap: 2px; }
 .pairarrows .way.on { color: var(--accent); font-weight: 800; }
 .pairarrows small { font-size: 11px; }
+/* The selection's way, in one row above a sync's tree: what's selected (cut short), then its three buttons */
+.markrow { display: flex; align-items: center; gap: 6px; flex-wrap: nowrap; min-width: 0; }
+.markrow .markon { flex: 0 100 auto; min-width: 1.5em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: 13px; font-weight: 600; color: var(--muted); }
+.markrow button { flex: 0 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 4px 8px; font-size: 13px; }
+.markrow button.toward { box-shadow: inset 4px 0 0 var(--rc); background: color-mix(in srgb, var(--rc) 10%, var(--card)); font-weight: 600; }
+/* (On a phone the pair's boxes a little smaller: the pair and its arrows in one row on a 360px screen) */
+@media (max-width: 600px) { .pairside { padding: 2px 8px; font-size: 14px; gap: 4px; } .pairlegend { gap: 6px 8px; } }
+/* The status line's parts (a replica's hashing each, see hashes_screen.status_parts()): each kept on one line, the line
+   broken only between them; one wider than the screen cut short */
+#status > span { display: flex; flex-wrap: wrap; column-gap: 12px; row-gap: 2px; }
+#status .seg { white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+#status .seg + .seg { margin-left: 0; }
+/* On a phone (its text may be big): the pair and its arrows in one row, a long name cut short rather than the row
+   broken; the ways' row without what's selected (the bottom bar says it) and with Leave as · alone */
+@media (max-width: 600px) {
+  .pairlegend { flex-wrap: nowrap; min-width: 0; }
+  .pairlegend .pairside { flex: 0 1 auto; min-width: 0; }
+  .pairlegend .pairside > span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+  .pairlegend .pairarrows { flex: none; }
+  .markrow .markon, .markrow .leaveword { display: none; }
+  .markrow button { flex: 1 1 0; }
+  .markrow button:first-of-type { flex: none; }
+}
+/* A sync's tree's tabs as a dropdown beside the search, on its row */
+.tabs.tabselect { flex: 0 1 auto; overflow: visible; }
+.tabselect label { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; color: var(--muted); white-space: nowrap; }
+.tabselect select { font: inherit; color: var(--fg); background: var(--card); border: 1px solid var(--line); border-radius: 8px;
+  padding: 7px 8px; max-width: 52vw; }
+.statehead .headrow:has(.tabselect) { flex-wrap: nowrap; }
+/* (On a phone the dropdown and the search share the row: the search gives way) */
+@media (max-width: 600px) {
+  .statehead .headrow:has(.tabselect) > #search { min-width: 0; flex: 1 1 0; }
+  .tabselect select { max-width: 46vw; }
+}
+.actsec > .markrow { flex: 1 1 100%; }

@@ -231,7 +231,7 @@ function renderPickerFrame() {
   if (sides && screen.states.length) {
     // A sync's tree of states: its head kept in sight as the tree scrolls, in two rows: the pair and what the
     // arrows do, with the plan so far; the tabs (each with its count) and the search
-    parts.push(el('div', {class: 'statehead'}, el('div', {class: 'headrow'}, pairLegend(sides), el('div', {class: 'pairplan', id: 'pairplan'})),
+    parts.push(el('div', {class: 'statehead'}, el('div', {class: 'headrow'}, pairLegend(sides)),
       el('div', {class: 'headrow'}, screen.tabs.length ? el('div', {class: 'tabs', id: 'pickertabs'}) : '', search)));
   } else {
     if (screen.header) parts.push(el('div', {class: 'header'}, segmentsSpan(screen.header)));
@@ -335,7 +335,7 @@ function colorNames(root) {
   const names = view.sides.filter(side => side.name).sort((one, other) => other.name.length - one.name.length);
   if (!names.length) return;
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {acceptNode: node =>
-    node.parentElement && !node.parentElement.closest('.pairname, input, textarea, select, option, .pairside, b') &&
+    node.parentElement && !node.parentElement.closest('.pairname, input, textarea, select, option, .pairside, b, .markrow') &&
     names.some(side => node.data.includes(side.name)) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT});
   const found = [];
   while (walker.nextNode()) found.push(walker.currentNode);
@@ -362,6 +362,15 @@ function renderTabs() {
   if (!tabs) return;
   // (Each with how many files it shows)
   const count = tab => view.items.filter(path => { const info = view.info.get(path); return info.t === 'f' && (!tab.groups.length || tab.groups.includes(info.g)); }).length;
+  // (A sync's tree: a dropdown beside the search, "Show: All (13)", rather than a row of tabs of its own)
+  if (view.sides && view.screen.states.length) {
+    const pick = el('select', {'aria-label': 'Which files to show', onchange: event => { view.tab = +event.target.value; renderPickerParts(); }},
+      view.screen.tabs.map((tab, i) => el('option', {value: String(i)}, tab.title + ' (' + count(tab) + ')')));
+    pick.value = String(view.tab);
+    tabs.classList.add('tabselect');
+    tabs.replaceChildren(el('label', {}, 'Show ', pick));
+    return;
+  }
   tabs.replaceChildren(...view.screen.tabs.map((tab, i) => el('button', {class: i === view.tab ? 'on' : '',
     onclick: () => { view.tab = i; renderPickerParts(); }}, tab.title, el('span', {class: 'tabcount'}, ' ' + count(tab)))));
 }
@@ -571,7 +580,11 @@ function groupBadge(group, sides) {
 
 // What a file's arrow will do (see plan.py's plan_of()): ⇒ changes B, ⇐ changes A: a copy into it, a removal from
 // it, its version replaced, or its file moved to the other's path. {kind, color, parts} or null (left as is)
-const PLANNED = {copy: ['Copy to ', 'green'], remove: ['Remove from ', 'red'], replace: ['Replace in ', 'yellow'], move: ['Move in ', 'cyan']};
+const PLANNED_WORDS = {copy: ['Copy to ', 'green'], remove: ['Remove from ', 'red'], replace: ['Replace in ', 'yellow'], move: ['Move in ', 'cyan']};
+// (On a phone, the commands' short names: cp, rm, mv; a replacement's as it is)
+const PLANNED_SHORT = {copy: ['cp to ', 'green'], remove: ['rm from ', 'red'], replace: ['Replace in ', 'yellow'], move: ['mv in ', 'cyan']};
+const NARROW = window.matchMedia('(max-width: 600px)');
+const PLANNED = new Proxy({}, {get: (target, kind) => (NARROW.matches ? PLANNED_SHORT : PLANNED_WORDS)[kind]});
 function plannedKind(group, state) {
   if (state !== 'to-b' && state !== 'to-a') return null;
   if (group === 'differ') return 'replace';
@@ -620,23 +633,21 @@ function plannedUnder(path, sides) {
 }
 
 // Under the legend: the whole plan, as it is now
+// The plan so far, in the arrows between the pair: how many files are marked each way, and all of it in words as
+// their tooltip ("Copy 2 files to usb disk · Remove 1 file from work laptop"); a row of its own would take a line
 function renderPlan() {
   const arrows = document.getElementById('pairarrows');
-  if (arrows && view.sides) {
-    const marked = name => view.items.filter(path => { const info = view.info.get(path); return info.t === 'f' && info.st === name; }).length;
-    const way = (mark, name, side) => {
-      const count = marked(name);
-      return el('span', {class: 'way' + (count ? ' on' : ''), title: count + ' file' + (count === 1 ? '' : 's') + ' marked to change ' + side.name},
-        mark, count ? el('small', {}, String(count)) : '');
-    };
-    arrows.replaceChildren(way('⇒', 'to-b', view.sides[1]), way('⇐', 'to-a', view.sides[0]));
-  }
-  const box = document.getElementById('pairplan');
-  if (!box || !view.sides) return;
+  if (!arrows || !view.sides) return;
+  const marked = name => view.items.filter(path => { const info = view.info.get(path); return info.t === 'f' && info.st === name; }).length;
   const counts = plannedCounts('.');
-  box.replaceChildren(counts.size ? el('b', {}, 'Planned: ') : '',
-    ...(counts.size ? plannedParts(counts, view.sides, true).flatMap((part, i) => i ? [' · ', part] : [part]) :
-      [el('span', {class: 'note'}, 'Nothing planned yet: tap a file\'s · to mark it ⇒ or ⇐.')]));
+  const plan = counts.size ? plannedParts(counts, view.sides, true).map(part => part.textContent.replace(/\s+/g, ' ').trim()).join(' · ') :
+    'nothing marked yet: tap a file\'s · to mark it ⇒ or ⇐';
+  const way = (mark, name) => {
+    const count = marked(name);
+    return el('span', {class: 'way' + (count ? ' on' : '')}, mark, count ? el('small', {}, String(count)) : '');
+  };
+  arrows.title = 'Plan: ' + plan;
+  arrows.replaceChildren(way('⇒', 'to-b'), way('⇐', 'to-a'));
 }
 
 // A folder's photos side by side (a picker whose files have pictures, see PickerScreen.picture()): a folder holding
@@ -1092,7 +1103,9 @@ function renderPickerActions() {
   if (screen.states.length) {
     if (actionsOpen()) onSelection.push(...general.splice(0));
     else { onSelection.length = 0; general.length = 0; }
-    onSelection.unshift(...marks);
+    // (A sync's tree: in one short row, markRow(); first in the bottom bar's part about the selection, under its name)
+    if (view.sides) onSelection.unshift(markRow(screen));
+    else onSelection.unshift(...marks);
   }
   const side = [];
   if (screen.side && screen.side.enterPicks) {
@@ -1106,6 +1119,21 @@ function renderPickerActions() {
     isSyncFilesTree(screen) && actionsOpen() ? section('', quickActions(screen, selected), 'quick') : '',
     section(screen.mode === 'list' ? '' : 'On ' + selected, onSelection),
     section(screen.side ? 'In ' + screen.side.root : '', side), section('Misc', general));
+}
+
+// The selection's way in a sync's tree, in one short row (it fits a phone's 360px), in the bottom bar's part about the
+// selection, which names it: · Leave, ⇒ B, ⇐ A, each saying all of what it does as its tooltip (stateButtonLabel())
+function markRow(screen) {
+  const path = view.selected || '.';
+  const buttons = screen.states.map(state => {
+    const changed = state.name === 'to-b' ? view.sides[1] : state.name === 'to-a' ? view.sides[0] : null;
+    const full = el('span', {}, stateButtonLabel(state, path));
+    // (The replica by its name, in plain text, and its color as the button's edge: a box in a button doesn't shrink)
+    return el('button', {class: 'small' + (changed ? ' toward' : ''), style: changed ? '--rc:' + changed.color : '',
+      title: full.textContent.replace(/\s+/g, ' ').trim(), onclick: () => act('state', {paths: [path], name: state.name})},
+      (state.mark.trim() || '·') + ' ', changed ? changed.name : el('span', {class: 'leaveword'}, 'Leave'));
+  });
+  return el('div', {class: 'markrow'}, ...buttons);
 }
 
 // How many files are marked (in a state but the first, "leave as is")
