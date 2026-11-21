@@ -64,7 +64,8 @@ function inboxCard(inbox) {
   const head = el('div', {class: 'head'}, icon(iconName), el('b', {}, inbox.kind === 'phone' ? 'Photos on ' + inbox.name : inbox.name),
     inbox.kind === 'phone' ? chip(inbox.there ? 'ok' : 'none', inbox.there ? 'Plugged in' : 'Not plugged in') :
       !inbox.there ? chip('bad', 'Not there') : '');
-  const parts = [head, inbox.kind === 'phone' ? pathLine(inbox.source.full, where + ' · its ' + inbox.source.inner + ' folder') : pathLine(inbox.path, where),
+  const parts = [head, inbox.kind === 'phone' ? pathLine(inbox.source.full, where + ' · ' + (inbox.source.folders ? 'its ' + inbox.source.folders.join(', ') :
+      'its ' + inbox.source.inner + ' folder')) : pathLine(inbox.path, where),
     el('div', {class: 'note'}, progress.text),
     bar(progress.share, 'sure'),
     progress.checked ? el('div', {class: 'note'}, progress.checked) : ''];

@@ -99,12 +99,13 @@ def _known_paths():
 
 
 def _read():
-    """The labels and the known paths, read again if the file changed"""
+    """The labels and the known paths, read again if the file changed, or what's mounted did (a replica's path is
+    where its disk is mounted, or its placeholder while it isn't: volumes.py)"""
     global _labels, _labels_of, _known
     try:
         path = replicas.replicas_file()
         status = os.stat(path)
-        state = (path, status.st_mtime_ns, status.st_size)
+        state = (path, status.st_mtime_ns, status.st_size, volumes.signature())
     except OSError:
         _labels, _known = {}, []
         return

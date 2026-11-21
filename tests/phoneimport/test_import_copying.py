@@ -2,9 +2,11 @@
 import hashlib
 import os
 import shutil
+import tempfile
 import unittest
 from unittest import mock
 
+import helpers
 from dirdelta.drive import drivecache
 from dirdelta.known import users
 from dirdelta.phoneimport import copying, pool, sources, store
@@ -128,6 +130,26 @@ class SourcesTest(unittest.TestCase):
         self.assertEqual({'device': None, 'drive': False, 'inner': '/home/me/Pictures', 'full': '/home/me/Pictures'},
                          sources.describe('/home/me/Pictures'))
         self.assertTrue(sources.describe('cloud/unsorted')['drive'])
+
+
+    def test_a_phones_storage_is_its_camera_and_whatsapps_photos_and_videos(self):
+        gvfs = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, gvfs)
+        storage = os.path.join(gvfs, 'mtp:host=SAMSUNG_SAMSUNG_Android_RZCY502XMHE', 'Internal storage')
+        whatsapp = 'Android/media/com.whatsapp/WhatsApp/Media'
+        helpers.make_files(storage, ['DCIM/Camera/a.jpg', 'DCIM/Screenshots/s.png', 'Download/d.jpg', 'Music/m.mp3',
+                                     whatsapp + '/WhatsApp Images/IMG-1.jpg', whatsapp + '/WhatsApp Images/Sent/IMG-2.jpg',
+                                     whatsapp + '/WhatsApp Video/VID-1.mp4', whatsapp + '/WhatsApp Audio/AUD-1.mp3',
+                                     'Android/data/app/x.jpg'])
+        with mock.patch('dirdelta.phoneimport.sources.GVFS_DIR', gvfs):
+            self.assertEqual([('SAMSUNG Android', storage)], sources.phones())
+            self.assertEqual(['DCIM', 'WhatsApp Images', 'WhatsApp Video'], sources.describe(storage)['folders'])
+            # (What was sent too: a photo taken in WhatsApp is only there; not what's elsewhere in the storage)
+            self.assertEqual(sorted(['DCIM/Camera/a.jpg', 'DCIM/Screenshots/s.png', whatsapp + '/WhatsApp Images/IMG-1.jpg',
+                                     whatsapp + '/WhatsApp Images/Sent/IMG-2.jpg', whatsapp + '/WhatsApp Video/VID-1.mp4']),
+                             sorted(sources.media_files(storage)))
+            # (An import from before, of a phone's DCIM alone, is still that dir's)
+            self.assertEqual(['Camera/a.jpg', 'Screenshots/s.png'], sorted(sources.media_files(os.path.join(storage, 'DCIM'))))
 
 
 if __name__ == '__main__':

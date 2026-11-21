@@ -74,6 +74,12 @@ class TwoDisksTest(unittest.TestCase):
         self.assertIsNone(mounts.unmounted(grey_away))
         self.assertEqual(here, volumes.present(grey_away))
 
+    def test_a_disk_mounted_later_keeps_its_one_name(self):
+        self.write({'replicas': ['uuid:%s:/eliran' % (BLACK,)], 'labels': {'uuid:%s:/eliran' % (BLACK,): 'Black HD'}})
+        self.assertEqual(['Black HD'], [replicanames.name(path) for path in replicas.load().added_replicas])
+        self.mount(BLACK)
+        self.assertEqual(['Black HD'], [replicanames.name(path) for path in replicas.load().added_replicas])
+
     def test_saving_keeps_each_by_its_disk(self):
         self.mount(BLACK)
         known = replicas.Replicas()

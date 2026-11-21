@@ -15,14 +15,21 @@ GVFS_DIR = '/run/user/%d/gvfs' % (os.getuid(),)
 SKIPPED_DIRS = {'.thumbnails', '.trashed', '.Trash', 'Android', '.cache', 'cache', 'LOST.DIR'}
 
 
-# The dirs of a phone's storage imported from (others may be added: Pictures, WhatsApp's...)
-PHONE_DIRS = ('DCIM',)
+# The dirs of a phone's storage imported from: its camera's (DCIM: photos, videos, screenshots), and WhatsApp's photos
+# and videos (where newer Androids keep them, under Android/media, and where older ones did); each a phone's
+# storage's import has those of them it has (a phone's source is its storage: phones())
+WHATSAPP_MEDIA = ('Android/media/com.whatsapp/WhatsApp/Media', 'WhatsApp/Media')
+PHONE_DIRS = ('DCIM',) + tuple('%s/%s' % (media_dir, name) for media_dir in WHATSAPP_MEDIA
+                               for name in ('WhatsApp Images', 'WhatsApp Video'))
+# In WhatsApp's dirs, what the user sent (Sent/) is imported too: a photo taken with WhatsApp's own camera is only
+# there (a photo sent from the gallery is there too, as WhatsApp made it smaller: another file than the gallery's)
+SKIPPED_PHONE_SUBDIRS = set()
 MTP_PREFIX = 'mtp:host='
 
 
 def phones():
-    """[(name, path)] of the dirs imported from (PHONE_DIRS) of the phones mounted now, e.g. ('Pixel 8',
-    '/run/user/1000/gvfs/mtp:host=Google_Pixel_8_.../Internal shared storage/DCIM')"""
+    """[(name, path)] of the storages of the phones mounted now that have any of PHONE_DIRS, e.g. ('Pixel 8',
+    '/run/user/1000/gvfs/mtp:host=Google_Pixel_8_.../Internal shared storage'): each a source, of those dirs' photos"""
     found = []
     for mount in sorted(glob.glob(os.path.join(GVFS_DIR, MTP_PREFIX + '*'))):
         try:
@@ -30,11 +37,22 @@ def phones():
         except OSError:
             continue
         for storage in storages:
-            for name in PHONE_DIRS:
-                path = os.path.join(mount, storage, name)
-                if os.path.isdir(path):
-                    found.append((device_name(os.path.basename(mount)), path))
+            path = os.path.join(mount, storage)
+            if phone_dirs(path):
+                found.append((device_name(os.path.basename(mount)), path))
     return found
+
+
+def phone_dirs(storage):
+    """The ones of PHONE_DIRS the phone's storage (its path) has"""
+    return [name for name in PHONE_DIRS if os.path.isdir(os.path.join(storage, name))]
+
+
+def is_phone_storage(source):
+    """Whether source is a phone's storage (phones()'s: its PHONE_DIRS imported), not a dir in it (an import from
+    before, of its DCIM alone) nor another dir"""
+    parts = source.split(os.sep)
+    return (source.startswith(GVFS_DIR) and len(parts) >= 2 and parts[-2].startswith(MTP_PREFIX))
 
 
 def device_name(mount_name):
@@ -68,7 +86,12 @@ def describe(source):
     if mount is None or not source.startswith(GVFS_DIR):
         return {'device': None, 'drive': False, 'inner': source, 'full': source}
     inner = parts[mount + 2:] or parts[mount + 1:]
-    return {'device': device_name(parts[mount]), 'drive': False, 'inner': '/'.join(inner), 'full': source}
+    found = {'device': device_name(parts[mount]), 'drive': False, 'inner': '/'.join(inner), 'full': source}
+    if is_phone_storage(source):
+        # (What's imported from it, by name: DCIM, WhatsApp Images, WhatsApp Video; those it has, if it's plugged in)
+        there = phone_dirs(source) if os.path.isdir(source) else PHONE_DIRS
+        found['folders'] = list(dict.fromkeys(os.path.basename(name) for name in there))
+    return found
 
 
 # What's imported: photos and videos (not audio: a phone's recordings and music aren't sorted here)
@@ -97,13 +120,24 @@ def drive_media_files(source):
 
 def media_files(source, is_stopped=lambda: False):
     """{relpath: (size, mtime)} of the photos and videos under source, but in
-    SKIPPED_DIRS and hidden ones. Raises OSError if source can't be read at all."""
+    SKIPPED_DIRS and hidden ones; a phone's storage's, in its PHONE_DIRS (and what was sent).
+    Raises OSError if source can't be read at all."""
     os.listdir(source)
+    if not is_phone_storage(source):
+        return _media_under(source, source, SKIPPED_DIRS, is_stopped)
     found = {}
-    for dirpath, dirnames, filenames in os.walk(source):
+    for name in phone_dirs(source):
+        found.update(_media_under(source, os.path.join(source, name), SKIPPED_DIRS | SKIPPED_PHONE_SUBDIRS, is_stopped))
+    return found
+
+
+def _media_under(source, top, skipped, is_stopped):
+    """{relpath under source: (size, mtime)} of the photos and videos under top, but in skipped and hidden dirs"""
+    found = {}
+    for dirpath, dirnames, filenames in os.walk(top):
         if is_stopped():
             break
-        dirnames[:] = sorted(name for name in dirnames if name not in SKIPPED_DIRS and not name.startswith('.'))
+        dirnames[:] = sorted(name for name in dirnames if name not in skipped and not name.startswith('.'))
         for name in sorted(filenames):
             if not is_photo(name) or name.startswith('.'):
                 continue
