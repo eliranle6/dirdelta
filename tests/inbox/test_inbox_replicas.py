@@ -172,11 +172,14 @@ class ReplicasTest(InboxSortTest):
 
     def test_run_records_the_sort(self):
         known = replicas.Replicas()
-        with mock.patch('dirdelta.known.replicas.save') as save, \
+        # (5 files in the inbox as it starts, 2 as it ends: 3 sorted)
+        with mock.patch('dirdelta.known.replicas.save') as save, mock.patch.object(Sort, 'inbox_file_count', side_effect=[5, 2]), \
                 mock.patch.object(Sort, 'run'), mock.patch.object(Sort, 'prepare_hashing'):
             inbox.run(self.inbox, self.root, known)
         self.assertEqual(known.sorts, [(self.inbox, self.root)])
-        save.assert_called_once_with(known)
+        save.assert_called_with(known)
+        # How far the inbox's sorting is, for the Inboxes page
+        self.assertEqual((3, 2), (known.inbox_counts[self.inbox]['sorted'], known.inbox_counts[self.inbox]['left']))
 
     def test_run_offers_to_hash_the_local_ones_first(self):
         order = []

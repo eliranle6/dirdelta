@@ -140,7 +140,8 @@ class ReplicasFileTest(unittest.TestCase):
                                             'replicas': ['/disk/me'], 'inboxes': ['cloud/phone'],
                                             'looks': {'disk-key': {'color': 'teal', 'icon': 'usb'}},
                                             'main': None, 'pairs': [], 'records': {},
-                                            'phones': {'Google_Pixel_8_3A170DLJH002DN': {'name': 'my pixel'}}})
+                                            'phones': {'Google_Pixel_8_3A170DLJH002DN': {'name': 'my pixel'}},
+                                            'inbox_counts': {}})
 
     def test_with_a_main_replica_each_other_is_paired_with_it_and_the_pairs_added_too(self):
         known = replicas.Replicas()

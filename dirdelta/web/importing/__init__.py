@@ -55,9 +55,31 @@ def inboxes():
                                       paths.is_cloud_path(one.source) or os.path.isdir(one.source)))
     return [{'path': path, 'kind': kind, 'name': name, 'there': there, 'added': path in added,
              'phone': sources.phone_id(path), 'source': sources.describe(path),
+             # (An unsorted folder's: how many files its sorts took out of it, and how many it has now)
+             'sorting': _sorting(path, known_replicas) if kind in ('drive', 'folder') else None,
              'dests': checking.destinations(path) if kind != 'newphone' else [],
              'imports': [summary(one) for one in imports if one.source == path]}
             for path, (kind, name, there) in found.items()]
+
+
+def _sorting(path, known_replicas):
+    """{'sorted': how many files the inbox's sorts took out of it, 'left': how many it has now (None if that can't be
+    told: not there), 'when': when it was last sorted}"""
+    counts = known_replicas.inbox_counts.get(path) or {}
+    return {'sorted': counts.get('sorted', 0), 'left': _nr_files(path), 'when': counts.get('when')}
+
+
+def _nr_files(path):
+    """How many files the inbox at path has now (a Drive one's as the cache has them), or None if it can't be read"""
+    try:
+        if paths.is_cloud_path(path):
+            from dirdelta.drive import drivecache
+            return sum(1 for entry in drivecache.entries(paths.path_in_cloud(path)) if not entry.is_dir)
+        if not os.path.isdir(path):
+            return None
+        return sum(len(files) for _, _, files in os.walk(path))
+    except Exception:
+        return None
 
 
 def _phones(known_replicas, imports):

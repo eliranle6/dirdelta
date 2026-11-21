@@ -24,7 +24,7 @@ normalized = paths.normalized
 class Replicas(ReplicaLists):
     def __init__(self, history=None, favorites=None, sorts=None, recent_dirs=None, known=None, compared=None,
                  labels=None, followers=None, added_replicas=None, added_inboxes=None, looks=None, main_replica=None,
-                 extra_pairs=None, records=None, phones=None):
+                 extra_pairs=None, records=None, phones=None, inbox_counts=None):
         # Pairs (tuples of 2 normalized paths), the latest first
         self.history = list(history or [])
         # Pairs, in the order they were added
@@ -64,6 +64,9 @@ class Replicas(ReplicaLists):
         # The user's phones, imported from: {its id (its USB link's: phoneimport.sources.phone_id()): {'name': what the
         # user calls it}}, in the order they were added; None if the file had none yet (before 2026-11-21)
         self.phones = None if phones is None else {key: dict(info) for key, info in phones.items()}
+        # Of each inbox the file sort sorted (normalized): {'sorted': how many files its sorts took out of it, all told,
+        # 'left': how many it had as the last one ended, 'when': 'YYYY-MM-DD HH:MM'}
+        self.inbox_counts = {path: dict(counts) for path, counts in (inbox_counts or {}).items()}
 
     def set_label(self, key, label):
         """Label what key is of (None: it has no label now)"""
@@ -167,6 +170,12 @@ class Replicas(ReplicaLists):
         root = normalized(root_path)
         paired = [path for pair in self.favorites + self.history if root in pair for path in pair if path != root]
         return list(dict.fromkeys(self.followers.get(root, []) + paired))
+
+    def note_inbox(self, inbox_path, nr_sorted, nr_left, when):
+        """Note that a sort of the inbox just took nr_sorted files out of it, nr_left left in it (when, a datetime)"""
+        path = normalized(inbox_path)
+        counts = self.inbox_counts.get(path, {})
+        self.inbox_counts[path] = {'sorted': counts.get('sorted', 0) + nr_sorted, 'left': nr_left, 'when': _time(when)}
 
     def record_sort(self, inbox_path, root_path):
         """Note that the inbox was just sorted into root_path: it goes to the top of the sorts (once;

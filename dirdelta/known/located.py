@@ -67,6 +67,8 @@ def _mapped(content, path):
         content['compared'] = [dict(item, pair=[path(one) for one in item['pair']])
                                if isinstance(item, dict) and isinstance(item.get('pair'), list) else item
                                for item in content['compared']]
+    if isinstance(content.get('inbox_counts'), dict):
+        content['inbox_counts'] = {path(inbox): counts for inbox, counts in content['inbox_counts'].items()}
     if isinstance(content.get('recent_dirs'), dict):
         content['recent_dirs'] = {path(root): dirs for root, dirs in content['recent_dirs'].items()}
     if isinstance(content.get('followers'), dict):

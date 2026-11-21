@@ -1,5 +1,6 @@
 """The sort of an inbox into a sorted tree (see dirdelta.inbox): InboxSort, one object whose
 parts are mixins, each in a module of its own, and run(), which runs one"""
+import datetime
 import os
 import threading
 
@@ -147,6 +148,10 @@ class InboxSort(Listing, Screen, Keys, Side, Previews, Copies, Menu, Destination
         self._inbox_in_root = ('/'.join(inbox_parts[len(root_parts):])
                                if self.is_same_kind and inbox_parts[:len(root_parts)] == root_parts else None)
 
+    def inbox_file_count(self):
+        """How many files the inbox has, as its tree has them now (the sort's moves and removals taken out)"""
+        return sum(1 for _ in self._inbox_tree.iter_files())
+
     def _make_trees(self):
         """The inbox's and the sorted tree's trees, neither removed when it's left empty, nor moved whole"""
         self._inbox_tree, self._root_tree = tree_of(self.inbox_path), tree_of(self.root_path)
@@ -181,6 +186,13 @@ def _run(inbox_path, root_path, known_replicas, follower_paths=()):
     with picker.place("Sort %s \u2192 %s" % (names[sort.inbox_path], names[sort.root_path])):
         if not sort.prepare_hashing():
             return
+        nr_before = sort.inbox_file_count()
         sort.run()
+    if known_replicas is not None:
+        # (How far the inbox's sorting is, for the Inboxes page: what this sort took out of it, and what's left; a dry
+        # run takes nothing out)
+        nr_left = sort.inbox_file_count()
+        known_replicas.note_inbox(sort.inbox_path, max(0, nr_before - nr_left), nr_left, datetime.datetime.now())
+        replicas.save(known_replicas)
     if known_replicas is not None:
         log_entries.offer_entries(sort.changes, sort.log_trees(), known_replicas)

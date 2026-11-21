@@ -1305,7 +1305,8 @@ every link carries, then a cookie), and a watcher.
   a file from before has the phones its imports were from, once.
 - The Inboxes page and an import, redone 2026-11-21: an unsorted folder (on a disk or in Drive) is sorted with the
   file sort (Sort files: any kind of file, the sort's own screens with Claude's suggestions; an earlier photo import of
-  it still opened from its card), a phone imported from (Import photos); each into the main replica by default
+  it still opened from its card; how far it is, a bar: the files its sorts took out of it, counted as each sort starts and
+  ends, `Replicas.inbox_counts`, of those and the ones it has now, `importing._sorting()`), a phone imported from (Import photos); each into the main replica by default
   (`checks.destinations()`: the main one first), another chosen in Into. An import is compared with the replica it goes
   into alone (`checks.Check`: `known.Known([dest])`), and is one screen (`import.js`'s `renderImport()`): its head (from,
   Into, which opens another import, how many are new, ready to move, already in the replica (hidden; Show them all),

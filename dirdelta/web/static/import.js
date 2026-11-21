@@ -137,6 +137,15 @@ function folderCard(inbox) {
   const [iconName, where] = INBOX_KINDS[inbox.kind];
   const parts = [el('div', {class: 'head'}, icon(iconName), el('b', {}, inbox.name), !inbox.there ? chip('bad', 'Not there') : ''),
     pathLine(inbox.path, where)];
+  // How far its sorting is: the files its sorts took out of it of those and the ones left, as the last sort ended
+  const sorting = inbox.sorting;
+  if (sorting && sorting.left !== null) {
+    const all = sorting.sorted + sorting.left;
+    parts.push(el('div', {class: 'note'}, (sorting.sorted ? sorting.sorted.toLocaleString() + ' sorted · ' : '') +
+      (sorting.left ? sorting.left.toLocaleString() + ' ' + (sorting.left === 1 ? 'file' : 'files') + ' left to sort' : 'Nothing left to sort') +
+      (sorting.when ? ' · last sorted ' + age(sorting.when).text : sorting.sorted ? '' : ' · not sorted here yet')),
+      bar(all ? 100 * sorting.sorted / all : 100, 'sure'));
+  }
   const dests = inbox.dests;
   if (!dests.length) {
     parts.push(el('p', {class: 'note'}, inbox.kind === 'drive' ? 'Add a replica to sort it into (Replicas).' :

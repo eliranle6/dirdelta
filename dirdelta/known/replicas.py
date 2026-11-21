@@ -66,7 +66,8 @@ def _from(content):
                     {str(key): dict(look) for key, look in content.get('looks', {}).items() if isinstance(look, dict)},
                     content.get('main') or None, _pairs(content.get('pairs', [])),
                     {str(key): dict(record) for key, record in content.get('records', {}).items() if isinstance(record, dict)},
-                    _phones(content.get('phones')))
+                    _phones(content.get('phones')),
+                    {str(path): dict(counts) for path, counts in (content.get('inbox_counts') or {}).items() if isinstance(counts, dict)})
 
 
 def save(replicas):
@@ -111,7 +112,8 @@ def _content(replicas):
                'main': replicas.main_replica,
                'pairs': [list(pair) for pair in replicas.extra_pairs],
                'records': replicas.records,
-               'phones': replicas.phones}
+               'phones': replicas.phones,
+               'inbox_counts': replicas.inbox_counts}
 
 
 def _write(path, content):
