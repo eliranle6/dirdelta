@@ -1038,8 +1038,7 @@ function checkedLine(screen) {
 function renderPickerActions() {
   const screen = view.screen;
   const main = [];
-  const back = screen.hints.find(([key]) => key === 'q');
-  main.push(el('button', {onclick: goBack}, back ? capitalized(back[1]) : 'Back'));
+  // (Back is first in the row above, of where it is: setTop())
   const selected = view.selected ? baseName(view.selected) : screen.root;
   if (screen.mode !== 'list') {
     const enter = screen.hints.find(([key]) => key === 'Enter');
@@ -1329,7 +1328,14 @@ function setTop(title, labels) {
   const tab = runningTab === 'inboxes' ? ['/inboxes', 'Inboxes'] : ['/replicas', 'Replicas'];
   // (A sync's tree: its two replicas named with their icons and colors)
   const where = view.sides && view.screen && view.screen.kind === 'picker' && pairTitle(plainOf(rest), view.sides);
-  document.getElementById('crumbs').replaceChildren(el('a', {href: tab[0]}, tab[1]),
+  // A picker's way back (its q: Back, or the start menu's Quit), first in the row of where it is: leaving the screen
+  // is the page's, not one of the bottom bar's actions on what's selected
+  const screen = view.screen && view.screen.kind === 'picker' ? view.screen : null;
+  const back = screen && screen.hints.find(([key]) => key === 'q');
+  document.getElementById('crumbs').replaceChildren(
+    screen ? el('button', {class: 'crumbback', title: 'Back to where you were (the browser\'s Back too)', onclick: goBack},
+      '\u2190 ' + (back ? capitalized(back[1]) : 'Back')) : '',
+    el('a', {href: tab[0]}, tab[1]),
     rest ? el('span', {id: 'where'}, ' > ', where || segmentsSpan(rest)) : el('span', {id: 'where'}));
   document.getElementById('labels').replaceChildren(...(labels || []).map(labelChip));
   document.title = (title || 'dirdelta').split(' > ').pop();

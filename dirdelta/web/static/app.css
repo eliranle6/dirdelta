@@ -514,3 +514,5 @@ footer#bottom { padding-top: 12px; }
   .pathbutton:hover { text-decoration: underline; }
 }
 .row .twisty:not(:empty), .mark, .row input[type=checkbox] { cursor: pointer; }
+/* A picker's Back, first in the row of where it is (setTop()) */
+#crumbs .crumbback { font-size: 13px; font-weight: 600; padding: 3px 10px; margin-right: 10px; border-radius: 6px; vertical-align: middle; }
