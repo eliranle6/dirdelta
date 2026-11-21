@@ -672,3 +672,23 @@ footer#bottom { padding-top: 12px; }
   .rootrow > .pairarrows { margin-left: 4px; }
   .rootrow > .pairarrows + .pairside { margin-left: 4px; }
 }
+/* (On a phone the tree a little smaller: its text, marks, badges and checkboxes, and less padding in its rows; the root
+   row as its rows) */
+@media (max-width: 600px) {
+  .tree, .rootrow { font-size: 14px; }
+  .tree .row { --row-pad: 2px; min-height: 28px; }
+  .tree .row > * + * { margin-left: 4px; }
+  .tree .row .mark, .rootrow .mark { min-width: 26px; padding: 0 4px; font-size: 13px; }
+  .tree .row input[type=checkbox] { width: 17px; height: 17px; }
+  .tree .gbadge { min-width: 50px; font-size: 11px; padding: 0 5px; }
+  .tree .gbadge .icon svg { width: 13px; height: 13px; }
+  .tree .planned { font-size: 11px; padding: 1px 6px; }
+  .tree .gridbutton { font-size: 11px; padding: 1px 6px; }
+  .rootrow { min-height: 28px; padding-top: 2px; padding-bottom: 2px; }
+  .rootrow > * + * { margin-left: 4px; }
+}
+/* A file row's line to its mark, after its branch's arm: drawn as the arm is (the same box, its line at the same 50%), so
+   the two meet in one straight line rather than a pixel apart */
+.tree .row .twisty.leaf { height: auto; border-top: 0; opacity: 1; align-self: stretch; position: relative;
+  margin-top: calc(-1 * var(--row-pad, 6px)); margin-bottom: calc(-1 * var(--row-pad, 6px) - 1px); }
+.tree .row .twisty.leaf::before { content: ''; position: absolute; left: 0; right: 0; top: 50%; border-top: 1.5px solid var(--muted); opacity: .55; }
