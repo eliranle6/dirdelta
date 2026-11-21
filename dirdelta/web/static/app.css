@@ -538,3 +538,9 @@ footer#bottom { padding-top: 12px; }
 /* (The details' "Selected:" kept whole; a long name wraps instead) */
 .preview .previewhead { white-space: nowrap; }
 .preview .previewhead .target { white-space: normal; min-width: 0; overflow-wrap: anywhere; }
+/* The ways files go between the pair's two boxes: ⇒ into the right one, ⇐ into the left one, each with how many are
+   marked so (bold once any are) */
+.pairarrows { display: inline-flex; flex-direction: column; align-items: center; line-height: 1.05; color: var(--muted); font-size: 18px; }
+.pairarrows .way { display: inline-flex; align-items: baseline; gap: 2px; }
+.pairarrows .way.on { color: var(--accent); font-weight: 800; }
+.pairarrows small { font-size: 11px; }

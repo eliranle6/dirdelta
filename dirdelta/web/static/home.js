@@ -202,10 +202,13 @@ const STATE_WORDS = {'in sync': 'In sync', 'a ahead': 'Out of step', 'b ahead': 
 
 // How in step a pair is, as a color: green only all of it; short of it, from red (80% or less) through orange to
 // yellow (just short of all), so 99% isn't taken for done
+// How in step replicas are, one scale for the pairs and Home's tile: all of it green, 90% yellow, 50% orange, else red
+function inStepTone(share) {
+  return share >= 1 ? 'ok' : share >= 0.9 ? 'warn' : share >= 0.5 ? 'orange' : 'bad';
+}
+
 function inStepColor(share) {
-  if (share >= 1) return 'var(--green)';
-  const hue = Math.round(48 * Math.max(0, Math.min(1, (share - 0.8) / 0.2)));
-  return 'hsl(' + hue + ' 80% 45%)';
+  return {ok: 'var(--green)', warn: 'var(--yellow)', orange: 'var(--orange)', bad: 'var(--red)'}[inStepTone(share)];
 }
 
 // Whether what's running is this pair's sync (started from its Sync, by this user)
@@ -325,7 +328,7 @@ function inStepTile(data, tile) {
   const share = either ? both / either : 1;
   const percent = share === 1 ? '100%' : Math.min(99.9, Math.floor(share * 1000) / 10) + '%';
   // (Green only all in step: short of it, even at 99%, yellow)
-  return tile(share === 1 ? 'ok' : share >= 0.9 ? 'warn' : 'bad', 'equal', 'Replicas in step', percent,
+  return tile(inStepTone(share), 'equal', 'Replicas in step', percent,
     'Files in both as of the last comparison (' + counted + ' of ' + data.pairs.length + ' pair' + (data.pairs.length === 1 ? '' : 's') + ')' +
       (changed ? '; changed since' : ''), '/replicas');
 }

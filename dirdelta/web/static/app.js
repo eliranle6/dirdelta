@@ -549,8 +549,10 @@ function pairLegend(sides) {
   const [a, b] = sides;
   const box = side => el('span', {class: 'pairside', style: '--side:' + side.color}, icon(side.icon), el('span', {}, side.name));
   return el('div', {class: 'pairlegend', title: '⇒ changes ' + b.name + ' to match ' + a.name + '; ⇐ changes ' + a.name + ' to match ' + b.name},
-    box(a), el('span', {class: 'pairways'}, el('b', {}, '⇒'), ' changes ', sideName(b),
-      el('span', {class: 'tip'}, ' · '), el('b', {}, '⇐'), ' changes ', sideName(a)), box(b));
+    // (Between the two, the ways files go: ⇒ into B, ⇐ into A, each with how many are marked so, renderPlan())
+    box(a), el('span', {class: 'pairarrows', id: 'pairarrows'}), box(b),
+    el('span', {class: 'pairways'}, el('b', {}, '⇒'), ' changes ', sideName(b),
+      el('span', {class: 'tip'}, ' · '), el('b', {}, '⇐'), ' changes ', sideName(a)));
 }
 
 // The tag after a file's name that says it's only in one replica: its badge says so instead
@@ -619,6 +621,16 @@ function plannedUnder(path, sides) {
 
 // Under the legend: the whole plan, as it is now
 function renderPlan() {
+  const arrows = document.getElementById('pairarrows');
+  if (arrows && view.sides) {
+    const marked = name => view.items.filter(path => { const info = view.info.get(path); return info.t === 'f' && info.st === name; }).length;
+    const way = (mark, name, side) => {
+      const count = marked(name);
+      return el('span', {class: 'way' + (count ? ' on' : ''), title: count + ' file' + (count === 1 ? '' : 's') + ' marked to change ' + side.name},
+        mark, count ? el('small', {}, String(count)) : '');
+    };
+    arrows.replaceChildren(way('⇒', 'to-b', view.sides[1]), way('⇐', 'to-a', view.sides[0]));
+  }
   const box = document.getElementById('pairplan');
   if (!box || !view.sides) return;
   const counts = plannedCounts('.');

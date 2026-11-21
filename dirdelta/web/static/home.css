@@ -27,9 +27,9 @@ a.banner.running { border: 2px solid var(--accent); border-left-width: 6px; back
 .tile .bar { margin-top: 4px; }
 .tile { background: var(--card); border: 1px solid var(--line); border-top: 4px solid var(--grey); border-radius: 10px; padding: 8px 12px;
   display: flex; flex-direction: column; gap: 2px; }
-.tile.ok { border-top-color: var(--green); } .tile.warn { border-top-color: var(--yellow); } .tile.bad { border-top-color: var(--red); }
+.tile.ok { border-top-color: var(--green); } .tile.warn { border-top-color: var(--yellow); } .tile.orange { border-top-color: var(--orange); } .tile.bad { border-top-color: var(--red); }
 .tile-title { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
-.tile.ok .tile-title .icon { color: var(--green); } .tile.warn .tile-title .icon { color: var(--yellow); } .tile.bad .tile-title .icon { color: var(--red); }
+.tile.ok .tile-title .icon { color: var(--green); } .tile.warn .tile-title .icon { color: var(--yellow); } .tile.orange .tile-title .icon { color: var(--orange); } .tile.bad .tile-title .icon { color: var(--red); }
 .list { display: flex; flex-direction: column; background: var(--card); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
 .list .item, button.item { display: flex; align-items: center; gap: 10px; text-align: left; padding: 11px 14px; width: 100%; }
 button.item { border: 0; border-radius: 0; background: none; }
