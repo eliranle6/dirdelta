@@ -15,8 +15,18 @@ function view() {
   return 'photos';
 }
 
+// (A replica in the address by its place among the import's replicas, 1 the first: never by its path)
 function photosLink(kind, replica) {
-  return '#photos/' + kind + (replica ? '/' + encodeURIComponent(replica) : '');
+  const at = replica && page.data ? (page.data.replicas || []).findIndex(found => found.path === replica) : -1;
+  return '#photos/' + kind + (at >= 0 ? '/' + (at + 1) : '');
+}
+
+// The replica's path the photos shown are filtered by ('' none), from the address's number (or, from before, its path)
+function filterReplica() {
+  const token = page.filter.replica;
+  if (!token) return '';
+  const found = /^\d+$/.test(token) && page.data ? (page.data.replicas || [])[+token - 1] : null;
+  return found ? found.path : token;
 }
 
 window.addEventListener('hashchange', () => { page.selected.clear(); window.scrollTo(0, 0); load(); });
@@ -293,7 +303,7 @@ function renderOverview() {
   }
   if (data.otherDisk) {
     cards.push(el('div', {class: 'card tone-red'}, el('h2', {}, 'A different disk is mounted there now'),
-      el('p', {}, 'The disk mounted at ' + data.dest + ' now (' + data.destDisk + ') isn\'t the one this import was started with. ' +
+      el('p', {}, 'The disk mounted where ' + (data.destName || nameOf(data.dest)) + ' was (' + data.destDisk + ') isn\'t the one this import was started with. ' +
         'Nothing is moved until that disk is back; start a new import to sort into this one.')));
   }
   cards.push(source);
@@ -304,8 +314,8 @@ function renderOverview() {
   for (const replica of data.replicas) {
     const counted = over.replicas.find(found => found.path === replica.path);
     const card = el('div', {class: 'card'}, el('h2', {class: 'head'}, icon(replica.kind === 'drive' ? 'drive' : 'disk'), 'Already in ' + replica.name),
-      el('p', {class: 'kind'}, replica.kind === 'drive' ? 'Google Drive replica' : 'Local disk replica'),
-      pathLine(replica.path));
+      // (Called by its name alone: never by the dirs it's in)
+      el('p', {class: 'kind'}, replica.kind === 'drive' ? 'Google Drive replica' : 'Local disk replica'));
     if (!over.checked) card.append(el('p', {}, checked()));
     else {
       card.append(el('div', {class: 'stat'}, el('b', {}, counted.have + ' of ' + over.total), el('span', {}, 'are there already')),
@@ -407,12 +417,12 @@ function haveIn(file, replica) { return (file.have || []).filter(found => found.
 
 function filterText() {
   const [text] = FILTERS[page.filter.kind] || FILTERS.all;
-  return typeof text === 'function' ? text(nameOf(page.filter.replica)) : text;
+  return typeof text === 'function' ? text(nameOf(filterReplica())) : text;
 }
 
 function passes(file) {
   const [, test] = FILTERS[page.filter.kind] || FILTERS.all;
-  return test(file, page.filter.replica);
+  return test(file, filterReplica());
 }
 
 function renderImport() {

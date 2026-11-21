@@ -119,10 +119,10 @@ async function setMode(live) {
   else modeNote('red', answer.error);
 }
 
-// A path, shortened to its last parts, the whole shown on a tap (and hidden on the next)
+// A path, shortened to its last part (never the dirs it's in), the whole shown on a tap (and hidden on the next)
 function pathLine(full, before) {
   const parts = full.split('/').filter(Boolean);
-  const short = parts.length > 2 ? '…/' + parts.slice(-2).join('/') : full;
+  const short = parts.length > 1 ? '…/' + parts[parts.length - 1] : full;
   const shown = el('button', {class: 'pathbutton', title: full, onclick: event => {
     event.preventDefault();
     shown.textContent = shown.textContent === full ? short : full;

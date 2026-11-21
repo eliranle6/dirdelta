@@ -33,6 +33,26 @@ def _device(path):
     return 'laptop' if mount is None or mount.target in ('/', '/home') else 'disk'
 
 
+def _named_entry(entry, known_replicas):
+    """A replica's log's last entry, the replicas' paths in its text (a sync writes "copied 3 files from PATH") said by
+    their names, as everywhere on the pages"""
+    if not entry or not entry.get('text'):
+        return entry
+    text = entry['text']
+    names = {path: naming.name(path) for path in known_replicas.replica_paths() + known_replicas.inbox_paths()}
+    # (And the paths a replica was seen at before, by its label: e.g. a disk now not mounted, or mounted elsewhere)
+    for identity, info in known_replicas.known.items():
+        label = known_replicas.labels.get(identity)
+        for path in info.get('paths') or []:
+            if label:
+                names.setdefault(path, label)
+    # (The longest first, so a replica in another's dir isn't named by the other's)
+    for path in sorted(names, key=len, reverse=True):
+        if path in text:
+            text = text.replace(path, names[path])
+    return dict(entry, text=text)
+
+
 def _when(stamp):
     """A datetime as 'YYYY-MM-DD HH:MM', or None"""
     return stamp.strftime('%Y-%m-%d %H:%M') if stamp else None
@@ -59,7 +79,7 @@ def replica_info(path, known_replicas):
         found['hashing'] = checks.hash_state(path)
         found['hashesKept'] = hashcache.count_under(path) if found['there'] else 0
     info = known_replicas.info_at(path) or {}
-    found.update(lastEntry=info.get('last_entry'), seen=info.get('seen'), changed=info.get('changed'))
+    found.update(lastEntry=_named_entry(info.get('last_entry'), known_replicas), seen=info.get('seen'), changed=info.get('changed'))
     # (A replica whose disk isn't mounted is at a placeholder: the path it was last seen at is shown, see volumes.py)
     if volumes.of_placeholder(path) and info.get('paths'):
         found['shownPath'] = info['paths'][0]
