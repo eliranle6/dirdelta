@@ -88,3 +88,6 @@ h2.head { display: flex; align-items: center; gap: 8px; }
 .group h2 small { color: var(--muted); font-weight: 400; font-size: 14px; }
 .day h3 { font-size: 15px; margin: 12px 0 6px; display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
 .endimport { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 24px; }
+/* The selection's row: as tall as its bar, whether it's the bar or the hint, so nothing moves as the first is selected */
+.sticky .selrow { min-height: var(--selrow-h, 42px); display: flex; align-items: center; }
+.sticky .selrow > * { flex: 1; }

@@ -278,16 +278,7 @@ function renderImport() {
   const parts = [];
   if (!focused) {
     parts.push(importHead(data, counts));
-    // What's done with the photos selected (a folder for them, or skipping them), once there are any
-    const chosen = page.selected.size ? el('div', {class: 'bar'}, el('b', {}, page.selected.size + ' selected'),
-      el('input', {type: 'text', id: 'target', list: 'folders', placeholder: 'Folder in ' + data.destName + '…',
-        value: page.target, oninput: event => { page.target = event.target.value; }}),
-      el('datalist', {id: 'folders'}, data.folders.map(dir => el('option', {value: dir}))),
-      el('button', {class: 'primary', onclick: () => assign([...page.selected], page.target)}, 'Put them in this folder'),
-      el('button', {onclick: () => assign([...page.selected], null, true)}, 'Skip them'),
-      el('button', {onclick: () => { page.selected.clear(); renderImport(); }}, 'Clear')) :
-      el('div', {class: 'note'}, 'Tap photos to select them, or use a group\'s or a day\'s buttons.');
-    parts.push(el('div', {class: 'sticky'}, sortMeter(files), chosen));
+    parts.push(el('div', {class: 'sticky'}, sortMeter(files), selectionRow()));
   } else {
     const sticky = document.querySelector('.sticky');
     sticky.firstChild.replaceWith(sortMeter(files));
@@ -301,7 +292,48 @@ function renderImport() {
   if (!document.querySelector('#main button.sure')) main.replaceChildren(...parts);
   renderFooter(counts);
   fitHeader();
+  fitSelectionRow();
   showPosition();
+}
+
+// What's done with the photos selected (a folder for them, or skipping them), once there are any; else how to select
+// them. One height either way, so nothing under it moves as the first is selected
+function selectionRow(asBar) {
+  const data = page.data;
+  const row = page.selected.size || asBar ? el('div', {class: 'bar'}, el('b', {}, page.selected.size + ' selected'),
+    el('input', {type: 'text', id: 'target', list: 'folders', placeholder: 'Folder in ' + data.destName + '…',
+      value: page.target, oninput: event => { page.target = event.target.value; }}),
+    el('datalist', {id: 'folders'}, data.folders.map(dir => el('option', {value: dir}))),
+    el('button', {class: 'primary', onclick: () => assign([...page.selected], page.target)}, 'Put them in this folder'),
+    el('button', {onclick: () => assign([...page.selected], null, true)}, 'Skip them'),
+    el('button', {onclick: () => { page.selected.clear(); showSelection(); }}, 'Clear')) :
+    el('div', {class: 'note'}, 'Tap photos to select them, or use a group\'s or a day\'s buttons.');
+  return el('div', {class: 'selrow'}, row);
+}
+
+// The selection's row as tall as its bar is at this width (it wraps on a phone): measured on a hidden one, as the page
+// is drawn and when its width changes
+function fitSelectionRow() {
+  const sticky = document.querySelector('.sticky');
+  if (!sticky || !page.data) return;
+  const probe = selectionRow(true);
+  probe.style.cssText = 'position:absolute; visibility:hidden; left:0; right:0; min-height:0';
+  sticky.append(probe);
+  document.documentElement.style.setProperty('--selrow-h', probe.offsetHeight + 'px');
+  probe.remove();
+}
+window.addEventListener('resize', fitSelectionRow);
+
+// A change of the selection shown at once: the photos' marks and the selection's row, nothing else drawn again (a
+// page of thousands of photos takes a second to draw)
+function showSelection() {
+  for (const node of document.querySelectorAll('#main .photo')) node.classList.toggle('sel', page.selected.has(node.dataset.rel));
+  const row = document.querySelector('.sticky .selrow');
+  const focused = document.activeElement && document.activeElement.id === 'target';
+  if (row && !(focused && page.selected.size)) row.replaceWith(selectionRow());
+  else if (row) row.querySelector('b').textContent = page.selected.size + ' selected';
+  const status = document.getElementById('status').textContent.replace(/ · \d+ selected$/, '');
+  document.getElementById('status').textContent = status + (page.selected.size ? ' · ' + page.selected.size + ' selected' : '');
 }
 
 // The import's head: from where into which replica (another chosen there: its own import), how many are new and how
@@ -355,7 +387,7 @@ function groupParts(group, isTitled) {
   const parts = [];
   if (isTitled) {
     parts.push(el('div', {class: 'group'}, el('h2', {}, group.title, el('small', {}, newCount ? newCount.toLocaleString() + ' new' : 'nothing new')),
-      undecided.length ? el('button', {onclick: () => { undecided.forEach(rel => page.selected.add(rel)); renderImport(); }}, 'Select the ' + undecided.length) : '',
+      undecided.length ? el('button', {onclick: () => { undecided.forEach(rel => page.selected.add(rel)); showSelection(); }}, 'Select the ' + undecided.length) : '',
       undecided.length ? group.suggested.map(dir => el('button', {onclick: () => assign(undecided, dir)}, 'All ' + undecided.length + ' to ' + dir)) : ''));
   }
   if (!shown.length) return parts;
@@ -364,7 +396,7 @@ function groupParts(group, isTitled) {
     if (!dayFiles.length) continue;
     const open = dayFiles.filter(isUndecided).map(file => file.rel);
     const header = el('h3', {}, day.day === 'None' ? 'No date' : day.day, el('small', {}, dayFiles.length + ' ' + plural(dayFiles.length, 'file', 'files')),
-      open.length ? el('button', {onclick: () => { open.forEach(rel => page.selected.add(rel)); renderImport(); }}, 'Select the day') : '',
+      open.length ? el('button', {onclick: () => { open.forEach(rel => page.selected.add(rel)); showSelection(); }}, 'Select the day') : '',
       open.length ? day.suggested.map(dir => el('button', {onclick: () => assign(open, dir)}, 'All to ' + dir)) : '');
     parts.push(el('div', {class: 'day', 'data-day': (isTitled ? group.title + ' · ' : '') + (day.day === 'None' ? 'No date' : day.day),
       'data-undecided': open.length}, header, el('div', {class: 'grid'}, dayFiles.map(photo))));
@@ -468,10 +500,10 @@ function photo(file) {
   }
   const image = picture(file);
   return el('div', {class: 'photo' + (page.selected.has(file.rel) ? ' sel' : '') + (file.state === 'moved' ? ' done' : ''),
-    onclick: () => {
+    'data-rel': file.rel, onclick: () => {
       if (file.state === 'moved') return;
       if (page.selected.has(file.rel)) page.selected.delete(file.rel); else page.selected.add(file.rel);
-      renderImport();
+      showSelection();
     }}, image, isThere(file) ? el('span', {class: 'badge'}, 'have') : '', el('div', {class: 'cap'}, caption));
 }
 
