@@ -7,7 +7,7 @@
 
 const params = new URLSearchParams(location.search);
 const page = {id: params.get('id'), data: null, selected: new Set(), timer: null, target: '', showAll: false,
-  group: null, nrDays: 0};
+  group: null, nrDays: 0, openDirs: new Set()};
 page.group = groupInAddress();
 
 // The group shown (its key, in the address: #group=whatsapp-images), one at a time: each is big on its own
@@ -620,8 +620,11 @@ function readyParts() {
     el('p', {class: 'note'}, 'Open a folder to look at its files; Move, below, moves them all.'),
     ...dirs.map(dir => {
       const files = byDir.get(dir), rels = files.map(file => file.rel);
-      const grid = el('div', {class: 'grid'});
-      const folder = el('details', {class: 'readydir', ontoggle: () => {
+      // (Its files drawn once it's opened; opened, it stays so as the page is drawn again: a change, a move)
+      const isOpen = page.openDirs.has(dir);
+      const grid = el('div', {class: 'grid'}, isOpen ? files.map(photo) : []);
+      const folder = el('details', {class: 'readydir', open: isOpen, ontoggle: () => {
+        if (folder.open) page.openDirs.add(dir); else page.openDirs.delete(dir);
         if (folder.open && !grid.childElementCount) grid.replaceChildren(...files.map(photo));
       }}, el('summary', {}, el('span', {class: 'readyname'}, icon('folder'), '→ ' + dir), el('small', {}, files.length + ' ' + plural(files.length, 'file', 'files')),
         el('span', {class: 'readyacts'}, dayToggle(rels),
