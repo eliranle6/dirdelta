@@ -83,7 +83,7 @@ h2.head { display: flex; align-items: center; gap: 8px; }
 .importhead .counts { display: flex; flex-wrap: wrap; gap: 4px 14px; align-items: baseline; margin: 6px 0; }
 .importhead .counts b { font-size: 18px; }
 .importhead .showall { color: var(--muted); font-size: 14px; display: inline-flex; align-items: center; gap: 4px; }
-.group { display: flex; gap: 6px 8px; flex-wrap: wrap; align-items: center; margin: 22px 0 4px; padding-top: 10px; border-top: 2px solid var(--line); }
+.group { display: flex; gap: 6px 8px; flex-wrap: wrap; align-items: center; margin: 14px 0 4px; }
 .group h2 { font-size: 18px; margin: 0; display: flex; gap: 8px; align-items: baseline; }
 .group h2 small { color: var(--muted); font-weight: 400; font-size: 14px; }
 .day h3 { font-size: 15px; margin: 12px 0 6px; display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
