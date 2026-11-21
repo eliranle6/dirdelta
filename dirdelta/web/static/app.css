@@ -307,9 +307,9 @@ header#top > #crumbs:has(> #where:empty) { display: none; }
 .tree .row > * + * { margin-left: 6px; } .tree .row > .guide + *, .tree .row > .guide + .guide { margin-left: 0; }
 .row .guide { flex: none; width: 18px; align-self: stretch; margin: calc(-1 * var(--row-pad, 6px)) 0 calc(-1 * var(--row-pad, 6px) - 1px); position: relative; }
 .row .guide::before, .row .guide::after { content: ''; position: absolute; border-color: var(--muted); opacity: .55; }
-.row .guide.pipe::before, .row .guide.tee::before { left: 8px; top: 0; bottom: 0; border-left: 1.5px solid; }
-.row .guide.elbow::before { left: 8px; top: 0; height: 50%; border-left: 1.5px solid; }
-.row .guide.tee::after, .row .guide.elbow::after { left: 8px; right: 0; top: 50%; border-top: 1.5px solid; }
+.row .guide.pipe::before, .row .guide.tee::before { left: calc(50% - .75px); top: 0; bottom: 0; border-left: 1.5px solid; }
+.row .guide.elbow::before { left: calc(50% - .75px); top: 0; height: 50%; border-left: 1.5px solid; }
+.row .guide.tee::after, .row .guide.elbow::after { left: calc(50% - .75px); right: 0; top: 50%; border-top: 1.5px solid; }
 .tree .row .twisty.leaf { height: 0; border-top: 1.5px solid var(--muted); opacity: .55; }
 .tree .row > .guide + .name { margin-left: 4px; }
 /* The bottom bar in sections: the main row (back, the main action, ?); what acts on the selection; on the
@@ -659,4 +659,16 @@ footer#bottom { padding-top: 12px; }
   main:has(> .statehead) { padding-top: 2px; }
   .tree .row { --row-pad: 3px; min-height: 32px; padding-top: var(--row-pad); padding-bottom: var(--row-pad); }
   .tree .row .mark { padding-top: 0; padding-bottom: 0; }
+}
+/* (The root row's ▾ in a tree row's twisty column: 6px in, 18px wide, as .tree .row's) */
+@media (max-width: 600px) {
+  .rootrow { padding-left: 6px; gap: 0; }
+  .rootrow > * + * { margin-left: 6px; }
+  .rootrow > .roottwisty { width: 18px; flex: none; text-align: center; color: var(--muted); }
+}
+@media (max-width: 600px) {
+  .rootrow .pairside { font-size: 13px; padding: 1px 4px; gap: 3px; }
+  .rootrow .pairside .icon svg { width: 14px; height: 14px; }
+  .rootrow > .pairarrows { margin-left: 4px; }
+  .rootrow > .pairarrows + .pairside { margin-left: 4px; }
 }

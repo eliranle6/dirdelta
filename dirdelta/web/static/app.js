@@ -577,7 +577,9 @@ function pairTitle(text, sides) {
 function rootRow(sides) {
   const [a, b] = sides;
   const box = side => el('span', {class: 'pairside', style: '--side:' + side.color}, icon(side.icon), el('span', {}, side.name));
+  // (Its ▾ where a tree row's is, so the tree's first lines hang from it as a folder's from its own)
   return el('div', {class: 'rootrow', id: 'rootrow', onclick: () => act('select', {path: ''})},
+    el('span', {class: 'roottwisty'}, '▾'),
     el('button', {class: 'mark rootmark', id: 'rootmark', title: 'All the files: the next mark', onclick: event => {
       event.stopPropagation();
       const next = nextState('.');
