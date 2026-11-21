@@ -170,6 +170,8 @@ class ImportPageTest(ImportTest):
         self.assertEqual(1, brief['replicas'][0]['unhashed'])
         self.call('POST', '/api/import/assign', body={'id': import_id, 'rels': [first['rel']], 'skip': True})
         self.call('POST', '/api/import/assign', body={'id': import_id, 'rels': [second['rel']], 'target': 'media/Trip'})
+        # (Offered first next time, kept with the replica's recent dirs)
+        self.assertEqual(['media/Trip'], self.call('GET', '/api/import', {'id': import_id})['recentDirs'])
         with mock.patch('dirdelta.util.dryrun.DRYRUN', False):
             self.call('POST', '/api/import/apply', body={'id': import_id})
             self.wait_for(applying.applying_of(import_id).thread)

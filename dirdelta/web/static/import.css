@@ -91,3 +91,19 @@ h2.head { display: flex; align-items: center; gap: 8px; }
 /* The selection's row: as tall as its bar, whether it's the bar or the hint, so nothing moves as the first is selected */
 .sticky .selrow { min-height: var(--selrow-h, 42px); display: flex; align-items: center; }
 .sticky .selrow > * { flex: 1; }
+/* The folder dialog: over the page, the replica's folders browsed or searched, the recent ones on top */
+.overlay { position: fixed; inset: 0; z-index: 50; background: rgba(0, 0, 0, .45); display: flex; align-items: center; justify-content: center; padding: 16px; }
+.dialog { background: var(--card); color: var(--fg); border-radius: 12px; width: min(560px, 100%); max-height: 86vh; display: flex; flex-direction: column; gap: 8px; padding: 14px; box-shadow: 0 8px 30px rgba(0, 0, 0, .3); }
+.dialoghead { display: flex; justify-content: space-between; align-items: center; font-size: 16px; }
+.dialog .folders { overflow-y: auto; min-height: 120px; border: 1px solid var(--line); border-radius: 8px; }
+.dialog .recent { display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 8px; max-height: 30vh; overflow-y: auto; }
+.dialog .recent > .note { padding: 4px 10px; }
+.folderrow { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 4px 8px; border-top: 1px solid var(--line); }
+.folders .folderrow:first-child, .recent .note + .folderrow { border-top: 0; }
+.folderrow .link { display: inline-flex; align-items: center; gap: 6px; text-align: left; overflow-wrap: anywhere; }
+button.link { background: none; border: 0; padding: 4px 2px; color: var(--fg); cursor: pointer; font: inherit; }
+.crumbs button.link { color: var(--accent); }
+.dialogfoot { display: flex; gap: 6px; flex-wrap: wrap; }
+.dialogfoot input { flex: 1 1 180px; min-width: 0; }
+.bar .recentdir { max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (hover: hover) { .folderrow:hover { background: var(--sel); } }

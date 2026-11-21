@@ -300,11 +300,11 @@ function renderImport() {
 // them. One height either way, so nothing under it moves as the first is selected
 function selectionRow(asBar) {
   const data = page.data;
+  // (The folders they were last put in, a tap each; any other chosen in the folder dialog)
+  const recent = (data.recentDirs || []).slice(0, MAX_RECENT_SHOWN);
   const row = page.selected.size || asBar ? el('div', {class: 'bar'}, el('b', {}, page.selected.size + ' selected'),
-    el('input', {type: 'text', id: 'target', list: 'folders', placeholder: 'Folder in ' + data.destName + '…',
-      value: page.target, oninput: event => { page.target = event.target.value; }}),
-    el('datalist', {id: 'folders'}, data.folders.map(dir => el('option', {value: dir}))),
-    el('button', {class: 'primary', onclick: () => assign([...page.selected], page.target)}, 'Put them in this folder'),
+    el('button', {class: 'primary', onclick: () => chooseFolder(dir => assign([...page.selected], dir))}, 'Choose folder…'),
+    recent.map(dir => el('button', {class: 'recentdir', title: 'Put them in ' + dir, onclick: () => assign([...page.selected], dir)}, '→ ' + shortDir(dir))),
     el('button', {onclick: () => assign([...page.selected], null, true)}, 'Skip them'),
     el('button', {onclick: () => { page.selected.clear(); showSelection(); }}, 'Clear')) :
     el('div', {class: 'note'}, 'Tap photos to select them, or use a group\'s or a day\'s buttons.');
@@ -323,6 +323,54 @@ function fitSelectionRow() {
   probe.remove();
 }
 window.addEventListener('resize', fitSelectionRow);
+
+const MAX_RECENT_SHOWN = 5;
+
+// A folder's last two parts (its whole path in its tooltip)
+function shortDir(dir) {
+  const parts = dir.split('/');
+  return parts.length > 2 ? '…/' + parts.slice(-2).join('/') : dir;
+}
+
+// The folder dialog: the replica's folders, browsed (each folder's own, a tap going into it, Up going out) or searched
+// (any folder whose path has what's typed), the recent ones on top, a new one made under the one shown; done calls
+// done(the folder's path in the replica) once one is chosen
+function chooseFolder(done) {
+  const data = page.data, all = data.folders || [];
+  let at = '', query = '';
+  const box = el('div', {class: 'dialog'}), overlay = el('div', {class: 'overlay', onclick: event => { if (event.target === overlay) close(); }}, box);
+  const close = () => { overlay.remove(); document.removeEventListener('keydown', onKey); };
+  const onKey = event => { if (event.key === 'Escape') close(); };
+  const choose = dir => { close(); done(dir); };
+  const children = dir => {
+    const prefix = dir ? dir + '/' : '';
+    return [...new Set(all.filter(path => path.startsWith(prefix) && path.length > prefix.length).map(path => prefix + path.slice(prefix.length).split('/')[0]))].sort((a, b) => a.localeCompare(b));
+  };
+  const row = (dir, text) => el('div', {class: 'folderrow'}, el('button', {class: 'link', onclick: () => { at = dir; query = ''; draw(); }}, icon('folder'), text),
+    el('button', {class: 'small', onclick: () => choose(dir)}, 'Choose'));
+  const draw = () => {
+    const search = el('input', {type: 'search', placeholder: 'Search the folders of ' + data.destName, value: query,
+      oninput: event => { query = event.target.value; draw(); }});
+    const found = query ? all.filter(path => path.toLowerCase().includes(query.toLowerCase())).slice(0, 200) : children(at);
+    const recent = data.recentDirs || [];
+    const crumbs = [el('button', {class: 'link', onclick: () => { at = ''; draw(); }}, data.destName)];
+    at.split('/').filter(Boolean).forEach((part, i, parts) => crumbs.push(' / ', el('button', {class: 'link', onclick: () => { at = parts.slice(0, i + 1).join('/'); draw(); }}, part)));
+    const newName = el('input', {type: 'text', placeholder: 'New folder in ' + (at ? at.split('/').pop() : data.destName)});
+    box.replaceChildren(
+      el('div', {class: 'dialoghead'}, el('b', {}, 'Choose a folder in ' + data.destName), el('button', {class: 'small quiet', onclick: close}, '✕')),
+      !query && recent.length ? el('div', {class: 'recent'}, el('div', {class: 'note'}, 'Recent'), recent.map(dir => row(dir, dir))) : '',
+      search,
+      query ? el('div', {class: 'note'}, found.length + (found.length === 200 ? '+' : '') + ' found') : el('div', {class: 'crumbs'}, crumbs),
+      el('div', {class: 'folders'}, found.length ? found.map(dir => row(dir, query ? dir : dir.split('/').pop())) : el('div', {class: 'note'}, query ? 'None.' : 'No folders in it.')),
+      query ? '' : el('div', {class: 'dialogfoot'}, newName,
+        el('button', {onclick: () => { const name = newName.value.trim().replace(/^\/+|\/+$/g, ''); if (name) choose((at ? at + '/' : '') + name); }}, 'Make it and choose it'),
+        at ? el('button', {class: 'primary', onclick: () => choose(at)}, 'Choose ' + at.split('/').pop()) : ''));
+    if (query) { search.focus(); search.setSelectionRange(query.length, query.length); }
+  };
+  document.addEventListener('keydown', onKey);
+  draw();
+  document.body.append(overlay);
+}
 
 // A change of the selection shown at once: the photos' marks and the selection's row, nothing else drawn again (a
 // page of thousands of photos takes a second to draw)
@@ -397,7 +445,8 @@ function groupParts(group, isTitled) {
     const open = dayFiles.filter(isUndecided).map(file => file.rel);
     const header = el('h3', {}, day.day === 'None' ? 'No date' : day.day, el('small', {}, dayFiles.length + ' ' + plural(dayFiles.length, 'file', 'files')),
       open.length ? el('button', {onclick: () => { open.forEach(rel => page.selected.add(rel)); showSelection(); }}, 'Select the day') : '',
-      open.length ? day.suggested.map(dir => el('button', {onclick: () => assign(open, dir)}, 'All to ' + dir)) : '');
+      open.length ? day.suggested.map(dir => el('button', {onclick: () => assign(open, dir)}, 'All to ' + dir)) : '',
+      open.length ? el('button', {class: 'quiet', onclick: () => chooseFolder(dir => assign(open, dir))}, 'All to…') : '');
     parts.push(el('div', {class: 'day', 'data-day': (isTitled ? group.title + ' · ' : '') + (day.day === 'None' ? 'No date' : day.day),
       'data-undecided': open.length}, header, el('div', {class: 'grid'}, dayFiles.map(photo))));
   }

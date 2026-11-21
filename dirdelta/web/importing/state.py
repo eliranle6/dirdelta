@@ -6,10 +6,20 @@ import os
 import time
 
 from dirdelta.known import replicanames
+from dirdelta.known import replicas
 from dirdelta.phoneimport import applying, copying, known, overview, sources, store, suggest
 from dirdelta.util import dryrun
 from dirdelta.web import naming
 from dirdelta.web.importing import checks as checking
+
+
+def described(source):
+    """sources.describe(source), a phone called by the name the user gave it"""
+    found = sources.describe(source)
+    named = ((replicas.load().phones or {}).get(sources.phone_id(source)) or {}).get('name')
+    if found['device'] and named:
+        found['device'] = named
+    return found
 
 
 def summary(found):
@@ -17,7 +27,7 @@ def summary(found):
     counts = {store.PENDING: 0, store.COPIED: 0, store.MOVED: 0, store.SKIPPED: 0}
     for info in files.values():
         counts[info['state']] += 1
-    return {'id': found.id, 'source': sources.describe(found.source), 'dest': found.dest, 'destName': naming.name(found.dest),
+    return {'id': found.id, 'source': described(found.source), 'dest': found.dest, 'destName': naming.name(found.dest),
             'destDisk': replicanames.disk_name(found.dest),
             'otherDisk': found.dest_id is not None and found.dest_id != checking.identity(found.dest),
             'created': found.created, 'changed': _changed(found), 'counts': counts, 'already': already(found, files)}
@@ -85,6 +95,8 @@ def import_state(found, check, with_files=True):
         _copy_new(found, files, haves)
     if with_files:
         state['folders'] = known.dirs.get(found.dest, []) if known is not None else []
+        # (The folders files were last put in, the latest first: offered at once, kept across imports and the file sort)
+        state['recentDirs'] = replicas.load().dirs_of(found.dest)
         state['groups'] = _groups(found.source, files, haves, check.suggester)
     return state
 

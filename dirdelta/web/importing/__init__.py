@@ -169,6 +169,11 @@ def routes():
         target = body.get('target')
         target = target.strip('/') if target and _is_inside(target) else None
         found.choose(body.get('rels', []), target, bool(body.get('skip')))
+        if target:
+            # (The folder offered first next time, here and in the file sort: the replica's recent dirs, kept)
+            known_replicas = replicas.load()
+            known_replicas.record_dir(found.dest, target)
+            replicas.save(known_replicas)
         return {'ok': True}
 
     def read(query, body):
