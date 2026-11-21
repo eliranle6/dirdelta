@@ -7,7 +7,7 @@ const MAX_ROWS = 1500;
 const view = {
   version: 0, screen: null, items: [], info: new Map(), children: new Map(), fileCounts: new Map(),
   picked: new Set(), selected: null, sideSelected: null, status: '', previewVersion: -1,
-  expanded: new Set(['.']), sideExpanded: new Set(), wentBack: false, search: '', tab: 0, showHelp: false, lazy: new Map(), running: false, log: [],
+  expanded: new Set(['.']), sideExpanded: new Set(), wentBack: false, search: '', tab: 0, lazy: new Map(), running: false, log: [],
 };
 
 async function api(method, path, body) {
@@ -77,7 +77,7 @@ function newScreen(screen) {
   const previous = view.shownOne;
   view.shownOne = true;
   Object.assign(view, {screen, items: [], info: new Map(), children: new Map(), fileCounts: new Map(),
-    picked: new Set(), search: '', tab: 0, showHelp: false, previewVersion: -1, lazy: new Map(),
+    picked: new Set(), search: '', tab: 0, previewVersion: -1, lazy: new Map(),
     expanded: new Set(['.']), sideExpanded: null, sideFollowed: undefined, scrollTo: 0, isKept: false, sides: null});
   // Each screen its own address: a new picker a step of the browser's history (its Back is the screen's
   // Back, see goBack()); one shown on going back, or on a refresh, or a messages screen in its place
@@ -244,7 +244,7 @@ function renderPickerFrame() {
   // (No side tree: the tree (or the menu) takes the whole width, a tree's details in the bottom bar)
   const body = el('div', {class: 'split' + (!screen.side && (inBar || screen.mode === 'list') ? ' single' : '')}, el('div', {id: 'tree'}),
     el('div', {}, inBar ? '' : el('div', {id: 'preview'}), el('div', {id: 'side'})));
-  parts.push(body, el('div', {class: 'footer', id: 'footer'}), el('div', {class: 'help', id: 'help'}));
+  parts.push(body, el('div', {class: 'footer', id: 'footer'}));
   placePreview(inBar);
   // A menu right after a tree (what to do with its picks, then its confirmations): a panel over that tree,
   // dimmed under it, rather than a page of its own; the flow is the same (the panel is this menu's screen)
@@ -324,7 +324,6 @@ function renderPickerParts() {
   document.getElementById('status').replaceChildren(segmentsSpan(NARROW.matches ? shortStatus(view.status) : view.status));
   markHashingNow(document.getElementById('status'));
   renderPickerActions();
-  renderHelp();
   colorNames(document.getElementById('main'));
   colorNames(document.getElementById('bottom'));
 }
@@ -1092,9 +1091,6 @@ function renderPickerActions() {
         'aria-expanded': String(actionsOpen()), onclick: () => { setActionsOpen(!actionsOpen()); renderPickerActions(); }}, actionsOpen() ? '▴' : '▾')) :
       enterButton);
   }
-  if (screen.hints.length || screen.help.length) {
-    main.push(el('button', {class: 'help', title: 'What the keys do', onclick: () => { view.showHelp = !view.showHelp; renderHelp(); }}, '?'));
-  }
   const keyButton = (key, onclick) => el('button', {title: key.text, onclick},
     key.text ? short(capitalized(key.text)) : key.name, el('small', {class: 'keyname'}, key.name));
   const onSelection = [], general = [], marks = [];
@@ -1177,17 +1173,6 @@ function stateButtonLabel(state, path) {
     parts.length ? ': ' : '', ...parts.flatMap((part, i) => i ? [' · ', part] : [part])];
 }
 
-function renderHelp() {
-  const box = document.getElementById('help');
-  if (!box) return;
-  const screen = view.screen;
-  // (A tree of states: what its marks mean first, the keys after; the keys hidden on a touch screen, which has none)
-  const keys = isTouch() ? [] : screen.hints.map(([key, text]) => el('div', {}, key.padEnd(10) + text));
-  const lines = screen.help.map(line => el('div', {}, styledSpan(line)));
-  box.replaceChildren(view.showHelp ? el('div', {class: 'preview'}, screen.states.length ? [lines, keys] : [keys, lines]) : '');
-}
-
-function isTouch() { return window.matchMedia('(hover: none)').matches; }
 
 function capitalized(text) { return text ? text[0].toUpperCase() + text.slice(1) : text; }
 
@@ -1415,6 +1400,31 @@ function setBarHeight(px) {
   placePanel();
 }
 
+// On a phone, the bottom bar's size in steps rather than dragged: hidden (only these buttons), its first row (the main
+// action), its first two (and what acts on the selection), or all of it; kept for this browser
+const BAR_LEVEL_KEY = 'dirdelta_bar_level', BAR_LEVELS = 4;
+function setBarLevel(level) {
+  const bottom = document.getElementById('bottom');
+  level = Math.max(0, Math.min(BAR_LEVELS - 1, level));
+  bottom.dataset.level = String(level);
+  bottom.querySelectorAll('.barsteps button').forEach(button => {
+    button.disabled = button.dataset.step === 'up' ? level === BAR_LEVELS - 1 : level === 0;
+  });
+  try { localStorage.setItem(BAR_LEVEL_KEY, String(level)); } catch (error) { /* (not kept) */ }
+  placePanel();
+}
+
+function barSteps() {
+  const bottom = document.getElementById('bottom');
+  const step = by => () => setBarLevel(Number(bottom.dataset.level) + by);
+  bottom.prepend(el('div', {class: 'barsteps'},
+    el('button', {class: 'small', 'data-step': 'down', title: 'Show less of this bar', 'aria-label': 'Show less of this bar', onclick: step(-1)}, '\ufe3e'),
+    el('button', {class: 'small', 'data-step': 'up', title: 'Show more of this bar', 'aria-label': 'Show more of this bar', onclick: step(1)}, '\ufe3d')));
+  let level = BAR_LEVELS - 1;
+  try { const kept = localStorage.getItem(BAR_LEVEL_KEY); if (kept !== null) level = Number(kept); } catch (error) { /* (all of it) */ }
+  setBarLevel(level);
+}
+
 function barHandle() {
   const bottom = document.getElementById('bottom');
   const handle = el('div', {class: 'barhandle', title: 'Drag to make this bar taller or shorter (double-click: back to its size)'});
@@ -1446,5 +1456,6 @@ function barHandle() {
 }
 
 barHandle();
+barSteps();
 tabBar('run');
 poll();

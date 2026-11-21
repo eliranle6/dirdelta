@@ -112,5 +112,7 @@ def replicas_shown(pair):
         looks = known_replicas.load().looks
     except known_replicas.ReplicasError:
         looks = {}
-    return [{'path': path, 'name': name, 'drive': paths.is_cloud_path(path),
-             'look': looks.get(replicanames.label_key(path)) or {}} for path, name in pair]
+    # (Each by its name as it is now, not as the flow had it when it started: a replica named meanwhile is shown so)
+    names = replicanames.short_names([path for path, _ in pair])
+    return [{'path': path, 'name': names[path], 'drive': paths.is_cloud_path(path),
+             'look': looks.get(replicanames.label_key(path)) or {}} for path, _ in pair]

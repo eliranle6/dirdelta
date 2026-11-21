@@ -135,7 +135,8 @@ class HomeTest(WebTest):
         frontend.show_replicas([(self.local, 'photos'), ('cloud/photos', 'Drive')])
         self.wait_for(lambda: self.session.screen() is not None)
         shown = api.routes(self.session, None)[('GET', '/api/state')]({}, {})['screen']['replicas']
-        self.assertEqual([('photos', False), ('Drive', True)], [(replica['name'], replica['drive']) for replica in shown])
+        # (By their names as they are now, not as the flow said them when it started: here, their disks')
+        self.assertEqual([('LocalDisk:photos', False), ('Cloud:photos', True)], [(replica['name'], replica['drive']) for replica in shown])
         self.assertEqual({'color': 'teal'}, shown[1]['look'])
         self.session.screen().cancel()
 

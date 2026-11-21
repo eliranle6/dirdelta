@@ -324,7 +324,7 @@ header#top > #crumbs:has(> #where:empty) { display: none; }
 @media (hover: none) and (pointer: coarse) { #actions .keyname { display: none; } }
 /* (At most half the screen, scrolling in itself: the tree above it stays in sight) */
 footer#bottom { max-height: var(--bar-h); overflow-y: auto; overscroll-behavior: contain; }
-footer#bottom.sized { height: var(--bar-h); }
+/* (As tall as what's on it, at most --bar-h: dragging its edge sets that most, not its height) */
 .side .tree { border: 0; border-radius: 0; }
 /* A tree's menu (what to do with its picks) as a panel over it: the tree dimmed under it, the panel from the
    bottom bar up (at most most of the height, scrolling in itself); a tap outside it is Back */
@@ -583,3 +583,19 @@ footer#bottom { padding-top: 12px; }
   .tabselect select { max-width: 46vw; }
 }
 .actsec > .markrow { flex: 1 1 100%; }
+/* On a phone: no ? (it's about keys, and a phone has none); the bottom bar's size in steps (︽ ︾, setBarLevel()), not
+   dragged: hidden, its first row, its first two, all of it (with the status line) */
+.barsteps { display: none; }
+@media (max-width: 600px) {
+  .barhandle { display: none; }
+  footer#bottom { padding-top: 4px; }
+  .barsteps { display: flex; justify-content: center; gap: 10px; margin: -2px 0 2px; }
+  .barsteps button { padding: 0 18px; font-size: 16px; line-height: 1.3; }
+  footer#bottom[data-level="0"] > #actions, footer#bottom[data-level="0"] > #status,
+  footer#bottom[data-level="1"] > #status, footer#bottom[data-level="2"] > #status { display: none; }
+  /* (Its rows: the main action (with the checked files' line), then each part after it) */
+  footer#bottom[data-level="1"] > #actions > :not(.main):not(.checkedline),
+  footer#bottom[data-level="2"] > #actions > .main ~ * ~ * { display: none; }
+}
+/* (On a phone, as tall as the rows chosen show, up to most of the screen) */
+@media (max-width: 600px) { footer#bottom { max-height: 70vh; } }
