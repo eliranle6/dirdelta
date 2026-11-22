@@ -10,7 +10,8 @@ from dirdelta.known import replicas
 from dirdelta.trees import paths
 from dirdelta.util import media
 
-GVFS_DIR = '/run/user/%d/gvfs' % (os.getuid(),)
+# (DIRDELTA_GVFS_DIR: another, e.g. a made-up phone's for a test run)
+GVFS_DIR = os.environ.get('DIRDELTA_GVFS_DIR') or '/run/user/%d/gvfs' % (os.getuid(),)
 # Dirs not looked in: apps' own data, thumbnails, and the trash
 SKIPPED_DIRS = {'.thumbnails', '.trashed', '.Trash', 'Android', '.cache', 'cache', 'LOST.DIR'}
 
