@@ -1325,7 +1325,17 @@ every link carries, then a cookie), and a watcher.
   a phone's or a folder's files are copied into the replica (Copy N into REPLICA; the source keeps its own, removed from it
   in Already in REPLICA, which the head links to), a Drive inbox's moved; what's going on (copying the new ones here,
   copying or moving into the replica, removing) a bar each in the head, with its percentage and what it said at most 10
-  lines high, scrolled to its end (`progress()`); a poll redraws the photos only if anything about them
+  lines high, scrolled to its end (`progress()`);
+  reviewed 2026-11-22 (an agent's UX review, its points done): the tabs with icons (camera, chat, video; Ready's copy, Already's
+  check), their counts alone (✓ once all is decided), the open one alone titled on a phone; one line of progress (N left, the
+  bar, %, the day shown, Next ›) with View (`viewButton()`: tiles S/M/L, captions off/name/all, by day or by month, oldest or
+  newest first, Show the decided ones too; kept in localStorage); days named short (Wed 4 Mar), each with a ☐ N toggle, the
+  suggested folders as chips (its last two parts, the whole in the tooltip) and Other folder… (the folder dialog, the
+  suggestions on top, the search focused, Put them in X); a tile's ✓ once selected, Shift selecting a range, ⤢ seeing it
+  whole (`openViewer()`: ← → Space Escape), its caption ✓ or ≈ as its badge; a choice shown at once (`choose()`), told the
+  server after; Copy green, said at once as it's pressed; a job done titled by what it did (✓ Copied 6 into Laptop), with ✕,
+  and while it goes on in the footer (Copying 3 of 6…); removing weak matches offers Check contents first; Escape clears the
+  selection, Enter chooses its folder; End this import asked in a dialog; a poll redraws the photos only if anything about them
   changed (`filesSignature()`), else the head and the footer alone,
   each with how many are new and the folders suggested for all of it (`Suggester.suggest_group()`: where the replica
   keeps WhatsApp's images, or videos, by their names), then by day (the day's suggestions, as before); End this import

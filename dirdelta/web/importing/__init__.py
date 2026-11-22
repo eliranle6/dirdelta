@@ -12,7 +12,7 @@ from dirdelta.trees import paths
 from dirdelta.web import naming
 from dirdelta.util import dryrun
 from dirdelta.web.importing import checks as checking
-from dirdelta.web.importing.state import import_state, note_where, summary
+from dirdelta.web.importing.state import described, import_state, note_where, summary
 from dirdelta.web.server import FileReply, Reply
 
 
@@ -222,7 +222,7 @@ def routes():
         reading, moving = copying.reading_of(found.source), applying.applying_of(found.id)
         if (moving is not None and not moving.is_done) or (reading is not None and reading.phase == 'copying'):
             return {'ok': False, 'error': "Files are being copied or moved: wait for that to end."}
-        removing.remove(found, rels)
+        removing.remove(found, rels, described(found.source)['device'])
         return {'ok': True}
 
     def end(query, body):

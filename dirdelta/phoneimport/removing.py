@@ -5,8 +5,10 @@ import doesn't list it any more. A dry run (see dryrun.py) only says what it wou
 import os
 import subprocess
 import threading
+import time
 
 from dirdelta.util import dryrun
+from dirdelta.util import text
 
 # {import id: its Removing}, the ones running or done since the daemon started
 _removings = {}
@@ -16,8 +18,10 @@ _lock = threading.Lock()
 class Removing(object):
     """Removing an import's files from its source: is_done, and [(text, color)] lines saying what was done"""
 
-    def __init__(self, found, relpaths):
-        self.import_, self.relpaths = found, list(relpaths)
+    def __init__(self, found, relpaths, source_name=None):
+        # (source_name: what the user calls the source, e.g. their phone's name, said in its lines)
+        self.import_, self.relpaths, self.source_name = found, list(relpaths), source_name
+        self.started = time.time()
         self.lines = []
         self.is_done = False
         self.nr_removed = 0
@@ -38,8 +42,8 @@ class Removing(object):
                         self._forget(relpath)
         finally:
             found.pool.save()
-            where = "the phone" if found.source.startswith('/run/') else "Drive" if found.pool.is_drive else "the folder"
-            self.lines.append(("%s %d file(s) from %s." % ("Would remove" if dryrun.DRYRUN else "Removed", self.nr_removed, where), 'green'))
+            where = self.source_name or ("the Drive inbox" if found.pool.is_drive else "the source")
+            self.lines.append(("%s %s from %s." % ("Would remove" if dryrun.DRYRUN else "Removed", text.files(self.nr_removed), where), 'green'))
             if dryrun.DRYRUN:
                 self.lines.append((dryrun.note(), 'green'))
             self.is_done = True
@@ -82,13 +86,13 @@ class Removing(object):
                 pass
 
 
-def remove(found, relpaths):
+def remove(found, relpaths, source_name=None):
     """Start removing the import found's files at relpaths from its source, unless one's going on; returns its Removing"""
     with _lock:
         removing = _removings.get(found.id)
         if removing is not None and removing.thread.is_alive():
             return removing
-        removing = _removings[found.id] = Removing(found, relpaths)
+        removing = _removings[found.id] = Removing(found, relpaths, source_name)
         removing.thread.start()
         return removing
 

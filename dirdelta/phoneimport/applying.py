@@ -7,6 +7,7 @@ Drive's trash, as a sort moves it out of its inbox. From Drive into Drive, a fil
 import hashlib
 import os
 import threading
+import time
 
 from dirdelta.hashes import hashcache
 from dirdelta.phoneimport import copying, store
@@ -14,6 +15,7 @@ from dirdelta.trees import entries
 from dirdelta.trees import paths
 from dirdelta.trees.localdiskdirtree import fs
 from dirdelta.util import dryrun
+from dirdelta.util import text
 
 # {import id: its Applying}, the ones running or done since the daemon started
 _applyings = {}
@@ -30,6 +32,7 @@ class Applying(object):
         self.nr_moved = self.nr_there = 0
         # How many files there are to do, and how many were done (each, whatever came of it): for the page's bar
         self.nr_total = self.nr_done = 0
+        self.started = time.time()
         self.thread = threading.Thread(target=self._run, daemon=True)
 
     def _run(self):
@@ -46,8 +49,8 @@ class Applying(object):
             found.save()
             found.pool.save()
             moved = found.pool.is_drive
-            self.lines.append(("%s %d file(s) into the replica%s.%s" % (
-                ("Would move" if moved else "Would copy") if dryrun.DRYRUN else ("Moved" if moved else "Copied"), self.nr_moved,
+            self.lines.append(("%s %s into the replica%s.%s" % (
+                ("Would move" if moved else "Would copy") if dryrun.DRYRUN else ("Moved" if moved else "Copied"), text.files(self.nr_moved),
                 ", %d there already" % (self.nr_there,) if self.nr_there else "",
                 "" if moved or dryrun.DRYRUN or not self.nr_moved else " The %s keeps its own: remove them from it in Already in the replica." % (
                     "phone" if found.source.startswith('/run/') else "folder")), 'green'))

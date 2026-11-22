@@ -91,9 +91,9 @@ def import_state(found, check, with_files=True):
                  reading={'phase': reading.phase, 'message': reading.message, 'asked': reading.nr_asked,
                           'copied': reading.nr_copied} if reading else None,
                  applying={'done': moving.is_done, 'lines': moving.lines, 'total': moving.nr_total, 'count': moving.nr_done,
-                           'moves': found.pool.is_drive} if moving else None,
-                 removing={'done': removed.is_done, 'lines': removed.lines, 'total': removed.nr_total, 'count': removed.nr_done}
-                 if removed else None)
+                           'moves': found.pool.is_drive, 'moved': moving.nr_moved, 'started': moving.started} if moving else None,
+                 removing={'done': removed.is_done, 'lines': removed.lines, 'total': removed.nr_total, 'count': removed.nr_done,
+                           'removed': removed.nr_removed, 'started': removed.started} if removed else None)
     if with_files:
         state['folders'] = known.dirs.get(found.dest, []) if known is not None else []
         # (The folders files were last put in, the latest first: offered at once, kept across imports and the file sort)

@@ -14,7 +14,7 @@
 .chips button.on { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
 .day h3, .day h2 { font-size: 15px; margin: 14px 0 6px; display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
 .day h3 small, .day h2 small { color: var(--muted); font-weight: 400; }
-.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 6px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(var(--tile, 118px), 1fr)); gap: 6px; }
 .photo { position: relative; background: var(--card); border: 1px solid var(--line); border-radius: 8px; overflow: hidden;
   cursor: pointer; outline: 3px solid transparent; }
 .photo.sel { outline-color: var(--accent); }
@@ -115,7 +115,6 @@ button.link { background: none; border: 0; padding: 4px 2px; color: var(--fg); c
 .note.more { text-align: center; padding: 16px; }
 /* The Already-in tab, in its own tone; each photo there marked strong (the same contents) or weak (name and size) */
 .grouptabs .theretab { margin-left: auto; }
-.grouptabs .theretab.on { background: var(--green); border-color: var(--green); }
 .photo .badge.strong { background: var(--green); color: #fff; }
 .photo .badge.weak { background: var(--yellow); color: #fff; }
 .day h3 .daytoggle.on { background: var(--sel); border-color: var(--accent); }
@@ -132,3 +131,65 @@ button.link { background: none; border: 0; padding: 4px 2px; color: var(--fg); c
 .progresshead { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
 .progress .lines { max-height: calc(var(--lines, 10) * 1.45em); overflow-y: auto; font-family: ui-monospace, monospace; font-size: 12px;
   line-height: 1.45em; border: 1px solid var(--line); border-radius: 6px; padding: 4px 8px; background: var(--bg); }
+/* The import, reviewed (2026-11-22): one line of progress, the view's menu, chips, a tile's ✓ and ⤢, the photo seen whole */
+.sortmeter .meterline { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.sortmeter .meterline .meter { flex: 1 1 120px; margin: 0; }
+.sortmeter .meterline .pct { font-weight: 700; min-width: 3ch; }
+.sortmeter .meterline .grow { flex: 1; }
+.sortmeter #position { font-size: 12px; margin: 0; }
+.viewpick { position: relative; }
+.viewmenu { position: absolute; right: 0; top: calc(100% + 4px); z-index: 5; background: var(--card); border: 1px solid var(--line); border-radius: 10px;
+  padding: 8px; display: flex; flex-direction: column; gap: 6px; box-shadow: 0 6px 20px rgba(0, 0, 0, .18); min-width: 250px; }
+.viewmenu[hidden] { display: none; }
+.viewmenu > div { display: flex; gap: 4px; align-items: center; }
+.viewmenu > div > .note { min-width: 64px; }
+.viewmenu button.on { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
+button.chip { display: inline-flex; align-items: center; gap: 4px; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+button.chip .icon svg, .bar button .icon svg, .group button .icon svg, .day h3 button .icon svg { width: 15px; height: 15px; }
+.bar button, .group button, .day h3 button { display: inline-flex; align-items: center; gap: 4px; }
+.recentdirs { display: inline-flex; gap: 6px; overflow-x: auto; max-width: 100%; scrollbar-width: thin; }
+.recentdirs::-webkit-scrollbar { height: 4px; }
+.grouptabs .button { display: inline-flex; align-items: center; gap: 6px; }
+.grouptabs .icon svg { width: 16px; height: 16px; }
+.grouptabs .tabcount.good { color: var(--green); font-weight: 700; }
+.grouptabs .button.on .tabcount.good { color: #fff; }
+.group h2 { display: inline-flex; align-items: center; gap: 6px; }
+.primary.green { background: var(--green); border-color: var(--green); color: #fff; display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+.progresshead .dismiss { margin-left: auto; }
+/* A tile: ✓ in a circle once it's selected; ⤢ to see it whole (on a pointer, as it's hovered; on a touch screen, always) */
+.photo.sel { outline: 3px solid var(--accent); outline-offset: -3px; }
+.photo.sel::after { content: '✓'; position: absolute; top: 4px; left: 4px; width: 22px; height: 22px; border-radius: 50%; background: var(--accent);
+  color: #fff; font-weight: 700; font-size: 14px; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 0 2px #fff; }
+.photo .whole { position: absolute; bottom: auto; top: calc(var(--tile, 118px) - 34px); right: 4px; padding: 3px; border-radius: 6px; background: rgba(0, 0, 0, .45);
+  color: #fff; border: 0; display: flex; line-height: 0; }
+.photo .whole svg { width: 18px; height: 18px; }
+@media (hover: hover) { .photo .whole { opacity: 0; } .photo:hover .whole, .photo .whole:focus { opacity: 1; } }
+.photo .playglyph { font-size: 32px; color: var(--muted); }
+#main[data-captions="off"] .photo .cap { display: none; }
+#main[data-captions="name"] .photo .cap > :not(.name):not(.to) { display: none; }
+.photo .whole { top: auto; bottom: auto; }
+.photo { display: flex; flex-direction: column; }
+.photo > img, .photo > video, .photo > .noimg { flex: none; }
+.photo .whole { position: absolute; top: 4px; right: 4px; }
+.photo:has(.badge) .whole { top: 28px; }
+.viewer { flex-direction: row; gap: 8px; }
+.viewer figure { margin: 0; display: flex; flex-direction: column; gap: 8px; max-width: min(92vw, 1100px); max-height: 92vh; }
+.viewer .wholeimg { max-width: 100%; max-height: calc(92vh - 80px); object-fit: contain; border-radius: 8px; background: #000; }
+.viewer figcaption { background: var(--card); color: var(--fg); border-radius: 8px; padding: 8px 12px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; }
+.viewer .prev, .viewer .next { font-size: 34px; line-height: 1; padding: 8px 14px; border-radius: 50%; background: rgba(255, 255, 255, .85); border: 0; }
+.dialogfoot.end { justify-content: flex-end; }
+@media (max-width: 600px) {
+  .grouptabs { flex-wrap: wrap; overflow: visible; }
+  .viewer .prev, .viewer .next { position: absolute; bottom: 16px; }
+  .viewer .prev { left: 16px; } .viewer .next { right: 16px; }
+}
+.primary.green .icon, .bar .primary .icon { color: inherit; }
+@media (max-width: 600px) {
+  /* (A tab not shown: its icon and count alone; the selection's Skip, Clear, Remove their icons alone) */
+  .grouptabs { flex-wrap: nowrap; overflow-x: auto; }
+  .grouptabs .button:not(.on) .tabtitle { display: none; }
+  .bar .lbl { display: none; }
+  .sortmeter #position { display: none; }
+  .viewmenu .showall { padding-top: 4px; }
+}
+.viewmenu .showall { font-size: 14px; color: var(--fg); }

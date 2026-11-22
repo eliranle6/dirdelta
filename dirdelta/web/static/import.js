@@ -6,8 +6,23 @@
 'use strict';
 
 const params = new URLSearchParams(location.search);
+// How the photos are shown, the user's (kept in this browser): tiles' size, their captions, by day or by month, oldest or
+// newest first
+const VIEW_DEFAULTS = {tile: 'M', captions: 'all', by: 'day', order: 'old'};
+const TILE_SIZES = {S: 84, M: 118, L: 180};
 const page = {id: params.get('id'), data: null, selected: new Set(), timer: null, target: '', showAll: false,
-  group: null, nrDays: 0, openDirs: new Set()};
+  group: null, nrDays: 0, openDirs: new Set(), dismissed: new Set(), lastTapped: null, view: importView()};
+
+function importView() {
+  try { return Object.assign({}, VIEW_DEFAULTS, JSON.parse(localStorage.getItem('dirdelta_import_view') || '{}')); }
+  catch (error) { return Object.assign({}, VIEW_DEFAULTS); }
+}
+function setView(key, value) {
+  page.view[key] = value;
+  kept('dirdelta_import_view', JSON.stringify(page.view));
+  page.nrDays = 0;
+  renderImport();
+}
 page.group = groupInAddress();
 
 // The group shown (its key, in the address: #group=whatsapp-images), one at a time: each is big on its own
@@ -316,7 +331,8 @@ function have(file) {
   const name = file.rel.split('/').pop();
   return (file.have || []).map(found => {
     const there = found.relpath.split('/').pop() === name ? (found.relpath.split('/').slice(0, -1).join('/') || '(top)') : found.relpath;
-    return there + (found.how === 'contents' ? '' : ' ≈');
+    // (✓ the same contents, ≈ the same name and size only: as the tile's badge says)
+    return (found.how === 'contents' ? '✓ ' : '≈ ') + there;
   });
 }
 
@@ -335,10 +351,10 @@ function renderImport() {
   const parts = [];
   if (!focused) {
     parts.push(importHead(data, counts));
-    parts.push(el('div', {class: 'sticky'}, groupTabs(), [THERE, READY].includes(page.group) ? el('div', {class: 'sortmeter'}) : sortMeter(groupFiles), selectionRow()));
+    parts.push(el('div', {class: 'sticky'}, groupTabs(), sortMeter(groupFiles), selectionRow()));
   } else {
     const sticky = document.querySelector('.sticky');
-    sticky.querySelector('.sortmeter').replaceWith([THERE, READY].includes(page.group) ? el('div', {class: 'sortmeter'}) : sortMeter(groupFiles));
+    sticky.querySelector('.sortmeter').replaceWith(sortMeter(groupFiles));
     parts.push(document.querySelector('.importhead'), sticky);
   }
   if (group) parts.push(...groupParts(group));
@@ -347,6 +363,9 @@ function renderImport() {
     group.key === THERE ? 'None.' : group.days.some(day => day.files.some(isReady)) ? 'All decided: see ' + readyTitle() + '.' : 'Nothing new here.'));
   parts.push(endCard(data));
   if (!document.querySelector('#main button.sure')) main.replaceChildren(...parts);
+  // (The view's tile size and captions, the page's own)
+  main.style.setProperty('--tile', TILE_SIZES[page.view.tile] + 'px');
+  main.dataset.captions = page.view.captions;
   renderFooter(counts);
   fitHeader();
   fitSelectionRow();
@@ -360,21 +379,23 @@ function selectionRow(asBar) {
   if (page.group === THERE) return el('div', {class: 'selrow'}, removeBar(asBar));
   if (page.group === READY) {
     return el('div', {class: 'selrow'}, page.selected.size || asBar ? el('div', {class: 'bar'}, el('b', {}, page.selected.size + ' selected'),
-      el('button', {onclick: () => undecide([...page.selected])}, 'Back to undecided'),
-      el('button', {class: 'primary', onclick: () => chooseFolder(dir => assign([...page.selected], dir))}, 'Change folder…'),
-      el('button', {onclick: () => assign([...page.selected], null, true)}, 'Skip them'),
+      el('button', {class: 'primary', onclick: () => chooseFolder(dir => assign([...page.selected], dir))}, icon('folder'), 'Change folder…'),
+      el('button', {onclick: () => undecide([...page.selected])}, icon('back'), 'Back to undecided'),
+      el('button', {onclick: () => assign([...page.selected], null, true)}, icon('skip'), 'Skip'),
       el('button', {onclick: () => { page.selected.clear(); showSelection(); }}, 'Clear')) :
       el('div', {class: 'note'}, 'Open a folder and tap files to change them, or Undo all of a folder.'));
   }
   // (The folders they were last put in, a tap each; any other chosen in the folder dialog)
   const recent = (data.recentDirs || []).slice(0, MAX_RECENT_SHOWN);
   const row = page.selected.size || asBar ? el('div', {class: 'bar'}, el('b', {}, page.selected.size + ' selected'),
-    el('button', {class: 'primary', onclick: () => chooseFolder(dir => assign([...page.selected], dir))}, 'Choose folder…'),
-    recent.map(dir => el('button', {class: 'recentdir', title: 'Put them in ' + dir, onclick: () => assign([...page.selected], dir)}, '→ ' + shortDir(dir))),
-    el('button', {onclick: () => assign([...page.selected], null, true)}, 'Skip them'),
-    el('button', {class: 'danger quiet', onclick: removeSelected}, 'Remove…'),
-    el('button', {onclick: () => { page.selected.clear(); showSelection(); }}, 'Clear')) :
-    el('div', {class: 'note'}, 'Tap photos to select them, or use a group\'s or a day\'s buttons.');
+    el('button', {class: 'primary', onclick: () => chooseFolder(dir => assign([...page.selected], dir))}, icon('folder'), 'Choose folder…'),
+    // (The recent ones in a row of their own that scrolls sideways on a phone)
+    recent.length ? el('span', {class: 'recentdirs'}, recent.map(dir => el('button', {class: 'small chip', title: 'Put them in ' + dir,
+      onclick: () => assign([...page.selected], dir)}, icon('move'), shortDir(dir)))) : '',
+    el('button', {title: 'Skip them', onclick: () => assign([...page.selected], null, true)}, icon('skip'), el('span', {class: 'lbl'}, 'Skip')),
+    el('button', {title: 'Clear the selection', onclick: () => { page.selected.clear(); showSelection(); }}, '✕', el('span', {class: 'lbl'}, ' Clear')),
+    el('button', {class: 'tone-red', onclick: removeSelected, title: 'Remove them from ' + (data.source.device || 'the source')}, icon('trash'), el('span', {class: 'lbl'}, 'Remove…'))) :
+    el('div', {class: 'note'}, 'Tap photos to select (Shift: a range), or use a day\'s ☐.');
   return el('div', {class: 'selrow'}, row);
 }
 
@@ -397,7 +418,7 @@ function removeBar(asBar) {
   const source = data.source.device || (data.source.drive ? 'the Drive inbox' : 'the folder');
   if (!page.selected.size && !asBar) return el('div', {class: 'note'}, 'Tap the ones to remove from ' + source + ', or select a day\'s or all of a kind.');
   return el('div', {class: 'bar'}, el('b', {}, page.selected.size + ' selected'),
-    el('button', {class: 'danger', onclick: removeSelected}, 'Remove from ' + source + '…'),
+    el('button', {class: 'danger', onclick: removeSelected}, icon('trash'), 'Remove from ' + source + '…'),
     el('button', {onclick: () => { page.selected.clear(); showSelection(); }}, 'Clear'));
 }
 
@@ -412,7 +433,7 @@ function shortDir(dir) {
 // The folder dialog: the replica's folders, browsed (each folder's own, a tap going into it, Up going out) or searched
 // (any folder whose path has what's typed), the recent ones on top, a new one made under the one shown; done calls
 // done(the folder's path in the replica) once one is chosen
-function chooseFolder(done) {
+function chooseFolder(done, suggested) {
   const data = page.data, all = data.folders || [];
   let at = '', query = '';
   const box = el('div', {class: 'dialog'}), overlay = el('div', {class: 'overlay', onclick: event => { if (event.target === overlay) close(); }}, box);
@@ -429,20 +450,23 @@ function chooseFolder(done) {
     const search = el('input', {type: 'search', placeholder: 'Search the folders of ' + data.destName, value: query,
       oninput: event => { query = event.target.value; draw(); }});
     const found = query ? all.filter(path => path.toLowerCase().includes(query.toLowerCase())).slice(0, 200) : children(at);
-    const recent = data.recentDirs || [];
+    // (The suggested ones and the recent ones, on top)
+    const recent = [...new Set((suggested || []).concat(data.recentDirs || []))];
     const crumbs = [el('button', {class: 'link', onclick: () => { at = ''; draw(); }}, data.destName)];
     at.split('/').filter(Boolean).forEach((part, i, parts) => crumbs.push(' / ', el('button', {class: 'link', onclick: () => { at = parts.slice(0, i + 1).join('/'); draw(); }}, part)));
     const newName = el('input', {type: 'text', placeholder: 'New folder in ' + (at ? at.split('/').pop() : data.destName)});
     box.replaceChildren(
       el('div', {class: 'dialoghead'}, el('b', {}, 'Choose a folder in ' + data.destName), el('button', {class: 'small quiet', onclick: close}, '✕')),
-      !query && recent.length ? el('div', {class: 'recent'}, el('div', {class: 'note'}, 'Recent'), recent.map(dir => row(dir, dir))) : '',
+      !query && recent.length ? el('div', {class: 'recent'}, el('div', {class: 'note'}, (suggested || []).length ? 'Suggested and recent' : 'Recent'),
+        recent.map(dir => row(dir, dir))) : '',
       search,
       query ? el('div', {class: 'note'}, found.length + (found.length === 200 ? '+' : '') + ' found') : el('div', {class: 'crumbs'}, crumbs),
       el('div', {class: 'folders'}, found.length ? found.map(dir => row(dir, query ? dir : dir.split('/').pop())) : el('div', {class: 'note'}, query ? 'None.' : 'No folders in it.')),
       query ? '' : el('div', {class: 'dialogfoot'}, newName,
-        el('button', {onclick: () => { const name = newName.value.trim().replace(/^\/+|\/+$/g, ''); if (name) choose((at ? at + '/' : '') + name); }}, 'Make it and choose it'),
-        at ? el('button', {class: 'primary', onclick: () => choose(at)}, 'Choose ' + at.split('/').pop()) : ''));
-    if (query) { search.focus(); search.setSelectionRange(query.length, query.length); }
+        el('button', {onclick: () => { const name = newName.value.trim().replace(/^\/+|\/+$/g, ''); if (name) choose((at ? at + '/' : '') + name); }}, 'Make it and choose it')),
+      at && !query ? el('div', {class: 'dialogfoot end'}, el('button', {class: 'primary', onclick: () => choose(at)}, icon('folder'), 'Put them in ' + at.split('/').pop())) : '');
+    search.focus();
+    if (query) search.setSelectionRange(query.length, query.length);
   };
   document.addEventListener('keydown', onKey);
   draw();
@@ -450,15 +474,17 @@ function chooseFolder(done) {
 }
 
 // A question over the page (Escape, or a tap outside it, is No): resolves to whether the user said yes
-function confirmDialog(title, lines, yesText, noText) {
+function confirmDialog(title, lines, yesText, noText, other) {
   return new Promise(resolve => {
     const done = answer => { overlay.remove(); document.removeEventListener('keydown', onKey); resolve(answer); };
     const onKey = event => { if (event.key === 'Escape') done(false); };
     const no = el('button', {onclick: () => done(false)}, noText || 'Cancel');
+    // (other: {text, value}, a third answer, the safe one, e.g. checking first)
     const overlay = el('div', {class: 'overlay', onclick: event => { if (event.target === overlay) done(false); }},
       el('div', {class: 'dialog', role: 'alertdialog', 'aria-label': title}, el('div', {class: 'dialoghead'}, el('b', {}, title)),
         ...lines.map(line => typeof line === 'string' ? el('p', {}, line) : line),
-        el('div', {class: 'dialogfoot'}, no, el('button', {class: 'danger sure', onclick: () => done(true)}, yesText))));
+        el('div', {class: 'dialogfoot'}, no, other ? el('button', {class: 'primary', onclick: () => done(other.value)}, other.text) : '',
+          el('button', {class: 'danger sure', onclick: () => done(true)}, yesText))));
     document.addEventListener('keydown', onKey);
     document.body.append(overlay);
     no.focus();
@@ -480,7 +506,12 @@ async function removeSelected() {
   if (notIn) lines.push(el('p', {class: 'c-red'}, notIn + ' of them ' + plural(notIn, "isn't", "aren't") + ' in ' + data.destName + ': removed, ' +
     plural(notIn, 'it', 'they') + ' will be gone for good.'));
   lines.push(isDry ? 'A dry run: nothing will be removed.' : data.source.drive ? 'They go to Drive\'s trash (30 days).' : 'A phone or a folder here has no trash: this can\'t be undone.');
-  if (!await confirmDialog('Remove from ' + source + '?', lines, 'Remove ' + rels.length)) return;
+  // (Some matched by name and size only: checking their contents first is offered, and removing them anyway said so)
+  const canCheck = weak && !data.source.drive;
+  const answer0 = await confirmDialog('Remove from ' + source + '?', lines, (weak === rels.length ? 'Remove ' + rels.length + ' anyway' : 'Remove ' + rels.length),
+    'Cancel', canCheck ? {text: 'Check contents first', value: 'check'} : null);
+  if (answer0 === 'check') return void act('/api/import/read', {which: 'nameOnly'});
+  if (!answer0) return;
   if (notIn && !isDry && !await confirmDialog('Are you sure?', [el('p', {class: 'c-red'}, notIn + ' ' + plural(notIn, 'file', 'files') +
       ' that ' + data.destName + ' doesn\'t have will be deleted from ' + source + ', for good.')], 'Yes, delete them', 'No, keep them')) return;
   const answer = await api('POST', '/api/import/remove', {id: page.id, rels, evenNotInReplica: notIn > 0});
@@ -506,12 +537,13 @@ function showSelection() {
 // Something going on (or done): its bar with its percentage, dots while it goes on, and what it said (if anything), at
 // most LINES_SHOWN lines high, scrolled to its end (where it was, if it was scrolled up)
 const LINES_SHOWN = 10;
-function progress(title, count, total, isDone, lines) {
+function progress(title, count, total, isDone, lines, key) {
   count = count || 0;
   total = total || 0;
   const share = total ? Math.min(100, Math.floor(100 * count / total)) : (isDone ? 100 : 0);
   const box = el('div', {class: 'progress' + (isDone ? ' done' : '')},
-    el('div', {class: 'progresshead'}, isDone ? el('b', {}, title) : waiting(title), el('span', {class: 'note'}, count.toLocaleString() + ' of ' + total.toLocaleString())),
+    el('div', {class: 'progresshead'}, isDone ? el('b', {}, title) : waiting(title), el('span', {class: 'note'}, count.toLocaleString() + ' of ' + total.toLocaleString()),
+      isDone && key ? el('button', {class: 'small quiet dismiss', title: 'Dismiss', 'aria-label': 'Dismiss', onclick: () => { page.dismissed.add(key); box.remove(); }}, '✕') : ''),
     bar(share, isDone ? 'sure' : ''));
   if (lines && lines.length) {
     const log = el('div', {class: 'lines', style: '--lines:' + LINES_SHOWN}, lines.map(([text, color]) => el('div', {class: color ? 'c-' + color : ''}, text)));
@@ -548,11 +580,9 @@ function importHead(data, counts) {
     !data.indexed ? el('div', {class: 'counts'}, el('b', {}, allFiles().length.toLocaleString() + ' photos and videos'),
       el('span', {}, waiting('finding which ' + data.destName + ' lacks'))) :
     el('div', {class: 'counts'}, el('b', {}, counts.undecided.toLocaleString() + ' to decide'),
-      counts.ready ? el('span', {}, counts.ready + ' ready to move') : '',
-      el('span', {}, counts.there.toLocaleString() + ' already in ' + data.destName + (page.showAll ? '' : ' (hidden)')),
-      counts.moved ? el('span', {}, counts.moved + (verb() === 'move' ? ' moved' : ' copied in')) : '', counts.skipped ? el('span', {}, counts.skipped + ' skipped') : '',
-      el('label', {class: 'showall'}, el('input', {type: 'checkbox', checked: page.showAll, onchange: event => { page.showAll = event.target.checked; renderImport(); }}),
-        ' Show them all')),
+      counts.ready ? el('span', {}, counts.ready + ' ready to ' + verb()) : '',
+      el('span', {}, counts.there.toLocaleString() + ' already in ' + data.destName),
+      counts.moved ? el('span', {}, counts.moved + (verb() === 'move' ? ' moved' : ' copied in')) : '', counts.skipped ? el('span', {}, counts.skipped + ' skipped') : ''),
     notes.length ? el('div', {class: 'note'}, ...notes.flatMap((note, i) => i ? [' · ', note] : [note])) : '',
     el('div', {class: 'row2'}, el('span', {class: 'note'}, data.listedAgo !== null ? 'Listed ' + ago(data.listedAgo) : ''),
       !reading || reading.phase === 'done' || reading.phase === 'waiting' ? el('button', {class: 'small quiet', onclick: () => act('/api/import/read', {which: 'list'})},
@@ -564,14 +594,17 @@ function importHead(data, counts) {
   if (reading && reading.phase === 'copying') {
     head.append(progress((drive ? 'Downloading' : 'Copying') + ' the new ones here, to compare their contents', reading.copied, reading.asked, false));
   }
-  if (data.applying) head.append(progress(data.applying.done ? 'Done' : (data.applying.moves ? 'Moving' : 'Copying') + ' into ' + data.destName,
-    data.applying.count, data.applying.total, data.applying.done, data.applying.lines));
-  if (data.removing) head.append(progress(data.removing.done ? 'Done' : 'Removing from ' + (data.source.device || 'the source'),
-    data.removing.count, data.removing.total, data.removing.done, data.removing.lines));
-  // (Removing from the source: what the replica has already, in its tab)
-  const nrThere = allFiles().filter(isInReplica).length;
-  if (nrThere && page.group !== THERE) head.append(el('div', {class: 'row2'}, el('a', {class: 'button', href: '#group=' + THERE},
-    'Remove from ' + (data.source.device || (data.source.drive ? 'the Drive inbox' : 'the folder')) + ' what ' + data.destName + ' has (' + nrThere.toLocaleString() + ')…')));
+  // (Copying into the replica, removing from the source: titled by what it did once it's done, dismissed with ✕)
+  const isDry = data.label[0] === 'DRY RUN', source = data.source.device || (drive ? 'the Drive inbox' : 'the folder');
+  const moves = data.applying && data.applying.moves;
+  if (data.applying && !page.dismissed.has('a' + data.applying.started)) {
+    head.append(progress(data.applying.done ? '✓ ' + (isDry ? (moves ? 'Would move ' : 'Would copy ') : (moves ? 'Moved ' : 'Copied ')) + data.applying.moved + ' into ' + data.destName :
+      (moves ? 'Moving' : 'Copying') + ' into ' + data.destName, data.applying.count, data.applying.total, data.applying.done, data.applying.lines, 'a' + data.applying.started));
+  }
+  if (data.removing && !page.dismissed.has('r' + data.removing.started)) {
+    head.append(progress(data.removing.done ? '✓ ' + (isDry ? 'Would remove ' : 'Removed ') + data.removing.removed + ' from ' + source : 'Removing from ' + source,
+      data.removing.count, data.removing.total, data.removing.done, data.removing.lines, 'r' + data.removing.started));
+  }
   if (data.otherDisk) head.append(el('p', {class: 'c-red'}, 'Another disk is mounted where ' + data.destName + ' was (' + data.destDisk +
     '): nothing is moved until that disk is back.'));
   return head;
@@ -601,20 +634,24 @@ function thereGroup() {
   return {key: THERE, title: 'Already in ' + page.data.destName, days: sorted, suggested: []};
 }
 
+const GROUP_ICONS = {camera: 'camera', 'whatsapp-images': 'chat', 'whatsapp-video': 'video', other: 'folder', all: 'folder'};
+
 // The groups as tabs (a phone's camera's, WhatsApp's images, its videos), each with how many are new, and the files the
 // replica has already (to remove from the source)
 function groupTabs() {
   const groups = page.data.groups;
   const shown = shownGroup();
-  const tab = (key, title, count, isOn) => el('a', {class: 'button' + (isOn ? ' on' : '') + (key === THERE ? ' theretab' : ''), role: 'tab',
-    'aria-selected': String(isOn), href: '#group=' + key}, title, el('span', {class: 'tabcount'}, count));
+  const tab = (key, glyph, title, count, isOn, tone) => el('a', {class: 'button' + (isOn ? ' on' : ''), role: 'tab',
+    'aria-selected': String(isOn), href: '#group=' + key, title}, icon(glyph), el('span', {class: 'tabtitle'}, title),
+    el('span', {class: 'tabcount' + (tone ? ' ' + tone : '')}, count));
   const nrThere = allFiles().filter(isInReplica).length, nrReady = allFiles().filter(isReady).length;
-  return el('div', {class: 'grouptabs', role: 'tablist'}, groups.length > 1 ? groups.map(group => {
-    const nrLeft = group.days.reduce((sum, day) => sum + day.files.filter(isUndecided).length, 0);
-    return tab(group.key, group.title, nrLeft ? nrLeft.toLocaleString() + ' to decide' : 'all decided', group === shown);
-  }) : groups.length ? tab(groups[0].key, 'To decide', allFiles().filter(isUndecided).length.toLocaleString(), shown === groups[0]) : '',
-    nrReady ? tab(READY, readyTitle(), nrReady.toLocaleString(), page.group === READY) : '',
-    nrThere ? tab(THERE, 'Already in ' + page.data.destName, nrThere.toLocaleString(), page.group === THERE) : '');
+  // (Each group's: how many are left to decide, ✓ once none are)
+  const left = group => group.days.reduce((sum, day) => sum + day.files.filter(isUndecided).length, 0);
+  return el('div', {class: 'grouptabs', role: 'tablist'}, groups.length > 1 ? groups.map(group =>
+    tab(group.key, GROUP_ICONS[group.key] || 'folder', group.title, left(group) ? left(group).toLocaleString() : '✓', group === shown, left(group) ? '' : 'good')) :
+    groups.length ? tab(groups[0].key, 'folder', 'To decide', left(groups[0]) ? left(groups[0]).toLocaleString() : '✓', shown === groups[0], left(groups[0]) ? '' : 'good') : '',
+    nrReady ? tab(READY, verb() === 'move' ? 'move' : 'copy', readyTitle(), nrReady.toLocaleString(), page.group === READY) : '',
+    nrThere ? tab(THERE, 'check', 'Already in ' + page.data.destName, nrThere.toLocaleString(), page.group === THERE, 'good') : '');
 }
 
 // The group's head (its suggestions for all of it) and its days, the first DAYS_AT_ONCE of them, more as the end of them
@@ -624,11 +661,12 @@ function groupParts(group) {
   if (group.key === READY) return readyParts();
   const files = group.days.flatMap(day => day.files);
   const undecided = files.filter(isUndecided).map(file => file.rel);
-  const parts = [el('div', {class: 'group'}, el('h2', {}, group.title, el('small', {}, undecided.length ? undecided.length.toLocaleString() + ' to decide' : 'all decided')),
-    undecided.length ? el('button', {onclick: () => { undecided.forEach(rel => page.selected.add(rel)); showSelection(); }}, 'Select all ' + undecided.length) : '',
-    undecided.length ? group.suggested.map(dir => el('button', {onclick: () => assign(undecided, dir)}, 'All ' + undecided.length + ' to ' + dir)) : '',
-    undecided.length ? el('button', {onclick: () => chooseFolder(dir => assign(undecided, dir))}, 'All to…') : '')];
-  const days = group.days.filter(day => day.files.some(isShown));
+  const parts = [el('div', {class: 'group'}, el('h2', {}, icon(GROUP_ICONS[group.key] || 'folder'), group.title,
+      el('small', {}, undecided.length ? undecided.length.toLocaleString() + ' to decide' : 'all decided')),
+    undecided.length ? dayToggle(undecided) : '',
+    undecided.length ? folderChips(group.suggested, undecided) : '',
+    undecided.length ? el('button', {class: 'small', onclick: () => chooseFolder(dir => assign(undecided, dir), group.suggested)}, icon('folder'), 'Other folder…') : '')];
+  const days = daysOf(group).filter(day => day.files.some(isShown));
   if (!page.nrDays) page.nrDays = DAYS_AT_ONCE;
   parts.push(...days.slice(0, page.nrDays).map(dayPart));
   // (Scrolled to, the next days drawn after the ones there: the page isn't drawn again)
@@ -647,14 +685,49 @@ function thereParts(group) {
     strong.length ? el('button', {onclick: () => select(strong)}, '✓ Select the ' + strong.length.toLocaleString() + ' with the same contents') : '',
     weak.length ? el('button', {onclick: () => select(weak)}, '≈ Select the ' + weak.length.toLocaleString() + ' with the same name and size') : '',
     weak.length && !page.data.source.drive ? el('button', {class: 'quiet', title: 'Copies them here and hashes them: needs the phone plugged in',
-      onclick: () => act('/api/import/read', {which: 'nameOnly'})}, 'Compare their contents') : ''),
+      onclick: () => act('/api/import/read', {which: 'nameOnly'})}, 'Check ≈ by contents (needs the phone)') : ''),
     el('p', {class: 'note'}, 'Pick what to remove from ' + source + ': ✓ the same contents in ' + page.data.destName +
       ' (sure), ≈ the same name and size only (likely, not sure).')];
-  const days = group.days;
+  const days = daysOf(group);
   if (!page.nrDays) page.nrDays = DAYS_AT_ONCE;
   parts.push(...days.slice(0, page.nrDays).map(dayPart));
   if (days.length > page.nrDays) parts.push(moreDays(days));
   return parts;
+}
+
+// A group's days, as the view has them: by day or by month (a month's suggestions its days', the likeliest first), oldest
+// or newest first
+function daysOf(group) {
+  let days = group.days;
+  if (page.view.by === 'month') {
+    const months = new Map();
+    for (const day of days) {
+      const key = day.day === 'None' ? 'None' : day.day.slice(0, 7);
+      if (!months.has(key)) months.set(key, {day: key, files: [], suggested: [], month: true});
+      const month = months.get(key);
+      month.files.push(...day.files);
+      for (const dir of day.suggested) if (!month.suggested.includes(dir)) month.suggested.push(dir);
+    }
+    days = [...months.values()].map(month => Object.assign(month, {suggested: month.suggested.slice(0, 3)}));
+  }
+  if (page.view.order === 'new') days = days.filter(day => day.day !== 'None').reverse().concat(days.filter(day => day.day === 'None'));
+  return days;
+}
+
+// A day's (or a month's) name, short: Wed 4 Mar (with its year if it isn't this one); March 2026
+function dayLabel(day) {
+  if (day.day === 'None') return 'No date';
+  const [year, month, date] = day.day.split('-').map(Number);
+  const when = new Date(year, month - 1, date || 1);
+  const thisYear = year === new Date().getFullYear();
+  if (day.month) return when.toLocaleDateString(undefined, {month: 'long', year: 'numeric'});
+  return when.toLocaleDateString(undefined, Object.assign({weekday: 'short', day: 'numeric', month: 'short'}, thisYear ? {} : {year: 'numeric'}));
+}
+
+// Folders suggested for rels, a chip each: its icon and short name (its whole path in its tooltip), a tap putting them there
+function folderChips(dirs, rels) {
+  return dirs.map(dir => el('button', {class: 'small chip', title: 'Put ' + (rels.length === 1 ? 'it' : 'these ' + rels.length) + ' in ' + dir,
+    onclick: () => assign(rels, dir)}, icon('folder'), shortDir(dir)));
 }
 
 // The Ready-to-move tab: the files given a folder, by folder, each folder a row that opens to its photos (drawn once it's
@@ -670,8 +743,8 @@ function readyParts() {
   const total = dirs.reduce((sum, dir) => sum + byDir.get(dir).length, 0);
   return [el('div', {class: 'group'}, el('h2', {}, readyTitle() + ' into ' + page.data.destName,
       el('small', {}, total.toLocaleString() + ' in ' + dirs.length + ' ' + plural(dirs.length, 'folder', 'folders')))),
-    el('p', {class: 'note'}, 'Open a folder to look at its files; ' + capitalized(verb()) + ', below, ' + verb() + 's them all' +
-      (page.data.source.drive ? '.' : ' (the ' + (page.data.source.device ? 'phone' : 'folder') + ' keeps its own).')),
+    el('p', {class: 'note'}, 'Open a folder to look at its files. ' + capitalized(verb()) + ' (below) ' + (verb() === 'move' ? 'moves' : 'copies') +
+      ' them all' + (page.data.source.drive ? '.' : '; the ' + (page.data.source.device ? 'phone' : 'folder') + ' keeps its own.')),
     ...dirs.map(dir => {
       const files = byDir.get(dir), rels = files.map(file => file.rel);
       // (Its files drawn once it's opened; opened, it stays so as the page is drawn again: a change, a move)
@@ -690,8 +763,8 @@ function readyParts() {
 // Back to deciding: no folder, not skipped
 async function undecide(rels) {
   if (!rels.length) return;
+  choose(rels, null, null);
   await api('POST', '/api/import/assign', {id: page.id, rels, target: null, skip: false});
-  page.selected.clear();
   await load();
 }
 
@@ -730,7 +803,9 @@ function dayToggle(rels) {
 }
 function labelDayToggle(button, rels) {
   const all = rels.every(rel => page.selected.has(rel));
-  button.textContent = all ? '☑ All ' + rels.length + ' selected' : '☐ Select all ' + rels.length;
+  // (A checkbox and how many it's of: all of them selected, or not)
+  button.textContent = (all ? '☑ ' : '☐ ') + rels.length;
+  button.title = all ? 'Unselect these ' + rels.length : 'Select these ' + rels.length;
   button.classList.toggle('on', all);
 }
 
@@ -738,22 +813,18 @@ function dayPart(day) {
   const dayFiles = day.files.filter(isShown);
   const open = dayFiles.filter(isUndecided).map(file => file.rel);
   const selectable = dayFiles.filter(file => file.state !== 'moved' || page.group === THERE).map(file => file.rel);
-  const header = el('h3', {}, day.day === 'None' ? 'No date' : day.day, el('small', {}, dayFiles.length + ' ' + plural(dayFiles.length, 'file', 'files')),
-    selectable.length ? dayToggle(selectable) : '',
-    open.length ? day.suggested.map(dir => el('button', {onclick: () => assign(open, dir)}, 'All to ' + dir)) : '',
-    open.length ? el('button', {onclick: () => chooseFolder(dir => assign(open, dir))}, 'All to…') : '');
-  return el('div', {class: 'day', 'data-day': day.day === 'None' ? 'No date' : day.day, 'data-undecided': open.length},
+  const header = el('h3', {}, selectable.length ? dayToggle(selectable) : '', dayLabel(day), el('small', {}, String(dayFiles.length)),
+    open.length ? folderChips(day.suggested, open) : '',
+    open.length ? el('button', {class: 'small', onclick: () => chooseFolder(dir => assign(open, dir), day.suggested)}, icon('folder'), 'Other folder…') : '');
+  return el('div', {class: 'day', 'data-day': dayLabel(day), 'data-undecided': open.length},
     header, el('div', {class: 'grid'}, dayFiles.map(photo)));
 }
 
 // Ending the import: what it forgets, and what it doesn't touch; asked twice
 function endCard(data) {
   const end = el('button', {class: 'small danger', onclick: async () => {
-    if (!end.classList.contains('sure')) {
-      end.classList.add('sure');
-      end.textContent = 'Yes, end it';
-      return;
-    }
+    if (!await confirmDialog('End this import?', ['Its choices and its copies here are forgotten; nothing on the ' +
+        (data.source.device ? 'phone' : data.source.drive ? 'Drive inbox' : 'folder') + ' or in ' + data.destName + ' is touched.'], 'End it')) return;
     const answer = await api('POST', '/api/import/end', {id: page.id});
     if (answer.ok) location.href = '/inboxes'; else document.getElementById('status').textContent = answer.error || "Couldn't end it.";
   }}, 'End this import');
@@ -764,15 +835,36 @@ function endCard(data) {
 // How far the sorting is: the new files decided (a folder chosen, skipped or moved) of all of them, a bar, where the
 // page is (which day of the ones shown), and a jump to the next day with files left to decide
 function sortMeter(files) {
+  const isGroup = ![THERE, READY].includes(page.group);
   const toSort = files.filter(file => !isThere(file) || isDone(file));
   const decided = toSort.filter(file => !isUndecided(file)).length;
   const share = toSort.length ? Math.floor(100 * decided / toSort.length) : 100;
-  return el('div', {class: 'sortmeter'},
-    el('div', {class: 'big'}, el('b', {}, share + '%'), el('span', {}, decided + ' of ' + toSort.length + ' new decided'),
-      el('button', {onclick: () => window.scrollTo({top: 0, behavior: 'smooth'})}, 'Top'),
-      el('button', {onclick: nextUndecided}, 'Next undecided ›')),
-    el('div', {class: 'meter thick'}, el('div', {class: 'sure', style: 'width:' + share + '%'})),
-    el('div', {id: 'position', class: 'note'}));
+  // (One line: what's left, the bar, where the page is, the next day to decide; showing the decided ones too; the view)
+  return el('div', {class: 'sortmeter'}, el('div', {class: 'meterline'},
+    isGroup ? [el('b', {}, (toSort.length - decided).toLocaleString() + ' left'),
+      el('div', {class: 'meter thick', title: decided + ' of ' + toSort.length + ' decided'}, el('div', {class: 'sure', style: 'width:' + share + '%'})),
+      el('span', {class: 'pct'}, share + '%')] : el('span', {class: 'grow'}),
+    el('span', {id: 'position', class: 'note'}),
+    isGroup ? el('button', {class: 'small', onclick: nextUndecided, title: 'The next day with files to decide'}, 'Next ›') : '',
+    viewButton()));
+}
+
+// The view's choices, in a small menu: tiles' size, captions, by day or month, oldest or newest first
+function viewButton() {
+  const choice = (key, value, text) => el('button', {class: 'small' + (page.view[key] === value ? ' on' : ''), onclick: () => setView(key, value)}, text);
+  const menu = el('div', {class: 'viewmenu', hidden: true},
+    el('div', {}, el('span', {class: 'note'}, 'Tiles'), choice('tile', 'S', 'S'), choice('tile', 'M', 'M'), choice('tile', 'L', 'L')),
+    el('div', {}, el('span', {class: 'note'}, 'Captions'), choice('captions', 'off', 'Off'), choice('captions', 'name', 'Name'), choice('captions', 'all', 'All')),
+    el('div', {}, el('span', {class: 'note'}, 'Group'), choice('by', 'day', 'By day'), choice('by', 'month', 'By month')),
+    el('div', {}, el('span', {class: 'note'}, 'Order'), choice('order', 'old', 'Oldest first'), choice('order', 'new', 'Newest first')),
+    // (In a group's tab: the ones decided, and those the replica has, shown too)
+    el('label', {class: 'showall'}, el('input', {type: 'checkbox', checked: page.showAll, onchange: event => { page.showAll = event.target.checked; renderImport(); }}),
+      ' Show the decided ones too'));
+  const button = el('button', {class: 'small quiet', title: 'How the photos are shown', 'aria-expanded': 'false', onclick: () => {
+    menu.hidden = !menu.hidden;
+    button.setAttribute('aria-expanded', String(!menu.hidden));
+  }}, icon('gear'), ' View');
+  return el('span', {class: 'viewpick'}, button, menu);
 }
 
 // The day at the top of what's shown (under the sticky bar), and its number among the days shown
@@ -788,7 +880,7 @@ function showPosition() {
   const shown = document.getElementById('position');
   if (!shown) return;
   const {days, at} = currentDay();
-  shown.textContent = days.length ? 'Day ' + (at + 1) + ' of ' + days.length + ' · ' + days[at].dataset.day : '';
+  shown.textContent = days.length ? days[at].dataset.day + ' (' + (at + 1) + '/' + days.length + ')' : '';
 }
 
 function nextUndecided() {
@@ -803,6 +895,15 @@ function fitHeader() {
 }
 
 window.addEventListener('scroll', () => requestAnimationFrame(showPosition), {passive: true});
+// (On the import, with nothing over it and nothing typed in: Escape clears the selection, Enter chooses its folder)
+document.addEventListener('keydown', event => {
+  if (!page.id || !page.data || document.querySelector('.overlay') || ['INPUT', 'SELECT', 'TEXTAREA'].includes(document.activeElement.tagName)) return;
+  if (event.key === 'Escape' && page.selected.size) { page.selected.clear(); showSelection(); }
+  else if (event.key === 'Enter' && page.selected.size && page.group !== THERE) {
+    event.preventDefault();
+    chooseFolder(dir => assign([...page.selected], dir));
+  }
+});
 window.addEventListener('resize', fitHeader);
 
 const VIDEO = /\.(mp4|m4v|mov|3gp|webm|mkv)$/i;
@@ -815,7 +916,7 @@ function picture(file) {
   let image = pictures.get(file.rel);
   if (image) return image;
   const query = '?id=' + encodeURIComponent(page.id) + '&rel=' + encodeURIComponent(file.rel);
-  const name = () => el('div', {class: 'noimg'}, file.rel.split('/').pop());
+  const name = () => el('div', {class: 'noimg'}, VIDEO.test(file.rel) ? el('span', {class: 'playglyph'}, '▶') : file.rel.split('/').pop());
   const keep = node => { pictures.set(file.rel, node); return node; };
   image = keep(el('img', {loading: 'lazy', alt: file.rel, src: '/api/import/thumb' + query}));
   image.addEventListener('error', () => {
@@ -834,44 +935,117 @@ function photo(file) {
   if (file.state === 'moved') caption.push(el('div', {class: 'to'}, '✓ moved'));
   else if (file.state === 'skipped') caption.push(el('div', {class: 'skipped'}, 'skipped'));
   else if (file.target) caption.push(el('div', {class: 'to'}, '→ ' + file.target));
-  for (const text of have(file)) caption.push(el('div', {class: 'have'}, '✓ in ' + page.data.destName + ' · ' + text));
-  caption.push(el('div', {}, file.rel.split('/').pop()));
+  for (const text of have(file)) caption.push(el('div', {class: 'have'}, text));
+  caption.push(el('div', {class: 'name'}, file.rel.split('/').pop()));
   if (VIDEO.test(file.rel) && file.state !== 'moved') {
     caption.push(el('a', {class: 'play', target: '_blank', onclick: event => event.stopPropagation(),
       href: '/api/import/file?id=' + encodeURIComponent(page.id) + '&rel=' + encodeURIComponent(file.rel)}, '▶ Play'));
   }
   const image = picture(file);
   return el('div', {class: 'photo' + (page.selected.has(file.rel) ? ' sel' : '') + (file.state === 'moved' ? ' done' : ''),
-    'data-rel': file.rel, onclick: () => {
-      if (file.state === 'moved' && page.group !== THERE) return;
-      if (page.selected.has(file.rel)) page.selected.delete(file.rel); else page.selected.add(file.rel);
-      showSelection();
-    }}, image, isInReplica(file) ? el('span', {class: 'badge ' + (isStrong(file) ? 'strong' : 'weak'),
+    'data-rel': file.rel, onclick: event => tapPhoto(file, event.shiftKey)}, image,
+    el('button', {class: 'whole', title: 'See it whole (← → the others, Space selects)', 'aria-label': 'See it whole',
+      onclick: event => { event.stopPropagation(); openViewer(file.rel); }}, icon('expand')), isInReplica(file) ? el('span', {class: 'badge ' + (isStrong(file) ? 'strong' : 'weak'),
       title: isStrong(file) ? 'The same contents in ' + page.data.destName : 'The same name and size in ' + page.data.destName + ' (not sure)'},
       isStrong(file) ? '✓ same' : '≈ likely') : '', el('div', {class: 'cap'}, caption));
 }
 
+// A tap on a photo: it selected, or not; with Shift, every one shown between it and the one tapped before, as that one is
+function tapPhoto(file, isRange) {
+  if (file.state === 'moved' && page.group !== THERE) return;
+  const rels = [...document.querySelectorAll('#main .photo')].map(node => node.dataset.rel);
+  const from = rels.indexOf(page.lastTapped), to = rels.indexOf(file.rel);
+  if (isRange && from >= 0 && to >= 0) {
+    const select = page.selected.has(page.lastTapped);
+    for (const rel of rels.slice(Math.min(from, to), Math.max(from, to) + 1)) select ? page.selected.add(rel) : page.selected.delete(rel);
+  } else if (page.selected.has(file.rel)) page.selected.delete(file.rel);
+  else page.selected.add(file.rel);
+  page.lastTapped = file.rel;
+  showSelection();
+}
+
+// The files given a folder (or skipped, or back to deciding) at once on the page, then told the server: what's decided
+// leaves the tab as it's tapped
 async function assign(rels, target, skip) {
   if (!rels.length || (!skip && !target)) return;
+  choose(rels, skip ? null : target, skip ? 'skipped' : null);
   await api('POST', '/api/import/assign', {id: page.id, rels, target, skip: !!skip});
-  page.selected.clear();
   await load();
+}
+
+function choose(rels, target, state) {
+  const chosen = new Set(rels);
+  for (const file of allFiles()) {
+    if (!chosen.has(file.rel) || file.state === 'moved') continue;
+    file.target = target;
+    file.state = state || (file.state === 'skipped' ? 'pending' : file.state);
+  }
+  page.selected.clear();
+  renderImport();
+}
+
+// A photo seen whole, over the page: the next and the one before among the ones shown (← →), selected or not (Space),
+// closed with Escape; its picture the thumbnail, then the file itself (from the phone, if it's there)
+function openViewer(rel) {
+  const rels = [...document.querySelectorAll('#main .photo')].map(node => node.dataset.rel);
+  const byRel = new Map(allFiles().map(file => [file.rel, file]));
+  let at = Math.max(0, rels.indexOf(rel));
+  const picture = el('img', {class: 'wholeimg', alt: ''}), caption = el('div', {class: 'wholecap'});
+  const selectButton = el('button', {onclick: () => { toggle(); }});
+  const close = () => { overlay.remove(); document.removeEventListener('keydown', onKey); };
+  const toggle = () => { tapPhoto(byRel.get(rels[at]), false); draw(); };
+  const go = step => { at = (at + step + rels.length) % rels.length; draw(); };
+  const onKey = event => {
+    if (event.key === 'Escape') close();
+    else if (event.key === 'ArrowRight') go(1);
+    else if (event.key === 'ArrowLeft') go(-1);
+    else if (event.key === ' ') { event.preventDefault(); toggle(); }
+  };
+  const draw = () => {
+    const file = byRel.get(rels[at]);
+    const query = '?id=' + encodeURIComponent(page.id) + '&rel=' + encodeURIComponent(file.rel);
+    picture.src = '/api/import/thumb' + query;
+    if (!VIDEO.test(file.rel)) {
+      const whole = new Image();
+      whole.onload = () => { if (byRel.get(rels[at]) === file) picture.src = whole.src; };
+      whole.src = '/api/import/file' + query;
+    }
+    caption.replaceChildren(el('b', {}, file.rel.split('/').pop()), ' · ' + (at + 1) + ' of ' + rels.length,
+      file.target ? el('span', {class: 'to'}, ' → ' + file.target) : '', ...have(file).map(text => el('span', {class: 'have'}, ' ' + text)));
+    selectButton.textContent = page.selected.has(file.rel) ? '☑ Selected' : '☐ Select';
+  };
+  const overlay = el('div', {class: 'overlay viewer', onclick: event => { if (event.target === overlay) close(); }},
+    el('button', {class: 'prev', 'aria-label': 'The one before', onclick: () => go(-1)}, '‹'),
+    el('figure', {}, picture, el('figcaption', {}, caption, el('div', {class: 'row2'}, selectButton, el('button', {onclick: close}, 'Close')))),
+    el('button', {class: 'next', 'aria-label': 'The next', onclick: () => go(1)}, '›'));
+  document.addEventListener('keydown', onKey);
+  draw();
+  document.body.append(overlay);
 }
 
 // The footer: how far it is, in plain words, and Move once any file is ready to move
 function renderFooter(counts) {
   const data = page.data;
   const status = [counts.undecided.toLocaleString() + ' to decide'];
-  if (counts.ready) status.push(counts.ready + ' ready to move');
+  // (What's going on, first: copying N of M…)
+  for (const [doing, text] of [[data.applying, (verb() === 'move' ? 'Moving ' : 'Copying ')], [data.removing, 'Removing ']]) {
+    if (doing && !doing.done) status.unshift(text + doing.count + ' of ' + doing.total + '…');
+  }
+  if (counts.ready) status.push(counts.ready + ' ready to ' + verb());
   if (counts.moved) status.push(counts.moved + (verb() === 'move' ? ' moved' : ' copied in'));
   if (page.selected.size) status.push(page.selected.size + ' selected');
   document.getElementById('status').textContent = status.join(' · ');
   const busy = data.applying && !data.applying.done;
-  document.getElementById('actions').replaceChildren(counts.ready ? el('button', {class: 'primary', disabled: busy,
-    onclick: () => api('POST', '/api/import/apply', {id: page.id}).then(answer => {
+  const go = el('button', {class: 'primary green', disabled: busy, onclick: () => {
+    // (Said at once: the server's answer comes after)
+    go.disabled = true;
+    go.replaceChildren(waiting(capitalized(verb()) + 'ing'));
+    api('POST', '/api/import/apply', {id: page.id}).then(answer => {
       if (answer.error) document.getElementById('status').textContent = answer.error;
       return loadImport();
-    })}, busy ? waiting(capitalized(verb()) + 'ing') : capitalized(verb()) + ' ' + counts.ready + ' into ' + data.destName) : '');
+    });
+  }}, busy ? waiting(capitalized(verb()) + 'ing') : [icon(verb()), capitalized(verb()) + ' ' + counts.ready + ' into ' + data.destName]);
+  document.getElementById('actions').replaceChildren(counts.ready ? go : '');
 }
 
 tabBar('inboxes');
