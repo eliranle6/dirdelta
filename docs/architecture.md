@@ -1362,6 +1362,9 @@ every link carries, then a cookie), and a watcher.
   copied yet copied first; a dry run says what it would do). Starting the same source into the same
   replica opens its import (listed again); "End this import" removes it, and the source's pool if no
   other import has that source.
+- The watcher's emails are each off unless the user turns it on (2026-11-22: a sync's disk connected emailed at each sync), in
+  the top bar's user menu: Email me when a replica's disk is connected, when a phone is plugged in (`settings.is_notified()`,
+  `/api/users/notify`).
 - The watcher looks every 5 s for a phone's storage or a known local replica appearing (one known at the look before, and not there then: a folder a sync used for the first time is new to the list, not newly there), and emails the
   user a link (`sharing/link.py`; the address is kept in `settings.json` after the first one), at most
   once in 10 minutes a path: a replica to each user who has it, a phone to each who imported from it

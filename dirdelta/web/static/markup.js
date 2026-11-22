@@ -191,6 +191,12 @@ async function userBar() {
     pick.value = found.current;
     if (value === '+add') return showForm('add');
     if (value === '+email') return showForm('email');
+    if (value.startsWith('+notify:')) {
+      // (Emailed when it happens, or not: switched, and the menu said again)
+      const kind = value.slice('+notify:'.length);
+      return void fetch('/api/users/notify', {method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({kind, on: !(found.notify || {})[kind]})}).then(() => location.reload());
+    }
     if (value.startsWith('+theme:')) {
       kept('dirdelta_theme', value.slice('+theme:'.length));
       return void location.reload();
@@ -206,6 +212,9 @@ async function userBar() {
     el('optgroup', {label: 'Change user'}, found.users.map(name => el('option', {value: name, selected: name === found.current}, name))),
     el('optgroup', {label: found.current},
       el('option', {value: '+email'}, found.email ? 'Email for links…' : 'Set the email for links…'),
+      // (Off unless turned on: ✓ when it is)
+      el('option', {value: '+notify:replica'}, ((found.notify || {}).replica ? '✓ ' : '') + 'Email me when a replica\'s disk is connected'),
+      el('option', {value: '+notify:phone'}, ((found.notify || {}).phone ? '✓ ' : '') + 'Email me when a phone is plugged in'),
       el('option', {value: '+add'}, 'Add a user…')),
     el('optgroup', {label: 'Layout'}, Object.entries(LAYOUTS).map(([key, text]) =>
       el('option', {value: '+layout:' + key}, (key === layout() ? '✓ ' : '') + text))),

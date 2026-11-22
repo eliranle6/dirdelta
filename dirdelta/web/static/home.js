@@ -244,8 +244,9 @@ function pairRow(pair, running, user, comparing) {
     const either = totalA === null ? null : totalA + onlyB;
     const percent = share === null ? null : (share === 1 ? '100' : Math.min(99.9, Math.floor(share * 1000) / 10).toString());
     // (Its state and how much is in step, one line)
-    const color = fraction => stale ? 'var(--grey)' : inStepColor(fraction);
-    parts.push(el('div', {class: 'statehead-line'}, el('span', {class: 'statename c-' + (stale ? 'grey' : pair.state.color)},
+    // (Not sure any more: yellow, never green, whatever it was)
+    const color = fraction => stale ? 'var(--yellow)' : inStepColor(fraction);
+    parts.push(el('div', {class: 'statehead-line'}, el('span', {class: 'statename c-' + (stale ? 'yellow' : pair.state.color)},
       (stale ? 'Last known' : STATE_WORDS[pair.state.kind] || '') + (percent !== null ? ':' : '')),
       percent !== null ? el('b', {style: 'color:' + color(share)}, percent + '% in step') : ''));
     if (either) {
@@ -279,7 +280,7 @@ function pairRow(pair, running, user, comparing) {
   else fresh.push(el('button', {class: 'small quiet', title: 'Read both file lists again and compare them (nothing is changed)',
     onclick: () => compareAgain(pair)}, '↻ Compare again'));
   if (again && again.error) parts.push(el('div', {class: 'note c-red'}, "Couldn't compare again: " + again.error));
-  return el('div', {class: 'item pair' + (syncing ? ' syncing' : '')}, el('span', {class: 'syncmark c-' + (stale ? 'grey' : pair.state.color)}, stale ? '?' : pair.state.mark),
+  return el('div', {class: 'item pair' + (syncing ? ' syncing' : '')}, el('span', {class: 'syncmark c-' + (stale ? 'yellow' : pair.state.color)}, stale ? '?' : pair.state.mark),
     el('span', {class: 'what'}, el('b', {class: 'pairline'}, pair.favorite ? '★' : '', replicaLabel(pair.a, pair.nameA), '⇄',
       replicaLabel(pair.b, pair.nameB)), syncing ? el('div', {class: 'insync'}, waiting('Sync in progress')) : '',
       parts, el('div', {class: 'chips-row pairfoot'}, fresh, button)));
@@ -402,10 +403,18 @@ function lastSyncTile(data, tile) {
 // last checked), of the ones being sorted
 function sortedTile(data, tile) {
   // (How many inboxes of each kind: the phones, and the folders, on a disk or in Drive)
-  const phones = data.inboxes.filter(inbox => inbox.kind === 'phone').length, folders = data.inboxes.length - phones;
+  const phones = data.inboxes.filter(inbox => inbox.kind === 'phone').length;
+  const folders = data.inboxes.filter(inbox => ['drive', 'folder'].includes(inbox.kind)).length;
   const tileOf = tile, inboxCount = countOf(phones, 'phone', 'phones') + ' · ' + countOf(folders, 'folder', 'folders');
   tile = (tone, glyph, title, value, hint, href) => tileOf(tone, glyph, title, value, withCount(inboxCount, hint), href);
-  const sum = tallies(data.inboxes.flatMap(inbox => inbox.imports));
+  const sum = tallies(data.inboxes.filter(inbox => inbox.kind === 'phone').flatMap(inbox => inbox.imports));
+  // (An unsorted folder's: what its file sorts took out of it, and what's left in it)
+  for (const inbox of data.inboxes) {
+    if (!['drive', 'folder'].includes(inbox.kind) || !inbox.sorting || inbox.sorting.left === null) continue;
+    sum.total += inbox.sorting.sorted + inbox.sorting.left;
+    sum.sorted += inbox.sorting.sorted;
+    sum.left += inbox.sorting.left;
+  }
   if (!sum.total) return tile('none', 'check', 'Inboxes sorted', 'Not started', 'Sort one on Inboxes', '/inboxes');
   const share = (sum.sorted + sum.there) / sum.total;
   return tile(sum.left ? 'warn' : 'ok', 'check', 'Inboxes sorted', Math.floor(share * 100) + '%',
@@ -431,11 +440,13 @@ function lastSortTile(data, tile) {
 // The inboxes there now, of each kind (unsorted folders, phones plugged in), and how many of their files
 // are left to sort (of the ones started)
 function inboxesTile(data, tile) {
-  const folders = data.inboxes.filter(inbox => inbox.kind !== 'phone');
+  // (The user's own: a phone plugged in that isn't one of theirs isn't counted)
+  const folders = data.inboxes.filter(inbox => ['drive', 'folder'].includes(inbox.kind));
   const phones = data.inboxes.filter(inbox => inbox.kind === 'phone');
-  const there = folders.concat(phones).filter(inbox => inbox.there).length;
+  const all = folders.concat(phones), there = all.filter(inbox => inbox.there).length;
   const value = el('span', {class: 'tile-lines'}, el('span', {}, thereOutOf(folders) + ' unsorted folders'), el('span', {}, thereOutOf(phones) + ' phones'));
-  return tile(there ? 'ok' : 'none', 'inbox', 'Inboxes available', value, '', '/inboxes');
+  // (Green only with all of them there; some: yellow)
+  return tile(!there ? 'none' : there === all.length ? 'ok' : 'warn', 'inbox', 'Inboxes available', value, '', '/inboxes');
 }
 
 function homePage(data) {

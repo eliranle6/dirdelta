@@ -277,7 +277,15 @@ def routes(session):
 
     def user_list(query, body):
         return {'users': users.all_users(), 'current': users.current(), 'owner': users.OWNER,
-                'email': settings.email_address()}
+                'email': settings.email_address(), 'notify': {kind: settings.is_notified(kind) for kind in settings.NOTIFY_KINDS}}
+
+    def set_notify(query, body):
+        """Email the user (or not) when body['kind'] happens: a replica's disk connected, a phone plugged in"""
+        try:
+            settings.set_notified(body.get('kind'), body.get('on'))
+        except ValueError as error:
+            return {'ok': False, 'error': str(error)}
+        return {'ok': True}
 
     def set_email(query, body):
         address = (body.get('address') or '').strip()
@@ -296,6 +304,6 @@ def routes(session):
 
     return {('GET', '/api/home'): home, ('POST', '/api/home/hash'): hash_replica,
             ('GET', '/api/running'): running, ('GET', '/api/users'): user_list, ('POST', '/api/users/add'): add_user,
-            ('POST', '/api/users/email'): set_email, ('POST', '/api/mode'): set_mode, ('POST', '/api/replicas/name'): name_replica,
+            ('POST', '/api/users/email'): set_email, ('POST', '/api/users/notify'): set_notify, ('POST', '/api/mode'): set_mode, ('POST', '/api/replicas/name'): name_replica,
             ('POST', '/api/replicas/main'): set_main, ('POST', '/api/pairs/add'): change_pair(True),
             ('POST', '/api/pairs/remove'): change_pair(False), ('POST', '/api/pairs/compare'): compare_pairs}

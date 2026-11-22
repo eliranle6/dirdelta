@@ -37,6 +37,25 @@ def set_email_address(address):
         _save(settings)
 
 
+# What the user may be emailed a link about, as it happens (the daemon's watcher): a known replica's disk connected,
+# a phone plugged in. Neither unless they turned it on (2026-11-22: a sync's disk connected emailed them at each sync)
+NOTIFY_KINDS = ('replica', 'phone')
+
+
+def is_notified(kind):
+    """Whether the user is emailed when it happens (kind: one of NOTIFY_KINDS); the default: no"""
+    return (_load().get('notify') or {}).get(kind) is True
+
+
+def set_notified(kind, is_on):
+    if kind not in NOTIFY_KINDS:
+        raise ValueError("no such notice: %r" % (kind,))
+    with _lock:
+        settings = _load()
+        settings['notify'] = dict(settings.get('notify') or {}, **{kind: bool(is_on)})
+        _save(settings)
+
+
 def _load():
     try:
         with open(users.own(SETTINGS_FILE)) as f:

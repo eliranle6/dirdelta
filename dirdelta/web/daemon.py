@@ -5,6 +5,7 @@ replica's drive is mounted (to sync it)"""
 import sys
 import threading
 
+from dirdelta.known import settings
 from dirdelta.known import users
 from dirdelta.sharing import link as sharing
 from dirdelta.ui import frontend
@@ -58,6 +59,10 @@ def _say(kind, name, key, port, whose):
     """Email each user of whose a link to what appeared (opening the page as them): a phone's import
     page, or the start menu"""
     for user in whose:
+        # (Only to a user who asked to be: off unless they turned it on, in the page's user menu)
+        with users.acting_as(user):
+            if not settings.is_notified('phone' if kind == PHONE else 'replica'):
+                continue
         if kind == PHONE:
             url, what = access.link(key, port, '/inboxes', u=user), "Import the photos of %s" % (name,)
         else:

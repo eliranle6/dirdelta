@@ -372,6 +372,7 @@ function selectionRow(asBar) {
     el('button', {class: 'primary', onclick: () => chooseFolder(dir => assign([...page.selected], dir))}, 'Choose folder…'),
     recent.map(dir => el('button', {class: 'recentdir', title: 'Put them in ' + dir, onclick: () => assign([...page.selected], dir)}, '→ ' + shortDir(dir))),
     el('button', {onclick: () => assign([...page.selected], null, true)}, 'Skip them'),
+    el('button', {class: 'danger quiet', onclick: removeSelected}, 'Remove…'),
     el('button', {onclick: () => { page.selected.clear(); showSelection(); }}, 'Clear')) :
     el('div', {class: 'note'}, 'Tap photos to select them, or use a group\'s or a day\'s buttons.');
   return el('div', {class: 'selrow'}, row);
@@ -390,32 +391,17 @@ function fitSelectionRow() {
 }
 window.addEventListener('resize', fitSelectionRow);
 
-const MAX_RECENT_SHOWN = 5;
-
-// The Already-in tab's selection bar: Remove from the source, asked twice (the second time saying how many are matched by
-// name and size only), and Clear; else how to select them
+// The Already-in tab's selection bar: Remove from the source (asked: removeSelected()), and Clear; else how to select them
 function removeBar(asBar) {
   const data = page.data;
   const source = data.source.device || (data.source.drive ? 'the Drive inbox' : 'the folder');
   if (!page.selected.size && !asBar) return el('div', {class: 'note'}, 'Tap the ones to remove from ' + source + ', or select a day\'s or all of a kind.');
-  const rels = [...page.selected];
-  const byRel = new Map(allFiles().map(file => [file.rel, file]));
-  const weak = rels.filter(rel => byRel.has(rel) && !isStrong(byRel.get(rel))).length;
-  const box = el('div', {class: 'bar'});
-  const idle = () => box.replaceChildren(el('b', {}, page.selected.size + ' selected'),
-    el('button', {class: 'danger', onclick: ask}, 'Remove from ' + source + '…'),
+  return el('div', {class: 'bar'}, el('b', {}, page.selected.size + ' selected'),
+    el('button', {class: 'danger', onclick: removeSelected}, 'Remove from ' + source + '…'),
     el('button', {onclick: () => { page.selected.clear(); showSelection(); }}, 'Clear'));
-  const ask = () => box.replaceChildren(el('span', {class: weak ? 'c-orange' : ''}, 'Remove ' + rels.length + ' from ' + source + '? ' +
-      (weak ? weak + ' of them ' + plural(weak, 'is', 'are') + ' in ' + data.destName + ' by name and size only, not sure. ' : '') +
-      (data.label[0] === 'DRY RUN' ? '(A dry run: nothing is removed.)' : 'They can\'t be brought back from ' + (data.source.drive ? 'Drive\'s trash after 30 days.' : 'a phone.'))),
-    el('button', {class: 'danger sure', onclick: async () => {
-      const answer = await api('POST', '/api/import/remove', {id: page.id, rels});
-      if (answer.error) document.getElementById('status').textContent = answer.error; else page.selected.clear();
-      await load();
-    }}, 'Yes, remove ' + plural(rels.length, 'it', 'them')), el('button', {onclick: idle}, 'Keep ' + plural(rels.length, 'it', 'them')));
-  idle();
-  return box;
 }
+
+const MAX_RECENT_SHOWN = 5;
 
 // A folder's last two parts (its whole path in its tooltip)
 function shortDir(dir) {
@@ -461,6 +447,45 @@ function chooseFolder(done) {
   document.addEventListener('keydown', onKey);
   draw();
   document.body.append(overlay);
+}
+
+// A question over the page (Escape, or a tap outside it, is No): resolves to whether the user said yes
+function confirmDialog(title, lines, yesText, noText) {
+  return new Promise(resolve => {
+    const done = answer => { overlay.remove(); document.removeEventListener('keydown', onKey); resolve(answer); };
+    const onKey = event => { if (event.key === 'Escape') done(false); };
+    const no = el('button', {onclick: () => done(false)}, noText || 'Cancel');
+    const overlay = el('div', {class: 'overlay', onclick: event => { if (event.target === overlay) done(false); }},
+      el('div', {class: 'dialog', role: 'alertdialog', 'aria-label': title}, el('div', {class: 'dialoghead'}, el('b', {}, title)),
+        ...lines.map(line => typeof line === 'string' ? el('p', {}, line) : line),
+        el('div', {class: 'dialogfoot'}, no, el('button', {class: 'danger sure', onclick: () => done(true)}, yesText))));
+    document.addEventListener('keydown', onKey);
+    document.body.append(overlay);
+    no.focus();
+  });
+}
+
+// Removing the files selected from the source (the phone, the folder, the Drive inbox): asked; and asked again, saying so,
+// if any isn't in the replica (removed, it's gone: a phone has no trash)
+async function removeSelected() {
+  const data = page.data, rels = [...page.selected];
+  if (!rels.length) return;
+  const source = data.source.device || (data.source.drive ? 'the Drive inbox' : 'the folder');
+  const byRel = new Map(allFiles().map(file => [file.rel, file]));
+  const notIn = rels.filter(rel => byRel.has(rel) && !isInReplica(byRel.get(rel))).length;
+  const weak = rels.filter(rel => byRel.has(rel) && isInReplica(byRel.get(rel)) && !isStrong(byRel.get(rel))).length;
+  const isDry = data.label[0] === 'DRY RUN';
+  const lines = [rels.length + ' ' + plural(rels.length, 'file', 'files') + ' will be removed from ' + source + '.'];
+  if (weak) lines.push(weak + ' of them ' + plural(weak, 'is', 'are') + ' in ' + data.destName + ' by name and size only: likely, not sure.');
+  if (notIn) lines.push(el('p', {class: 'c-red'}, notIn + ' of them ' + plural(notIn, "isn't", "aren't") + ' in ' + data.destName + ': removed, ' +
+    plural(notIn, 'it', 'they') + ' will be gone for good.'));
+  lines.push(isDry ? 'A dry run: nothing will be removed.' : data.source.drive ? 'They go to Drive\'s trash (30 days).' : 'A phone or a folder here has no trash: this can\'t be undone.');
+  if (!await confirmDialog('Remove from ' + source + '?', lines, 'Remove ' + rels.length)) return;
+  if (notIn && !isDry && !await confirmDialog('Are you sure?', [el('p', {class: 'c-red'}, notIn + ' ' + plural(notIn, 'file', 'files') +
+      ' that ' + data.destName + ' doesn\'t have will be deleted from ' + source + ', for good.')], 'Yes, delete them', 'No, keep them')) return;
+  const answer = await api('POST', '/api/import/remove', {id: page.id, rels, evenNotInReplica: notIn > 0});
+  if (answer.error) document.getElementById('status').textContent = answer.error; else page.selected.clear();
+  await load();
 }
 
 // A change of the selection shown at once: the photos' marks and the selection's row, nothing else drawn again (a

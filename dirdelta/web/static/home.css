@@ -99,5 +99,5 @@ button.item { border: 0; border-radius: 0; background: none; }
 .item.pair .pairfoot { flex-wrap: wrap; gap: 6px 8px; }
 .item.pair .comparing { color: var(--accent); }
 .compareall { display: flex; justify-content: flex-end; margin: 0 0 6px; }
-.syncbar.stale { opacity: .7; background-image: repeating-linear-gradient(45deg, transparent 0 6px, color-mix(in srgb, var(--card) 35%, transparent) 6px 12px); }
+.syncbar.stale { background-image: repeating-linear-gradient(45deg, transparent 0 6px, color-mix(in srgb, var(--card) 35%, transparent) 6px 12px); }
 .syncbar.stale .both { background-image: repeating-linear-gradient(45deg, transparent 0 6px, color-mix(in srgb, var(--card) 35%, transparent) 6px 12px); }
