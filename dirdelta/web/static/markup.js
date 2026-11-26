@@ -529,16 +529,19 @@ const ICONS = {
   person: '<circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/>',
 };
 
-// Google's G, in its four colors (a Drive replica's mark, replicaLabel())
+// Google Drive's logo (a Drive replica's mark, replicaLabel())
 function googleIcon() {
   const span = document.createElement('span');
   span.className = 'icon gicon';
   span.title = 'Google Drive';
-  span.innerHTML = '<svg viewBox="0 0 48 48" width="16" height="16" aria-hidden="true">' +
-    '<path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>' +
-    '<path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>' +
-    '<path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>' +
-    '<path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>';
+  // (Google Drive's own logo, as Google draws it: not changed in shape or colors)
+  span.innerHTML = '<svg viewBox="0 0 87.3 78" width="16" height="16" aria-hidden="true">' +
+    '<path fill="#0066da" d="m6.6 66.85 3.85 6.65c.8 1.4 1.95 2.5 3.3 3.3l13.75-23.8h-27.5c0 1.55.4 3.1 1.2 4.5z"/>' +
+    '<path fill="#00ac47" d="m43.65 25-13.75-23.8c-1.35.8-2.5 1.9-3.3 3.3l-25.4 44a9.06 9.06 0 0 0 -1.2 4.5h27.5z"/>' +
+    '<path fill="#ea4335" d="m73.55 76.8c1.35-.8 2.5-1.9 3.3-3.3l1.6-2.75 7.65-13.25c.8-1.4 1.2-2.95 1.2-4.5h-27.502l5.852 11.5z"/>' +
+    '<path fill="#00832d" d="m43.65 25 13.75-23.8c-1.35-.8-2.9-1.2-4.5-1.2h-18.5c-1.6 0-3.15.45-4.5 1.2z"/>' +
+    '<path fill="#2684fc" d="m59.8 53h-32.3l-13.75 23.8c1.35.8 2.9 1.2 4.5 1.2h50.8c1.6 0 3.15-.45 4.5-1.2z"/>' +
+    '<path fill="#ffba00" d="m73.4 26.5-12.7-22c-.8-1.4-1.95-2.5-3.3-3.3l-13.75 23.8 16.15 28h27.45c0-1.55-.4-3.1-1.2-4.5z"/></svg>';
   return span;
 }
 
@@ -587,7 +590,7 @@ function replicaLabel(path, name, isInbox) {
   const look = replicaLooks[path] || {};
   const color = lookColor(look);
   // (Its color as a box around its name, not its text's: a colored text reads as a link)
-  // (A Drive one's: Google's G before it, then its own icon if the user chose one, else none: the G says it's Drive)
+  // (A Drive one's: Drive's logo before it, then its own icon if the user chose one, else none: the logo says it's Drive)
   return el('span', {class: 'rname' + (color ? ' rtag' : ''), style: color ? '--rc:' + color : ''},
     isDrive && !isInbox ? googleIcon() : '', isInbox ? icon('inbox') : isDrive && !look.icon ? '' : icon(look.icon || 'disk'), name);
 }
