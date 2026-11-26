@@ -74,7 +74,9 @@ def replica_info(path, known_replicas):
     else:
         unmounted = mounts.unmounted(path)
         found['there'] = unmounted is None and os.path.isdir(path)
-        found['why'] = ("its disk isn't mounted" if unmounted is not None else
+        # (Its disk connected but not mounted: the page can mount it, mounting.py)
+        found['canMount'] = unmounted is not None and mounts.is_connected(unmounted)
+        found['why'] = ("its disk isn't mounted" if found['canMount'] else "its disk isn't connected" if unmounted is not None else
                         "not there" if not found['there'] else '')
         found['hashing'] = checks.hash_state(path)
         found['hashesKept'] = hashcache.count_under(path) if found['there'] else 0

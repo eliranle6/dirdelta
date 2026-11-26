@@ -91,10 +91,7 @@ h2.head { display: flex; align-items: center; gap: 8px; }
 /* The selection's row: as tall as its bar, whether it's the bar or the hint, so nothing moves as the first is selected */
 .sticky .selrow { min-height: var(--selrow-h, 42px); display: flex; align-items: center; }
 .sticky .selrow > * { flex: 1; }
-/* The folder dialog: over the page, the replica's folders browsed or searched, the recent ones on top */
-.overlay { position: fixed; inset: 0; z-index: 50; background: rgba(0, 0, 0, .45); display: flex; align-items: center; justify-content: center; padding: 16px; }
-.dialog { background: var(--card); color: var(--fg); border-radius: 12px; width: min(560px, 100%); max-height: 86vh; display: flex; flex-direction: column; gap: 8px; padding: 14px; box-shadow: 0 8px 30px rgba(0, 0, 0, .3); }
-.dialoghead { display: flex; justify-content: space-between; align-items: center; font-size: 16px; }
+/* The folder dialog (the dialogs' own look is app.css's): the replica's folders browsed or searched, the recent ones on top */
 .dialog .folders { overflow-y: auto; min-height: 120px; border: 1px solid var(--line); border-radius: 8px; }
 .dialog .recent { display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 8px; max-height: 30vh; overflow-y: auto; }
 .dialog .recent > .note { padding: 4px 10px; }
@@ -103,8 +100,6 @@ h2.head { display: flex; align-items: center; gap: 8px; }
 .folderrow .link { display: inline-flex; align-items: center; gap: 6px; text-align: left; overflow-wrap: anywhere; }
 button.link { background: none; border: 0; padding: 4px 2px; color: var(--fg); cursor: pointer; font: inherit; }
 .crumbs button.link { color: var(--accent); }
-.dialogfoot { display: flex; gap: 6px; flex-wrap: wrap; }
-.dialogfoot input { flex: 1 1 180px; min-width: 0; }
 .bar .recentdir { max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 @media (hover: hover) { .folderrow:hover { background: var(--sel); } }
 /* The groups as tabs, in the sticky bar: one shown at a time */
@@ -177,7 +172,6 @@ button.chip .icon svg, .bar button .icon svg, .group button .icon svg, .day h3 b
 .viewer .wholeimg { max-width: 100%; max-height: calc(92vh - 80px); object-fit: contain; border-radius: 8px; background: #000; }
 .viewer figcaption { background: var(--card); color: var(--fg); border-radius: 8px; padding: 8px 12px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; }
 .viewer .prev, .viewer .next { font-size: 34px; line-height: 1; padding: 8px 14px; border-radius: 50%; background: rgba(255, 255, 255, .85); border: 0; }
-.dialogfoot.end { justify-content: flex-end; }
 @media (max-width: 600px) {
   .grouptabs { flex-wrap: wrap; overflow: visible; }
   .viewer .prev, .viewer .next { position: absolute; bottom: 16px; }

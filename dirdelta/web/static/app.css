@@ -728,3 +728,14 @@ button[class*="tone-"]:disabled { color: var(--disabled); }
 .tabs.tabselect select { min-width: 0; flex: 1 1 auto; max-width: 100%; text-overflow: ellipsis; }
 .statehead .searchtoggle { flex: none; }
 .gicon svg { display: block; }
+
+/* A dialog over the page (the import's folder dialog and questions, the replicas' Mount) */
+.overlay { position: fixed; inset: 0; z-index: 50; background: rgba(0, 0, 0, .45); display: flex; align-items: center; justify-content: center; padding: 16px; }
+.dialog { background: var(--card); color: var(--fg); border-radius: 12px; width: min(560px, 100%); max-height: 86vh; display: flex; flex-direction: column; gap: 8px; padding: 14px; box-shadow: 0 8px 30px rgba(0, 0, 0, .3); }
+.dialoghead { display: flex; justify-content: space-between; align-items: center; font-size: 16px; }
+.dialogfoot { display: flex; gap: 6px; flex-wrap: wrap; }
+.dialogfoot input { flex: 1 1 180px; min-width: 0; }
+.dialogfoot.end { justify-content: flex-end; }
+.dialog .warnbox { border: 1px solid var(--red); border-left-width: 4px; border-radius: 8px; padding: 8px 10px; background: color-mix(in srgb, var(--red) 8%, var(--card)); }
+.dialog .dialogerror { color: var(--red); white-space: pre-wrap; }
+.dialog code { font-family: var(--mono); font-size: 12px; overflow-wrap: anywhere; }

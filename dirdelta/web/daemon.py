@@ -10,7 +10,7 @@ from dirdelta.known import users
 from dirdelta.sharing import link as sharing
 from dirdelta.ui import frontend
 from dirdelta.util import dryrun
-from dirdelta.web import access, adding, api, home, importing, records, server
+from dirdelta.web import access, adding, api, home, importing, mounting, records, server
 from dirdelta.web.session import Session
 from dirdelta.web.watcher import PHONE, Watcher
 
@@ -29,6 +29,7 @@ def run(port=None):
     routes.update(home.routes(session))
     routes.update(adding.routes())
     routes.update(records.routes())
+    routes.update(mounting.routes())
     web_server = server.serve(routes, key, HOST, port)
     watcher = Watcher(lambda kind, name, path, whose: _say(kind, name, key, port, whose))
     watcher.start()

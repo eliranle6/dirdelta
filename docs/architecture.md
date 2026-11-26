@@ -310,6 +310,7 @@ The map (each module's docstring's first line; generated from the code):
   - `naming.py`: What the web version calls a replica: its one name (replicanames.name()), and where it is, said apart
   - `home.py`: The dashboard's and the Sync page's API (routes()): the replicas (disk, there or not, hashing, last log entry, last synced), the phones, what's running; the pairs and sorts to start; hashing a replica
   - `importing/`: The import page's API (routes()): the imports and the phones plugged in and Drive inboxes, starting one, an import's overview and files by day, thumbnails and files, copying and hashing, choosing dirs, moving them in, ending it; checks.py: what the replicas have (checked again when asked or old), hashing a replica or reading a Drive one again; state.py: what the page is sent
+  - `mounting.py`: Mounting a local replica's disk from the Replicas page (its Mount button): the terminal's mount command, sudo given the password asked for in a dialog that warns that it crosses the network unencrypted (plain HTTP), on its stdin and never kept; none if sudo lets the user (a sudoers rule)
   - `messages.py`: dirdelta's messages in the browser (MessagesScreen): lines under a title, Stop as Ctrl-C, Continue, or asking for a line
   - `picker/`: treepicker in the browser: a picker's command (its arguments, its items, its pipes) done by the web page instead of the terminal program
     - `items.py`: A web picker's items, as --updates shows them, each change numbered

@@ -170,6 +170,11 @@ function replicaCard(replica) {
       actions.push(el('button', {class: 'small', onclick: hash({media: false})}, (resumed ? 'Resume' : 'Hash') + ' all but the media files'));
     }
   }
+  // (Its disk connected but not mounted: mounted from here, mountReplica())
+  if (replica.kind === 'local' && replica.canMount) {
+    const button = el('button', {class: 'small primary', onclick: () => mountReplica(replica, button)}, 'Mount');
+    actions.push(button);
+  }
   // (The main replica: every other is synced with it)
   actions.push(el('button', {class: 'small', onclick: async () => {
     await api('POST', '/api/replicas/main', {path: replica.isMain ? '' : replica.path}); load();
@@ -193,6 +198,71 @@ function replicaCard(replica) {
     workBar(replica),
     entry ? el('div', {class: 'entry'}, el('span', {class: 'entry-label'}, 'Last log entry: '), entry) : '',
     actions.length ? el('div', {class: 'row2 end'}, actions) : '');
+}
+
+// Mounting a replica's disk (web/mounting.py): the server runs the mount the terminal would, with sudo; if sudo needs the
+// password, it's asked in a dialog that warns that it crosses the network unencrypted (plain HTTP), said once and not kept
+async function mountReplica(replica, button) {
+  button.disabled = true;
+  button.replaceChildren(waiting('Mounting'));
+  const answer = await api('POST', '/api/replicas/mount', {path: replica.path});
+  if (answer.ok && !(answer.readOnly || []).length) return load();
+  mountDialog(replica, answer);
+  load();
+}
+
+function mountDialog(replica, first) {
+  const title = 'Mount ' + replica.fullName;
+  const close = () => { overlay.remove(); document.removeEventListener('keydown', onKey); load(); };
+  const onKey = event => { if (event.key === 'Escape') close(); };
+  const box = el('div', {class: 'dialog', role: 'dialog', 'aria-label': title});
+  const overlay = el('div', {class: 'overlay', onclick: event => { if (event.target === overlay) close(); }}, box);
+  // (On this computer's own browser the password doesn't cross the network)
+  const isHere = ['localhost', '127.0.0.1', '::1', '[::1]'].includes(location.hostname);
+  const draw = (answer, busy) => {
+    const head = el('div', {class: 'dialoghead'}, el('b', {}, title), el('button', {class: 'small quiet', onclick: close}, '✕'));
+    if (answer.ok) {
+      // (Mounted, but read-only: why, and what to do)
+      box.replaceChildren(head, el('div', {}, 'Mounted, but read-only: nothing can be copied into it.'),
+        ...answer.readOnly.filter(line => line).map(line => el('div', {class: 'note'}, line)),
+        el('div', {class: 'dialogfoot end'}, el('button', {class: 'primary', onclick: close}, 'Close')));
+      return;
+    }
+    if (!answer.needsPassword) {
+      box.replaceChildren(head, el('div', {class: 'dialogerror'}, answer.error || "It couldn't be mounted."),
+        el('div', {class: 'dialogfoot end'}, el('button', {class: 'primary', onclick: close}, 'Close')));
+      return;
+    }
+    const password = el('input', {type: 'password', autocomplete: 'off', placeholder: 'Your password on this computer',
+      'aria-label': 'Password', disabled: busy});
+    const submit = async event => {
+      event.preventDefault();
+      if (!password.value) return password.focus();
+      const typed = password.value;
+      password.value = '';
+      draw(answer, true);
+      const next = await api('POST', '/api/replicas/mount', {path: replica.path, password: typed});
+      if (next.ok && !(next.readOnly || []).length) return close();
+      draw(next, false);
+    };
+    box.replaceChildren(head,
+      el('div', {}, 'Mounting its disk needs sudo, which needs your password. It runs:'),
+      el('div', {}, el('code', {}, answer.command)),
+      el('div', {class: 'warnbox'}, el('b', {}, 'Warning: '), isHere ?
+        "this page talks to dirdelta over plain HTTP, unencrypted. Here, on this computer's own browser, the password doesn't leave the computer." :
+        'this page talks to dirdelta over plain HTTP, unencrypted: your password crosses the network as it is, and ' +
+        'anyone watching it (on this Wi-Fi) could read it. It is your sudo password, for everything on this computer, not only this.',
+        el('div', {class: 'note'}, "It's used once for this mount and never kept. To mount without a password, " +
+          'let sudo run this one command without one (a sudoers rule): then this isn\'t asked.')),
+      answer.error ? el('div', {class: 'dialogerror'}, answer.error) : '',
+      el('form', {class: 'dialogfoot', onsubmit: submit}, password,
+        el('button', {type: 'button', onclick: close}, 'Cancel'),
+        el('button', {type: 'submit', class: 'danger', disabled: busy}, busy ? waiting('Mounting') : 'Send it and mount')));
+    if (!busy) password.focus();
+  };
+  document.addEventListener('keydown', onKey);
+  draw(first, false);
+  document.body.append(overlay);
 }
 
 // A pair's sync status: how much of it is in step (the files both had, of all either had, and what each
